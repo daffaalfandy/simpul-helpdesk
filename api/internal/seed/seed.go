@@ -11,8 +11,11 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/holidaypreset"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
@@ -33,20 +36,40 @@ const (
 	orgFooterNote = "Data stored in Indonesia · Personal data handled under UU PDP"
 	// RequesterClient is the client the demo requester belongs to.
 	RequesterClient = "Dinas Kominfo Jambi"
+	// GoldPlan is the demo premium SLA plan. Its numbers are placeholders (HANDOFF §13 Q3).
+	GoldPlan = "Gold"
+
+	emailRina = "rina@demo-vendor.test"
+	emailAdi  = "adi@demo-vendor.test"
+	emailYoga = "yoga@demo-vendor.test"
 )
+
+// goldTargets are the Standard targets with P2 also running 24/7.
+var goldTargets = []sla.Target{
+	{Priority: sla.P1, FirstResponseMinutes: 15, ResolveMinutes: 240, DeliverMinutes: 240, Calendar: sla.CalendarAlways},
+	{Priority: sla.P2, FirstResponseMinutes: 30, ResolveMinutes: 480, DeliverMinutes: 540, Calendar: sla.CalendarAlways},
+	{Priority: sla.P3, FirstResponseMinutes: 120, ResolveMinutes: 1080, DeliverMinutes: 1080, DeliverFromCatalog: true, Calendar: sla.CalendarBusinessHours},
+	{Priority: sla.P4, FirstResponseMinutes: 240, ResolveMinutes: 2700, DeliverMinutes: 2700, Calendar: sla.CalendarBusinessHours},
+}
 
 // ErrNotDev is returned when seeding outside development.
 var ErrNotDev = errors.New("seed only runs when APP_ENV=" + config.EnvDev)
 
-var clients = []string{
-	RequesterClient,
-	"BPKAD Kota Batam",
-	"Bappeda Prov. Riau",
-	"Diskominfo Kab. Bintan",
-	"Kementerian PANRB",
-	"Setda Kab. Muaro Jambi",
-	"Sekretariat DPRD Kota Batam",
-	"Disdukcapil Kab. Muaro Jambi",
+// client is a demo client from the mock (Settings › Clients). Empty plan means the default.
+type client struct {
+	name, contractNo, start, end, plan, picName, picEmail string
+	agents                                                []string // emails
+}
+
+var clients = []client{
+	{RequesterClient, "KTR/KOMINFO-JMB/006/2026", "2026-01-01", "2026-12-31", GoldPlan, "Hendra Gunawan", "hendra@kominfo-jambi.test", []string{emailRina, emailAdi}},
+	{"BPKAD Kota Batam", "KTR/BPKAD-BTM/014/2026", "2026-03-01", "2027-02-28", "", "Sri Lestari", "sri.lestari@bpkad-batam.test", []string{emailYoga}},
+	{"Bappeda Prov. Riau", "SPK/BAPPEDA-RIAU/031/2026", "2026-01-01", "2026-12-31", "", "Fajar Nugroho", "fajar@bappeda-riau.test", []string{emailYoga}},
+	{"Diskominfo Kab. Bintan", "KTR/KOMINFO-BTN/009/2026", "2026-06-01", "2027-05-31", "", "Maya Sari", "maya@kominfo-bintan.test", []string{emailYoga}},
+	{"Kementerian PANRB", "KTR/PANRB/112/2026", "2026-01-01", "2026-12-31", GoldPlan, "Arif Rahman", "arif@panrb.test", []string{emailRina, emailAdi}},
+	{name: "Setda Kab. Muaro Jambi"},
+	{name: "Sekretariat DPRD Kota Batam"},
+	{name: "Disdukcapil Kab. Muaro Jambi"},
 }
 
 type person struct {
@@ -59,13 +82,14 @@ type person struct {
 var people = []person{
 	{"admin@demo-vendor.test", "Demo Admin", auth.RoleAdmin, "", ""},
 	{"dewi@demo-vendor.test", "Dewi Wulandari", auth.RoleSupervisor, "", "Team lead"},
-	{"rina@demo-vendor.test", "Rina Pratiwi", auth.RoleAgent, "", "L2"},
-	{"adi@demo-vendor.test", "Adi Saputra", auth.RoleAgent, "", "L2"},
-	{"yoga@demo-vendor.test", "Yoga Hidayat", auth.RoleAgent, "", "L1"},
+	{emailRina, "Rina Pratiwi", auth.RoleAgent, "", "L2"},
+	{emailAdi, "Adi Saputra", auth.RoleAgent, "", "L2"},
+	{emailYoga, "Yoga Hidayat", auth.RoleAgent, "", "L1"},
 	{"hendra@kominfo-jambi.test", "Hendra Gunawan", auth.RoleRequester, RequesterClient, "IT Officer"},
 }
 
-// Run upserts the demo organisation, clients and users. It is safe to run repeatedly.
+// Run upserts the demo organisation, SLA plans, clients, users, agent assignments and
+// holidays. It is safe to run repeatedly.
 func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, out io.Writer) error {
 	if env != config.EnvDev {
 		return ErrNotDev
@@ -81,14 +105,19 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		}); err != nil {
 			return err
 		}
-		clientIDs := make(map[string]uuid.UUID, len(clients))
-		for _, name := range clients {
-			id, err := tx.Q.UpsertClient(ctx, name)
-			if err != nil {
-				return fmt.Errorf("client %s: %w", name, err)
-			}
-			clientIDs[name] = id
+		plans, err := seedPlans(ctx, tx.Q)
+		if err != nil {
+			return err
 		}
+		clientIDs := make(map[string]uuid.UUID, len(clients))
+		for _, c := range clients {
+			id, err := upsertClient(ctx, tx.Q, c, plans)
+			if err != nil {
+				return fmt.Errorf("client %s: %w", c.name, err)
+			}
+			clientIDs[c.name] = id
+		}
+		userIDs := make(map[string]uuid.UUID, len(people))
 		for _, p := range people {
 			params := db.UpsertUserByEmailParams{
 				Email: p.email, Name: p.name, PasswordHash: &hash, Role: string(p.role),
@@ -102,17 +131,29 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 				title := p.jobTitle
 				params.JobTitle = &title
 			}
-			if _, err := tx.Q.UpsertUserByEmail(ctx, params); err != nil {
+			id, err := tx.Q.UpsertUserByEmail(ctx, params)
+			if err != nil {
 				return fmt.Errorf("user %s: %w", p.email, err)
 			}
+			userIDs[p.email] = id
 		}
-		return nil
+		for _, c := range clients {
+			ids := make([]uuid.UUID, 0, len(c.agents))
+			for _, email := range c.agents {
+				ids = append(ids, userIDs[email])
+			}
+			if err := tx.Q.InsertClientAgents(ctx, db.InsertClientAgentsParams{ClientID: clientIDs[c.name], UserIds: ids}); err != nil {
+				return fmt.Errorf("agents of %s: %w", c.name, err)
+			}
+		}
+		return seedHolidays(ctx, tx.Q)
 	})
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(out, "Seeded organisation %q with %d clients and %d users.\n\n", OrgName, len(clients), len(people))
+	fmt.Fprintf(out, "Seeded organisation %q with %d clients, %d users and holidays for %v.\n\n",
+		OrgName, len(clients), len(people), holidaypreset.Years())
 	tw := tabwriter.NewWriter(out, tableMinWidth, tableTabWidth, tablePadding, tablePadChar, 0)
 	fmt.Fprintln(tw, "EMAIL\tNAME\tROLE")
 	for _, p := range people {
@@ -121,4 +162,78 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 	_ = tw.Flush()
 	fmt.Fprintf(out, "\nPassword for every user: %s\n", DevPassword)
 	return nil
+}
+
+// seedPlans adds the Gold plan and returns plan IDs by name; "" maps to the default plan.
+func seedPlans(ctx context.Context, q *db.Queries) (map[string]uuid.UUID, error) {
+	goldID, err := q.UpsertSlaPlanByName(ctx, GoldPlan)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range goldTargets {
+		if err := q.UpsertSlaTarget(ctx, db.UpsertSlaTargetParams{
+			PlanID: goldID, Priority: string(t.Priority), FirstResponseMinutes: int32(t.FirstResponseMinutes),
+			ResolveMinutes: int32(t.ResolveMinutes), DeliverMinutes: int32(t.DeliverMinutes),
+			DeliverFromCatalog: t.DeliverFromCatalog, Calendar: string(t.Calendar),
+		}); err != nil {
+			return nil, err
+		}
+	}
+	all, err := q.ListSlaPlans(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids := map[string]uuid.UUID{GoldPlan: goldID}
+	for _, p := range all {
+		if p.IsDefault {
+			ids[""] = p.ID
+		}
+	}
+	return ids, nil
+}
+
+func upsertClient(ctx context.Context, q *db.Queries, c client, plans map[string]uuid.UUID) (uuid.UUID, error) {
+	start, err := optionalDate(c.start)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	end, err := optionalDate(c.end)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return q.UpsertClientDetails(ctx, db.UpsertClientDetailsParams{
+		Name: c.name, ContractNo: optional(c.contractNo), ContractStart: start, ContractEnd: end,
+		PicName: optional(c.picName), PicEmail: optional(c.picEmail), SlaPlanID: plans[c.plan],
+	})
+}
+
+// seedHolidays loads every bundled holiday list, keeping dates that already exist.
+func seedHolidays(ctx context.Context, q *db.Queries) error {
+	for _, year := range holidaypreset.Years() {
+		p, _ := holidaypreset.ForYear(year)
+		for _, h := range p.Holidays {
+			if _, err := q.InsertHolidayIfMissing(ctx, db.InsertHolidayIfMissingParams{Date: h.Date, Name: h.Name}); err != nil {
+				return fmt.Errorf("holiday %s: %w", h.Date, err)
+			}
+		}
+	}
+	return nil
+}
+
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func optionalDate(s string) (*calendar.Date, error) {
+	if s == "" {
+		return nil, nil
+	}
+	d, err := calendar.ParseDate(s)
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
 }

@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar"
 	"github.com/google/uuid"
 )
 
@@ -26,8 +27,34 @@ type AuditLog struct {
 	RequestID   *string
 }
 
+type BusinessHour struct {
+	Weekday     int16
+	OpenMinute  int16
+	CloseMinute int16
+}
+
 type Client struct {
+	ID            uuid.UUID
+	Name          string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	ContractNo    *string
+	ContractStart *calendar.Date
+	ContractEnd   *calendar.Date
+	PicName       *string
+	PicEmail      *string
+	SlaPlanID     uuid.UUID
+}
+
+type ClientAgent struct {
+	ClientID  uuid.UUID
+	UserID    uuid.UUID
+	CreatedAt time.Time
+}
+
+type Holiday struct {
 	ID        uuid.UUID
+	Date      calendar.Date
 	Name      string
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -68,6 +95,25 @@ type Session struct {
 	ExpiresAt  time.Time
 	Ip         *netip.Addr
 	UserAgent  *string
+}
+
+type SlaPlan struct {
+	ID        uuid.UUID
+	Name      string
+	IsDefault bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type SlaTarget struct {
+	PlanID               uuid.UUID
+	Priority             string
+	FirstResponseMinutes int32
+	ResolveMinutes       int32
+	DeliverMinutes       int32
+	DeliverFromCatalog   bool
+	Calendar             string
+	UpdatedAt            time.Time
 }
 
 type User struct {

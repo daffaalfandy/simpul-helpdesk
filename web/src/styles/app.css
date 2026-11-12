@@ -119,6 +119,9 @@
   --container-portal: var(--container-portal);
   --container-form: var(--container-form);
   --container-auth: var(--container-auth);
+  --container-dialog-form: var(--container-dialog-form);
+  --container-dialog-confirm: var(--container-dialog-confirm);
+  --container-table: var(--container-table);
 
   --ease-standard: var(--easing);
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/holidaypreset"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/seed"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 )
@@ -26,11 +27,36 @@ func TestSeedIsIdempotent(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	var users, clients int
-	_ = st.Pool().QueryRow(ctx, `SELECT count(*) FROM users`).Scan(&users)
-	_ = st.Pool().QueryRow(ctx, `SELECT count(*) FROM clients`).Scan(&clients)
-	if users != 6 || clients != 8 {
-		t.Fatalf("users=%d clients=%d, want 6 and 8", users, clients)
+	count := func(sql string) int {
+		var n int
+		if err := st.Pool().QueryRow(ctx, sql).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	presetDays := 0
+	for _, year := range holidaypreset.Years() {
+		p, _ := holidaypreset.ForYear(year)
+		presetDays += len(p.Holidays)
+	}
+	got := map[string]int{
+		"users":            count(`SELECT count(*) FROM users`),
+		"clients":          count(`SELECT count(*) FROM clients`),
+		"plans":            count(`SELECT count(*) FROM sla_plans`),
+		"gold targets":     count(`SELECT count(*) FROM sla_targets t JOIN sla_plans p ON p.id = t.plan_id WHERE p.name = 'Gold'`),
+		"gold clients":     count(`SELECT count(*) FROM clients c JOIN sla_plans p ON p.id = c.sla_plan_id WHERE p.name = 'Gold'`),
+		"agent links":      count(`SELECT count(*) FROM client_agents`),
+		"holidays":         count(`SELECT count(*) FROM holidays`),
+		"standard default": count(`SELECT count(*) FROM sla_plans WHERE is_default AND name = 'Standard'`),
+	}
+	want := map[string]int{
+		"users": 6, "clients": 8, "plans": 2, "gold targets": 4, "gold clients": 2, "agent links": 7,
+		"holidays": presetDays, "standard default": 1,
+	}
+	for k, w := range want {
+		if got[k] != w {
+			t.Errorf("%s = %d, want %d", k, got[k], w)
+		}
 	}
 	org, err := st.Q().GetOrganization(ctx)
 	if err != nil || org.Name != seed.OrgName {

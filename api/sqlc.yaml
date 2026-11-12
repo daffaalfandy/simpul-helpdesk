@@ -27,3 +27,11 @@ sql:
               import: time
               type: Time
               pointer: true
+          - db_type: date
+            go_type: github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar.Date
+          - db_type: date
+            nullable: true
+            go_type:
+              import: github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar
+              type: Date
+              pointer: true

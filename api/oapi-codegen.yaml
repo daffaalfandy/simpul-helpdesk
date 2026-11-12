@@ -5,3 +5,6 @@ generate:
   strict-server: true
   models: true
   embedded-spec: true
+compatibility:
+  # Prefix enum constants with their type (gen.RoleAdmin) so new enums can't clash.
+  always-prefix-enum-values: true

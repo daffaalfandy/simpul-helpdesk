@@ -26,6 +26,18 @@ const (
 	CodeClientNotAllowed   = "client_not_allowed"
 	CodeClientNotFound     = "client_not_found"
 	CodeInternal           = "internal"
+
+	CodeClientNameTaken       = "client_name_taken"
+	CodeClientInUse           = "client_in_use"
+	CodeInvalidContractPeriod = "invalid_contract_period"
+	CodeInvalidAgent          = "invalid_agent"
+	CodeSlaPlanNotFound       = "sla_plan_not_found"
+	CodeSlaPlanNameTaken      = "sla_plan_name_taken"
+	CodeSlaPlanInUse          = "sla_plan_in_use"
+	CodeSlaPlanIsDefault      = "sla_plan_is_default"
+	CodeInvalidSlaTargets     = "invalid_sla_targets"
+	CodeInvalidBusinessHours  = "invalid_business_hours"
+	CodeHolidayDateTaken      = "holiday_date_taken"
 )
 
 // Error is a domain error with a stable machine-readable code.
@@ -97,6 +109,11 @@ func Internal() *Error {
 // Invalid is a 400 with a specific code.
 func Invalid(code, title, detail string) *Error {
 	return &Error{Status: http.StatusBadRequest, Code: code, Title: title, Detail: detail}
+}
+
+// Conflict is a 409: the request clashes with the current state, e.g. a taken name.
+func Conflict(code, title, detail string) *Error {
+	return &Error{Status: http.StatusConflict, Code: code, Title: title, Detail: detail}
 }
 
 // InvalidRequest means the request doesn't match the API contract.

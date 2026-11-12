@@ -18,6 +18,7 @@ func TestCapabilitiesMatchHandoffRoleTable(t *testing.T) {
 		CapReportsView:    {RoleAdmin, RoleSupervisor},
 		CapUsersManage:    {RoleAdmin},
 		CapSettingsManage: {RoleAdmin},
+		CapClientsViewAll: {RoleAdmin, RoleSupervisor},
 	}
 	all := []Role{RoleAdmin, RoleSupervisor, RoleAgent, RoleRequester}
 	for c, allowed := range want {

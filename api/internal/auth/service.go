@@ -33,8 +33,6 @@ const (
 
 	// TargetUser is the audit target type for users.
 	TargetUser = "user"
-	// actorCLI names the actor for changes made from the command line.
-	actorCLI = "cli"
 	// auditDataRole is the audit data key holding a role.
 	auditDataRole = "role"
 )
@@ -406,7 +404,7 @@ func (s *Service) CreateUser(ctx context.Context, in NewUser) (uuid.UUID, error)
 			return err
 		}
 		return audit.Write(ctx, tx.Q, audit.Entry{
-			ActorKind: audit.ActorSystem, ActorName: actorCLI, Action: ActionUserCreated,
+			ActorKind: audit.ActorSystem, ActorName: audit.ActorNameCLI, Action: ActionUserCreated,
 			TargetType: TargetUser, TargetID: &id, Data: map[string]any{auditDataRole: in.Role},
 		})
 	})

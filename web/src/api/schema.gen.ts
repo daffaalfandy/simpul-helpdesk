@@ -129,6 +129,240 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Clients the user may see, by name
+         * @description Admins and supervisors see every client; agents see the clients assigned to them.
+         */
+        get: operations["listClients"];
+        put?: never;
+        /**
+         * Add a client (admin only)
+         * @description Error codes are `invalid_name`, `invalid_email`, `invalid_contract_period`, `sla_plan_not_found` and `client_name_taken` (409).
+         */
+        post: operations["createClient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{clientId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        /** One client */
+        get: operations["getClient"];
+        /** Replace a client's details (admin only) */
+        put: operations["updateClient"];
+        post?: never;
+        /**
+         * Delete a client with no requesters (admin only)
+         * @description Error code `client_in_use` (409) while requesters belong to the client.
+         */
+        delete: operations["deleteClient"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{clientId}/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the agents assigned to a client (admin only)
+         * @description Every user must be an active agent (`invalid_agent`).
+         */
+        put: operations["setClientAgents"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sla-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SLA plans, the default first */
+        get: operations["listSlaPlans"];
+        put?: never;
+        /**
+         * Add an SLA plan (admin only)
+         * @description Error codes are `invalid_name`, `invalid_sla_targets` and `sla_plan_name_taken` (409).
+         */
+        post: operations["createSlaPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sla-plans/{planId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: components["parameters"]["PlanId"];
+            };
+            cookie?: never;
+        };
+        /** One SLA plan */
+        get: operations["getSlaPlan"];
+        /** Replace a plan's name and targets (admin only) */
+        put: operations["updateSlaPlan"];
+        post?: never;
+        /**
+         * Delete a plan no client uses (admin only)
+         * @description Error codes `sla_plan_is_default` and `sla_plan_in_use` (409).
+         */
+        delete: operations["deleteSlaPlan"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sla-plans/{planId}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: components["parameters"]["PlanId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make a plan the default for new clients (admin only) */
+        post: operations["setDefaultSlaPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/business-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The organisation's working hours */
+        get: operations["getBusinessHours"];
+        /**
+         * Replace the working hours (admin only)
+         * @description Error code `invalid_business_hours`. Targets are stored in minutes, so this changes how long a working day is.
+         */
+        put: operations["updateBusinessHours"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/holidays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Holidays in date order */
+        get: operations["listHolidays"];
+        put?: never;
+        /**
+         * Add a holiday (admin only)
+         * @description Error codes `invalid_name` and `holiday_date_taken` (409).
+         */
+        post: operations["createHoliday"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/holidays/{holidayId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                holidayId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a holiday (admin only) */
+        delete: operations["deleteHoliday"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/holiday-presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bundled official holiday lists (admin only) */
+        get: operations["listHolidayPresets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/holiday-presets/{year}/load": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a bundled year's missing holidays (admin only)
+         * @description Dates that already have a holiday are left as they are.
+         */
+        post: operations["loadHolidayPreset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -204,6 +438,130 @@ export interface components {
             /** @description 10 to 128 characters. */
             password: string;
         };
+        Ref: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        /** @enum {string} */
+        Priority: "P1" | "P2" | "P3" | "P4";
+        /**
+         * @description `business_hours` counts working minutes only; `always` runs 24/7.
+         * @enum {string}
+         */
+        SlaCalendar: "business_hours" | "always";
+        /** @enum {string} */
+        Weekday: "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
+        Client: {
+            /** Format: uuid */
+            id: string;
+            /** @example Dinas Kominfo Jambi */
+            name: string;
+            /** @example KTR/KOMINFO-JMB/006/2026 */
+            contractNo: string | null;
+            /** Format: date */
+            contractStart: string | null;
+            /** Format: date */
+            contractEnd: string | null;
+            picName: string | null;
+            picEmail: string | null;
+            slaPlan: components["schemas"]["Ref"];
+            requesterCount: number;
+            /** @description Agents assigned to this client, by name. */
+            agents: components["schemas"]["Ref"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ClientInput: {
+            name: string;
+            contractNo?: string | null;
+            /** Format: date */
+            contractStart?: string | null;
+            /** Format: date */
+            contractEnd?: string | null;
+            picName?: string | null;
+            picEmail?: string | null;
+            /** Format: uuid */
+            slaPlanId: string;
+        };
+        ClientAgentsInput: {
+            userIds: string[];
+        };
+        SlaTarget: {
+            priority: components["schemas"]["Priority"];
+            firstResponseMinutes: number;
+            /** @description Incidents. */
+            resolveMinutes: number;
+            /** @description Service requests. */
+            deliverMinutes: number;
+            /** @description Service requests use the catalogue item's delivery time, falling back to deliverMinutes. */
+            deliverFromCatalog: boolean;
+            calendar: components["schemas"]["SlaCalendar"];
+        };
+        SlaPlan: {
+            /** Format: uuid */
+            id: string;
+            /** @example Standard */
+            name: string;
+            isDefault: boolean;
+            clientCount: number;
+            /** @description One per priority, P1 to P4. */
+            targets: components["schemas"]["SlaTarget"][];
+        };
+        SlaPlanInput: {
+            name: string;
+            targets: components["schemas"]["SlaTarget"][];
+        };
+        BusinessHours: {
+            /** @example Asia/Jakarta */
+            timezone: string;
+            weekdays: components["schemas"]["Weekday"][];
+            /** @example 08:00 */
+            opens: string;
+            /** @example 17:00 */
+            closes: string;
+            /**
+             * @description Length of one working day; converts "working days" to minutes.
+             * @example 540
+             */
+            workingDayMinutes: number;
+        };
+        BusinessHoursInput: {
+            weekdays: components["schemas"]["Weekday"][];
+            /** @example 08:00 */
+            opens: string;
+            /** @example 17:00 */
+            closes: string;
+        };
+        Holiday: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            /** @example Hari Lahir Pancasila */
+            name: string;
+        };
+        HolidayInput: {
+            /** Format: date */
+            date: string;
+            name: string;
+        };
+        HolidayPreset: {
+            year: number;
+            /** @example ID */
+            country: string;
+            holidayCount: number;
+            /** @description Preset dates that have no holiday yet. */
+            missingCount: number;
+        };
+        HolidayPresetLoadResult: {
+            year: number;
+            addedCount: number;
+            /** @description Dates that already had a holiday. */
+            skippedCount: number;
+        };
     };
     responses: {
         /** @description Error (RFC 9457 problem details) */
@@ -227,7 +585,10 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        ClientId: string;
+        PlanId: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -394,6 +755,511 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listClients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Clients */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Client */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setClientAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientAgentsInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listSlaPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlaPlan"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createSlaPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlaPlanInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlaPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSlaPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: components["parameters"]["PlanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlaPlan"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateSlaPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: components["parameters"]["PlanId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlaPlanInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlaPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteSlaPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: components["parameters"]["PlanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setDefaultSlaPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: components["parameters"]["PlanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new default plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlaPlan"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getBusinessHours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Working hours */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessHours"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateBusinessHours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessHoursInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessHours"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listHolidays: {
+        parameters: {
+            query?: {
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Holidays */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Holiday"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createHoliday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HolidayInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Holiday"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteHoliday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                holidayId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listHolidayPresets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Presets by year */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayPreset"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    loadHolidayPreset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Loaded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayPresetLoadResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

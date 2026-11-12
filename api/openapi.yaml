@@ -21,6 +21,9 @@ tags:
   - name: organization
   - name: auth
   - name: users
+  - name: clients
+  - name: sla
+  - name: calendar
 
 paths:
   /organization:
@@ -142,6 +145,365 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /clients:
+    get:
+      operationId: listClients
+      summary: Clients the user may see, by name
+      description: Admins and supervisors see every client; agents see the clients assigned to them.
+      tags: [clients]
+      responses:
+        "200":
+          description: Clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Client" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createClient
+      summary: Add a client (admin only)
+      description: Error codes are `invalid_name`, `invalid_email`, `invalid_contract_period`, `sla_plan_not_found` and `client_name_taken` (409).
+      tags: [clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /clients/{clientId}:
+    parameters:
+      - $ref: "#/components/parameters/ClientId"
+    get:
+      operationId: getClient
+      summary: One client
+      tags: [clients]
+      responses:
+        "200":
+          description: Client
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateClient
+      summary: Replace a client's details (admin only)
+      tags: [clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteClient
+      summary: Delete a client with no requesters (admin only)
+      description: Error code `client_in_use` (409) while requesters belong to the client.
+      tags: [clients]
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /clients/{clientId}/agents:
+    parameters:
+      - $ref: "#/components/parameters/ClientId"
+    put:
+      operationId: setClientAgents
+      summary: Replace the agents assigned to a client (admin only)
+      description: Every user must be an active agent (`invalid_agent`).
+      tags: [clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientAgentsInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /sla-plans:
+    get:
+      operationId: listSlaPlans
+      summary: SLA plans, the default first
+      tags: [sla]
+      responses:
+        "200":
+          description: Plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SlaPlan" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createSlaPlan
+      summary: Add an SLA plan (admin only)
+      description: Error codes are `invalid_name`, `invalid_sla_targets` and `sla_plan_name_taken` (409).
+      tags: [sla]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SlaPlanInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SlaPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /sla-plans/{planId}:
+    parameters:
+      - $ref: "#/components/parameters/PlanId"
+    get:
+      operationId: getSlaPlan
+      summary: One SLA plan
+      tags: [sla]
+      responses:
+        "200":
+          description: Plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SlaPlan" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateSlaPlan
+      summary: Replace a plan's name and targets (admin only)
+      tags: [sla]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SlaPlanInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SlaPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteSlaPlan
+      summary: Delete a plan no client uses (admin only)
+      description: Error codes `sla_plan_is_default` and `sla_plan_in_use` (409).
+      tags: [sla]
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /sla-plans/{planId}/default:
+    parameters:
+      - $ref: "#/components/parameters/PlanId"
+    post:
+      operationId: setDefaultSlaPlan
+      summary: Make a plan the default for new clients (admin only)
+      tags: [sla]
+      responses:
+        "200":
+          description: The new default plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SlaPlan" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /business-hours:
+    get:
+      operationId: getBusinessHours
+      summary: The organisation's working hours
+      tags: [calendar]
+      responses:
+        "200":
+          description: Working hours
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BusinessHours" }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateBusinessHours
+      summary: Replace the working hours (admin only)
+      description: Error code `invalid_business_hours`. Targets are stored in minutes, so this changes how long a working day is.
+      tags: [calendar]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BusinessHoursInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BusinessHours" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /holidays:
+    get:
+      operationId: listHolidays
+      summary: Holidays in date order
+      tags: [calendar]
+      parameters:
+        - name: year
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1970, maximum: 9999 }
+      responses:
+        "200":
+          description: Holidays
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Holiday" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createHoliday
+      summary: Add a holiday (admin only)
+      description: Error codes `invalid_name` and `holiday_date_taken` (409).
+      tags: [calendar]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HolidayInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Holiday" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /holidays/{holidayId}:
+    parameters:
+      - name: holidayId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      operationId: deleteHoliday
+      summary: Delete a holiday (admin only)
+      tags: [calendar]
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /holiday-presets:
+    get:
+      operationId: listHolidayPresets
+      summary: Bundled official holiday lists (admin only)
+      tags: [calendar]
+      responses:
+        "200":
+          description: Presets by year
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/HolidayPreset" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /holiday-presets/{year}/load:
+    parameters:
+      - name: year
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1970, maximum: 9999 }
+    post:
+      operationId: loadHolidayPreset
+      summary: Add a bundled year's missing holidays (admin only)
+      description: Dates that already have a holiday are left as they are.
+      tags: [calendar]
+      responses:
+        "200":
+          description: Loaded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HolidayPresetLoadResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -149,6 +511,18 @@ components:
       in: cookie
       name: sd_session
       description: "`__Host-sd_session` when served over HTTPS."
+
+  parameters:
+    ClientId:
+      name: clientId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PlanId:
+      name: planId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
 
   responses:
     Problem:
@@ -268,3 +642,173 @@ components:
           minLength: 10
           maxLength: 128
           description: 10 to 128 characters.
+
+    Ref:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    Priority:
+      type: string
+      enum: [P1, P2, P3, P4]
+
+    SlaCalendar:
+      type: string
+      description: "`business_hours` counts working minutes only; `always` runs 24/7."
+      enum: [business_hours, always]
+
+    Weekday:
+      type: string
+      enum: [sun, mon, tue, wed, thu, fri, sat]
+
+    Client:
+      type: object
+      required: [id, name, contractNo, contractStart, contractEnd, picName, picEmail, slaPlan,
+                 requesterCount, agents, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Dinas Kominfo Jambi }
+        contractNo: { type: string, nullable: true, example: KTR/KOMINFO-JMB/006/2026 }
+        contractStart: { type: string, format: date, nullable: true }
+        contractEnd: { type: string, format: date, nullable: true }
+        picName: { type: string, nullable: true }
+        picEmail: { type: string, nullable: true }
+        slaPlan: { $ref: "#/components/schemas/Ref" }
+        requesterCount: { type: integer }
+        agents:
+          type: array
+          description: Agents assigned to this client, by name.
+          items: { $ref: "#/components/schemas/Ref" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ClientInput:
+      type: object
+      required: [name, slaPlanId]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        contractNo: { type: string, nullable: true, maxLength: 100 }
+        contractStart: { type: string, format: date, nullable: true }
+        contractEnd: { type: string, format: date, nullable: true }
+        picName: { type: string, nullable: true, maxLength: 200 }
+        picEmail: { type: string, nullable: true, maxLength: 254 }
+        slaPlanId: { type: string, format: uuid }
+
+    ClientAgentsInput:
+      type: object
+      required: [userIds]
+      properties:
+        userIds:
+          type: array
+          maxItems: 500
+          items: { type: string, format: uuid }
+
+    SlaTarget:
+      type: object
+      required: [priority, firstResponseMinutes, resolveMinutes, deliverMinutes, deliverFromCatalog, calendar]
+      properties:
+        priority: { $ref: "#/components/schemas/Priority" }
+        firstResponseMinutes: { type: integer, minimum: 1, maximum: 525600 }
+        resolveMinutes:
+          type: integer
+          minimum: 1
+          maximum: 525600
+          description: Incidents.
+        deliverMinutes:
+          type: integer
+          minimum: 1
+          maximum: 525600
+          description: Service requests.
+        deliverFromCatalog:
+          type: boolean
+          description: Service requests use the catalogue item's delivery time, falling back to deliverMinutes.
+        calendar: { $ref: "#/components/schemas/SlaCalendar" }
+
+    SlaPlan:
+      type: object
+      required: [id, name, isDefault, clientCount, targets]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Standard }
+        isDefault: { type: boolean }
+        clientCount: { type: integer }
+        targets:
+          type: array
+          description: One per priority, P1 to P4.
+          items: { $ref: "#/components/schemas/SlaTarget" }
+
+    SlaPlanInput:
+      type: object
+      required: [name, targets]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        targets:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { $ref: "#/components/schemas/SlaTarget" }
+
+    BusinessHours:
+      type: object
+      required: [timezone, weekdays, opens, closes, workingDayMinutes]
+      properties:
+        timezone: { type: string, example: Asia/Jakarta }
+        weekdays:
+          type: array
+          items: { $ref: "#/components/schemas/Weekday" }
+        opens: { type: string, example: "08:00" }
+        closes: { type: string, example: "17:00" }
+        workingDayMinutes:
+          type: integer
+          description: Length of one working day; converts "working days" to minutes.
+          example: 540
+
+    BusinessHoursInput:
+      type: object
+      required: [weekdays, opens, closes]
+      properties:
+        weekdays:
+          type: array
+          minItems: 1
+          maxItems: 7
+          items: { $ref: "#/components/schemas/Weekday" }
+        opens: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$", example: "08:00" }
+        closes: { type: string, pattern: "^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$", example: "17:00" }
+
+    Holiday:
+      type: object
+      required: [id, date, name]
+      properties:
+        id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        name: { type: string, example: Hari Lahir Pancasila }
+
+    HolidayInput:
+      type: object
+      required: [date, name]
+      properties:
+        date: { type: string, format: date }
+        name: { type: string, minLength: 1, maxLength: 200 }
+
+    HolidayPreset:
+      type: object
+      required: [year, country, holidayCount, missingCount]
+      properties:
+        year: { type: integer }
+        country: { type: string, example: ID }
+        holidayCount: { type: integer }
+        missingCount:
+          type: integer
+          description: Preset dates that have no holiday yet.
+
+    HolidayPresetLoadResult:
+      type: object
+      required: [year, addedCount, skippedCount]
+      properties:
+        year: { type: integer }
+        addedCount: { type: integer }
+        skippedCount:
+          type: integer
+          description: Dates that already had a holiday.

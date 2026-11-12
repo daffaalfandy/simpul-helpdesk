@@ -21,10 +21,12 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 )
@@ -67,7 +69,7 @@ func newEnv(t *testing.T) *env {
 	}
 	svc := auth.NewService(st, auth.NewHasher(cheapParams, auth.DefaultMaxConcurrentHashes), jobs, auth.DefaultOptions(), log)
 	h, err := httpapi.New(httpapi.Deps{
-		Config: cfg, Store: st, Auth: svc, Logger: log,
+		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st), SLA: sla.NewService(st), Logger: log,
 		WebUI: fstest.MapFS{"index.html": {Data: []byte(spaMarker)}, "assets/app.js": {Data: []byte("//js")}},
 	})
 	if err != nil {
@@ -180,7 +182,7 @@ func TestLoginSetsSecureSessionCookie(t *testing.T) {
 	}
 	var me gen.Me
 	_ = json.Unmarshal(rec.Body.Bytes(), &me)
-	if me.Role != gen.Agent || me.Email != e.users[auth.RoleAgent] {
+	if me.Role != gen.RoleAgent || me.Email != e.users[auth.RoleAgent] {
 		t.Fatalf("me = %+v", me)
 	}
 }
@@ -267,7 +269,7 @@ func TestMeIncludesClientForRequesters(t *testing.T) {
 	rec := e.do(request{method: http.MethodGet, path: apiBase + "/auth/me", cookie: e.sessionFor(auth.RoleRequester)})
 	var me gen.Me
 	_ = json.Unmarshal(rec.Body.Bytes(), &me)
-	if me.Role != gen.Requester || me.Client == nil || me.Client.Name != "Dinas Kominfo Jambi" {
+	if me.Role != gen.RoleRequester || me.Client == nil || me.Client.Name != "Dinas Kominfo Jambi" {
 		t.Fatalf("me = %+v", me)
 	}
 }

@@ -6,6 +6,13 @@ import { api, ApiError, HttpStatus, type Me } from './client'
 export const queryKeys = {
   me: ['me'],
   organization: ['organization'],
+  users: ['users'],
+  clients: ['clients'],
+  slaPlans: ['sla-plans'],
+  businessHours: ['business-hours'],
+  holidays: ['holidays'],
+  holidaysForYear: (year: number) => ['holidays', year] as const,
+  holidayPresets: ['holiday-presets'],
 } as const
 
 /** The signed-in user, or null when signed out. */

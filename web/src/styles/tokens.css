@@ -125,6 +125,9 @@
   --container-portal: 1240px;  /* client portal pages */
   --container-form: 880px;     /* report-an-issue form */
   --container-auth: 440px;    /* sign-in and password pages */
+  --container-dialog-form: 640px;    /* form dialogs (add client, edit plan) */
+  --container-dialog-confirm: 480px; /* confirmation dialogs */
+  --container-table: 720px;          /* tables scroll sideways below this width */
   --sidebar-w: 230px;
   --sidebar-rail-w: 72px;
 

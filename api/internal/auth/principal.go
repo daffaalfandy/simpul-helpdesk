@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 )
 
 // Role is a user's role in the organisation.
@@ -63,3 +65,6 @@ func PrincipalFrom(ctx context.Context) (*Principal, bool) {
 	p, ok := ctx.Value(principalKey{}).(*Principal)
 	return p, ok && p != nil
 }
+
+// AuditActor identifies the principal in audit entries.
+func (p *Principal) AuditActor() audit.Actor { return audit.UserActor(p.UserID, p.Name) }

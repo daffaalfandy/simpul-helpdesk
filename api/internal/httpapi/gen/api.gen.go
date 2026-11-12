@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -22,24 +23,66 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for Priority.
+const (
+	PriorityP1 Priority = "P1"
+	PriorityP2 Priority = "P2"
+	PriorityP3 Priority = "P3"
+	PriorityP4 Priority = "P4"
+)
+
+// Valid indicates whether the value is a known member of the Priority enum.
+func (e Priority) Valid() bool {
+	switch e {
+	case PriorityP1:
+		return true
+	case PriorityP2:
+		return true
+	case PriorityP3:
+		return true
+	case PriorityP4:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Role.
 const (
-	Admin      Role = "admin"
-	Agent      Role = "agent"
-	Requester  Role = "requester"
-	Supervisor Role = "supervisor"
+	RoleAdmin      Role = "admin"
+	RoleAgent      Role = "agent"
+	RoleRequester  Role = "requester"
+	RoleSupervisor Role = "supervisor"
 )
 
 // Valid indicates whether the value is a known member of the Role enum.
 func (e Role) Valid() bool {
 	switch e {
-	case Admin:
+	case RoleAdmin:
 		return true
-	case Agent:
+	case RoleAgent:
 		return true
-	case Requester:
+	case RoleRequester:
 		return true
-	case Supervisor:
+	case RoleSupervisor:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SlaCalendar.
+const (
+	SlaCalendarAlways        SlaCalendar = "always"
+	SlaCalendarBusinessHours SlaCalendar = "business_hours"
+)
+
+// Valid indicates whether the value is a known member of the SlaCalendar enum.
+func (e SlaCalendar) Valid() bool {
+	switch e {
+	case SlaCalendarAlways:
+		return true
+	case SlaCalendarBusinessHours:
 		return true
 	default:
 		return false
@@ -48,23 +91,121 @@ func (e Role) Valid() bool {
 
 // Defines values for UserStatus.
 const (
-	Active    UserStatus = "active"
-	Invited   UserStatus = "invited"
-	Suspended UserStatus = "suspended"
+	UserStatusActive    UserStatus = "active"
+	UserStatusInvited   UserStatus = "invited"
+	UserStatusSuspended UserStatus = "suspended"
 )
 
 // Valid indicates whether the value is a known member of the UserStatus enum.
 func (e UserStatus) Valid() bool {
 	switch e {
-	case Active:
+	case UserStatusActive:
 		return true
-	case Invited:
+	case UserStatusInvited:
 		return true
-	case Suspended:
+	case UserStatusSuspended:
 		return true
 	default:
 		return false
 	}
+}
+
+// Defines values for Weekday.
+const (
+	WeekdayFri Weekday = "fri"
+	WeekdayMon Weekday = "mon"
+	WeekdaySat Weekday = "sat"
+	WeekdaySun Weekday = "sun"
+	WeekdayThu Weekday = "thu"
+	WeekdayTue Weekday = "tue"
+	WeekdayWed Weekday = "wed"
+)
+
+// Valid indicates whether the value is a known member of the Weekday enum.
+func (e Weekday) Valid() bool {
+	switch e {
+	case WeekdayFri:
+		return true
+	case WeekdayMon:
+		return true
+	case WeekdaySat:
+		return true
+	case WeekdaySun:
+		return true
+	case WeekdayThu:
+		return true
+	case WeekdayTue:
+		return true
+	case WeekdayWed:
+		return true
+	default:
+		return false
+	}
+}
+
+// BusinessHours defines model for BusinessHours.
+type BusinessHours struct {
+	// Closes Example: 17:00
+	Closes string `json:"closes"`
+
+	// Opens Example: 08:00
+	Opens string `json:"opens"`
+
+	// Timezone Example: Asia/Jakarta
+	Timezone string    `json:"timezone"`
+	Weekdays []Weekday `json:"weekdays"`
+
+	// WorkingDayMinutes Length of one working day; converts "working days" to minutes.
+	//
+	// Example: 540
+	WorkingDayMinutes int `json:"workingDayMinutes"`
+}
+
+// BusinessHoursInput defines model for BusinessHoursInput.
+type BusinessHoursInput struct {
+	// Closes Example: 17:00
+	Closes string `json:"closes"`
+
+	// Opens Example: 08:00
+	Opens    string    `json:"opens"`
+	Weekdays []Weekday `json:"weekdays"`
+}
+
+// Client defines model for Client.
+type Client struct {
+	// Agents Agents assigned to this client, by name.
+	Agents      []Ref               `json:"agents"`
+	ContractEnd *openapi_types.Date `json:"contractEnd"`
+
+	// ContractNo Example: KTR/KOMINFO-JMB/006/2026
+	ContractNo    *string             `json:"contractNo"`
+	ContractStart *openapi_types.Date `json:"contractStart"`
+	CreatedAt     time.Time           `json:"createdAt"`
+	Id            openapi_types.UUID  `json:"id"`
+
+	// Name Example: Dinas Kominfo Jambi
+	Name           string    `json:"name"`
+	PicEmail       *string   `json:"picEmail"`
+	PicName        *string   `json:"picName"`
+	RequesterCount int       `json:"requesterCount"`
+	SlaPlan        Ref       `json:"slaPlan"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+// ClientAgentsInput defines model for ClientAgentsInput.
+type ClientAgentsInput struct {
+	UserIds []openapi_types.UUID `json:"userIds"`
+}
+
+// ClientInput defines model for ClientInput.
+type ClientInput struct {
+	ContractEnd   *openapi_types.Date `json:"contractEnd,omitempty"`
+	ContractNo    *string             `json:"contractNo,omitempty"`
+	ContractStart *openapi_types.Date `json:"contractStart,omitempty"`
+	Name          string              `json:"name"`
+	PicEmail      *string             `json:"picEmail,omitempty"`
+	PicName       *string             `json:"picName,omitempty"`
+	SlaPlanId     openapi_types.UUID  `json:"slaPlanId"`
 }
 
 // ClientRef defines model for ClientRef.
@@ -76,6 +217,41 @@ type ClientRef struct {
 // ForgotPasswordRequest defines model for ForgotPasswordRequest.
 type ForgotPasswordRequest struct {
 	Email string `json:"email"`
+}
+
+// Holiday defines model for Holiday.
+type Holiday struct {
+	Date openapi_types.Date `json:"date"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// Name Example: Hari Lahir Pancasila
+	Name string `json:"name"`
+}
+
+// HolidayInput defines model for HolidayInput.
+type HolidayInput struct {
+	Date openapi_types.Date `json:"date"`
+	Name string             `json:"name"`
+}
+
+// HolidayPreset defines model for HolidayPreset.
+type HolidayPreset struct {
+	// Country Example: ID
+	Country      string `json:"country"`
+	HolidayCount int    `json:"holidayCount"`
+
+	// MissingCount Preset dates that have no holiday yet.
+	MissingCount int `json:"missingCount"`
+	Year         int `json:"year"`
+}
+
+// HolidayPresetLoadResult defines model for HolidayPresetLoadResult.
+type HolidayPresetLoadResult struct {
+	AddedCount int `json:"addedCount"`
+
+	// SkippedCount Dates that already had a holiday.
+	SkippedCount int `json:"skippedCount"`
+	Year         int `json:"year"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -107,6 +283,9 @@ type Organization struct {
 	Name string `json:"name"`
 }
 
+// Priority defines model for Priority.
+type Priority string
+
 // Problem defines model for Problem.
 type Problem struct {
 	// Code Stable machine-readable error code, e.g. `invalid_credentials`.
@@ -132,6 +311,12 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// Ref defines model for Ref.
+type Ref struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+}
+
 // ResetPasswordRequest defines model for ResetPasswordRequest.
 type ResetPasswordRequest struct {
 	// Password 10 to 128 characters.
@@ -141,6 +326,45 @@ type ResetPasswordRequest struct {
 
 // Role defines model for Role.
 type Role string
+
+// SlaCalendar `business_hours` counts working minutes only; `always` runs 24/7.
+type SlaCalendar string
+
+// SlaPlan defines model for SlaPlan.
+type SlaPlan struct {
+	ClientCount int                `json:"clientCount"`
+	Id          openapi_types.UUID `json:"id"`
+	IsDefault   bool               `json:"isDefault"`
+
+	// Name Example: Standard
+	Name string `json:"name"`
+
+	// Targets One per priority, P1 to P4.
+	Targets []SlaTarget `json:"targets"`
+}
+
+// SlaPlanInput defines model for SlaPlanInput.
+type SlaPlanInput struct {
+	Name    string      `json:"name"`
+	Targets []SlaTarget `json:"targets"`
+}
+
+// SlaTarget defines model for SlaTarget.
+type SlaTarget struct {
+	// Calendar `business_hours` counts working minutes only; `always` runs 24/7.
+	Calendar SlaCalendar `json:"calendar"`
+
+	// DeliverFromCatalog Service requests use the catalogue item's delivery time, falling back to deliverMinutes.
+	DeliverFromCatalog bool `json:"deliverFromCatalog"`
+
+	// DeliverMinutes Service requests.
+	DeliverMinutes       int      `json:"deliverMinutes"`
+	FirstResponseMinutes int      `json:"firstResponseMinutes"`
+	Priority             Priority `json:"priority"`
+
+	// ResolveMinutes Incidents.
+	ResolveMinutes int `json:"resolveMinutes"`
+}
 
 // User defines model for User.
 type User struct {
@@ -157,8 +381,22 @@ type User struct {
 // UserStatus defines model for UserStatus.
 type UserStatus string
 
+// Weekday defines model for Weekday.
+type Weekday string
+
+// ClientId defines model for ClientId.
+type ClientId = openapi_types.UUID
+
+// PlanId defines model for PlanId.
+type PlanId = openapi_types.UUID
+
 // RateLimited defines model for RateLimited.
 type RateLimited = Problem
+
+// ListHolidaysParams defines parameters for ListHolidays.
+type ListHolidaysParams struct {
+	Year *int `form:"year,omitempty" json:"year,omitempty"`
+}
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
@@ -168,6 +406,27 @@ type ForgotPasswordJSONRequestBody = ForgotPasswordRequest
 
 // ResetPasswordJSONRequestBody defines body for ResetPassword for application/json ContentType.
 type ResetPasswordJSONRequestBody = ResetPasswordRequest
+
+// UpdateBusinessHoursJSONRequestBody defines body for UpdateBusinessHours for application/json ContentType.
+type UpdateBusinessHoursJSONRequestBody = BusinessHoursInput
+
+// CreateClientJSONRequestBody defines body for CreateClient for application/json ContentType.
+type CreateClientJSONRequestBody = ClientInput
+
+// UpdateClientJSONRequestBody defines body for UpdateClient for application/json ContentType.
+type UpdateClientJSONRequestBody = ClientInput
+
+// SetClientAgentsJSONRequestBody defines body for SetClientAgents for application/json ContentType.
+type SetClientAgentsJSONRequestBody = ClientAgentsInput
+
+// CreateHolidayJSONRequestBody defines body for CreateHoliday for application/json ContentType.
+type CreateHolidayJSONRequestBody = HolidayInput
+
+// CreateSlaPlanJSONRequestBody defines body for CreateSlaPlan for application/json ContentType.
+type CreateSlaPlanJSONRequestBody = SlaPlanInput
+
+// UpdateSlaPlanJSONRequestBody defines body for UpdateSlaPlan for application/json ContentType.
+type UpdateSlaPlanJSONRequestBody = SlaPlanInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -186,9 +445,66 @@ type ServerInterface interface {
 	// ResetPassword Set a new password with a reset token
 	// (POST /auth/password/reset)
 	ResetPassword(w http.ResponseWriter, r *http.Request)
+	// GetBusinessHours The organisation's working hours
+	// (GET /business-hours)
+	GetBusinessHours(w http.ResponseWriter, r *http.Request)
+	// UpdateBusinessHours Replace the working hours (admin only)
+	// (PUT /business-hours)
+	UpdateBusinessHours(w http.ResponseWriter, r *http.Request)
+	// ListClients Clients the user may see, by name
+	// (GET /clients)
+	ListClients(w http.ResponseWriter, r *http.Request)
+	// CreateClient Add a client (admin only)
+	// (POST /clients)
+	CreateClient(w http.ResponseWriter, r *http.Request)
+	// DeleteClient Delete a client with no requesters (admin only)
+	// (DELETE /clients/{clientId})
+	DeleteClient(w http.ResponseWriter, r *http.Request, clientId ClientId)
+	// GetClient One client
+	// (GET /clients/{clientId})
+	GetClient(w http.ResponseWriter, r *http.Request, clientId ClientId)
+	// UpdateClient Replace a client's details (admin only)
+	// (PUT /clients/{clientId})
+	UpdateClient(w http.ResponseWriter, r *http.Request, clientId ClientId)
+	// SetClientAgents Replace the agents assigned to a client (admin only)
+	// (PUT /clients/{clientId}/agents)
+	SetClientAgents(w http.ResponseWriter, r *http.Request, clientId ClientId)
+	// ListHolidayPresets Bundled official holiday lists (admin only)
+	// (GET /holiday-presets)
+	ListHolidayPresets(w http.ResponseWriter, r *http.Request)
+	// LoadHolidayPreset Add a bundled year's missing holidays (admin only)
+	// (POST /holiday-presets/{year}/load)
+	LoadHolidayPreset(w http.ResponseWriter, r *http.Request, year int)
+	// ListHolidays Holidays in date order
+	// (GET /holidays)
+	ListHolidays(w http.ResponseWriter, r *http.Request, params ListHolidaysParams)
+	// CreateHoliday Add a holiday (admin only)
+	// (POST /holidays)
+	CreateHoliday(w http.ResponseWriter, r *http.Request)
+	// DeleteHoliday Delete a holiday (admin only)
+	// (DELETE /holidays/{holidayId})
+	DeleteHoliday(w http.ResponseWriter, r *http.Request, holidayId openapi_types.UUID)
 	// GetOrganization Public organisation branding for the sign-in page and footer
 	// (GET /organization)
 	GetOrganization(w http.ResponseWriter, r *http.Request)
+	// ListSlaPlans SLA plans, the default first
+	// (GET /sla-plans)
+	ListSlaPlans(w http.ResponseWriter, r *http.Request)
+	// CreateSlaPlan Add an SLA plan (admin only)
+	// (POST /sla-plans)
+	CreateSlaPlan(w http.ResponseWriter, r *http.Request)
+	// DeleteSlaPlan Delete a plan no client uses (admin only)
+	// (DELETE /sla-plans/{planId})
+	DeleteSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId)
+	// GetSlaPlan One SLA plan
+	// (GET /sla-plans/{planId})
+	GetSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId)
+	// UpdateSlaPlan Replace a plan's name and targets (admin only)
+	// (PUT /sla-plans/{planId})
+	UpdateSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId)
+	// SetDefaultSlaPlan Make a plan the default for new clients (admin only)
+	// (POST /sla-plans/{planId}/default)
+	SetDefaultSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId)
 	// ListUsers List all users (admin only)
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -228,9 +544,123 @@ func (_ Unimplemented) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// GetBusinessHours The organisation's working hours
+// (GET /business-hours)
+func (_ Unimplemented) GetBusinessHours(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateBusinessHours Replace the working hours (admin only)
+// (PUT /business-hours)
+func (_ Unimplemented) UpdateBusinessHours(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListClients Clients the user may see, by name
+// (GET /clients)
+func (_ Unimplemented) ListClients(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateClient Add a client (admin only)
+// (POST /clients)
+func (_ Unimplemented) CreateClient(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteClient Delete a client with no requesters (admin only)
+// (DELETE /clients/{clientId})
+func (_ Unimplemented) DeleteClient(w http.ResponseWriter, r *http.Request, clientId ClientId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetClient One client
+// (GET /clients/{clientId})
+func (_ Unimplemented) GetClient(w http.ResponseWriter, r *http.Request, clientId ClientId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateClient Replace a client's details (admin only)
+// (PUT /clients/{clientId})
+func (_ Unimplemented) UpdateClient(w http.ResponseWriter, r *http.Request, clientId ClientId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetClientAgents Replace the agents assigned to a client (admin only)
+// (PUT /clients/{clientId}/agents)
+func (_ Unimplemented) SetClientAgents(w http.ResponseWriter, r *http.Request, clientId ClientId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListHolidayPresets Bundled official holiday lists (admin only)
+// (GET /holiday-presets)
+func (_ Unimplemented) ListHolidayPresets(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// LoadHolidayPreset Add a bundled year's missing holidays (admin only)
+// (POST /holiday-presets/{year}/load)
+func (_ Unimplemented) LoadHolidayPreset(w http.ResponseWriter, r *http.Request, year int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListHolidays Holidays in date order
+// (GET /holidays)
+func (_ Unimplemented) ListHolidays(w http.ResponseWriter, r *http.Request, params ListHolidaysParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateHoliday Add a holiday (admin only)
+// (POST /holidays)
+func (_ Unimplemented) CreateHoliday(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteHoliday Delete a holiday (admin only)
+// (DELETE /holidays/{holidayId})
+func (_ Unimplemented) DeleteHoliday(w http.ResponseWriter, r *http.Request, holidayId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetOrganization Public organisation branding for the sign-in page and footer
 // (GET /organization)
 func (_ Unimplemented) GetOrganization(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListSlaPlans SLA plans, the default first
+// (GET /sla-plans)
+func (_ Unimplemented) ListSlaPlans(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateSlaPlan Add an SLA plan (admin only)
+// (POST /sla-plans)
+func (_ Unimplemented) CreateSlaPlan(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteSlaPlan Delete a plan no client uses (admin only)
+// (DELETE /sla-plans/{planId})
+func (_ Unimplemented) DeleteSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSlaPlan One SLA plan
+// (GET /sla-plans/{planId})
+func (_ Unimplemented) GetSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateSlaPlan Replace a plan's name and targets (admin only)
+// (PUT /sla-plans/{planId})
+func (_ Unimplemented) UpdateSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetDefaultSlaPlan Make a plan the default for new clients (admin only)
+// (POST /sla-plans/{planId}/default)
+func (_ Unimplemented) SetDefaultSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -319,11 +749,416 @@ func (siw *ServerInterfaceWrapper) ResetPassword(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetBusinessHours operation middleware
+func (siw *ServerInterfaceWrapper) GetBusinessHours(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBusinessHours(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateBusinessHours operation middleware
+func (siw *ServerInterfaceWrapper) UpdateBusinessHours(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateBusinessHours(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListClients operation middleware
+func (siw *ServerInterfaceWrapper) ListClients(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClients(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateClient operation middleware
+func (siw *ServerInterfaceWrapper) CreateClient(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateClient(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteClient operation middleware
+func (siw *ServerInterfaceWrapper) DeleteClient(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "clientId" -------------
+	var clientId ClientId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "clientId", chi.URLParam(r, "clientId"), &clientId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clientId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteClient(w, r, clientId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetClient operation middleware
+func (siw *ServerInterfaceWrapper) GetClient(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "clientId" -------------
+	var clientId ClientId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "clientId", chi.URLParam(r, "clientId"), &clientId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clientId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClient(w, r, clientId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateClient operation middleware
+func (siw *ServerInterfaceWrapper) UpdateClient(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "clientId" -------------
+	var clientId ClientId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "clientId", chi.URLParam(r, "clientId"), &clientId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clientId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateClient(w, r, clientId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetClientAgents operation middleware
+func (siw *ServerInterfaceWrapper) SetClientAgents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "clientId" -------------
+	var clientId ClientId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "clientId", chi.URLParam(r, "clientId"), &clientId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clientId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetClientAgents(w, r, clientId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListHolidayPresets operation middleware
+func (siw *ServerInterfaceWrapper) ListHolidayPresets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHolidayPresets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LoadHolidayPreset operation middleware
+func (siw *ServerInterfaceWrapper) LoadHolidayPreset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "year" -------------
+	var year int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "year", chi.URLParam(r, "year"), &year, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LoadHolidayPreset(w, r, year)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListHolidays operation middleware
+func (siw *ServerInterfaceWrapper) ListHolidays(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListHolidaysParams
+
+	// ------------- Optional query parameter "year" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "year", r.URL.Query(), &params.Year, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "year"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHolidays(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateHoliday operation middleware
+func (siw *ServerInterfaceWrapper) CreateHoliday(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateHoliday(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteHoliday operation middleware
+func (siw *ServerInterfaceWrapper) DeleteHoliday(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "holidayId" -------------
+	var holidayId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "holidayId", chi.URLParam(r, "holidayId"), &holidayId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "holidayId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteHoliday(w, r, holidayId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetOrganization operation middleware
 func (siw *ServerInterfaceWrapper) GetOrganization(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetOrganization(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSlaPlans operation middleware
+func (siw *ServerInterfaceWrapper) ListSlaPlans(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSlaPlans(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSlaPlan operation middleware
+func (siw *ServerInterfaceWrapper) CreateSlaPlan(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSlaPlan(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSlaPlan operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSlaPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planId" -------------
+	var planId PlanId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planId", chi.URLParam(r, "planId"), &planId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSlaPlan(w, r, planId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSlaPlan operation middleware
+func (siw *ServerInterfaceWrapper) GetSlaPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planId" -------------
+	var planId PlanId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planId", chi.URLParam(r, "planId"), &planId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSlaPlan(w, r, planId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSlaPlan operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSlaPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planId" -------------
+	var planId PlanId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planId", chi.URLParam(r, "planId"), &planId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSlaPlan(w, r, planId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetDefaultSlaPlan operation middleware
+func (siw *ServerInterfaceWrapper) SetDefaultSlaPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planId" -------------
+	var planId PlanId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planId", chi.URLParam(r, "planId"), &planId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetDefaultSlaPlan(w, r, planId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -480,6 +1315,63 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/clients", wrapper.ListClients)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/clients", wrapper.CreateClient)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/clients/{clientId}", wrapper.DeleteClient)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/clients/{clientId}", wrapper.GetClient)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/clients/{clientId}", wrapper.UpdateClient)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/clients/{clientId}/agents", wrapper.SetClientAgents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/sla-plans", wrapper.ListSlaPlans)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/sla-plans", wrapper.CreateSlaPlan)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/sla-plans/{planId}", wrapper.DeleteSlaPlan)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/sla-plans/{planId}", wrapper.GetSlaPlan)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/sla-plans/{planId}", wrapper.UpdateSlaPlan)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/sla-plans/{planId}/default", wrapper.SetDefaultSlaPlan)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/business-hours", wrapper.GetBusinessHours)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/business-hours", wrapper.UpdateBusinessHours)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/holidays", wrapper.ListHolidays)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/holidays", wrapper.CreateHoliday)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/holidays/{holidayId}", wrapper.DeleteHoliday)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/holiday-presets", wrapper.ListHolidayPresets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/holiday-presets/{year}/load", wrapper.LoadHolidayPreset)
 	})
 
 	return r
@@ -756,6 +1648,1100 @@ func (response ResetPassworddefaultApplicationProblemPlusJSONResponse) VisitRese
 	return err
 }
 
+type GetBusinessHoursRequestObject struct {
+}
+
+type GetBusinessHoursResponseObject interface {
+	VisitGetBusinessHoursResponse(w http.ResponseWriter) error
+}
+
+type GetBusinessHours200JSONResponse BusinessHours
+
+func (response GetBusinessHours200JSONResponse) VisitGetBusinessHoursResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBusinessHours401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetBusinessHours401ApplicationProblemPlusJSONResponse) VisitGetBusinessHoursResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBusinessHoursdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetBusinessHoursdefaultApplicationProblemPlusJSONResponse) VisitGetBusinessHoursResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBusinessHoursRequestObject struct {
+	Body *UpdateBusinessHoursJSONRequestBody
+}
+
+type UpdateBusinessHoursResponseObject interface {
+	VisitUpdateBusinessHoursResponse(w http.ResponseWriter) error
+}
+
+type UpdateBusinessHours200JSONResponse BusinessHours
+
+func (response UpdateBusinessHours200JSONResponse) VisitUpdateBusinessHoursResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBusinessHours400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBusinessHours400ApplicationProblemPlusJSONResponse) VisitUpdateBusinessHoursResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBusinessHours401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateBusinessHours401ApplicationProblemPlusJSONResponse) VisitUpdateBusinessHoursResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBusinessHours403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateBusinessHours403ApplicationProblemPlusJSONResponse) VisitUpdateBusinessHoursResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBusinessHoursdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateBusinessHoursdefaultApplicationProblemPlusJSONResponse) VisitUpdateBusinessHoursResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClientsRequestObject struct {
+}
+
+type ListClientsResponseObject interface {
+	VisitListClientsResponse(w http.ResponseWriter) error
+}
+
+type ListClients200JSONResponse []Client
+
+func (response ListClients200JSONResponse) VisitListClientsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClients401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListClients401ApplicationProblemPlusJSONResponse) VisitListClientsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClients403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListClients403ApplicationProblemPlusJSONResponse) VisitListClientsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClientsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListClientsdefaultApplicationProblemPlusJSONResponse) VisitListClientsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClientRequestObject struct {
+	Body *CreateClientJSONRequestBody
+}
+
+type CreateClientResponseObject interface {
+	VisitCreateClientResponse(w http.ResponseWriter) error
+}
+
+type CreateClient201JSONResponse Client
+
+func (response CreateClient201JSONResponse) VisitCreateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClient400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateClient400ApplicationProblemPlusJSONResponse) VisitCreateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClient401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateClient401ApplicationProblemPlusJSONResponse) VisitCreateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClient403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateClient403ApplicationProblemPlusJSONResponse) VisitCreateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClient409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateClient409ApplicationProblemPlusJSONResponse) VisitCreateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateClientdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateClientdefaultApplicationProblemPlusJSONResponse) VisitCreateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteClientRequestObject struct {
+	ClientId ClientId `json:"clientId"`
+}
+
+type DeleteClientResponseObject interface {
+	VisitDeleteClientResponse(w http.ResponseWriter) error
+}
+
+type DeleteClient204Response struct {
+}
+
+func (response DeleteClient204Response) VisitDeleteClientResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteClient401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteClient401ApplicationProblemPlusJSONResponse) VisitDeleteClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteClient403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteClient403ApplicationProblemPlusJSONResponse) VisitDeleteClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteClient404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteClient404ApplicationProblemPlusJSONResponse) VisitDeleteClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteClient409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteClient409ApplicationProblemPlusJSONResponse) VisitDeleteClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteClientdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteClientdefaultApplicationProblemPlusJSONResponse) VisitDeleteClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClientRequestObject struct {
+	ClientId ClientId `json:"clientId"`
+}
+
+type GetClientResponseObject interface {
+	VisitGetClientResponse(w http.ResponseWriter) error
+}
+
+type GetClient200JSONResponse Client
+
+func (response GetClient200JSONResponse) VisitGetClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClient401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetClient401ApplicationProblemPlusJSONResponse) VisitGetClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClient403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetClient403ApplicationProblemPlusJSONResponse) VisitGetClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClient404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetClient404ApplicationProblemPlusJSONResponse) VisitGetClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClientdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetClientdefaultApplicationProblemPlusJSONResponse) VisitGetClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateClientRequestObject struct {
+	ClientId ClientId `json:"clientId"`
+	Body     *UpdateClientJSONRequestBody
+}
+
+type UpdateClientResponseObject interface {
+	VisitUpdateClientResponse(w http.ResponseWriter) error
+}
+
+type UpdateClient200JSONResponse Client
+
+func (response UpdateClient200JSONResponse) VisitUpdateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateClient400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateClient400ApplicationProblemPlusJSONResponse) VisitUpdateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateClient401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateClient401ApplicationProblemPlusJSONResponse) VisitUpdateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateClient403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateClient403ApplicationProblemPlusJSONResponse) VisitUpdateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateClient404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateClient404ApplicationProblemPlusJSONResponse) VisitUpdateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateClient409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateClient409ApplicationProblemPlusJSONResponse) VisitUpdateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateClientdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateClientdefaultApplicationProblemPlusJSONResponse) VisitUpdateClientResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetClientAgentsRequestObject struct {
+	ClientId ClientId `json:"clientId"`
+	Body     *SetClientAgentsJSONRequestBody
+}
+
+type SetClientAgentsResponseObject interface {
+	VisitSetClientAgentsResponse(w http.ResponseWriter) error
+}
+
+type SetClientAgents200JSONResponse Client
+
+func (response SetClientAgents200JSONResponse) VisitSetClientAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetClientAgents400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetClientAgents400ApplicationProblemPlusJSONResponse) VisitSetClientAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetClientAgents401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetClientAgents401ApplicationProblemPlusJSONResponse) VisitSetClientAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetClientAgents403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetClientAgents403ApplicationProblemPlusJSONResponse) VisitSetClientAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetClientAgents404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetClientAgents404ApplicationProblemPlusJSONResponse) VisitSetClientAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetClientAgentsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetClientAgentsdefaultApplicationProblemPlusJSONResponse) VisitSetClientAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHolidayPresetsRequestObject struct {
+}
+
+type ListHolidayPresetsResponseObject interface {
+	VisitListHolidayPresetsResponse(w http.ResponseWriter) error
+}
+
+type ListHolidayPresets200JSONResponse []HolidayPreset
+
+func (response ListHolidayPresets200JSONResponse) VisitListHolidayPresetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHolidayPresets401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListHolidayPresets401ApplicationProblemPlusJSONResponse) VisitListHolidayPresetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHolidayPresets403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListHolidayPresets403ApplicationProblemPlusJSONResponse) VisitListHolidayPresetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHolidayPresetsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListHolidayPresetsdefaultApplicationProblemPlusJSONResponse) VisitListHolidayPresetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LoadHolidayPresetRequestObject struct {
+	Year int `json:"year"`
+}
+
+type LoadHolidayPresetResponseObject interface {
+	VisitLoadHolidayPresetResponse(w http.ResponseWriter) error
+}
+
+type LoadHolidayPreset200JSONResponse HolidayPresetLoadResult
+
+func (response LoadHolidayPreset200JSONResponse) VisitLoadHolidayPresetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LoadHolidayPreset401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response LoadHolidayPreset401ApplicationProblemPlusJSONResponse) VisitLoadHolidayPresetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LoadHolidayPreset403ApplicationProblemPlusJSONResponse Problem
+
+func (response LoadHolidayPreset403ApplicationProblemPlusJSONResponse) VisitLoadHolidayPresetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LoadHolidayPreset404ApplicationProblemPlusJSONResponse Problem
+
+func (response LoadHolidayPreset404ApplicationProblemPlusJSONResponse) VisitLoadHolidayPresetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LoadHolidayPresetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response LoadHolidayPresetdefaultApplicationProblemPlusJSONResponse) VisitLoadHolidayPresetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHolidaysRequestObject struct {
+	Params ListHolidaysParams
+}
+
+type ListHolidaysResponseObject interface {
+	VisitListHolidaysResponse(w http.ResponseWriter) error
+}
+
+type ListHolidays200JSONResponse []Holiday
+
+func (response ListHolidays200JSONResponse) VisitListHolidaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHolidays400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListHolidays400ApplicationProblemPlusJSONResponse) VisitListHolidaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHolidays401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListHolidays401ApplicationProblemPlusJSONResponse) VisitListHolidaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHolidays403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListHolidays403ApplicationProblemPlusJSONResponse) VisitListHolidaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListHolidaysdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListHolidaysdefaultApplicationProblemPlusJSONResponse) VisitListHolidaysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateHolidayRequestObject struct {
+	Body *CreateHolidayJSONRequestBody
+}
+
+type CreateHolidayResponseObject interface {
+	VisitCreateHolidayResponse(w http.ResponseWriter) error
+}
+
+type CreateHoliday201JSONResponse Holiday
+
+func (response CreateHoliday201JSONResponse) VisitCreateHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateHoliday400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateHoliday400ApplicationProblemPlusJSONResponse) VisitCreateHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateHoliday401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateHoliday401ApplicationProblemPlusJSONResponse) VisitCreateHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateHoliday403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateHoliday403ApplicationProblemPlusJSONResponse) VisitCreateHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateHoliday409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateHoliday409ApplicationProblemPlusJSONResponse) VisitCreateHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateHolidaydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateHolidaydefaultApplicationProblemPlusJSONResponse) VisitCreateHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteHolidayRequestObject struct {
+	HolidayId openapi_types.UUID `json:"holidayId"`
+}
+
+type DeleteHolidayResponseObject interface {
+	VisitDeleteHolidayResponse(w http.ResponseWriter) error
+}
+
+type DeleteHoliday204Response struct {
+}
+
+func (response DeleteHoliday204Response) VisitDeleteHolidayResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteHoliday401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteHoliday401ApplicationProblemPlusJSONResponse) VisitDeleteHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteHoliday403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteHoliday403ApplicationProblemPlusJSONResponse) VisitDeleteHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteHoliday404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteHoliday404ApplicationProblemPlusJSONResponse) VisitDeleteHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteHolidaydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteHolidaydefaultApplicationProblemPlusJSONResponse) VisitDeleteHolidayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetOrganizationRequestObject struct {
 }
 
@@ -783,6 +2769,540 @@ type GetOrganizationdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetOrganizationdefaultApplicationProblemPlusJSONResponse) VisitGetOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSlaPlansRequestObject struct {
+}
+
+type ListSlaPlansResponseObject interface {
+	VisitListSlaPlansResponse(w http.ResponseWriter) error
+}
+
+type ListSlaPlans200JSONResponse []SlaPlan
+
+func (response ListSlaPlans200JSONResponse) VisitListSlaPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSlaPlans401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListSlaPlans401ApplicationProblemPlusJSONResponse) VisitListSlaPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSlaPlans403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListSlaPlans403ApplicationProblemPlusJSONResponse) VisitListSlaPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSlaPlansdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListSlaPlansdefaultApplicationProblemPlusJSONResponse) VisitListSlaPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSlaPlanRequestObject struct {
+	Body *CreateSlaPlanJSONRequestBody
+}
+
+type CreateSlaPlanResponseObject interface {
+	VisitCreateSlaPlanResponse(w http.ResponseWriter) error
+}
+
+type CreateSlaPlan201JSONResponse SlaPlan
+
+func (response CreateSlaPlan201JSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSlaPlan400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateSlaPlan400ApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSlaPlan401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSlaPlan401ApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSlaPlan403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSlaPlan403ApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSlaPlan409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSlaPlan409ApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSlaPlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateSlaPlandefaultApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSlaPlanRequestObject struct {
+	PlanId PlanId `json:"planId"`
+}
+
+type DeleteSlaPlanResponseObject interface {
+	VisitDeleteSlaPlanResponse(w http.ResponseWriter) error
+}
+
+type DeleteSlaPlan204Response struct {
+}
+
+func (response DeleteSlaPlan204Response) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSlaPlan401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteSlaPlan401ApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSlaPlan403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteSlaPlan403ApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSlaPlan404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteSlaPlan404ApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSlaPlan409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteSlaPlan409ApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSlaPlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteSlaPlandefaultApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSlaPlanRequestObject struct {
+	PlanId PlanId `json:"planId"`
+}
+
+type GetSlaPlanResponseObject interface {
+	VisitGetSlaPlanResponse(w http.ResponseWriter) error
+}
+
+type GetSlaPlan200JSONResponse SlaPlan
+
+func (response GetSlaPlan200JSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSlaPlan401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetSlaPlan401ApplicationProblemPlusJSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSlaPlan403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetSlaPlan403ApplicationProblemPlusJSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSlaPlan404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetSlaPlan404ApplicationProblemPlusJSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSlaPlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetSlaPlandefaultApplicationProblemPlusJSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSlaPlanRequestObject struct {
+	PlanId PlanId `json:"planId"`
+	Body   *UpdateSlaPlanJSONRequestBody
+}
+
+type UpdateSlaPlanResponseObject interface {
+	VisitUpdateSlaPlanResponse(w http.ResponseWriter) error
+}
+
+type UpdateSlaPlan200JSONResponse SlaPlan
+
+func (response UpdateSlaPlan200JSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSlaPlan400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSlaPlan400ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSlaPlan401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateSlaPlan401ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSlaPlan403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateSlaPlan403ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSlaPlan404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateSlaPlan404ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSlaPlan409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateSlaPlan409ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSlaPlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateSlaPlandefaultApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetDefaultSlaPlanRequestObject struct {
+	PlanId PlanId `json:"planId"`
+}
+
+type SetDefaultSlaPlanResponseObject interface {
+	VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error
+}
+
+type SetDefaultSlaPlan200JSONResponse SlaPlan
+
+func (response SetDefaultSlaPlan200JSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetDefaultSlaPlan401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetDefaultSlaPlan401ApplicationProblemPlusJSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetDefaultSlaPlan403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetDefaultSlaPlan403ApplicationProblemPlusJSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetDefaultSlaPlan404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetDefaultSlaPlan404ApplicationProblemPlusJSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetDefaultSlaPlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetDefaultSlaPlandefaultApplicationProblemPlusJSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -879,9 +3399,66 @@ type StrictServerInterface interface {
 	// ResetPassword Set a new password with a reset token
 	// (POST /auth/password/reset)
 	ResetPassword(ctx context.Context, request ResetPasswordRequestObject) (ResetPasswordResponseObject, error)
+	// GetBusinessHours The organisation's working hours
+	// (GET /business-hours)
+	GetBusinessHours(ctx context.Context, request GetBusinessHoursRequestObject) (GetBusinessHoursResponseObject, error)
+	// UpdateBusinessHours Replace the working hours (admin only)
+	// (PUT /business-hours)
+	UpdateBusinessHours(ctx context.Context, request UpdateBusinessHoursRequestObject) (UpdateBusinessHoursResponseObject, error)
+	// ListClients Clients the user may see, by name
+	// (GET /clients)
+	ListClients(ctx context.Context, request ListClientsRequestObject) (ListClientsResponseObject, error)
+	// CreateClient Add a client (admin only)
+	// (POST /clients)
+	CreateClient(ctx context.Context, request CreateClientRequestObject) (CreateClientResponseObject, error)
+	// DeleteClient Delete a client with no requesters (admin only)
+	// (DELETE /clients/{clientId})
+	DeleteClient(ctx context.Context, request DeleteClientRequestObject) (DeleteClientResponseObject, error)
+	// GetClient One client
+	// (GET /clients/{clientId})
+	GetClient(ctx context.Context, request GetClientRequestObject) (GetClientResponseObject, error)
+	// UpdateClient Replace a client's details (admin only)
+	// (PUT /clients/{clientId})
+	UpdateClient(ctx context.Context, request UpdateClientRequestObject) (UpdateClientResponseObject, error)
+	// SetClientAgents Replace the agents assigned to a client (admin only)
+	// (PUT /clients/{clientId}/agents)
+	SetClientAgents(ctx context.Context, request SetClientAgentsRequestObject) (SetClientAgentsResponseObject, error)
+	// ListHolidayPresets Bundled official holiday lists (admin only)
+	// (GET /holiday-presets)
+	ListHolidayPresets(ctx context.Context, request ListHolidayPresetsRequestObject) (ListHolidayPresetsResponseObject, error)
+	// LoadHolidayPreset Add a bundled year's missing holidays (admin only)
+	// (POST /holiday-presets/{year}/load)
+	LoadHolidayPreset(ctx context.Context, request LoadHolidayPresetRequestObject) (LoadHolidayPresetResponseObject, error)
+	// ListHolidays Holidays in date order
+	// (GET /holidays)
+	ListHolidays(ctx context.Context, request ListHolidaysRequestObject) (ListHolidaysResponseObject, error)
+	// CreateHoliday Add a holiday (admin only)
+	// (POST /holidays)
+	CreateHoliday(ctx context.Context, request CreateHolidayRequestObject) (CreateHolidayResponseObject, error)
+	// DeleteHoliday Delete a holiday (admin only)
+	// (DELETE /holidays/{holidayId})
+	DeleteHoliday(ctx context.Context, request DeleteHolidayRequestObject) (DeleteHolidayResponseObject, error)
 	// GetOrganization Public organisation branding for the sign-in page and footer
 	// (GET /organization)
 	GetOrganization(ctx context.Context, request GetOrganizationRequestObject) (GetOrganizationResponseObject, error)
+	// ListSlaPlans SLA plans, the default first
+	// (GET /sla-plans)
+	ListSlaPlans(ctx context.Context, request ListSlaPlansRequestObject) (ListSlaPlansResponseObject, error)
+	// CreateSlaPlan Add an SLA plan (admin only)
+	// (POST /sla-plans)
+	CreateSlaPlan(ctx context.Context, request CreateSlaPlanRequestObject) (CreateSlaPlanResponseObject, error)
+	// DeleteSlaPlan Delete a plan no client uses (admin only)
+	// (DELETE /sla-plans/{planId})
+	DeleteSlaPlan(ctx context.Context, request DeleteSlaPlanRequestObject) (DeleteSlaPlanResponseObject, error)
+	// GetSlaPlan One SLA plan
+	// (GET /sla-plans/{planId})
+	GetSlaPlan(ctx context.Context, request GetSlaPlanRequestObject) (GetSlaPlanResponseObject, error)
+	// UpdateSlaPlan Replace a plan's name and targets (admin only)
+	// (PUT /sla-plans/{planId})
+	UpdateSlaPlan(ctx context.Context, request UpdateSlaPlanRequestObject) (UpdateSlaPlanResponseObject, error)
+	// SetDefaultSlaPlan Make a plan the default for new clients (admin only)
+	// (POST /sla-plans/{planId}/default)
+	SetDefaultSlaPlan(ctx context.Context, request SetDefaultSlaPlanRequestObject) (SetDefaultSlaPlanResponseObject, error)
 	// ListUsers List all users (admin only)
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -1067,6 +3644,367 @@ func (sh *strictHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetBusinessHours operation middleware
+func (sh *strictHandler) GetBusinessHours(w http.ResponseWriter, r *http.Request) {
+	var request GetBusinessHoursRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBusinessHours(ctx, request.(GetBusinessHoursRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBusinessHours")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBusinessHoursResponseObject); ok {
+		if err := validResponse.VisitGetBusinessHoursResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateBusinessHours operation middleware
+func (sh *strictHandler) UpdateBusinessHours(w http.ResponseWriter, r *http.Request) {
+	var request UpdateBusinessHoursRequestObject
+
+	var body UpdateBusinessHoursJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateBusinessHours(ctx, request.(UpdateBusinessHoursRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateBusinessHours")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateBusinessHoursResponseObject); ok {
+		if err := validResponse.VisitUpdateBusinessHoursResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListClients operation middleware
+func (sh *strictHandler) ListClients(w http.ResponseWriter, r *http.Request) {
+	var request ListClientsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListClients(ctx, request.(ListClientsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListClients")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListClientsResponseObject); ok {
+		if err := validResponse.VisitListClientsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateClient operation middleware
+func (sh *strictHandler) CreateClient(w http.ResponseWriter, r *http.Request) {
+	var request CreateClientRequestObject
+
+	var body CreateClientJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateClient(ctx, request.(CreateClientRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateClient")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateClientResponseObject); ok {
+		if err := validResponse.VisitCreateClientResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteClient operation middleware
+func (sh *strictHandler) DeleteClient(w http.ResponseWriter, r *http.Request, clientId ClientId) {
+	var request DeleteClientRequestObject
+
+	request.ClientId = clientId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteClient(ctx, request.(DeleteClientRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteClient")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteClientResponseObject); ok {
+		if err := validResponse.VisitDeleteClientResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetClient operation middleware
+func (sh *strictHandler) GetClient(w http.ResponseWriter, r *http.Request, clientId ClientId) {
+	var request GetClientRequestObject
+
+	request.ClientId = clientId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetClient(ctx, request.(GetClientRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetClient")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetClientResponseObject); ok {
+		if err := validResponse.VisitGetClientResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateClient operation middleware
+func (sh *strictHandler) UpdateClient(w http.ResponseWriter, r *http.Request, clientId ClientId) {
+	var request UpdateClientRequestObject
+
+	request.ClientId = clientId
+
+	var body UpdateClientJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateClient(ctx, request.(UpdateClientRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateClient")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateClientResponseObject); ok {
+		if err := validResponse.VisitUpdateClientResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetClientAgents operation middleware
+func (sh *strictHandler) SetClientAgents(w http.ResponseWriter, r *http.Request, clientId ClientId) {
+	var request SetClientAgentsRequestObject
+
+	request.ClientId = clientId
+
+	var body SetClientAgentsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetClientAgents(ctx, request.(SetClientAgentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetClientAgents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetClientAgentsResponseObject); ok {
+		if err := validResponse.VisitSetClientAgentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListHolidayPresets operation middleware
+func (sh *strictHandler) ListHolidayPresets(w http.ResponseWriter, r *http.Request) {
+	var request ListHolidayPresetsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListHolidayPresets(ctx, request.(ListHolidayPresetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListHolidayPresets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListHolidayPresetsResponseObject); ok {
+		if err := validResponse.VisitListHolidayPresetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LoadHolidayPreset operation middleware
+func (sh *strictHandler) LoadHolidayPreset(w http.ResponseWriter, r *http.Request, year int) {
+	var request LoadHolidayPresetRequestObject
+
+	request.Year = year
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LoadHolidayPreset(ctx, request.(LoadHolidayPresetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LoadHolidayPreset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LoadHolidayPresetResponseObject); ok {
+		if err := validResponse.VisitLoadHolidayPresetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListHolidays operation middleware
+func (sh *strictHandler) ListHolidays(w http.ResponseWriter, r *http.Request, params ListHolidaysParams) {
+	var request ListHolidaysRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListHolidays(ctx, request.(ListHolidaysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListHolidays")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListHolidaysResponseObject); ok {
+		if err := validResponse.VisitListHolidaysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateHoliday operation middleware
+func (sh *strictHandler) CreateHoliday(w http.ResponseWriter, r *http.Request) {
+	var request CreateHolidayRequestObject
+
+	var body CreateHolidayJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateHoliday(ctx, request.(CreateHolidayRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateHoliday")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateHolidayResponseObject); ok {
+		if err := validResponse.VisitCreateHolidayResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteHoliday operation middleware
+func (sh *strictHandler) DeleteHoliday(w http.ResponseWriter, r *http.Request, holidayId openapi_types.UUID) {
+	var request DeleteHolidayRequestObject
+
+	request.HolidayId = holidayId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteHoliday(ctx, request.(DeleteHolidayRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteHoliday")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteHolidayResponseObject); ok {
+		if err := validResponse.VisitDeleteHolidayResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetOrganization operation middleware
 func (sh *strictHandler) GetOrganization(w http.ResponseWriter, r *http.Request) {
 	var request GetOrganizationRequestObject
@@ -1084,6 +4022,172 @@ func (sh *strictHandler) GetOrganization(w http.ResponseWriter, r *http.Request)
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetOrganizationResponseObject); ok {
 		if err := validResponse.VisitGetOrganizationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSlaPlans operation middleware
+func (sh *strictHandler) ListSlaPlans(w http.ResponseWriter, r *http.Request) {
+	var request ListSlaPlansRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSlaPlans(ctx, request.(ListSlaPlansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSlaPlans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSlaPlansResponseObject); ok {
+		if err := validResponse.VisitListSlaPlansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSlaPlan operation middleware
+func (sh *strictHandler) CreateSlaPlan(w http.ResponseWriter, r *http.Request) {
+	var request CreateSlaPlanRequestObject
+
+	var body CreateSlaPlanJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSlaPlan(ctx, request.(CreateSlaPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSlaPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSlaPlanResponseObject); ok {
+		if err := validResponse.VisitCreateSlaPlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSlaPlan operation middleware
+func (sh *strictHandler) DeleteSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
+	var request DeleteSlaPlanRequestObject
+
+	request.PlanId = planId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSlaPlan(ctx, request.(DeleteSlaPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSlaPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSlaPlanResponseObject); ok {
+		if err := validResponse.VisitDeleteSlaPlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSlaPlan operation middleware
+func (sh *strictHandler) GetSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
+	var request GetSlaPlanRequestObject
+
+	request.PlanId = planId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSlaPlan(ctx, request.(GetSlaPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSlaPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSlaPlanResponseObject); ok {
+		if err := validResponse.VisitGetSlaPlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateSlaPlan operation middleware
+func (sh *strictHandler) UpdateSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
+	var request UpdateSlaPlanRequestObject
+
+	request.PlanId = planId
+
+	var body UpdateSlaPlanJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateSlaPlan(ctx, request.(UpdateSlaPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateSlaPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateSlaPlanResponseObject); ok {
+		if err := validResponse.VisitUpdateSlaPlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetDefaultSlaPlan operation middleware
+func (sh *strictHandler) SetDefaultSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
+	var request SetDefaultSlaPlanRequestObject
+
+	request.PlanId = planId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetDefaultSlaPlan(ctx, request.(SetDefaultSlaPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetDefaultSlaPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetDefaultSlaPlanResponseObject); ok {
+		if err := validResponse.VisitSetDefaultSlaPlanResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1120,38 +4224,73 @@ func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"vFjbchu5Ef2VLiQPcmV4Ea2t7LIqD4otr1WRY5Yo5UVWieBMcwYWBpgFekhxXfyuvOfLUgB4mSGHIr0r",
-	"620uQKNx+vRpNL6xWOeFVqjIsv43ZtAWWln0LwOjxxJz9xhrRajIPfKikCLmJLTqFGHE375ardw/G2eY",
-	"c/f0V4MT1md/6Wzsd8Jf21nZXSwWEUvQxkYUzhzrswtjtIGT6w/v4Jezn/4OywUgQeJC2jdsEbFrTngl",
-	"ckGYvKZrN1pDztUcOBHmBVkWsQx5gsaDdY1k5q3zCaFxr/W5Q4y1SiyQhhkXBGOcaINAZi5UCjzlQrVZ",
-	"VPGR5gWyPhOKMEXj3HEOLb10A95JgYqu3U6+scLoAg2JEDbhYZlok3NifVaWImHRyqIlI1TqYFQ8x8pS",
-	"qx+LiBn8rRTGoXvH/Fw/9H5tQ4+/YkzOxgdtUk0Dbu1Mm+QafyvR0q5HmHMh3UPOn65QpZSxfu+ns4jl",
-	"Qq3e30YHPAlGmry40qlQL7x4xIrlrramnvZ+rk09Pc7vir2mLXzCXcdjH2LPayk/T1j/7nnubiixuI92",
-	"CEgw0QZMQAmNBa3k3JFOlVLysUTWJ1PiItoAtgPJkcz6qsc3gqTfEj7xvHCP7Kq3s9jxrIyY0cHgcwhc",
-	"uzGNDF4FwZtfGmuKw2eTciV+5wG27YhMtCY0/9a0tbX3nDhY0gYTEAouVaIVWsHhf/+FARqrFZeQuEEZ",
-	"V4nEBEqVoIHbWxi8HxwDi9SpvjU+KkdDWPEPcw3/QZVoww7RdW+uV6rBFk91gg2SR85JyHmcCYUtgzzx",
-	"H9ArvJsTAbbTNoyEmnIpkofYYIKKBJd25Ii58b9hRBPvQpFoZI9f1e56+UGgTFoSpyjBr+EjH5y0zglB",
-	"mNsGJrh5jSvlaC1Pj1DWYGIzoQnz5QduDJ+z5Xy0dNm8tCVOpa2F/qy70ad1MYkY7abnreIlZdqI37Ex",
-	"qcOH6gw+1iX1x5Krx4Os8n9X6649jQJ3mnZ+jRYPF5aqRtcDe9p1xfa09zPEGTc8dpLn4vmcknebtq0f",
-	"UW1Xj263NrHXPbh9b+VADbheKhyqMneTeJILN8mWBZqpsD55eepqwpoJaCqmNl7f2nAKecmC8mPrxGEF",
-	"5JZ8oT+nmvGEE7ZIeFl/jepSTbPnRrsQDMPIoyvS2nYTPSoGqySJSUzdTKGm/kTs+GILVAkmDdRw7mNc",
-	"GkHzoXM0EMOitUKrd1o/igYpHz08fNSWWjZ5WI4cwSxDBRbNFBPQUzTw8eZmMPSK6abEwdQKcbaZuiEC",
-	"L8S/cB6O2kJN9O7C54NLf2oZivw92scIuAJdoGpZXZoYwaKctDJtCRPIUBYJ2sf2F/VFnZeUuUIRegEo",
-	"LVrgsPQAgnNgkWA8h9Hg8/AGOk79OtIRbNSGmwxXo4T9otwmEhhV9+/3XEgulN85nCSuhugiR0VvgKsE",
-	"mlCrIPVFXUzRzN1+TPBySZGqp6WSaC0IAmEh5+YREyjKsRQxnIxWgezD3f3ojd+3b5+s2y/sa6HgZLSv",
-	"TfJGWMSkiFHZkJYhfOe/Dq5ab9tdFrHSnUJYRlTYfqczm83aqSrb2qSd5TTb4Wkh3eh2RrmslBu2jCOc",
-	"Dy5ZxKZobIhzt33a7rqBLri8EKzP3PS3XjEp8xytBMgrmw71YA2fq4mhE9io4z91Mn+mRfy+1rDWZSzq",
-	"Ob1UxFr33Ot2X2ztT9jUkQ5FqvyJMxB2i97COoa3613qEKm1L82H9fknH4mKz0rOIxjyHIeC8B9X/OlN",
-	"Y6O61hfn5Vn3dN+G1ghtOu2InfV+OTy+2vV7JCa8lPQd61Skj/Xv7p1O5jk38yWQ7uA+E5SBF2afwetq",
-	"HTHiqfVyW1LG7p2tNR91Sc8S0v3focZZA/whmrqkfeGMJXKDyXeE9OKpcATdsnU4gn8M3TqeuiSPIqoE",
-	"yOlpaQwqgkod2ANqqNEpNuD5K9InZK+eae+Wvpc2nJ+/l+F/Ek9PB0+PllDBif3orVjbmfjLmSo3t6qr",
-	"nPG5BYNUGmWh1+1FrqxThga0AaXJxy3kwxilVqm/weLeA0eiemzql0E/SIWbb5yOkuPeLgSXE79FHse6",
-	"VAT4JCzZCDgY136AFOrRJZ5WIMjCjM/bL649F0Fu1mJTWfqYIPvR+2PsMtH6PbqY+ZxEd+yYZWiwDRfr",
-	"ZtwCN7jpxX3DMgrnmBnyx4fVgqPduNdatR8U9sZ28KioNyjtyo5rDVXqBNWndPcVUnpfAUICDgpnGxr4",
-	"WrQi4qp/bKCD3rqx2iebtZutHyigtXUapDT8t+HIOzZcJevbmxcEdBAOybppMd9S0FJSnaAWPEVP9XC/",
-	"V8G5Bm7A2+WR3Qv0lbB060f8SYjX906Heszda6JdzL1HoE2C7jAwnoM/1v+Rk1r37WvWPYcmcCm9eFk4",
-	"8Tci/uL6TSVIISL3iy0+7LS1d/cLxxHXs7oI3n1b9jIdXojO9NRfcixtrhufGgEW0fq7T8DKe/Bhcb/4",
-	"fwAAAP//",
+	"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",
+	"xbhoQSy+0hiqjijenl/e/V8AAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

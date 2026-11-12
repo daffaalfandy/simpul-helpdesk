@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata" // business hours need IANA zones even on hosts without zoneinfo
 
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
@@ -22,11 +23,14 @@ import (
 	"golang.org/x/term"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/seed"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/webui"
 )
@@ -38,8 +42,11 @@ const (
 	cmdMigrate    = "migrate"
 	cmdSeed       = "seed"
 	cmdUser       = "user"
+	cmdHolidays   = "holidays"
 	cmdHelp       = "help"
 	subUserCreate = "create"
+	subPresets    = "presets"
+	subLoadPreset = "load-preset"
 	migrateUp     = "up"
 	migrateDown   = "down"
 	migrateStatus = "status"
@@ -70,6 +77,9 @@ Usage:
   simdesk migrate [up|down|status]
   simdesk seed               load demo data (APP_ENV=dev only)
   simdesk user create --email E --name N [--role admin] [--client NAME] [--job-title T] [--password-stdin]
+  simdesk holidays presets   list the bundled official holiday lists
+  simdesk holidays load-preset --year YYYY
+                             add a bundled year's missing holidays
 
 Configuration is read from environment variables (see .env.example).
 `
@@ -94,6 +104,8 @@ func main() {
 		err = runSeed(ctx)
 	case cmdUser:
 		err = runUser(ctx, args)
+	case cmdHolidays:
+		err = runHolidays(ctx, args)
 	case cmdHelp, "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -119,12 +131,14 @@ func errorMessage(err error) string {
 
 // app holds the shared wiring for every command.
 type app struct {
-	cfg    config.Config
-	log    *slog.Logger
-	store  *store.Store
-	hasher *auth.Hasher
-	jobs   *river.Client[pgx.Tx]
-	auth   *auth.Service
+	cfg     config.Config
+	log     *slog.Logger
+	store   *store.Store
+	hasher  *auth.Hasher
+	jobs    *river.Client[pgx.Tx]
+	auth    *auth.Service
+	clients *clients.Service
+	sla     *sla.Service
 }
 
 func newApp(ctx context.Context, runJobs bool) (*app, error) {
@@ -159,7 +173,9 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	hasher := auth.NewHasher(auth.DefaultParams, auth.DefaultMaxConcurrentHashes)
 	return &app{
 		cfg: cfg, log: log, store: st, hasher: hasher, jobs: jobs,
-		auth: auth.NewService(st, hasher, jobs, opts, log),
+		auth:    auth.NewService(st, hasher, jobs, opts, log),
+		clients: clients.NewService(st),
+		sla:     sla.NewService(st),
 	}, nil
 }
 
@@ -182,7 +198,9 @@ func runServe(ctx context.Context, args []string) error {
 	}
 	defer a.store.Close()
 
-	handler, err := httpapi.New(httpapi.Deps{Config: a.cfg, Store: a.store, Auth: a.auth, Logger: a.log, WebUI: webui.FS()})
+	handler, err := httpapi.New(httpapi.Deps{
+		Config: a.cfg, Store: a.store, Auth: a.auth, Clients: a.clients, SLA: a.sla, Logger: a.log, WebUI: webui.FS(),
+	})
 	if err != nil {
 		return err
 	}
@@ -313,6 +331,45 @@ func runUser(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("Created %s %s (%s)\n", *role, auth.NormalizeEmail(*email), id)
 	return nil
+}
+
+const holidaysUsage = "usage: simdesk holidays presets | simdesk holidays load-preset --year YYYY"
+
+func runHolidays(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return errors.New(holidaysUsage)
+	}
+	a, err := newApp(ctx, false)
+	if err != nil {
+		return err
+	}
+	defer a.store.Close()
+	switch args[0] {
+	case subPresets:
+		presets, err := a.sla.HolidayPresets(ctx)
+		if err != nil {
+			return err
+		}
+		for _, p := range presets {
+			fmt.Printf("%d  %s  %d holidays, %d missing\n", p.Year, p.Country, p.HolidayCount, p.MissingCount)
+		}
+		return nil
+	case subLoadPreset:
+		fs := flag.NewFlagSet(cmdHolidays+" "+subLoadPreset, flag.ExitOnError)
+		year := fs.Int("year", 0, "year to load (required)")
+		_ = fs.Parse(args[1:])
+		if *year == 0 {
+			return errors.New(holidaysUsage)
+		}
+		r, err := a.sla.LoadHolidayPreset(ctx, audit.SystemActor(audit.ActorNameCLI), *year)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Added %d (%d already present)\n", r.Added, r.Skipped)
+		return nil
+	default:
+		return errors.New(holidaysUsage)
+	}
 }
 
 func readPassword(fromStdin bool) (string, error) {

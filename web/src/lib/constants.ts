@@ -12,6 +12,11 @@ export const paths = {
   projects: '/projects',
   reports: '/reports',
   settings: '/settings',
+  settingsGeneral: '/settings/general',
+  settingsMembers: '/settings/members',
+  settingsSla: '/settings/sla',
+  settingsClients: '/settings/clients',
+  settingsIntegrations: '/settings/integrations',
   portal: '/portal',
 } as const
 
@@ -33,3 +38,10 @@ export const MAX_INITIALS = 2
 
 /** How long the signed-in user is considered fresh before refetching. */
 export const ME_STALE_TIME_MS = 60_000
+
+export const MINUTES_PER_HOUR = 60
+export const HOURS_PER_DAY = 24
+export const MINUTES_PER_DAY = MINUTES_PER_HOUR * HOURS_PER_DAY
+
+/** Holiday years offered around the current year, besides years with a bundled preset. */
+export const HOLIDAY_YEARS_AROUND = 1

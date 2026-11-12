@@ -20,6 +20,12 @@ import { Route as AgentProjectsRouteImport } from './routes/_agent/projects'
 import { Route as AgentReportsRouteImport } from './routes/_agent/reports'
 import { Route as AgentSettingsRouteImport } from './routes/_agent/settings'
 import { Route as PortalPortalRouteImport } from './routes/_portal/portal'
+import { Route as AgentSettingsIndexRouteImport } from './routes/_agent/settings/index'
+import { Route as AgentSettingsClientsRouteImport } from './routes/_agent/settings/clients'
+import { Route as AgentSettingsGeneralRouteImport } from './routes/_agent/settings/general'
+import { Route as AgentSettingsIntegrationsRouteImport } from './routes/_agent/settings/integrations'
+import { Route as AgentSettingsMembersRouteImport } from './routes/_agent/settings/members'
+import { Route as AgentSettingsSlaRouteImport } from './routes/_agent/settings/sla'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -74,6 +80,37 @@ const PortalPortalRoute = PortalPortalRouteImport.update({
   path: '/portal',
   getParentRoute: () => PortalRoute,
 } as any)
+const AgentSettingsIndexRoute = AgentSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AgentSettingsRoute,
+} as any)
+const AgentSettingsClientsRoute = AgentSettingsClientsRouteImport.update({
+  id: '/clients',
+  path: '/clients',
+  getParentRoute: () => AgentSettingsRoute,
+} as any)
+const AgentSettingsGeneralRoute = AgentSettingsGeneralRouteImport.update({
+  id: '/general',
+  path: '/general',
+  getParentRoute: () => AgentSettingsRoute,
+} as any)
+const AgentSettingsIntegrationsRoute =
+  AgentSettingsIntegrationsRouteImport.update({
+    id: '/integrations',
+    path: '/integrations',
+    getParentRoute: () => AgentSettingsRoute,
+  } as any)
+const AgentSettingsMembersRoute = AgentSettingsMembersRouteImport.update({
+  id: '/members',
+  path: '/members',
+  getParentRoute: () => AgentSettingsRoute,
+} as any)
+const AgentSettingsSlaRoute = AgentSettingsSlaRouteImport.update({
+  id: '/sla',
+  path: '/sla',
+  getParentRoute: () => AgentSettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -83,8 +120,14 @@ export interface FileRoutesByFullPath {
   '/board': typeof AgentBoardRoute
   '/projects': typeof AgentProjectsRoute
   '/reports': typeof AgentReportsRoute
-  '/settings': typeof AgentSettingsRoute
+  '/settings': typeof AgentSettingsRouteWithChildren
   '/portal': typeof PortalPortalRoute
+  '/settings/clients': typeof AgentSettingsClientsRoute
+  '/settings/general': typeof AgentSettingsGeneralRoute
+  '/settings/integrations': typeof AgentSettingsIntegrationsRoute
+  '/settings/members': typeof AgentSettingsMembersRoute
+  '/settings/sla': typeof AgentSettingsSlaRoute
+  '/settings/': typeof AgentSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,8 +137,13 @@ export interface FileRoutesByTo {
   '/board': typeof AgentBoardRoute
   '/projects': typeof AgentProjectsRoute
   '/reports': typeof AgentReportsRoute
-  '/settings': typeof AgentSettingsRoute
   '/portal': typeof PortalPortalRoute
+  '/settings/clients': typeof AgentSettingsClientsRoute
+  '/settings/general': typeof AgentSettingsGeneralRoute
+  '/settings/integrations': typeof AgentSettingsIntegrationsRoute
+  '/settings/members': typeof AgentSettingsMembersRoute
+  '/settings/sla': typeof AgentSettingsSlaRoute
+  '/settings': typeof AgentSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -108,8 +156,14 @@ export interface FileRoutesById {
   '/_agent/board': typeof AgentBoardRoute
   '/_agent/projects': typeof AgentProjectsRoute
   '/_agent/reports': typeof AgentReportsRoute
-  '/_agent/settings': typeof AgentSettingsRoute
+  '/_agent/settings': typeof AgentSettingsRouteWithChildren
   '/_portal/portal': typeof PortalPortalRoute
+  '/_agent/settings/clients': typeof AgentSettingsClientsRoute
+  '/_agent/settings/general': typeof AgentSettingsGeneralRoute
+  '/_agent/settings/integrations': typeof AgentSettingsIntegrationsRoute
+  '/_agent/settings/members': typeof AgentSettingsMembersRoute
+  '/_agent/settings/sla': typeof AgentSettingsSlaRoute
+  '/_agent/settings/': typeof AgentSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -123,6 +177,12 @@ export interface FileRouteTypes {
     | '/reports'
     | '/settings'
     | '/portal'
+    | '/settings/clients'
+    | '/settings/general'
+    | '/settings/integrations'
+    | '/settings/members'
+    | '/settings/sla'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -132,8 +192,13 @@ export interface FileRouteTypes {
     | '/board'
     | '/projects'
     | '/reports'
-    | '/settings'
     | '/portal'
+    | '/settings/clients'
+    | '/settings/general'
+    | '/settings/integrations'
+    | '/settings/members'
+    | '/settings/sla'
+    | '/settings'
   id:
     | '__root__'
     | '/'
@@ -147,6 +212,12 @@ export interface FileRouteTypes {
     | '/_agent/reports'
     | '/_agent/settings'
     | '/_portal/portal'
+    | '/_agent/settings/clients'
+    | '/_agent/settings/general'
+    | '/_agent/settings/integrations'
+    | '/_agent/settings/members'
+    | '/_agent/settings/sla'
+    | '/_agent/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -237,21 +308,85 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalPortalRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_agent/settings/': {
+      id: '/_agent/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AgentSettingsIndexRouteImport
+      parentRoute: typeof AgentSettingsRoute
+    }
+    '/_agent/settings/clients': {
+      id: '/_agent/settings/clients'
+      path: '/clients'
+      fullPath: '/settings/clients'
+      preLoaderRoute: typeof AgentSettingsClientsRouteImport
+      parentRoute: typeof AgentSettingsRoute
+    }
+    '/_agent/settings/general': {
+      id: '/_agent/settings/general'
+      path: '/general'
+      fullPath: '/settings/general'
+      preLoaderRoute: typeof AgentSettingsGeneralRouteImport
+      parentRoute: typeof AgentSettingsRoute
+    }
+    '/_agent/settings/integrations': {
+      id: '/_agent/settings/integrations'
+      path: '/integrations'
+      fullPath: '/settings/integrations'
+      preLoaderRoute: typeof AgentSettingsIntegrationsRouteImport
+      parentRoute: typeof AgentSettingsRoute
+    }
+    '/_agent/settings/members': {
+      id: '/_agent/settings/members'
+      path: '/members'
+      fullPath: '/settings/members'
+      preLoaderRoute: typeof AgentSettingsMembersRouteImport
+      parentRoute: typeof AgentSettingsRoute
+    }
+    '/_agent/settings/sla': {
+      id: '/_agent/settings/sla'
+      path: '/sla'
+      fullPath: '/settings/sla'
+      preLoaderRoute: typeof AgentSettingsSlaRouteImport
+      parentRoute: typeof AgentSettingsRoute
+    }
   }
 }
+
+interface AgentSettingsRouteChildren {
+  AgentSettingsClientsRoute: typeof AgentSettingsClientsRoute
+  AgentSettingsGeneralRoute: typeof AgentSettingsGeneralRoute
+  AgentSettingsIntegrationsRoute: typeof AgentSettingsIntegrationsRoute
+  AgentSettingsMembersRoute: typeof AgentSettingsMembersRoute
+  AgentSettingsSlaRoute: typeof AgentSettingsSlaRoute
+  AgentSettingsIndexRoute: typeof AgentSettingsIndexRoute
+}
+
+const AgentSettingsRouteChildren: AgentSettingsRouteChildren = {
+  AgentSettingsClientsRoute: AgentSettingsClientsRoute,
+  AgentSettingsGeneralRoute: AgentSettingsGeneralRoute,
+  AgentSettingsIntegrationsRoute: AgentSettingsIntegrationsRoute,
+  AgentSettingsMembersRoute: AgentSettingsMembersRoute,
+  AgentSettingsSlaRoute: AgentSettingsSlaRoute,
+  AgentSettingsIndexRoute: AgentSettingsIndexRoute,
+}
+
+const AgentSettingsRouteWithChildren = AgentSettingsRoute._addFileChildren(
+  AgentSettingsRouteChildren,
+)
 
 interface AgentRouteChildren {
   AgentBoardRoute: typeof AgentBoardRoute
   AgentProjectsRoute: typeof AgentProjectsRoute
   AgentReportsRoute: typeof AgentReportsRoute
-  AgentSettingsRoute: typeof AgentSettingsRoute
+  AgentSettingsRoute: typeof AgentSettingsRouteWithChildren
 }
 
 const AgentRouteChildren: AgentRouteChildren = {
   AgentBoardRoute: AgentBoardRoute,
   AgentProjectsRoute: AgentProjectsRoute,
   AgentReportsRoute: AgentReportsRoute,
-  AgentSettingsRoute: AgentSettingsRoute,
+  AgentSettingsRoute: AgentSettingsRouteWithChildren,
 }
 
 const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)

@@ -5,7 +5,14 @@
     "backToSignIn": "Back to sign in",
     "errorGeneric": "Something went wrong. Please try again.",
     "comingSoonTitle": "Coming soon",
-    "comingSoon": "This page isn't ready yet."
+    "comingSoon": "This page isn't ready yet.",
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save changes",
+    "edit": "Edit",
+    "delete": "Delete",
+    "none": "—",
+    "range": "{{from}} – {{to}}"
   },
   "roles": {
     "admin": "Admin",
@@ -90,5 +97,269 @@
     "body": "The page you're looking for doesn't exist or has moved.",
     "home": "Go to the start page"
   },
-  "roleWithTitle": "{{role}} · {{title}}"
+  "roleWithTitle": "{{role}} · {{title}}",
+  "settings": {
+    "title": "Settings",
+    "nav": {
+      "label": "Settings sections",
+      "groups": {
+        "organisation": "Organisation",
+        "serviceDesk": "Service desk",
+        "integrations": "Integrations"
+      },
+      "collapseAll": "Collapse all",
+      "expandAll": "Expand all",
+      "collapseMenu": "Collapse settings menu",
+      "expandMenu": "Expand settings menu",
+      "collapseGroup": "Collapse {{group}}",
+      "expandGroup": "Expand {{group}}",
+      "itemCount_one": "{{count}} item",
+      "itemCount_other": "{{count}} items"
+    },
+    "sections": {
+      "general": {
+        "title": "General",
+        "description": "Business hours and holidays that SLA timers run on."
+      },
+      "members": {
+        "title": "Members & roles",
+        "description": "Who is in your organisation and what each role can do."
+      },
+      "sla": {
+        "title": "SLA & priority",
+        "description": "Response and resolution targets used by every ticket."
+      },
+      "clients": {
+        "title": "Clients",
+        "description": "Organisations you support, with their contract and SLA plan."
+      },
+      "integrations": {
+        "title": "GitHub / GitLab",
+        "description": "Reads commits, pull requests and merge requests that mention a ticket ID, and moves tickets forward by their project's Definition of Done. Read-only: it never writes to your code."
+      }
+    },
+    "hours": {
+      "title": "Business hours",
+      "helper": "SLA timers only run in these hours, except targets set to 24/7.",
+      "timezone": "Times are in {{timezone}}.",
+      "closed": "Closed",
+      "holidays": "Holidays",
+      "holidayCount_one": "{{count}} holiday in {{year}}",
+      "holidayCount_other": "{{count}} holidays in {{year}}",
+      "edit": "Edit hours",
+      "dialogTitle": "Edit business hours",
+      "days": "Working days",
+      "opens": "Opens",
+      "closes": "Closes",
+      "workingDayNote": "SLA targets are stored as working time, so the length of a working day changes with these hours. Now: {{length}}.",
+      "dayLength_one": "{{count}} hour",
+      "dayLength_other": "{{count}} hours",
+      "dayLengthMinutes": "{{hours}} h {{minutes}} min",
+      "saved": "Business hours saved.",
+      "noDays": "Choose at least one working day.",
+      "closesBeforeOpens": "Closing time must be after opening time."
+    },
+    "holidays": {
+      "title": "Holidays",
+      "helper": "No SLA time is counted on these days.",
+      "year": "Year",
+      "add": "Add holiday",
+      "dialogTitle": "Add a holiday",
+      "date": "Date",
+      "name": "Name",
+      "dateRequired": "Choose a date.",
+      "nameRequired": "Enter a name.",
+      "remove": "Remove",
+      "removeLabel": "Remove {{name}}",
+      "removeTitle": "Remove this holiday?",
+      "removeBody": "{{name}} on {{date}} will count as a normal day again.",
+      "empty": "No holidays for {{year}} yet.",
+      "caption": "Holidays in {{year}}",
+      "colDate": "Date",
+      "colName": "Name",
+      "colActions": "Actions",
+      "preset_one": "The official Indonesian list for {{year}} has {{count}} date you don't have yet (national holidays and cuti bersama).",
+      "preset_other": "The official Indonesian list for {{year}} has {{count}} dates you don't have yet (national holidays and cuti bersama).",
+      "loadPreset_one": "Add {{count}} date",
+      "loadPreset_other": "Add {{count}} dates",
+      "loaded_one": "Added {{count}} holiday for {{year}}.",
+      "loaded_other": "Added {{count}} holidays for {{year}}.",
+      "added": "{{name}} added.",
+      "removed": "{{name}} removed."
+    },
+    "sla": {
+      "newPlan": "New plan",
+      "default": "Default",
+      "usedBy_one": "Used by {{count}} client",
+      "usedBy_other": "Used by {{count}} clients",
+      "helper": "Timers run on business hours unless a priority is set to 24/7. Changes apply to new tickets.",
+      "makeDefault": "Make default",
+      "editLabel": "Edit {{name}}",
+      "deleteLabel": "Delete {{name}}",
+      "makeDefaultLabel": "Make {{name}} the default plan",
+      "caption": "{{name}} targets",
+      "cols": {
+        "priority": "Priority",
+        "example": "Example",
+        "firstResponse": "First response",
+        "resolve": "Resolve (incidents)",
+        "deliver": "Deliver (requests)",
+        "hours": "Hours",
+        "escalate": "Escalate to"
+      },
+      "hoursBusiness": "Business hours",
+      "hoursAlways": "24/7",
+      "fromCatalog": "Catalogue time, else {{duration}}",
+      "dialogNew": "New SLA plan",
+      "dialogEdit": "Edit {{name}}",
+      "copyOf": "Starts as a copy of {{name}}.",
+      "planName": "Plan name",
+      "nameRequired": "Enter a plan name.",
+      "unit": "{{field}} unit for {{priority}}",
+      "deliverFromCatalog": "Requests use the catalogue item's delivery time",
+      "positive": "Use a whole number of 1 or more.",
+      "created": "{{name}} created.",
+      "saved": "{{name}} saved.",
+      "defaultChanged": "{{name}} is now the default plan for new clients.",
+      "deleted": "{{name}} deleted.",
+      "deleteTitle": "Delete {{name}}?",
+      "deleteBody": "This can't be undone. Plans still used by clients can't be deleted.",
+      "summaryAlways": "{{priorities}} 24/7",
+      "summaryBusiness": "Business hours only",
+      "matrix": {
+        "title": "Priority matrix",
+        "helper": "Guidance for choosing a priority. Requesters pick it when they report an issue; agents can change it with a reason.",
+        "caption": "Priority by impact and urgency",
+        "impact": "Impact",
+        "impacts": {
+          "office": "Whole office / public service",
+          "team": "Team",
+          "user": "One user"
+        },
+        "urgencies": {
+          "canWait": "Can wait",
+          "slowed": "Slowed",
+          "stopped": "Stopped"
+        }
+      }
+    },
+    "clients": {
+      "cardTitle": "Clients under contract",
+      "add": "Add client",
+      "caption": "Clients under contract",
+      "cols": {
+        "client": "Client",
+        "contractNo": "Contract no.",
+        "period": "Contract period",
+        "plan": "SLA plan",
+        "requesters": "Requesters",
+        "agents": "Agents",
+        "pic": "PIC",
+        "actions": "Actions"
+      },
+      "editLabel": "Edit {{name}}",
+      "from": "From {{date}}",
+      "until": "Until {{date}}",
+      "noAgents": "None assigned",
+      "emptyTitle": "No clients yet",
+      "empty": "Add the organisations you support to set their contract, SLA plan and agents.",
+      "dialogNew": "Add client",
+      "dialogEdit": "Edit {{name}}",
+      "name": "Client name",
+      "contractNo": "Contract number",
+      "start": "Contract start",
+      "end": "Contract end",
+      "plan": "SLA plan",
+      "picName": "PIC name",
+      "picEmail": "PIC email",
+      "agents": "Assigned agents",
+      "agentsHelp": "These agents see and work this client's tickets. Supervisors and admins see every client.",
+      "noActiveAgents": "There are no active agents yet.",
+      "nameRequired": "Enter the client's name.",
+      "periodInvalid": "The contract can't end before it starts.",
+      "delete": "Delete client",
+      "deleteTitle": "Delete {{name}}?",
+      "deleteBody": "This removes the client, its contract details and agent assignments. It can't be undone.",
+      "created": "{{name}} added.",
+      "saved": "{{name}} saved.",
+      "deleted": "{{name}} deleted."
+    }
+  },
+  "priority": {
+    "long": "{{priority}} · {{name}}",
+    "P1": {
+      "name": "Critical",
+      "example": "Public service or whole office down",
+      "escalation": "Supervisor + client PIC at 50%"
+    },
+    "P2": {
+      "name": "High",
+      "example": "A team can't work",
+      "escalation": "Supervisor at 75%"
+    },
+    "P3": {
+      "name": "Standard",
+      "example": "One user slowed down",
+      "escalation": "Supervisor at breach"
+    },
+    "P4": {
+      "name": "Low",
+      "example": "Requests and minor issues",
+      "escalation": "—"
+    }
+  },
+  "duration": {
+    "minutes_one": "{{count}} min",
+    "minutes_other": "{{count}} min",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours",
+    "workingDays_one": "{{count}} working day",
+    "workingDays_other": "{{count}} working days",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "unit": {
+      "minutes": "minutes",
+      "hours": "hours",
+      "workingDays": "working days",
+      "days": "days"
+    }
+  },
+  "weekday": {
+    "short": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
+    },
+    "long": {
+      "mon": "Monday",
+      "tue": "Tuesday",
+      "wed": "Wednesday",
+      "thu": "Thursday",
+      "fri": "Friday",
+      "sat": "Saturday",
+      "sun": "Sunday"
+    }
+  },
+  "errors": {
+    "forbidden": "You don't have access to this.",
+    "not_found": "This no longer exists. Refresh the page.",
+    "invalid_request": "Some fields aren't valid. Check them and try again.",
+    "invalid_name": "Enter a name.",
+    "invalid_email": "Enter a valid email address.",
+    "invalid_contract_period": "The contract can't end before it starts.",
+    "invalid_agent": "Only active agents can be assigned to a client.",
+    "invalid_sla_targets": "First response can't be longer than resolve or deliver.",
+    "invalid_business_hours": "Opening time must be before closing time.",
+    "sla_plan_not_found": "Choose an SLA plan.",
+    "client_name_taken": "A client with this name already exists.",
+    "client_in_use": "This client still has requesters. Move or remove them first.",
+    "sla_plan_name_taken": "A plan with this name already exists.",
+    "sla_plan_in_use": "Clients still use this plan. Move them to another plan first.",
+    "sla_plan_is_default": "The default plan can't be deleted. Make another plan the default first.",
+    "holiday_date_taken": "That date is already a holiday."
+  }
 }

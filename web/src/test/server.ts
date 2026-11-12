@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 
 import type { Me, Organization, Problem } from '../api/client'
+import { resetSettings, settingsHandlers } from './settingsApi'
 
 export const PASSWORD = 'correct-horse-battery'
 
@@ -42,6 +43,7 @@ export function resetApi() {
   state.me = null
   state.forgotRequests = []
   state.resetBodies = []
+  resetSettings()
 }
 
 export function problem(status: number, code: string, headers?: Record<string, string>) {
@@ -76,4 +78,4 @@ const handlers = [
   }),
 ]
 
-export const server = setupServer(...handlers)
+export const server = setupServer(...handlers, ...settingsHandlers)

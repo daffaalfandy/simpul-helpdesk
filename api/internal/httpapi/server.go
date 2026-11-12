@@ -21,24 +21,30 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
 // Deps are the server's dependencies.
 type Deps struct {
-	Config config.Config
-	Store  *store.Store
-	Auth   *auth.Service
-	Logger *slog.Logger
-	WebUI  fs.FS // built SPA; may be empty in development
+	Config  config.Config
+	Store   *store.Store
+	Auth    *auth.Service
+	Clients *clients.Service
+	SLA     *sla.Service
+	Logger  *slog.Logger
+	WebUI   fs.FS // built SPA; may be empty in development
 }
 
 type server struct {
 	cfg        config.Config
 	store      *store.Store
 	auth       *auth.Service
+	clients    *clients.Service
+	sla        *sla.Service
 	log        *slog.Logger
 	cookieName string
 }
@@ -51,7 +57,10 @@ func New(d Deps) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &server{cfg: d.Config, store: d.Store, auth: d.Auth, log: d.Logger, cookieName: cookieName(d.Config.CookieSecure)}
+	s := &server{
+		cfg: d.Config, store: d.Store, auth: d.Auth, clients: d.Clients, sla: d.SLA, log: d.Logger,
+		cookieName: cookieName(d.Config.CookieSecure),
+	}
 
 	r := chi.NewRouter()
 	r.Use(withRequestID)

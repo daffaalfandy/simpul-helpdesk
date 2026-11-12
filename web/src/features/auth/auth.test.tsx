@@ -51,9 +51,9 @@ describe('sign in', () => {
   })
 
   it('returns to the page the user asked for', async () => {
-    const { router } = renderApp('/login?redirect=%2Fsettings')
+    const { router } = renderApp('/login?redirect=%2Fsettings%2Fclients')
     await signIn('admin@demo-vendor.test')
-    await waitFor(() => expect(router.state.location.pathname).toBe('/settings'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/clients'))
   })
 
   it('ignores redirects to other sites', async () => {
