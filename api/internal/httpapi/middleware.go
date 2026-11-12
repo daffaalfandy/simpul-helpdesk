@@ -13,9 +13,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 
-	"simdesk/internal/apperr"
-	"simdesk/internal/auth"
-	"simdesk/internal/reqinfo"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/reqinfo"
 )
 
 // ClientIP returns the client address. X-Forwarded-For is only honoured when

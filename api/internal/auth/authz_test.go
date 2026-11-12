@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"simdesk/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 )
 
 func TestCapabilitiesMatchHandoffRoleTable(t *testing.T) {

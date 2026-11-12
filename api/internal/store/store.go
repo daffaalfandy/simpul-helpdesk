@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"simdesk/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 )
 
 // Store wraps the connection pool.

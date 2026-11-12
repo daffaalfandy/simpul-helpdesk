@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"simdesk/internal/testdb"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 )
 
 func TestMain(m *testing.M) { os.Exit(testdb.Main(m)) }

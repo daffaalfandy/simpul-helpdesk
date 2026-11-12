@@ -10,8 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	"simdesk/internal/apperr"
-	"simdesk/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 )
 
 // writeProblem renders err as RFC 9457 problem details. Unknown errors become a 500

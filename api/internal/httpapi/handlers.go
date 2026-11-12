@@ -3,9 +3,9 @@ package httpapi
 import (
 	"context"
 
-	"simdesk/internal/apperr"
-	"simdesk/internal/auth"
-	"simdesk/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 )
 
 // GetOrganization returns public branding.

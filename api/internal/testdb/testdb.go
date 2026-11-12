@@ -14,13 +14,14 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"simdesk/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
 const (
@@ -34,6 +35,9 @@ const (
 	adminPass   = "postgres"
 	sslDisabled = "sslmode=disable"
 	exitFailure = 1
+
+	startAttempts   = 3
+	startRetryDelay = 2 * time.Second
 )
 
 var (
@@ -49,9 +53,7 @@ func Main(m *testing.M) int {
 	var terminate func()
 	adminURL = os.Getenv(EnvURL)
 	if adminURL == "" {
-		c, err := postgres.Run(ctx, image,
-			postgres.WithDatabase(adminDB), postgres.WithUsername(adminUser), postgres.WithPassword(adminPass),
-			postgres.BasicWaitStrategies())
+		c, err := startContainer(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "testdb: start postgres (is Docker running? or set %s): %v\n", EnvURL, err)
 			return exitFailure
@@ -76,6 +78,25 @@ func Main(m *testing.M) int {
 		terminate()
 	}
 	return code
+}
+
+// startContainer starts Postgres, retrying because test packages run in
+// parallel and can race while testcontainers starts its shared reaper.
+func startContainer(ctx context.Context) (*postgres.PostgresContainer, error) {
+	var lastErr error
+	for attempt := range startAttempts {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * startRetryDelay)
+		}
+		c, err := postgres.Run(ctx, image,
+			postgres.WithDatabase(adminDB), postgres.WithUsername(adminUser), postgres.WithPassword(adminPass),
+			postgres.BasicWaitStrategies())
+		if err == nil {
+			return c, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 func buildTemplate(ctx context.Context) error {

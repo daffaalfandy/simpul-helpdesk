@@ -21,14 +21,14 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"golang.org/x/term"
 
-	"simdesk/internal/apperr"
-	"simdesk/internal/auth"
-	"simdesk/internal/config"
-	"simdesk/internal/httpapi"
-	"simdesk/internal/mail"
-	"simdesk/internal/seed"
-	"simdesk/internal/store"
-	"simdesk/internal/webui"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/seed"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/webui"
 )
 
 // Commands and sub-commands.

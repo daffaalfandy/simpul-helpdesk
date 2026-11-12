@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"simdesk/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 )
 
 // spaHandler serves the built web app. Real files are served as-is (hashed

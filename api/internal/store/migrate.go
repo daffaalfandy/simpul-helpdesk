@@ -11,7 +11,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivermigrate"
 
-	"simdesk/migrations"
+	"github.com/daffaalfandy/simpul-helpdesk/api/migrations"
 )
 
 // MigrateUp applies all app migrations, then River's job-queue migrations.

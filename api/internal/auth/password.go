@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/crypto/argon2"
 
-	"simdesk/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 )
 
 // Password length limits, in characters.

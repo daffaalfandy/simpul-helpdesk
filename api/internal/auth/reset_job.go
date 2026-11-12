@@ -11,9 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
-	"simdesk/internal/db"
-	"simdesk/internal/mail"
-	"simdesk/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
 const (

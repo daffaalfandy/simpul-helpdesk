@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"simdesk/internal/db"
-	"simdesk/internal/reqinfo"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/reqinfo"
 )
 
 // Actor kinds.

@@ -7,10 +7,10 @@ import (
 	"os"
 	"testing"
 
-	"simdesk/internal/auth"
-	"simdesk/internal/config"
-	"simdesk/internal/seed"
-	"simdesk/internal/testdb"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/seed"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 )
 
 func TestMain(m *testing.M) { os.Exit(testdb.Main(m)) }

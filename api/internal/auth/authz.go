@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 
-	"simdesk/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 )
 
 // Capability is something a role may do. Add capabilities as features land;

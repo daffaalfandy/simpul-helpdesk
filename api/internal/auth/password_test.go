@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"simdesk/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 )
 
 // cheapParams keep tests fast; production uses DefaultParams.

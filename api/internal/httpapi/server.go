@@ -19,11 +19,11 @@ import (
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"github.com/swaggest/swgui/v5emb"
 
-	"simdesk/internal/apperr"
-	"simdesk/internal/auth"
-	"simdesk/internal/config"
-	"simdesk/internal/httpapi/gen"
-	"simdesk/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
 // Deps are the server's dependencies.
@@ -47,7 +47,7 @@ var _ gen.StrictServerInterface = (*server)(nil)
 
 // New builds the HTTP handler.
 func New(d Deps) (http.Handler, error) {
-	spec, err := gen.GetSwagger()
+	spec, err := gen.GetSpec()
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func New(d Deps) (http.Handler, error) {
 
 // validator checks requests against the OpenAPI spec before they reach handlers.
 func (s *server) validator() func(http.Handler) http.Handler {
-	spec, err := gen.GetSwagger() // fresh copy: the middleware mutates Servers
+	spec, err := gen.GetSpec() // fresh copy: the middleware mutates Servers
 	if err != nil {
 		panic(err)
 	}

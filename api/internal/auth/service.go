@@ -15,11 +15,11 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
 
-	"simdesk/internal/apperr"
-	"simdesk/internal/audit"
-	"simdesk/internal/db"
-	"simdesk/internal/reqinfo"
-	"simdesk/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/reqinfo"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
 // Audit actions written by this package.

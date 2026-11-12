@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"simdesk/internal/auth"
-	"simdesk/internal/config"
-	"simdesk/internal/db"
-	"simdesk/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
 // Output table layout.

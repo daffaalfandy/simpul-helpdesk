@@ -19,14 +19,14 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivertest"
 
-	"simdesk/internal/apperr"
-	"simdesk/internal/auth"
-	"simdesk/internal/config"
-	"simdesk/internal/httpapi"
-	"simdesk/internal/httpapi/gen"
-	"simdesk/internal/mail"
-	"simdesk/internal/store"
-	"simdesk/internal/testdb"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 )
 
 func TestMain(m *testing.M) { os.Exit(testdb.Main(m)) }
@@ -294,7 +294,7 @@ func TestListUsersIsAdminOnly(t *testing.T) {
 // Every operation not marked public in the spec must reject anonymous calls.
 func TestOperationsRequireSessionByDefault(t *testing.T) {
 	e := newEnv(t)
-	spec, err := gen.GetSwagger()
+	spec, err := gen.GetSpec()
 	if err != nil {
 		t.Fatal(err)
 	}

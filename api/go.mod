@@ -1,4 +1,4 @@
-module simdesk
+module github.com/daffaalfandy/simpul-helpdesk/api
 
 go 1.26.10
 
