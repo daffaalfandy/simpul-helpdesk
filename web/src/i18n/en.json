@@ -1,0 +1,94 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "signOut": "Sign out",
+    "backToSignIn": "Back to sign in",
+    "errorGeneric": "Something went wrong. Please try again.",
+    "comingSoonTitle": "Coming soon",
+    "comingSoon": "This page isn't ready yet."
+  },
+  "roles": {
+    "admin": "Admin",
+    "supervisor": "Supervisor",
+    "agent": "Agent",
+    "requester": "Requester"
+  },
+  "login": {
+    "title": "Sign in to {{org}}",
+    "email": "Work email",
+    "emailPlaceholder": "name@company.go.id",
+    "password": "Password",
+    "forgot": "Forgot password?",
+    "submit": "Sign in",
+    "helper": "Your team and your clients sign in here. Agents see the service desk; client staff see their support portal.",
+    "noAccount": "Client and no account yet? Use the invite link from your support team.",
+    "errors": {
+      "emailRequired": "Enter your work email.",
+      "emailInvalid": "Enter a valid email address.",
+      "passwordRequired": "Enter your password.",
+      "invalidCredentials": "Wrong email or password.",
+      "rateLimited_one": "Too many attempts. Try again in {{count}} minute.",
+      "rateLimited_other": "Too many attempts. Try again in {{count}} minutes."
+    }
+  },
+  "forgot": {
+    "title": "Reset your password",
+    "intro": "Enter your work email and we'll send you a link to choose a new password.",
+    "submit": "Send reset link",
+    "sentTitle": "Check your email",
+    "sent": "If an account exists for {{email}}, we've sent a link to reset its password. The link works once."
+  },
+  "reset": {
+    "title": "Choose a new password",
+    "password": "New password",
+    "confirm": "Repeat new password",
+    "hint": "At least {{min}} characters.",
+    "submit": "Save new password",
+    "doneTitle": "Password changed",
+    "done": "You've been signed out everywhere. Sign in with your new password.",
+    "errors": {
+      "tooShort": "Use at least {{min}} characters.",
+      "mismatch": "The passwords don't match.",
+      "invalidToken": "This link is invalid or has expired.",
+      "missingToken": "Open this page from the link in your reset email.",
+      "requestNew": "Request a new link"
+    }
+  },
+  "nav": {
+    "main": "Main",
+    "board": "Board",
+    "projects": "Projects",
+    "reports": "Reports",
+    "settings": "Settings",
+    "account": "Account menu for {{name}}",
+    "home": "{{org}} home"
+  },
+  "agent": {
+    "organization": "{{org}}",
+    "greeting": {
+      "morning": "Good morning, {{name}}",
+      "afternoon": "Good afternoon, {{name}}",
+      "evening": "Good evening, {{name}}"
+    },
+    "boardEmptyTitle": "No tickets yet",
+    "boardEmpty": "Tickets for your clients will show up here."
+  },
+  "portal": {
+    "support": "{{org}} Support",
+    "hello": "Hello, {{name}}",
+    "emptyTitle": "No tickets yet",
+    "empty": "When you report an issue, you can follow its progress here."
+  },
+  "footer": {
+    "tagline": "Service desk for {{org}}.",
+    "portalTagline": "Support for clients of {{org}}.",
+    "copyright": "© {{year}} SimDesk",
+    "poweredBy": "Powered by SimDesk"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The page you're looking for doesn't exist or has moved.",
+    "home": "Go to the start page"
+  },
+  "roleWithTitle": "{{role}} · {{title}}"
+}

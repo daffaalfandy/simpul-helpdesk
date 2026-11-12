@@ -1,0 +1,39 @@
+# Local-only: product docs, design references and AI assistant files.
+# The repository holds application code only.
+/docs/
+/design/
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+AGENTS.md
+GEMINI.md
+.cursor/
+.aider*
+.impeccable/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Go
+/bin/
+/api/bin/
+*.test
+coverage.out
+
+# Web
+node_modules/
+/web/dist/
+/web/coverage/
+/web/.vitest/
+*.tsbuildinfo
+
+# SPA build embedded into the Go binary (placeholder kept)
+/api/internal/webui/dist/*
+!/api/internal/webui/dist/.gitkeep

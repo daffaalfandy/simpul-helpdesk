@@ -1,0 +1,34 @@
+# Development services only. Go and Vite run on the host (see Makefile).
+name: simdesk-dev
+
+services:
+  db:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: simdesk
+      POSTGRES_PASSWORD: simdesk
+      POSTGRES_DB: simdesk
+    ports:
+      - "54320:5432"
+    volumes:
+      # Postgres 18 images keep data under /var/lib/postgresql/<major>/...
+      - db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simdesk -d simdesk"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  db:

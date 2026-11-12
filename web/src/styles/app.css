@@ -1,0 +1,156 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/*
+ * Map the design tokens into Tailwind's theme. Default palettes and scales are
+ * cleared, so only token-backed utilities exist (e.g. bg-primary, rounded-lg,
+ * shadow-card). `inline` makes utilities reference the token variables directly.
+ */
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-subtle: var(--color-surface-subtle);
+  --color-tint: var(--color-tint);
+  --color-border: var(--color-border);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-border-strong: var(--color-border-strong);
+  --color-ink: var(--color-ink);
+  --color-ink-2: var(--color-ink-2);
+  --color-muted: var(--color-muted);
+  --color-disabled: var(--color-disabled);
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-tint: var(--color-primary-tint);
+  --color-primary-tint-2: var(--color-primary-tint-2);
+  --color-on-dark-accent: var(--color-on-dark-accent);
+  --color-on-dark-muted: var(--color-on-dark-muted);
+  --color-on-primary: var(--color-on-primary);
+  --color-success: var(--color-success);
+  --color-success-tint: var(--color-success-tint);
+  --color-success-border: var(--color-success-border);
+  --color-success-ink: var(--color-success-ink);
+  --color-danger: var(--color-danger);
+  --color-danger-tint: var(--color-danger-tint);
+  --color-priority-p1-bg: var(--priority-p1-bg);
+  --color-priority-p1-fg: var(--priority-p1-fg);
+  --color-priority-p2-bg: var(--priority-p2-bg);
+  --color-priority-p2-fg: var(--priority-p2-fg);
+  --color-priority-p3-bg: var(--priority-p3-bg);
+  --color-priority-p3-fg: var(--priority-p3-fg);
+  --color-priority-p4-bg: var(--priority-p4-bg);
+  --color-priority-p4-fg: var(--priority-p4-fg);
+  --color-chip-danger-bg: var(--chip-danger-bg);
+  --color-chip-danger-fg: var(--chip-danger-fg);
+  --color-chip-warning-bg: var(--chip-warning-bg);
+  --color-chip-warning-fg: var(--chip-warning-fg);
+  --color-chip-success-bg: var(--chip-success-bg);
+  --color-chip-success-fg: var(--chip-success-fg);
+  --color-chip-paused-bg: var(--chip-paused-bg);
+  --color-chip-paused-fg: var(--chip-paused-fg);
+  --color-chip-info-bg: var(--chip-info-bg);
+  --color-chip-info-fg: var(--chip-info-fg);
+  --color-chip-code-bg: var(--chip-code-bg);
+  --color-chip-code-fg: var(--chip-code-fg);
+  --color-note-internal-bg: var(--note-internal-bg);
+  --color-note-internal-border: var(--note-internal-border);
+  --color-note-internal-fg: var(--note-internal-fg);
+  --color-overlay: var(--overlay);
+  --color-avatar-1: var(--avatar-1);
+  --color-avatar-2: var(--avatar-2);
+  --color-avatar-3: var(--avatar-3);
+  --color-avatar-4: var(--avatar-4);
+  --color-avatar-none: var(--avatar-none);
+
+  --font-*: initial;
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --text-*: initial;
+  --text-2xs: var(--text-2xs);
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-3xl: var(--text-3xl);
+
+  --font-weight-*: initial;
+  --font-weight-regular: var(--weight-regular);
+  --font-weight-medium: var(--weight-medium);
+  --font-weight-semibold: var(--weight-semibold);
+  --font-weight-bold: var(--weight-bold);
+  --font-weight-extrabold: var(--weight-extrabold);
+
+  --leading-*: initial;
+  --leading-tight: var(--leading-tight);
+  --leading-snug: var(--leading-snug);
+  --leading-normal: var(--leading-normal);
+  --leading-relaxed: var(--leading-relaxed);
+
+  --tracking-*: initial;
+  --tracking-title: var(--tracking-title);
+  --tracking-caps: var(--tracking-caps);
+
+  /* 4px base: p-4 = --space-4 (16px), p-7 = --space-7 (28px). */
+  --spacing: var(--space-1);
+
+  --radius-*: initial;
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-3xl: var(--radius-3xl);
+  --radius-dialog: var(--radius-dialog);
+  --radius-full: var(--radius-full);
+
+  --shadow-*: initial;
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-popover: var(--shadow-popover);
+  --shadow-dialog: var(--shadow-dialog);
+
+  --container-*: initial;
+  --container-app: var(--container-app);
+  --container-portal: var(--container-portal);
+  --container-form: var(--container-form);
+  --container-auth: var(--container-auth);
+
+  --ease-standard: var(--easing);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background: var(--color-bg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: var(--color-primary);
+  }
+
+  a:hover {
+    color: var(--color-primary-hover);
+  }
+
+  /* Visible focus for keyboard users on every interactive element (HANDOFF §14.2). */
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}

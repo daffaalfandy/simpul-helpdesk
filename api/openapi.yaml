@@ -1,0 +1,270 @@
+openapi: 3.0.3
+info:
+  title: SimDesk API
+  version: 0.1.0
+  description: |
+    API for SimDesk, an open-source self-hosted helpdesk.
+
+    Authentication uses a session cookie set by `POST /auth/login`. The cookie is
+    named `sd_session` over plain HTTP (development) and `__Host-sd_session` over HTTPS.
+    Every operation requires a session unless it is marked public (`security: []`).
+
+    Errors use RFC 9457 problem details (`application/problem+json`).
+  license:
+    name: AGPL-3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+tags:
+  - name: organization
+  - name: auth
+  - name: users
+
+paths:
+  /organization:
+    get:
+      operationId: getOrganization
+      summary: Public organisation branding for the sign-in page and footer
+      tags: [organization]
+      security: []
+      responses:
+        "200":
+          description: Organisation branding
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: Sign in with email and password
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Signed in. The session cookie is set.
+          headers:
+            Set-Cookie:
+              description: Session cookie (HttpOnly, SameSite=Lax).
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Sign out and end the current session
+      tags: [auth]
+      responses:
+        "204":
+          description: Signed out. The session cookie is cleared.
+          headers:
+            Set-Cookie:
+              description: Expired session cookie.
+              schema: { type: string }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /auth/me:
+    get:
+      operationId: getMe
+      summary: The signed-in user
+      tags: [auth]
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /auth/password/forgot:
+    post:
+      operationId: forgotPassword
+      summary: Email a password reset link
+      description: Always returns 202, whether or not the email belongs to a user.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ForgotPasswordRequest" }
+      responses:
+        "202":
+          description: If the account exists, a reset link is on its way.
+        default: { $ref: "#/components/responses/Problem" }
+
+  /auth/password/reset:
+    post:
+      operationId: resetPassword
+      summary: Set a new password with a reset token
+      description: Signs the user out everywhere. Error codes are `invalid_token` and `weak_password`.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResetPasswordRequest" }
+      responses:
+        "204":
+          description: Password changed.
+        "400": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /users:
+    get:
+      operationId: listUsers
+      summary: List all users (admin only)
+      tags: [users]
+      responses:
+        "200":
+          description: Users ordered by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sd_session
+      description: "`__Host-sd_session` when served over HTTPS."
+
+  responses:
+    Problem:
+      description: Error (RFC 9457 problem details)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    RateLimited:
+      description: Too many attempts
+      headers:
+        Retry-After:
+          description: Seconds to wait before trying again.
+          schema: { type: integer }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, example: about:blank }
+        title: { type: string, example: Unauthorized }
+        status: { type: integer, example: 401 }
+        detail: { type: string }
+        code:
+          type: string
+          description: Stable machine-readable error code, e.g. `invalid_credentials`.
+          example: invalid_credentials
+        requestId: { type: string }
+        errors:
+          type: array
+          description: Field-level validation errors.
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    Role:
+      type: string
+      enum: [admin, supervisor, agent, requester]
+
+    UserStatus:
+      type: string
+      enum: [active, invited, suspended]
+
+    ClientRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    Organization:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, example: Demo Vendor }
+        logoUrl: { type: string, nullable: true }
+        footerNote:
+          type: string
+          nullable: true
+          example: Data stored in Indonesia · Personal data handled under UU PDP
+
+    Me:
+      type: object
+      required: [id, email, name, role]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        jobTitle: { type: string, nullable: true, example: L2 }
+        client:
+          allOf: [{ $ref: "#/components/schemas/ClientRef" }]
+          nullable: true
+          description: Set for requesters only.
+
+    User:
+      type: object
+      required: [id, email, name, role, status]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        jobTitle: { type: string, nullable: true }
+        client:
+          allOf: [{ $ref: "#/components/schemas/ClientRef" }]
+          nullable: true
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, minLength: 3, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 128 }
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, minLength: 3, maxLength: 254 }
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token: { type: string, minLength: 20, maxLength: 200 }
+        password:
+          type: string
+          minLength: 10
+          maxLength: 128
+          description: 10 to 128 characters.

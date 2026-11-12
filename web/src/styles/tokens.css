@@ -1,0 +1,136 @@
+/* SimDesk design tokens (copied from the design handoff). Source of truth for the app:
+   change values here, never hard-code colours or sizes in components. */
+
+:root {
+  /* ---------- Colour: neutrals ---------- */
+  --color-bg: #F5F8FC;              /* page background */
+  --color-surface: #FFFFFF;         /* cards, header, footer, inputs */
+  --color-surface-subtle: #F1F5FB;  /* hover on outline buttons, inactive tabs, input addons */
+  --color-tint: #E8EEF7;            /* board columns, neutral chips, logo placeholders */
+  --color-border: #DFE7F2;          /* card borders, dividers */
+  --color-border-subtle: #E6EDF6;   /* table row lines */
+  --color-border-strong: #CFD9E8;   /* inputs, outline buttons */
+  --color-ink: #14213D;             /* main text, dark banners, active pills */
+  --color-ink-2: #334155;           /* secondary text on white */
+  --color-muted: #52607A;           /* labels, meta text (passes 4.5:1 on bg) */
+  --color-disabled: #94A3B8;        /* disabled button background, dashed empty states */
+
+  /* ---------- Colour: brand ---------- */
+  --color-primary: #1D4ED8;         /* primary buttons, links, focus, selected */
+  --color-primary-hover: #1E3A8A;   /* hover/pressed, selected text */
+  --color-primary-tint: #EEF4FF;    /* selected option / card background */
+  --color-primary-tint-2: #DBE7FF;  /* drop target highlight */
+  --color-on-dark-accent: #93C5FD;  /* small labels on navy */
+  --color-on-dark-muted: #C7D2E3;   /* body text on navy */
+  --color-on-primary: #FFFFFF;
+
+  /* ---------- Colour: semantic ---------- */
+  --color-success: #15803D;         /* approve, SLA met (white text OK) */
+  --color-success-tint: #DCFCE7;
+  --color-success-border: #86EFAC;
+  --color-success-ink: #14532D;
+  --color-danger: #DC2626;          /* reject, breach, P1 (white text OK) */
+  --color-danger-tint: #FEE2E2;
+
+  /* ---------- Colour: priority badges ---------- */
+  --priority-p1-bg: #DC2626;  --priority-p1-fg: #FFFFFF;  /* Critical */
+  --priority-p2-bg: #F97316;  --priority-p2-fg: #1C0A00;  /* High */
+  --priority-p3-bg: #FACC15;  --priority-p3-fg: #3A2A00;  /* Standard */
+  --priority-p4-bg: #22C55E;  --priority-p4-fg: #052E16;  /* Low */
+
+  /* ---------- Colour: status / SLA chips (tint bg + dark text) ---------- */
+  --chip-danger-bg: #FDE4DA;   --chip-danger-fg: #9A3412;   /* breached, < 1h left */
+  --chip-warning-bg: #FDF0CF;  --chip-warning-fg: #6E4D00;  /* at risk, in progress */
+  --chip-success-bg: #DFF1E4;  --chip-success-fg: #23633A;  /* met, resolved */
+  --chip-paused-bg: #ECE6F7;   --chip-paused-fg: #4B3A7A;   /* waiting on client/you, UAT timer */
+  --chip-info-bg: #EEF4FF;     --chip-info-fg: #1E3A8A;     /* in UAT */
+  --chip-code-bg: #EEF3F9;     --chip-code-fg: #2F4A6B;     /* linked PR / commit */
+
+  /* ---------- Colour: special surfaces ---------- */
+  --note-internal-bg: #FFF7DC;      /* agent-only internal note */
+  --note-internal-border: #F0E0A6;
+  --note-internal-fg: #5C4A00;
+  --overlay: rgba(20, 33, 61, 0.55);/* dialog backdrop */
+
+  /* Avatar colours (assign per person, white initials) */
+  --avatar-1: #1D4ED8; --avatar-2: #0E7490; --avatar-3: #4F6B2A; --avatar-4: #14213D; --avatar-none: #7487A8;
+
+  /* ---------- Typography ---------- */
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+
+  --text-2xs: 11px;   /* tiny badges (P1, counts) */
+  --text-xs: 12px;    /* meta, labels, chips */
+  --text-sm: 13px;    /* secondary text, table meta */
+  --text-base: 14px;  /* body, buttons, inputs */
+  --text-md: 15px;    /* portal body, large inputs, card titles */
+  --text-lg: 17px;    /* section titles in cards */
+  --text-xl: 20px;    /* dialog titles, settings title */
+  --text-2xl: 26px;   /* page titles (ticket, settings section) */
+  --text-3xl: 28px;   /* main page titles */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;  /* titles, primary button labels */
+
+  --leading-tight: 1.2;     /* headings */
+  --leading-snug: 1.35;     /* card titles */
+  --leading-normal: 1.5;    /* UI text */
+  --leading-relaxed: 1.6;   /* messages, long text */
+  --tracking-title: -0.02em;
+  --tracking-caps: 0.06em;  /* uppercase group labels */
+
+  /* ---------- Spacing (4px base) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;   /* page side padding */
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-14: 56px;
+
+  /* ---------- Radius ---------- */
+  --radius-xs: 6px;    /* priority badges, small tags */
+  --radius-sm: 8px;    /* small buttons, inline chips */
+  --radius-md: 10px;   /* buttons, menu items */
+  --radius-lg: 12px;   /* inputs, primary buttons, kanban cards */
+  --radius-xl: 14px;   /* option cards, dropdown panel */
+  --radius-2xl: 16px;  /* board columns, side cards */
+  --radius-3xl: 18px;  /* main cards */
+  --radius-dialog: 20px;
+  --radius-full: 999px;/* pills, avatars */
+
+  /* ---------- Shadow ---------- */
+  --shadow-card: 0 1px 2px rgba(20, 33, 61, 0.06);
+  --shadow-raised: 0 8px 24px rgba(20, 33, 61, 0.06);
+  --shadow-popover: 0 12px 32px rgba(20, 33, 61, 0.16);
+  --shadow-dialog: 0 24px 60px rgba(20, 33, 61, 0.30);
+
+  /* ---------- Sizing ---------- */
+  --control-h-sm: 36px;   /* compact controls (min) */
+  --control-h-md: 44px;   /* default: minimum touch target */
+  --control-h-lg: 48px;   /* hero CTAs, sign in */
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 20px;
+  --avatar-sm: 26px;
+  --avatar-md: 34px;
+  --container-app: 1360px;     /* agent app */
+  --container-portal: 1240px;  /* client portal pages */
+  --container-form: 880px;     /* report-an-issue form */
+  --container-auth: 440px;    /* sign-in and password pages */
+  --sidebar-w: 230px;
+  --sidebar-rail-w: 72px;
+
+  /* ---------- Focus & motion ---------- */
+  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);
+  --duration-fast: 120ms;
+  --duration-base: 150ms;
+  --easing: cubic-bezier(0.2, 0, 0, 1);
+}

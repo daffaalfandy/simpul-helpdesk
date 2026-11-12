@@ -1,0 +1,53 @@
+{
+  "name": "simdesk-web",
+  "private": true,
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "gen": "openapi-typescript ../api/openapi.yaml -o src/api/schema.gen.ts && tsr generate",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . && tsc -b --noEmit && node scripts/check-no-hex.mjs"
+  },
+  "dependencies": {
+    "@fontsource/plus-jakarta-sans": "5.3.0",
+    "@tanstack/react-query": "5.107.1",
+    "@tanstack/react-router": "1.170.46",
+    "i18next": "27.1.1",
+    "lucide-react": "1.72.0",
+    "openapi-fetch": "0.17.0",
+    "react": "19.3.1",
+    "react-aria-components": "1.22.1",
+    "react-dom": "19.3.1",
+    "react-i18next": "18.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@tailwindcss/vite": "4.3.5",
+    "@tanstack/router-cli": "1.168.0",
+    "@tanstack/router-plugin": "1.169.0",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.10",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "eslint": "10.14.0",
+    "eslint-plugin-i18next": "6.1.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
+    "jsdom": "29.1.1",
+    "msw": "3.0.5",
+    "openapi-typescript": "7.13.0",
+    "tailwindcss": "4.3.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.0"
+  }
+}
