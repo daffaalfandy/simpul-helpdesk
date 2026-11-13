@@ -10,21 +10,14 @@ import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { Checkbox, CheckboxGroup } from '../../components/Checkbox'
 import { ConfirmDialog, FormDialog } from '../../components/Dialog'
-import { Dropdown } from '../../components/Dropdown'
 import { EmptyState } from '../../components/EmptyState'
 import { DateInput } from '../../components/Fields'
 import { RowHeader, Table, Td, Th } from '../../components/Table'
 import { TextInput } from '../../components/TextInput'
 import { formatMonthYear, formatPeriod } from '../../lib/dates'
 import { Roles } from '../../lib/roles'
-import {
-  clientsQueryOptions,
-  slaPlansQueryOptions,
-  useDeleteClient,
-  usersQueryOptions,
-  useSaveClient,
-} from './queries'
-import { ErrorAlert, planSummary, SectionHeader } from './shared'
+import { clientsQueryOptions, useDeleteClient, usersQueryOptions, useSaveClient } from './queries'
+import { ErrorAlert, SectionHeader } from './shared'
 
 const ACTIVE = 'active'
 
@@ -89,9 +82,8 @@ function ClientsTable({ clients, onEdit }: { clients: Client[]; onEdit: (c: Clie
           <Th>{t('settings.clients.cols.client')}</Th>
           <Th>{t('settings.clients.cols.contractNo')}</Th>
           <Th>{t('settings.clients.cols.period')}</Th>
-          <Th>{t('settings.clients.cols.plan')}</Th>
-          <Th className="text-right">{t('settings.clients.cols.requesters')}</Th>
-          <Th>{t('settings.clients.cols.agents')}</Th>
+          <Th>{t('settings.clients.cols.projects')}</Th>
+          <Th>{t('settings.clients.cols.requesters')}</Th>
           <Th>{t('settings.clients.cols.pic')}</Th>
           <Th>
             <span className="sr-only">{t('settings.clients.cols.actions')}</span>
@@ -102,27 +94,17 @@ function ClientsTable({ clients, onEdit }: { clients: Client[]; onEdit: (c: Clie
         {clients.map((c) => (
           <tr key={c.id}>
             <RowHeader>{c.name}</RowHeader>
-            <Td className="font-mono text-sm">{c.contractNo ?? t('common.none')}</Td>
+            <Td className="text-ink-2">{c.contractNo ?? t('common.none')}</Td>
             <Td className="whitespace-nowrap">{period(c)}</Td>
-            <Td>{c.slaPlan.name}</Td>
-            <Td className="text-right tabular-nums">{c.requesterCount}</Td>
             <Td>
-              {c.agents.length > 0 ? (
-                c.agents.map((a) => a.name).join(', ')
+              {c.projects.length > 0 ? (
+                c.projects.map((p) => p.name).join(', ')
               ) : (
-                <span className="text-muted">{t('settings.clients.noAgents')}</span>
+                <span className="text-muted">{t('settings.clients.noProjects')}</span>
               )}
             </Td>
-            <Td>
-              {c.picName || c.picEmail ? (
-                <span className="flex flex-col">
-                  {c.picName && <span>{c.picName}</span>}
-                  {c.picEmail && <span className="text-sm text-muted">{c.picEmail}</span>}
-                </span>
-              ) : (
-                t('common.none')
-              )}
-            </Td>
+            <Td className="tabular-nums">{c.requesterCount}</Td>
+            <Td>{c.picName ?? t('common.none')}</Td>
             <Td className="text-right">
               <Button
                 variant="outline"
@@ -147,17 +129,14 @@ type ClientDialogProps = { client: Client | null; onClose: () => void; onDone: (
 
 function ClientDialog({ client, onClose, onDone }: ClientDialogProps) {
   const { t } = useTranslation()
-  const { data: plans } = useSuspenseQuery(slaPlansQueryOptions)
   const { data: users } = useSuspenseQuery(usersQueryOptions)
   const save = useSaveClient()
   const remove = useDeleteClient()
-  const defaultPlanId = plans.find((p) => p.isDefault)?.id ?? plans[0]?.id ?? null
 
   const [name, setName] = useState(client?.name ?? '')
   const [contractNo, setContractNo] = useState(client?.contractNo ?? '')
   const [start, setStart] = useState<CalendarDate | null>(toDate(client?.contractStart))
   const [end, setEnd] = useState<CalendarDate | null>(toDate(client?.contractEnd))
-  const [planId, setPlanId] = useState<string | null>(client?.slaPlan.id ?? defaultPlanId)
   const [picName, setPicName] = useState(client?.picName ?? '')
   const [picEmail, setPicEmail] = useState(client?.picEmail ?? '')
   const previousAgentIds = client?.agents.map((a) => a.id) ?? []
@@ -171,7 +150,7 @@ function ClientDialog({ client, onClose, onDone }: ClientDialogProps) {
 
   const submit = () => {
     setSubmitted(true)
-    if (nameMissing || periodInvalid || !planId) return
+    if (nameMissing || periodInvalid) return
     const input: ClientInput = {
       name: name.trim(),
       contractNo: blankToNull(contractNo),
@@ -179,7 +158,6 @@ function ClientDialog({ client, onClose, onDone }: ClientDialogProps) {
       contractEnd: end?.toString() ?? null,
       picName: blankToNull(picName),
       picEmail: blankToNull(picEmail),
-      slaPlanId: planId,
     }
     save.mutate(
       { id: client?.id, input, agentIds, previousAgentIds },
@@ -217,12 +195,11 @@ function ClientDialog({ client, onClose, onDone }: ClientDialogProps) {
           errorMessage={t('settings.clients.nameRequired')}
         />
         <div className="grid gap-4 sm:grid-cols-2">
-          <TextInput label={t('settings.clients.contractNo')} value={contractNo} onChange={setContractNo} />
-          <Dropdown
-            label={t('settings.clients.plan')}
-            options={plans.map((p) => ({ id: p.id, label: p.name, description: planSummary(t, p) }))}
-            value={planId}
-            onChange={setPlanId}
+          <TextInput
+            className="sm:col-span-2"
+            label={t('settings.clients.contractNo')}
+            value={contractNo}
+            onChange={setContractNo}
           />
           <DateInput label={t('settings.clients.start')} value={start} onChange={setStart} />
           <DateInput

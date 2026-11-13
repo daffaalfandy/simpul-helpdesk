@@ -10,10 +10,9 @@ SELECT id, name FROM clients WHERE name = @name;
 -- agent_id limits the list to clients assigned to that agent; NULL lists all.
 -- Only requesters carry a client_id (users_requester_has_client), so this counts requesters.
 SELECT c.id, c.name, c.contract_no, c.contract_start, c.contract_end, c.pic_name, c.pic_email,
-       c.sla_plan_id, p.name AS sla_plan_name, c.created_at, c.updated_at,
+       c.created_at, c.updated_at,
        (SELECT count(*) FROM users u WHERE u.client_id = c.id)::int AS requester_count
 FROM clients c
-JOIN sla_plans p ON p.id = c.sla_plan_id
 WHERE sqlc.narg(agent_id)::uuid IS NULL
    OR EXISTS (SELECT 1 FROM client_agents ca
               WHERE ca.client_id = c.id AND ca.user_id = sqlc.narg(agent_id)::uuid)
@@ -21,25 +20,24 @@ ORDER BY lower(c.name);
 
 -- name: GetClient :one
 SELECT c.id, c.name, c.contract_no, c.contract_start, c.contract_end, c.pic_name, c.pic_email,
-       c.sla_plan_id, p.name AS sla_plan_name, c.created_at, c.updated_at,
+       c.created_at, c.updated_at,
        (SELECT count(*) FROM users u WHERE u.client_id = c.id)::int AS requester_count
 FROM clients c
-JOIN sla_plans p ON p.id = c.sla_plan_id
 WHERE c.id = @id
   AND (sqlc.narg(agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = c.id AND ca.user_id = sqlc.narg(agent_id)::uuid));
 
 -- name: GetClientForUpdate :one
-SELECT id, name, contract_no, contract_start, contract_end, pic_name, pic_email, sla_plan_id
+SELECT id, name, contract_no, contract_start, contract_end, pic_name, pic_email
 FROM clients
 WHERE id = @id
 FOR UPDATE;
 
 -- name: CreateClient :one
-INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email, sla_plan_id)
+INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email)
 VALUES (@name, sqlc.narg(contract_no), sqlc.narg(contract_start), sqlc.narg(contract_end),
-        sqlc.narg(pic_name), sqlc.narg(pic_email), @sla_plan_id)
+        sqlc.narg(pic_name), sqlc.narg(pic_email))
 RETURNING id;
 
 -- name: UpdateClient :exec
@@ -49,22 +47,20 @@ SET name = @name,
     contract_start = sqlc.narg(contract_start),
     contract_end = sqlc.narg(contract_end),
     pic_name = sqlc.narg(pic_name),
-    pic_email = sqlc.narg(pic_email),
-    sla_plan_id = @sla_plan_id
+    pic_email = sqlc.narg(pic_email)
 WHERE id = @id;
 
 -- name: UpsertClientDetails :one
 -- Seed only: create or refresh a client by name.
-INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email, sla_plan_id)
+INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email)
 VALUES (@name, sqlc.narg(contract_no), sqlc.narg(contract_start), sqlc.narg(contract_end),
-        sqlc.narg(pic_name), sqlc.narg(pic_email), @sla_plan_id)
+        sqlc.narg(pic_name), sqlc.narg(pic_email))
 ON CONFLICT (name) DO UPDATE
 SET contract_no = EXCLUDED.contract_no,
     contract_start = EXCLUDED.contract_start,
     contract_end = EXCLUDED.contract_end,
     pic_name = EXCLUDED.pic_name,
-    pic_email = EXCLUDED.pic_email,
-    sla_plan_id = EXCLUDED.sla_plan_id
+    pic_email = EXCLUDED.pic_email
 RETURNING id;
 
 -- name: DeleteClient :exec
@@ -98,3 +94,9 @@ WHERE id = ANY(@ids::uuid[]) AND role = @role AND status = @status;
 
 -- name: CountClientTickets :one
 SELECT count(*)::int FROM tickets WHERE client_id = @client_id;
+
+-- name: ListClientProjects :many
+-- client_id NULL lists every client's projects. For the Projects column on Settings › Clients.
+SELECT client_id, id, name FROM projects
+WHERE sqlc.narg(client_id)::uuid IS NULL OR client_id = sqlc.narg(client_id)::uuid
+ORDER BY lower(name);

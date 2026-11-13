@@ -10,9 +10,6 @@ export type Problem = components['schemas']['Problem']
 export type Role = components['schemas']['Role']
 export type Client = components['schemas']['Client']
 export type ClientInput = components['schemas']['ClientInput']
-export type SlaPlan = components['schemas']['SlaPlan']
-export type SlaPlanInput = components['schemas']['SlaPlanInput']
-export type SlaTarget = components['schemas']['SlaTarget']
 export type SlaCalendar = components['schemas']['SlaCalendar']
 export type Priority = components['schemas']['Priority']
 export type BusinessHours = components['schemas']['BusinessHours']
@@ -39,8 +36,7 @@ export type TicketAssigneeFilter = components['schemas']['TicketAssigneeFilter']
 export type Attachment = components['schemas']['Attachment']
 export type AttachmentPolicy = components['schemas']['AttachmentPolicy']
 export type Intake = components['schemas']['Intake']
-export type System = components['schemas']['System']
-export type SystemInput = components['schemas']['SystemInput']
+export type IntakeProject = components['schemas']['IntakeProject']
 export type CatalogItem = components['schemas']['CatalogItem']
 export type CatalogItemInput = components['schemas']['CatalogItemInput']
 export type Requester = components['schemas']['Requester']
@@ -66,13 +62,12 @@ export const ErrorCode = {
   WeakPassword: 'weak_password',
   ClientNameTaken: 'client_name_taken',
   ClientInUse: 'client_in_use',
-  SlaPlanNameTaken: 'sla_plan_name_taken',
-  SlaPlanInUse: 'sla_plan_in_use',
-  SlaPlanIsDefault: 'sla_plan_is_default',
   HolidayDateTaken: 'holiday_date_taken',
   EmailTaken: 'email_taken',
   ProjectNameTaken: 'project_name_taken',
   ProjectIsDefault: 'project_is_default',
+  ProjectInUse: 'project_in_use',
+  ClientHasNoProject: 'client_has_no_project',
   AttachmentTooLarge: 'attachment_too_large',
   AttachmentTypeNotAllowed: 'attachment_type_not_allowed',
 } as const

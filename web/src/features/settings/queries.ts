@@ -1,16 +1,11 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import type { BusinessHoursInput, CatalogItemInput, ClientInput, PriorityLevel, SlaPlanInput, SystemInput } from '../../api/client'
+import type { BusinessHoursInput, CatalogItemInput, ClientInput, PriorityLevel } from '../../api/client'
 import { api } from '../../api/client'
 import { clientsQueryOptions, queryKeys, useInvalidate } from '../../api/queries'
 import { unwrap } from '../../api/unwrap'
 
 export { clientsQueryOptions }
-
-export const slaPlansQueryOptions = queryOptions({
-  queryKey: queryKeys.slaPlans,
-  queryFn: () => unwrap(api.GET('/sla-plans')),
-})
 
 export const businessHoursQueryOptions = queryOptions({
   queryKey: queryKeys.businessHours,
@@ -59,7 +54,7 @@ export function useSaveClient() {
       }
       return client
     },
-    onSettled: () => invalidate(queryKeys.clients, queryKeys.slaPlans),
+    onSettled: () => invalidate(queryKeys.clients),
   })
 }
 
@@ -67,34 +62,7 @@ export function useDeleteClient() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: string) => unwrap(api.DELETE('/clients/{clientId}', { params: { path: { clientId: id } } })),
-    onSuccess: () => invalidate(queryKeys.clients, queryKeys.slaPlans),
-  })
-}
-
-export function useSavePlan() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: ({ id, input }: { id?: string; input: SlaPlanInput }) =>
-      id
-        ? unwrap(api.PUT('/sla-plans/{planId}', { params: { path: { planId: id } }, body: input }))
-        : unwrap(api.POST('/sla-plans', { body: input })),
-    onSuccess: () => invalidate(queryKeys.slaPlans, queryKeys.clients),
-  })
-}
-
-export function useDeletePlan() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: (id: string) => unwrap(api.DELETE('/sla-plans/{planId}', { params: { path: { planId: id } } })),
-    onSuccess: () => invalidate(queryKeys.slaPlans),
-  })
-}
-
-export function useSetDefaultPlan() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: (id: string) => unwrap(api.POST('/sla-plans/{planId}/default', { params: { path: { planId: id } } })),
-    onSuccess: () => invalidate(queryKeys.slaPlans),
+    onSuccess: () => invalidate(queryKeys.clients),
   })
 }
 
@@ -139,34 +107,10 @@ export function useLoadHolidayPreset() {
   })
 }
 
-export const systemsQueryOptions = queryOptions({
-  queryKey: queryKeys.systems,
-  queryFn: () => unwrap(api.GET('/systems')),
-})
-
 export const catalogItemsQueryOptions = queryOptions({
   queryKey: queryKeys.catalogItems,
   queryFn: () => unwrap(api.GET('/catalog-items')),
 })
-
-export function useSaveSystem() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: ({ id, input }: { id?: string; input: SystemInput }) =>
-      id
-        ? unwrap(api.PUT('/systems/{systemId}', { params: { path: { systemId: id } }, body: input }))
-        : unwrap(api.POST('/systems', { body: input })),
-    onSuccess: () => invalidate(queryKeys.systems, queryKeys.intake),
-  })
-}
-
-export function useDeleteSystem() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: (id: string) => unwrap(api.DELETE('/systems/{systemId}', { params: { path: { systemId: id } } })),
-    onSuccess: () => invalidate(queryKeys.systems, queryKeys.intake),
-  })
-}
 
 export function useSaveCatalogItem() {
   const invalidate = useInvalidate()

@@ -5,7 +5,6 @@ import { usePriorityNames } from '../../api/queries'
 import { BackLink } from '../../components/BackLink'
 import { Pill, PriorityBadge } from '../../components/Badges'
 import { paths } from '../../lib/constants'
-import { businessHoursQueryOptions } from '../settings/queries'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { ActivityLog } from './ActivityLog'
 import { AgentComposer } from './AgentComposer'
@@ -24,7 +23,6 @@ export function AgentTicketPage({ ticketKey }: { ticketKey: string }) {
   const me = useSignedInUser()
   const { data: ticket } = useSuspenseQuery(ticketQueryOptions(ticketKey))
   const { data: messages } = useSuspenseQuery(ticketMessagesQueryOptions(ticketKey))
-  const { data: hours } = useSuspenseQuery(businessHoursQueryOptions)
   const { stamp } = useTimestamp()
 
   return (
@@ -51,7 +49,7 @@ export function AgentTicketPage({ ticketKey }: { ticketKey: string }) {
         </section>
         <aside className="flex min-w-0 flex-col gap-4">
           <TicketProperties ticket={ticket} />
-          <ServiceLevelCard ticket={ticket} audience="agent" workingDayMinutes={hours.workingDayMinutes} />
+          <ServiceLevelCard ticket={ticket} audience="agent" />
           <ActivityLog ticketKey={ticket.key} type={ticket.type} />
         </aside>
       </div>

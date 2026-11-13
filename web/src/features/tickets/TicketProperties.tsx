@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -50,13 +51,18 @@ export function TicketProperties({ ticket }: { ticket: Ticket }) {
     assigneeOptions.push({ id: ticket.assignee.id, label: ticket.assignee.name })
   }
 
-  const detail = ticket.type === 'request' ? ticket.catalogItem : ticket.system
   const details = [
     { term: t('ticket.fields.client'), value: ticket.client.name },
     { term: t('ticket.fields.requester'), value: ticket.requester.name },
-    ...(detail
-      ? [{ term: ticket.type === 'request' ? t('ticket.fields.catalogItem') : t('ticket.fields.system'), value: detail.name }]
-      : []),
+    {
+      term: t('ticket.fields.project'),
+      value: (
+        <Link to="/projects/$projectId" params={{ projectId: ticket.project.id }}>
+          {ticket.project.name}
+        </Link>
+      ),
+    },
+    ...(ticket.catalogItem ? [{ term: t('ticket.fields.catalogItem'), value: ticket.catalogItem.name }] : []),
     { term: t('ticket.fields.channel'), value: t(`ticket.channelOption.${ticket.channel}`) },
   ]
 

@@ -3,7 +3,6 @@ package sla_test
 import (
 	"context"
 	"os"
-	"sync"
 	"testing"
 	"time"
 	_ "time/tzdata"
@@ -17,15 +16,6 @@ import (
 func TestMain(m *testing.M) { os.Exit(testdb.Main(m)) }
 
 var actor = audit.SystemActor(audit.ActorNameCLI)
-
-func plan(name string) sla.PlanInput {
-	return sla.PlanInput{Name: name, Targets: []sla.Target{
-		{Priority: sla.P1, FirstResponseMinutes: 15, ResolveMinutes: 240, DeliverMinutes: 240, Calendar: sla.CalendarAlways},
-		{Priority: sla.P2, FirstResponseMinutes: 30, ResolveMinutes: 480, DeliverMinutes: 540, Calendar: sla.CalendarAlways},
-		{Priority: sla.P3, FirstResponseMinutes: 120, ResolveMinutes: 1080, DeliverMinutes: 1080, Calendar: sla.CalendarBusinessHours},
-		{Priority: sla.P4, FirstResponseMinutes: 240, ResolveMinutes: 2700, DeliverMinutes: 2700, Calendar: sla.CalendarBusinessHours},
-	}}
-}
 
 func TestSchedulesUseStoredHoursAndHolidays(t *testing.T) {
 	ctx := context.Background()
@@ -52,47 +42,6 @@ func TestSchedulesUseStoredHoursAndHolidays(t *testing.T) {
 	}
 	if got := s.For(sla.CalendarAlways).Add(start, 2*time.Hour); !got.Equal(start.Add(2 * time.Hour)) {
 		t.Fatalf("24/7 due = %s", got)
-	}
-}
-
-func TestConcurrentDefaultSwitchesKeepOneDefault(t *testing.T) {
-	ctx := context.Background()
-	svc := sla.NewService(testdb.New(t))
-	const plans = 4
-	ids := make([]sla.Plan, 0, plans)
-	for _, name := range []string{"A", "B", "C", "D"} {
-		p, err := svc.CreatePlan(ctx, actor, plan(name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		ids = append(ids, p)
-	}
-	var wg sync.WaitGroup
-	errs := make(chan error, plans)
-	for _, p := range ids {
-		wg.Go(func() {
-			if _, err := svc.SetDefaultPlan(ctx, actor, p.ID); err != nil {
-				errs <- err
-			}
-		})
-	}
-	wg.Wait()
-	close(errs)
-	for err := range errs {
-		t.Errorf("SetDefaultPlan: %v", err)
-	}
-	all, err := svc.ListPlans(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defaults := 0
-	for _, p := range all {
-		if p.IsDefault {
-			defaults++
-		}
-	}
-	if defaults != 1 {
-		t.Fatalf("defaults = %d, want 1", defaults)
 	}
 }
 

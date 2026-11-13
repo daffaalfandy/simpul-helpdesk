@@ -2,56 +2,80 @@ import { useTranslation } from 'react-i18next'
 
 import type { Ticket } from '../../api/client'
 import { Card } from '../../components/Card'
-import { DescriptionList } from '../../components/DescriptionList'
-import { formatDuration } from '../../lib/formatDuration'
+import { formatTarget, formatTargetCompact } from '../../lib/formatDuration'
 import type { Audience } from './MessageThread'
 import { useTimestamp } from './time'
 
-type ServiceLevelCardProps = { ticket: Ticket; audience: Audience; workingDayMinutes: number }
+type ServiceLevelCardProps = { ticket: Ticket; audience: Audience }
 
 /**
- * The ticket's targets from its SLA snapshot. Live timers, pausing and breach arrive with the
- * SLA engine (M5); until then this shows the promise, not the countdown.
+ * The ticket's targets from its SLA snapshot (the project's SLA when the ticket was opened).
+ * Live timers, bars and breach states arrive with the SLA engine (M5b); until then this shows
+ * the promise and when the first reply went out.
  */
-export function ServiceLevelCard({ ticket, audience, workingDayMinutes }: ServiceLevelCardProps) {
+export function ServiceLevelCard({ ticket, audience }: ServiceLevelCardProps) {
   const { t } = useTranslation()
   const { stamp } = useTimestamp()
   const { sla } = ticket
-  const duration = (minutes: number) => formatDuration(t, minutes, sla.calendar, workingDayMinutes)
   const isRequest = ticket.type === 'request'
+  const pausedNote =
+    sla.pauseOnWaitingClient && sla.pauseOnUat
+      ? t('ticket.sla.pausedBoth')
+      : sla.pauseOnWaitingClient
+        ? t('ticket.sla.pausedWaiting')
+        : sla.pauseOnUat
+          ? t('ticket.sla.pausedUat')
+          : null
+  const replied = ticket.firstResponseAt ? stamp(ticket.firstResponseAt) : null
 
   if (audience === 'requester') {
     return (
-      <Card as="h2" title={t('ticket.sla.requesterTitle', { priority: sla.priority })}>
-        <ul className="flex flex-col gap-1.5 text-sm">
-          <li>{t('ticket.sla.firstReplyWithin', { duration: duration(sla.firstResponseMinutes) })}</li>
-          <li>
-            {isRequest
-              ? t('ticket.sla.deliveredWithin', { duration: duration(sla.resolutionMinutes) })
-              : t('ticket.sla.fixWithin', { duration: duration(sla.resolutionMinutes) })}
-          </li>
-          <li className="text-muted">{sla.calendar === 'always' ? t('ticket.sla.always') : t('ticket.sla.business')}</li>
-        </ul>
-        <p className="text-xs text-muted">{t('ticket.sla.pausedNote')}</p>
+      <Card as="h2" variant="compact" title={t('ticket.sla.requesterTitle', { priority: sla.priority })}>
+        <dl className="flex flex-col gap-2 text-sm">
+          <div className="flex flex-wrap justify-between gap-x-3">
+            <dt>{t('ticket.sla.firstReplyWithin', { duration: formatTarget(t, sla.firstResponse) })}</dt>
+            {replied && <dd className="font-bold text-success">{t('ticket.sla.replied')}</dd>}
+          </div>
+          <div className="flex flex-wrap justify-between gap-x-3">
+            <dt>
+              {isRequest
+                ? t('ticket.sla.deliveredWithin', { duration: formatTarget(t, sla.resolution) })
+                : t('ticket.sla.fixWithin', { duration: formatTarget(t, sla.resolution) })}
+            </dt>
+          </div>
+        </dl>
+        <p className="text-xs text-muted">
+          {sla.calendar === 'always' ? t('ticket.sla.always') : t('ticket.sla.business')}
+          {pausedNote && <> {pausedNote}</>}
+        </p>
       </Card>
     )
   }
+
+  const rows = [
+    { label: t('ticket.sla.firstResponse'), target: sla.firstResponse, state: replied && t('ticket.sla.sentAt', { when: replied }) },
+    { label: isRequest ? t('ticket.sla.deliver') : t('ticket.sla.resolve'), target: sla.resolution, state: null },
+  ]
   return (
-    <Card as="h2" title={t('ticket.sla.agentTitle', { priority: sla.priority })}>
-      <DescriptionList
-        items={[
-          { term: t('ticket.sla.firstResponse'), value: duration(sla.firstResponseMinutes) },
-          {
-            term: isRequest ? t('ticket.sla.deliver') : t('ticket.sla.resolve'),
-            value: duration(sla.resolutionMinutes),
-          },
-        ]}
-      />
-      <ul className="flex flex-col gap-1 text-xs text-muted">
-        <li>{sla.calendar === 'always' ? t('ticket.sla.always') : t('ticket.sla.business')}</li>
-        {sla.fromCatalog && <li>{t('ticket.sla.fromCatalog')}</li>}
-        {ticket.firstResponseAt && <li>{t('ticket.sla.firstResponseMet', { when: stamp(ticket.firstResponseAt) })}</li>}
-      </ul>
-    </Card>
+    <section
+      aria-labelledby={`sla-${ticket.id}`}
+      className="flex flex-col gap-3 rounded-2xl bg-ink px-4.5 py-4 text-on-primary shadow-card"
+    >
+      <h2 id={`sla-${ticket.id}`} className="text-base font-extrabold">
+        {t('ticket.sla.agentTitle', { priority: sla.priority, project: ticket.project.name })}
+      </h2>
+      <dl className="flex flex-col gap-2 text-sm">
+        {rows.map((r) => (
+          <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <dt>{t('ticket.sla.row', { label: r.label, target: formatTargetCompact(t, r.target) })}</dt>
+            {r.state && <dd className="font-bold text-success-border">{r.state}</dd>}
+          </div>
+        ))}
+      </dl>
+      <p className="text-xs text-on-dark-muted">
+        {sla.calendar === 'always' ? t('ticket.sla.always') : t('ticket.sla.business')}
+        {pausedNote && <> {pausedNote}</>}
+      </p>
+    </section>
   )
 }

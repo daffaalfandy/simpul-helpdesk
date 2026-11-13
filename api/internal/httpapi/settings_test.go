@@ -18,6 +18,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 )
 
 const requesterClient = "Dinas Kominfo Jambi"
@@ -67,18 +68,6 @@ func date(t *testing.T, s string) *openapi_types.Date {
 
 func str(s string) *string { return &s }
 
-func defaultPlan(t *testing.T, admin session) gen.SlaPlan {
-	t.Helper()
-	plans := decode[[]gen.SlaPlan](t, admin.do(http.MethodGet, "/sla-plans", nil), http.StatusOK)
-	for _, p := range plans {
-		if p.IsDefault {
-			return p
-		}
-	}
-	t.Fatal("no default plan")
-	return gen.SlaPlan{}
-}
-
 func userID(t *testing.T, e *env, role auth.Role) uuid.UUID {
 	t.Helper()
 	u, err := e.st.Q().GetUserByEmail(context.Background(), e.users[role])
@@ -88,30 +77,18 @@ func userID(t *testing.T, e *env, role auth.Role) uuid.UUID {
 	return u.ID
 }
 
-func planInput(name string) gen.SlaPlanInput {
-	targets := make([]gen.SlaTarget, 0, len(sla.Priorities))
-	for _, p := range sla.Priorities {
-		targets = append(targets, gen.SlaTarget{
-			Priority: gen.Priority(p), FirstResponseMinutes: 10, ResolveMinutes: 120, DeliverMinutes: 120,
-			Calendar: gen.SlaCalendarAlways,
-		})
-	}
-	return gen.SlaPlanInput{Name: name, Targets: targets}
-}
-
 func TestClientsCRUD(t *testing.T) {
 	e := newEnv(t)
 	admin := e.as(auth.RoleAdmin)
-	plan := defaultPlan(t, admin)
 
 	in := gen.ClientInput{
 		Name: "  BPKAD Kota Batam ", ContractNo: str("KTR/BPKAD-BTM/014/2026"),
 		ContractStart: date(t, "2026-03-01"), ContractEnd: date(t, "2027-02-28"),
-		PicName: str("Sri Lestari"), PicEmail: str("Sri@Batam.test"), SlaPlanId: plan.Id,
+		PicName: str("Sri Lestari"), PicEmail: str("Sri@Batam.test"),
 	}
 	created := decode[gen.Client](t, admin.do(http.MethodPost, "/clients", in), http.StatusCreated)
 	if created.Name != "BPKAD Kota Batam" || *created.PicEmail != "sri@batam.test" ||
-		created.ContractEnd.String() != "2027-02-28" || created.SlaPlan.Id != plan.Id || len(created.Agents) != 0 {
+		created.ContractEnd.String() != "2027-02-28" || len(created.Projects) != 0 || len(created.Agents) != 0 {
 		t.Fatalf("created = %+v", created)
 	}
 
@@ -125,6 +102,14 @@ func TestClientsCRUD(t *testing.T) {
 	if updated.Name != "BPKAD Batam" || updated.ContractNo != nil || updated.PicEmail != nil {
 		t.Fatalf("updated = %+v", updated)
 	}
+
+	// The client lists its projects; deleting a client without tickets takes them along.
+	testdb.Project(t, e.st, created.Id, "Network & infra support", true)
+	testdb.Project(t, e.st, created.Id, "Finance apps", false)
+	withProjects := decode[gen.Client](t, admin.do(http.MethodGet, "/clients/"+created.Id.String(), nil), http.StatusOK)
+	if len(withProjects.Projects) != 2 || withProjects.Projects[0].Name != "Finance apps" {
+		t.Fatalf("projects = %+v", withProjects.Projects)
+	}
 	if rec := admin.do(http.MethodDelete, "/clients/"+created.Id.String(), nil); rec.Code != http.StatusNoContent {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}
@@ -134,17 +119,15 @@ func TestClientsCRUD(t *testing.T) {
 func TestClientValidation(t *testing.T) {
 	e := newEnv(t)
 	admin := e.as(auth.RoleAdmin)
-	plan := defaultPlan(t, admin)
 	tests := map[string]struct {
 		in     gen.ClientInput
 		status int
 		code   string
 	}{
-		"name taken":       {gen.ClientInput{Name: requesterClient, SlaPlanId: plan.Id}, http.StatusConflict, apperr.CodeClientNameTaken},
-		"blank name":       {gen.ClientInput{Name: "   ", SlaPlanId: plan.Id}, http.StatusBadRequest, apperr.CodeInvalidName},
-		"period backwards": {gen.ClientInput{Name: "C", SlaPlanId: plan.Id, ContractStart: date(t, "2026-12-31"), ContractEnd: date(t, "2026-01-01")}, http.StatusBadRequest, apperr.CodeInvalidContractPeriod},
-		"unknown plan":     {gen.ClientInput{Name: "C", SlaPlanId: uuid.New()}, http.StatusBadRequest, apperr.CodeSlaPlanNotFound},
-		"bad PIC email":    {gen.ClientInput{Name: "C", SlaPlanId: plan.Id, PicEmail: str("@nowhere")}, http.StatusBadRequest, apperr.CodeInvalidEmail},
+		"name taken":       {gen.ClientInput{Name: requesterClient}, http.StatusConflict, apperr.CodeClientNameTaken},
+		"blank name":       {gen.ClientInput{Name: "   "}, http.StatusBadRequest, apperr.CodeInvalidName},
+		"period backwards": {gen.ClientInput{Name: "C", ContractStart: date(t, "2026-12-31"), ContractEnd: date(t, "2026-01-01")}, http.StatusBadRequest, apperr.CodeInvalidContractPeriod},
+		"bad PIC email":    {gen.ClientInput{Name: "C", PicEmail: str("@nowhere")}, http.StatusBadRequest, apperr.CodeInvalidEmail},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -157,11 +140,9 @@ func TestClientValidation(t *testing.T) {
 
 func TestClientWritesAreAdminOnly(t *testing.T) {
 	e := newEnv(t)
-	plan := defaultPlan(t, e.as(auth.RoleAdmin))
 	for _, role := range []auth.Role{auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		s := e.as(role)
-		expectProblem(t, s.do(http.MethodPost, "/clients", gen.ClientInput{Name: "X", SlaPlanId: plan.Id}), http.StatusForbidden, apperr.CodeForbidden)
-		expectProblem(t, s.do(http.MethodPost, "/sla-plans", planInput("X")), http.StatusForbidden, apperr.CodeForbidden)
+		expectProblem(t, s.do(http.MethodPost, "/clients", gen.ClientInput{Name: "X"}), http.StatusForbidden, apperr.CodeForbidden)
 		expectProblem(t, s.do(http.MethodPost, "/holidays", gen.HolidayInput{Date: *date(t, "2026-01-01"), Name: "X"}), http.StatusForbidden, apperr.CodeForbidden)
 		expectProblem(t, s.do(http.MethodPost, "/holiday-presets/2026/load", nil), http.StatusForbidden, apperr.CodeForbidden)
 	}
@@ -170,9 +151,8 @@ func TestClientWritesAreAdminOnly(t *testing.T) {
 func TestClientVisibilityAndAgents(t *testing.T) {
 	e := newEnv(t)
 	admin := e.as(auth.RoleAdmin)
-	plan := defaultPlan(t, admin)
-	a := decode[gen.Client](t, admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "A", SlaPlanId: plan.Id}), http.StatusCreated)
-	b := decode[gen.Client](t, admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "B", SlaPlanId: plan.Id}), http.StatusCreated)
+	a := decode[gen.Client](t, admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "A"}), http.StatusCreated)
+	b := decode[gen.Client](t, admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "B"}), http.StatusCreated)
 	agentID := userID(t, e, auth.RoleAgent)
 
 	agentsPath := "/clients/" + a.Id.String() + "/agents"
@@ -199,71 +179,6 @@ func TestClientVisibilityAndAgents(t *testing.T) {
 	cleared := decode[gen.Client](t, admin.do(http.MethodPut, agentsPath, gen.ClientAgentsInput{UserIds: []uuid.UUID{}}), http.StatusOK)
 	if len(cleared.Agents) != 0 {
 		t.Fatalf("agents after clearing = %+v", cleared.Agents)
-	}
-}
-
-func TestSlaPlans(t *testing.T) {
-	e := newEnv(t)
-	admin := e.as(auth.RoleAdmin)
-	standard := defaultPlan(t, admin)
-	if standard.Name != "Standard" || len(standard.Targets) != len(sla.Priorities) ||
-		standard.Targets[0].Calendar != gen.SlaCalendarAlways || standard.Targets[3].ResolveMinutes != 2700 {
-		t.Fatalf("standard = %+v", standard)
-	}
-
-	gold := decode[gen.SlaPlan](t, admin.do(http.MethodPost, "/sla-plans", planInput("Gold")), http.StatusCreated)
-	expectProblem(t, admin.do(http.MethodPost, "/sla-plans", planInput("gold")), http.StatusConflict, apperr.CodeSlaPlanNameTaken)
-
-	in := planInput("Gold 24/7")
-	in.Targets[1].ResolveMinutes = 240
-	updated := decode[gen.SlaPlan](t, admin.do(http.MethodPut, "/sla-plans/"+gold.Id.String(), in), http.StatusOK)
-	if updated.Name != "Gold 24/7" || updated.Targets[1].ResolveMinutes != 240 {
-		t.Fatalf("updated = %+v", updated)
-	}
-
-	client := decode[gen.Client](t, admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "PANRB", SlaPlanId: gold.Id}), http.StatusCreated)
-	expectProblem(t, admin.do(http.MethodDelete, "/sla-plans/"+gold.Id.String(), nil), http.StatusConflict, apperr.CodeSlaPlanInUse)
-	expectProblem(t, admin.do(http.MethodDelete, "/sla-plans/"+standard.Id.String(), nil), http.StatusConflict, apperr.CodeSlaPlanIsDefault)
-
-	newDefault := decode[gen.SlaPlan](t, admin.do(http.MethodPost, "/sla-plans/"+gold.Id.String()+"/default", nil), http.StatusOK)
-	if !newDefault.IsDefault || newDefault.ClientCount != 1 {
-		t.Fatalf("new default = %+v", newDefault)
-	}
-	plans := decode[[]gen.SlaPlan](t, admin.do(http.MethodGet, "/sla-plans", nil), http.StatusOK)
-	if len(plans) != 2 || !plans[0].IsDefault || plans[0].Id != gold.Id || plans[1].IsDefault {
-		t.Fatalf("plans = %+v", plans)
-	}
-
-	// Free the old default and the plan can go.
-	decode[gen.Client](t, admin.do(http.MethodPut, "/clients/"+client.Id.String(), gen.ClientInput{Name: "PANRB", SlaPlanId: gold.Id}), http.StatusOK)
-	jambi := decode[[]gen.Client](t, admin.do(http.MethodGet, "/clients", nil), http.StatusOK)[0]
-	decode[gen.Client](t, admin.do(http.MethodPut, "/clients/"+jambi.Id.String(), gen.ClientInput{Name: jambi.Name, SlaPlanId: gold.Id}), http.StatusOK)
-	if rec := admin.do(http.MethodDelete, "/sla-plans/"+standard.Id.String(), nil); rec.Code != http.StatusNoContent {
-		t.Fatalf("delete freed plan: %d %s", rec.Code, rec.Body)
-	}
-
-	decode[[]gen.SlaPlan](t, e.as(auth.RoleAgent).do(http.MethodGet, "/sla-plans", nil), http.StatusOK)
-	expectProblem(t, e.as(auth.RoleRequester).do(http.MethodGet, "/sla-plans", nil), http.StatusForbidden, apperr.CodeForbidden)
-}
-
-func TestSlaTargetValidation(t *testing.T) {
-	e := newEnv(t)
-	admin := e.as(auth.RoleAdmin)
-	tests := map[string]struct {
-		edit func(*gen.SlaPlanInput)
-		code string
-	}{
-		"duplicate priority":     {func(in *gen.SlaPlanInput) { in.Targets[3].Priority = gen.PriorityP1 }, apperr.CodeInvalidSlaTargets},
-		"response after resolve": {func(in *gen.SlaPlanInput) { in.Targets[0].FirstResponseMinutes = 121 }, apperr.CodeInvalidSlaTargets},
-		"zero minutes":           {func(in *gen.SlaPlanInput) { in.Targets[0].ResolveMinutes = 0 }, apperr.CodeInvalidRequest},
-		"three targets":          {func(in *gen.SlaPlanInput) { in.Targets = in.Targets[:3] }, apperr.CodeInvalidRequest},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			in := planInput("Broken")
-			tt.edit(&in)
-			expectProblem(t, admin.do(http.MethodPost, "/sla-plans", in), http.StatusBadRequest, tt.code)
-		})
 	}
 }
 
@@ -328,11 +243,8 @@ func TestHolidayPresets(t *testing.T) {
 func TestSettingsWritesAreAudited(t *testing.T) {
 	e := newEnv(t)
 	admin := e.as(auth.RoleAdmin)
-	plan := decode[gen.SlaPlan](t, admin.do(http.MethodPost, "/sla-plans", planInput("Gold")), http.StatusCreated)
-	decode[gen.SlaPlan](t, admin.do(http.MethodPut, "/sla-plans/"+plan.Id.String(), planInput("Gold+")), http.StatusOK)
-	decode[gen.SlaPlan](t, admin.do(http.MethodPost, "/sla-plans/"+plan.Id.String()+"/default", nil), http.StatusOK)
-	c := decode[gen.Client](t, admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "C", SlaPlanId: plan.Id}), http.StatusCreated)
-	decode[gen.Client](t, admin.do(http.MethodPut, "/clients/"+c.Id.String(), gen.ClientInput{Name: "C2", SlaPlanId: plan.Id}), http.StatusOK)
+	c := decode[gen.Client](t, admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "C"}), http.StatusCreated)
+	decode[gen.Client](t, admin.do(http.MethodPut, "/clients/"+c.Id.String(), gen.ClientInput{Name: "C2"}), http.StatusOK)
 	decode[gen.Client](t, admin.do(http.MethodPut, "/clients/"+c.Id.String()+"/agents", gen.ClientAgentsInput{UserIds: []uuid.UUID{userID(t, e, auth.RoleAgent)}}), http.StatusOK)
 	admin.do(http.MethodDelete, "/clients/"+c.Id.String(), nil)
 	decode[gen.BusinessHours](t, admin.do(http.MethodPut, "/business-hours", gen.BusinessHoursInput{Weekdays: []gen.Weekday{gen.WeekdayMon}, Opens: "09:00", Closes: "17:00"}), http.StatusOK)
@@ -356,7 +268,6 @@ func TestSettingsWritesAreAudited(t *testing.T) {
 	}
 	user := func(action string) string { return action + "/user" }
 	want := []string{
-		user(sla.ActionPlanCreated), user(sla.ActionPlanUpdated), user(sla.ActionPlanDefaultChanged),
 		user(clients.ActionCreated), user(clients.ActionUpdated), user(clients.ActionAgentsUpdated), user(clients.ActionDeleted),
 		user(sla.ActionHoursUpdated), user(sla.ActionHolidayCreated), user(sla.ActionHolidayDeleted), user(sla.ActionPresetLoaded),
 	}

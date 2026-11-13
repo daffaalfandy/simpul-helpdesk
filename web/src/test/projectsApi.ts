@@ -48,15 +48,15 @@ function fixtures() {
   const projects: Project[] = [
     {
       id: PROJECT_IDS.eOffice, client: JAMBI, name: 'e-Office', description: 'Letters, dispositions, archives',
-      isDefault: true, active: true, sla: fastSla, createdAt: STAMP, updatedAt: STAMP,
+      isDefault: true, active: true, sla: fastSla, openTicketCount: 2, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.email, client: JAMBI, name: 'Email', description: 'Mailboxes and accounts',
-      isDefault: false, active: true, sla: defaultSla, createdAt: STAMP, updatedAt: STAMP,
+      isDefault: false, active: true, sla: defaultSla, openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.network, client: BATAM, name: 'Network & infra support', description: null,
-      isDefault: true, active: true, sla: defaultSla, createdAt: STAMP, updatedAt: STAMP,
+      isDefault: true, active: true, sla: defaultSla, openTicketCount: 1, createdAt: STAMP, updatedAt: STAMP,
     },
   ]
   return { levels, projects }
@@ -115,7 +115,8 @@ export const projectsHandlers = [
     const first = !projectsApi.projects.some((p) => p.client.id === body.clientId)
     const project: Project = {
       id: newId(), client, name: body.name, description: body.description ?? null,
-      isDefault: body.isDefault || first, active: body.active || first, sla: defaultSla, createdAt: STAMP, updatedAt: STAMP,
+      isDefault: body.isDefault || first, active: body.active || first, sla: defaultSla, openTicketCount: 0,
+      createdAt: STAMP, updatedAt: STAMP,
     }
     projectsApi.projects.push(project)
     return HttpResponse.json(project, { status: 201 })

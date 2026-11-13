@@ -35,10 +35,11 @@ func TestSweeperPurgesOnlyExpiredPendingFiles(t *testing.T) {
 		VALUES ('r@c.test', 'R', 'requester', $1) RETURNING id`, client).Scan(&user); err != nil {
 		t.Fatal(err)
 	}
+	project := testdb.Project(t, st, client, "e-Office", true)
 	if err := pool.QueryRow(ctx, `INSERT INTO tickets (number, key, type, status, priority, channel, client_id,
-		requester_id, created_by, subject, description, sla_snapshot)
-		VALUES (1, 'HD-1', 'incident', 'new', 'P3', 'portal', $1, $2, $2, 'S', 'D', '{}') RETURNING id`,
-		client, user).Scan(&ticketID); err != nil {
+		requester_id, created_by, project_id, subject, description, sla_snapshot)
+		VALUES (1, 'HD-1', 'incident', 'new', 'P3', 'portal', $1, $2, $2, $3, 'S', 'D', '{}') RETURNING id`,
+		client, user, project).Scan(&ticketID); err != nil {
 		t.Fatal(err)
 	}
 

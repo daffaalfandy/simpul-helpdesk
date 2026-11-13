@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { PROJECT_IDS } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
 import { state, USERS } from '../../test/server'
 import { tickets } from '../../test/ticketsApi'
@@ -34,10 +35,13 @@ describe('agent ticket detail', () => {
     const headers = screen.getAllByText('Rina Pratiwi', { selector: 'strong' }).map((el) => el.parentElement?.textContent)
     expect(headers).toContain('Internal note · Rina Pratiwi (not visible to client)')
     expect(screen.getByText("Matches last night's SSO patch.")).toBeInTheDocument()
-    const sla = screen.getByRole('heading', { name: 'Service level · P1' }).closest('section') as HTMLElement
-    expect(within(sla).getByText('15 min')).toBeInTheDocument()
-    expect(within(sla).getByText('4 hours')).toBeInTheDocument()
-    expect(within(sla).getByText('Runs 24/7')).toBeInTheDocument()
+    const sla = screen.getByRole('region', { name: 'SLA · P1 · e-Office project' })
+    expect(within(sla).getByText('First response · 15m')).toBeInTheDocument()
+    expect(within(sla).getByText(/^Sent /)).toBeInTheDocument()
+    expect(within(sla).getByText('Resolution · 4h')).toBeInTheDocument()
+    expect(sla).toHaveTextContent("Runs 24/7 Time waiting for the client's reply or test doesn't count.")
+    const properties = screen.getByRole('heading', { name: 'Properties' }).closest('section') as HTMLElement
+    expect(within(properties).getByRole('link', { name: 'e-Office' })).toHaveAttribute('href', `/projects/${PROJECT_IDS.eOffice}`)
     const log = screen.getByRole('heading', { name: 'Activity log' }).closest('section') as HTMLElement
     expect(await within(log).findByText('Created by Hendra Gunawan via client portal')).toBeInTheDocument()
     expect(within(log).getByText('Assigned to Rina Pratiwi by Rina Pratiwi')).toBeInTheDocument()

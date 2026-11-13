@@ -6,9 +6,9 @@ SELECT nextval('ticket_number_seq')::bigint;
 
 -- name: CreateTicket :one
 INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
-                     created_by, system_id, catalog_item_id, subject, description, sla_snapshot)
+                     created_by, project_id, catalog_item_id, subject, description, sla_snapshot)
 VALUES (@number, @key, @type, @status, @priority, @channel, @client_id, @requester_id, sqlc.narg(assignee_id),
-        @created_by, sqlc.narg(system_id), sqlc.narg(catalog_item_id), @subject, @description, @sla_snapshot)
+        @created_by, @project_id, sqlc.narg(catalog_item_id), @subject, @description, @sla_snapshot)
 RETURNING id, created_at;
 
 -- name: ListTickets :many
@@ -43,14 +43,14 @@ SELECT t.id, t.key, t.type, t.status, t.priority, t.channel, t.subject, t.descri
        t.requester_id, r.name AS requester_name, r.job_title AS requester_job_title,
        t.assignee_id, a.name AS assignee_name,
        t.created_by, cb.name AS created_by_name, cb.role AS created_by_role,
-       t.system_id, s.name AS system_name,
+       t.project_id, p.name AS project_name,
        t.catalog_item_id, ci.name AS catalog_item_name
 FROM tickets t
 JOIN clients c ON c.id = t.client_id
 JOIN users r ON r.id = t.requester_id
 JOIN users cb ON cb.id = t.created_by
 LEFT JOIN users a ON a.id = t.assignee_id
-LEFT JOIN systems s ON s.id = t.system_id
+JOIN projects p ON p.id = t.project_id
 LEFT JOIN catalog_items ci ON ci.id = t.catalog_item_id
 WHERE t.key = @key
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
@@ -109,10 +109,10 @@ ORDER BY m.created_at, m.id;
 -- name: InsertSeedTicket :one
 -- Seed only: explicit number, status and times. Returns no row if the key exists.
 INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
-                     created_by, system_id, catalog_item_id, subject, description, sla_snapshot,
+                     created_by, project_id, catalog_item_id, subject, description, sla_snapshot,
                      first_response_at, resolved_at, created_at, updated_at)
 VALUES (@number, @key, @type, @status, @priority, @channel, @client_id, @requester_id, sqlc.narg(assignee_id),
-        @created_by, sqlc.narg(system_id), sqlc.narg(catalog_item_id), @subject, @description, @sla_snapshot,
+        @created_by, @project_id, sqlc.narg(catalog_item_id), @subject, @description, @sla_snapshot,
         sqlc.narg(first_response_at), sqlc.narg(resolved_at), @created_at, @updated_at)
 ON CONFLICT (key) DO NOTHING
 RETURNING id;

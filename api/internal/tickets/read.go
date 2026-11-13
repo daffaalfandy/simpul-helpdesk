@@ -123,7 +123,7 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, key string) (Ticke
 			ResolvedAt: r.ResolvedAt,
 		},
 		Channel: ticket.Channel(r.Channel), Description: r.Description, RequesterJobTitle: r.RequesterJobTitle,
-		System: optionalRef(r.SystemID, r.SystemName), CatalogItem: optionalRef(r.CatalogItemID, r.CatalogItemName),
+		Project: Ref{r.ProjectID, r.ProjectName}, CatalogItem: optionalRef(r.CatalogItemID, r.CatalogItemName),
 		CreatedBy: Ref{r.CreatedBy, r.CreatedByName}, LoggedByStaff: auth.Role(r.CreatedByRole) != auth.RoleRequester,
 		SLATargets: snap.Targets, FirstResponseAt: r.FirstResponseAt, ClosedAt: r.ClosedAt,
 		AllowedStatuses: []ticket.Status{},

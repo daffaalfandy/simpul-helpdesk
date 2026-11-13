@@ -18,22 +18,21 @@ import (
 // SeedTicket is a demo ticket with its history, for the dev seed only. History is written
 // the way the service writes it, so the activity log and progress tracker look real.
 type SeedTicket struct {
-	Number         int64
-	Prefix         string
-	Type           ticket.Type
-	Priority       sla.Priority
-	Channel        ticket.Channel
-	ClientID       uuid.UUID
-	Requester      Ref
-	CreatedBy      Ref
-	SystemID       *uuid.UUID
-	CatalogItemID  *uuid.UUID
-	CatalogMinutes *int
-	Subject        string
-	Description    string
-	CreatedAt      time.Time
-	Steps          []SeedStep
-	Messages       []SeedMessage
+	Number        int64
+	Prefix        string
+	Type          ticket.Type
+	Priority      sla.Priority
+	Channel       ticket.Channel
+	ClientID      uuid.UUID
+	Requester     Ref
+	CreatedBy     Ref
+	ProjectID     uuid.UUID
+	CatalogItemID *uuid.UUID
+	Subject       string
+	Description   string
+	CreatedAt     time.Time
+	Steps         []SeedStep
+	Messages      []SeedMessage
 }
 
 // SeedStep is a change after creation: an assignee change, a status change, or both.
@@ -92,13 +91,8 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 			firstResponse = &at
 		}
 	}
-	snap := ticket.SLASnapshot{Version: ticket.SnapshotVersion, CatalogDeliverMinutes: t.CatalogMinutes}
-	c, err := q.GetClient(ctx, db.GetClientParams{ID: t.ClientID})
+	snap, err := SnapshotFor(ctx, q, t.ProjectID)
 	if err != nil {
-		return false, err
-	}
-	snap.PlanID, snap.PlanName = c.SlaPlanID, c.SlaPlanName
-	if snap.Targets, err = sla.Targets(ctx, q, c.SlaPlanID); err != nil {
 		return false, err
 	}
 	snapJSON, err := json.Marshal(snap)
@@ -112,7 +106,7 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 	params := db.InsertSeedTicketParams{
 		Number: t.Number, Key: ticket.FormatKey(t.Prefix, t.Number), Type: string(t.Type), Status: string(status),
 		Priority: string(t.Priority), Channel: string(t.Channel), ClientID: t.ClientID, RequesterID: t.Requester.ID,
-		CreatedBy: t.CreatedBy.ID, SystemID: t.SystemID, CatalogItemID: t.CatalogItemID, Subject: t.Subject,
+		CreatedBy: t.CreatedBy.ID, ProjectID: t.ProjectID, CatalogItemID: t.CatalogItemID, Subject: t.Subject,
 		Description: t.Description, SlaSnapshot: snapJSON, FirstResponseAt: firstResponse, ResolvedAt: resolvedAt,
 		CreatedAt: t.CreatedAt, UpdatedAt: updatedAt,
 	}
@@ -129,7 +123,8 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 
 	created := seedEntry{at: t.CreatedAt, actor: t.CreatedBy, action: ActionCreated, data: map[string]any{
 		dataKey: params.Key, dataType: t.Type, dataPriority: t.Priority, dataStatus: ticket.StatusNew,
-		dataChannel: t.Channel, dataClient: t.ClientID, dataRequester: t.Requester.ID, dataAttachmentIDs: []uuid.UUID{},
+		dataChannel: t.Channel, dataClient: t.ClientID, dataRequester: t.Requester.ID, dataProject: t.ProjectID,
+		dataAttachmentIDs: []uuid.UUID{},
 	}}
 	entries = append([]seedEntry{created}, entries...)
 	responded := false

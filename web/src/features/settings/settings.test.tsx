@@ -39,18 +39,18 @@ describe('settings', () => {
 
   it('collapses groups, collapses all, and folds into an icon rail', async () => {
     const user = userEvent.setup()
-    renderApp('/settings/sla')
+    renderApp('/settings/priorities')
     const nav = await screen.findByRole('navigation', { name: 'Settings sections' })
     expect(within(nav).getByRole('button', { name: 'Collapse Service desk' })).toHaveAttribute('aria-expanded', 'true')
     expect(within(nav).getByRole('button', { name: 'Expand Organisation' })).toHaveAttribute('aria-expanded', 'false')
-    expect(within(nav).getByRole('link', { name: 'SLA & priority' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('link', { name: 'Priorities' })).toHaveAttribute('aria-current', 'page')
 
     await user.click(within(nav).getByRole('button', { name: 'Expand Organisation' }))
     expect(within(nav).getByRole('link', { name: 'General' })).toBeVisible()
 
     await user.click(within(nav).getByRole('button', { name: 'Collapse all' }))
     expect(within(nav).getByRole('button', { name: 'Expand all' })).toBeInTheDocument()
-    expect(within(nav).queryByRole('link', { name: 'SLA & priority' })).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: 'Priorities' })).not.toBeInTheDocument()
 
     await user.click(within(nav).getByRole('button', { name: 'Collapse settings menu' }))
     const rail = screen.getByRole('navigation', { name: 'Settings sections' })
@@ -59,31 +59,31 @@ describe('settings', () => {
   })
 
   describe('clients', () => {
-    it('lists clients with contract period, plan and agents', async () => {
+    it('lists clients with contract period and projects', async () => {
       renderApp('/settings/clients')
       const table = await screen.findByRole('table', { name: 'Clients under contract' })
       const jambi = within(table).getByRole('row', { name: /Dinas Kominfo Jambi/ })
       expect(jambi).toHaveTextContent('Jan–Dec 2026')
-      expect(jambi).toHaveTextContent('Gold')
-      expect(jambi).toHaveTextContent('Rina Pratiwi')
-      expect(within(table).getByRole('row', { name: /BPKAD Kota Batam/ })).toHaveTextContent('Mar 2026–Feb 2027')
+      expect(jambi).toHaveTextContent('e-Office, Email')
+      expect(jambi).toHaveTextContent('Hendra Gunawan')
+      const batam = within(table).getByRole('row', { name: /BPKAD Kota Batam/ })
+      expect(batam).toHaveTextContent('Mar 2026–Feb 2027')
+      expect(batam).toHaveTextContent('Network & infra support')
     })
 
-    it('adds a client with a plan and an agent', async () => {
+    it('adds a client with an agent', async () => {
       const user = userEvent.setup()
       renderApp('/settings/clients')
       await user.click(await screen.findByRole('button', { name: 'Add client' }))
       const dialog = await screen.findByRole('dialog', { name: 'Add client' })
       await user.type(within(dialog).getByRole('textbox', { name: /Client name/ }), 'Bappeda Prov. Riau')
-      await user.click(within(dialog).getByRole('button', { name: /SLA plan/ }))
-      await user.click(await screen.findByRole('option', { name: /Gold/ }))
       await user.click(within(dialog).getByRole('checkbox', { name: /Adi Saputra/ }))
       await user.click(within(dialog).getByRole('button', { name: 'Add client' }))
 
       expect(await screen.findByRole('status')).toHaveTextContent('Bappeda Prov. Riau added.')
-      expect(lastRequest('POST', '/clients')?.body).toMatchObject({ name: 'Bappeda Prov. Riau', slaPlanId: IDS.gold })
+      expect(lastRequest('POST', '/clients')?.body).toMatchObject({ name: 'Bappeda Prov. Riau' })
       expect(lastRequest('PUT', '/agents')?.body).toEqual({ userIds: [IDS.adi] })
-      expect(await screen.findByRole('row', { name: /Bappeda Prov. Riau/ })).toHaveTextContent('Adi Saputra')
+      expect(await screen.findByRole('row', { name: /Bappeda Prov. Riau/ })).toHaveTextContent('No projects yet')
     })
 
     it('shows the API message when the name is taken', async () => {
@@ -108,45 +108,6 @@ describe('settings', () => {
     })
   })
 
-  describe('SLA & priority', () => {
-    it('shows each plan with readable targets', async () => {
-      renderApp('/settings/sla')
-      const standard = await screen.findByRole('region', { name: /Standard/ })
-      expect(within(standard).getByText('Default')).toBeInTheDocument()
-      const p3 = within(standard).getByRole('row', { name: /P3 · Standard/ })
-      expect(p3).toHaveTextContent('2 hours')
-      expect(p3).toHaveTextContent('2 working days')
-      expect(p3).toHaveTextContent('Catalogue time, else 2 working days')
-      expect(within(standard).getByRole('row', { name: /P1 · Critical/ })).toHaveTextContent('24/7')
-      expect(within(standard).getByRole('button', { name: 'Delete Standard' })).toBeDisabled()
-    })
-
-    it('saves edited targets as minutes', async () => {
-      const user = userEvent.setup()
-      renderApp('/settings/sla')
-      await user.click(await screen.findByRole('button', { name: 'Edit Standard' }))
-      const dialog = await screen.findByRole('dialog', { name: 'Edit Standard' })
-      const p2 = within(dialog).getByRole('group', { name: 'P2 · High' })
-      const amount = within(p2).getByRole('textbox', { name: 'Resolve (incidents)' })
-      await user.clear(amount)
-      await user.type(amount, '1')
-      await user.click(within(p2).getByRole('button', { name: /Resolve \(incidents\) unit for P2/ }))
-      await user.click(await screen.findByRole('option', { name: 'working days' }))
-      await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
-
-      expect(await screen.findByRole('status')).toHaveTextContent('Standard saved.')
-      const body = lastRequest('PUT', `/sla-plans/${IDS.standard}`)?.body as { targets: Array<{ resolveMinutes: number }> }
-      expect(body.targets.map((t) => t.resolveMinutes)).toEqual([240, 540, 1080, 2700])
-    })
-
-    it('makes another plan the default', async () => {
-      const user = userEvent.setup()
-      renderApp('/settings/sla')
-      await user.click(await screen.findByRole('button', { name: 'Make Gold the default plan' }))
-      expect(await screen.findByRole('status')).toHaveTextContent('Gold is now the default plan for new clients.')
-      expect(lastRequest('POST', `/sla-plans/${IDS.gold}/default`)).toBeDefined()
-    })
-  })
 
   describe('General', () => {
     it('saves business hours', async () => {

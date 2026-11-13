@@ -156,9 +156,11 @@
         "system": "Choose a system.",
         "item": "Choose what they need.",
         "subject": "Enter a short subject.",
-        "details": "Describe the issue."
+        "details": "Describe the issue.",
+        "noProject": "This client has no project yet, so it can't take tickets. A supervisor adds one on the Projects page."
       },
-      "loadingRequesters": "Loading this client's requesters…"
+      "loadingRequesters": "Loading this client's requesters…",
+      "clientNoProjects": "No projects yet"
     },
     "ticket": {
       "back": "Back to board"
@@ -190,6 +192,10 @@
     },
     "new": {
       "back": "Back to my tickets",
+      "noProject": {
+        "title": "Reporting isn't set up yet",
+        "body": "Your organisation has no system to report on yet. Please contact our support team by phone or email."
+      },
       "title": "How can we help?",
       "hours": "Our team works {{hours}}, {{days}}.",
       "hoursAlways": "{{priorities}} issues are handled 24/7.",
@@ -206,9 +212,9 @@
       "subjectPlaceholder": "e.g. e-Office login fails for all staff",
       "system": "Which system?",
       "item": "What do you need?",
-      "deliveredWithin": "Delivered within {{duration}}",
       "priority": "Priority",
       "priorityHint": "Not sure? Pick the closest one. Our agent may adjust it and will tell you why.",
+      "priorityPickSystem": "Choose the system first to see how fast each priority is handled.",
       "firstReply": "First reply: {{duration}}",
       "fixedWithin": "Fixed within: {{duration}}",
       "deliveredWithinCard": "Delivered within: {{duration}}",
@@ -297,21 +303,17 @@
         "title": "Priorities",
         "description": "Priority names requesters see, and guidance for agents. SLA targets live on each project."
       },
-      "sla": {
-        "title": "SLA & priority",
-        "description": "Response and resolution targets used by every ticket."
-      },
       "clients": {
         "title": "Clients",
-        "description": "Organisations you support, with their contract and SLA plan."
+        "description": "Organisations you support, with their contract and projects."
       },
       "integrations": {
         "title": "GitHub / GitLab",
         "description": "Reads commits, pull requests and merge requests that mention a ticket ID, and moves tickets forward by their project's Definition of Done. Read-only: it never writes to your code."
       },
       "catalog": {
-        "title": "Systems & catalogue",
-        "description": "What the report form offers: the systems clients pick for incidents, and the service catalogue with delivery times."
+        "title": "Catalogue",
+        "description": "What clients can ask for when they need something new."
       }
     },
     "hours": {
@@ -363,62 +365,6 @@
       "added": "{{name}} added.",
       "removed": "{{name}} removed."
     },
-    "sla": {
-      "newPlan": "New plan",
-      "default": "Default",
-      "usedBy_one": "Used by {{count}} client",
-      "usedBy_other": "Used by {{count}} clients",
-      "helper": "Timers run on business hours unless a priority is set to 24/7. Changes apply to new tickets.",
-      "makeDefault": "Make default",
-      "editLabel": "Edit {{name}}",
-      "deleteLabel": "Delete {{name}}",
-      "makeDefaultLabel": "Make {{name}} the default plan",
-      "caption": "{{name}} targets",
-      "cols": {
-        "priority": "Priority",
-        "example": "Example",
-        "firstResponse": "First response",
-        "resolve": "Resolve (incidents)",
-        "deliver": "Deliver (requests)",
-        "hours": "Hours",
-        "escalate": "Escalate to"
-      },
-      "hoursBusiness": "Business hours",
-      "hoursAlways": "24/7",
-      "fromCatalog": "Catalogue time, else {{duration}}",
-      "dialogNew": "New SLA plan",
-      "dialogEdit": "Edit {{name}}",
-      "copyOf": "Starts as a copy of {{name}}.",
-      "planName": "Plan name",
-      "nameRequired": "Enter a plan name.",
-      "unit": "{{field}} unit for {{priority}}",
-      "deliverFromCatalog": "Requests use the catalogue item's delivery time",
-      "positive": "Use a whole number of 1 or more.",
-      "created": "{{name}} created.",
-      "saved": "{{name}} saved.",
-      "defaultChanged": "{{name}} is now the default plan for new clients.",
-      "deleted": "{{name}} deleted.",
-      "deleteTitle": "Delete {{name}}?",
-      "deleteBody": "This can't be undone. Plans still used by clients can't be deleted.",
-      "summaryAlways": "{{priorities}} 24/7",
-      "summaryBusiness": "Business hours only",
-      "matrix": {
-        "title": "Priority matrix",
-        "helper": "Guidance for choosing a priority. Requesters pick it when they report an issue; agents can change it with a reason.",
-        "caption": "Priority by impact and urgency",
-        "impact": "Impact",
-        "impacts": {
-          "office": "Whole office / public service",
-          "team": "Team",
-          "user": "One user"
-        },
-        "urgencies": {
-          "canWait": "Can wait",
-          "slowed": "Slowed",
-          "stopped": "Stopped"
-        }
-      }
-    },
     "clients": {
       "cardTitle": "Clients under contract",
       "add": "Add client",
@@ -427,25 +373,22 @@
         "client": "Client",
         "contractNo": "Contract no.",
         "period": "Contract period",
-        "plan": "SLA plan",
+        "projects": "Projects",
         "requesters": "Requesters",
-        "agents": "Agents",
         "pic": "PIC",
         "actions": "Actions"
       },
       "editLabel": "Edit {{name}}",
       "from": "From {{date}}",
       "until": "Until {{date}}",
-      "noAgents": "None assigned",
       "emptyTitle": "No clients yet",
-      "empty": "Add the organisations you support to set their contract, SLA plan and agents.",
+      "empty": "Add the organisations you support with their contract, PIC and agents. Their projects, with each project's SLA, live on the Projects page.",
       "dialogNew": "Add client",
       "dialogEdit": "Edit {{name}}",
       "name": "Client name",
       "contractNo": "Contract number",
       "start": "Contract start",
       "end": "Contract end",
-      "plan": "SLA plan",
       "picName": "PIC name",
       "picEmail": "PIC email",
       "agents": "Assigned agents",
@@ -458,34 +401,22 @@
       "deleteBody": "This removes the client, its contract details and agent assignments. It can't be undone.",
       "created": "{{name}} added.",
       "saved": "{{name}} saved.",
-      "deleted": "{{name}} deleted."
+      "deleted": "{{name}} deleted.",
+      "noProjects": "No projects yet"
     },
     "catalog": {
-      "systems": {
-        "title": "Which system?",
-        "description": "Clients pick one when something isn't working.",
-        "add": "Add system",
-        "caption": "Systems",
-        "empty": "No systems yet. The report form skips the question until you add one.",
-        "dialogNew": "Add a system",
-        "dialogEdit": "Edit {{name}}"
-      },
       "items": {
         "title": "Service catalogue",
-        "description": "What clients can ask for. A P3 service request is due within the item's delivery time.",
+        "description": "What clients can ask for. Delivery times come from each project's SLA.",
         "add": "Add item",
         "caption": "Catalogue items",
         "empty": "No catalogue items yet. The report form skips the question until you add one.",
         "dialogNew": "Add a catalogue item",
-        "dialogEdit": "Edit {{name}}",
-        "deliveryTime": "Delivery time",
-        "deliveryUnit": "Unit",
-        "positive": "Enter a delivery time of at least 1."
+        "dialogEdit": "Edit {{name}}"
       },
       "cols": {
         "name": "Name",
         "description": "Description",
-        "delivery": "Delivery time",
         "shown": "On the form",
         "tickets": "Tickets",
         "actions": "Actions"
@@ -538,30 +469,6 @@
   },
   "priority": {
     "long": "{{priority}} · {{name}}",
-    "P1": {
-      "name": "Critical",
-      "example": "Public service or whole office down",
-      "escalation": "Supervisor + client PIC at 50%",
-      "when": "A public service or the whole office is down"
-    },
-    "P2": {
-      "name": "High",
-      "example": "A team can't work",
-      "escalation": "Supervisor at 75%",
-      "when": "A team or department cannot work"
-    },
-    "P3": {
-      "name": "Standard",
-      "example": "One user slowed down",
-      "escalation": "Supervisor at breach",
-      "when": "One person is slowed down, with a workaround"
-    },
-    "P4": {
-      "name": "Low",
-      "example": "Requests and minor issues",
-      "escalation": "No escalation",
-      "when": "Minor issue or question, no rush"
-    },
     "request": {
       "P1": {
         "name": "Urgent",
@@ -589,13 +496,7 @@
     "workingDays_one": "{{count}} working day",
     "workingDays_other": "{{count}} working days",
     "days_one": "{{count}} day",
-    "days_other": "{{count}} days",
-    "unit": {
-      "minutes": "minutes",
-      "hours": "hours",
-      "workingDays": "working days",
-      "days": "days"
-    }
+    "days_other": "{{count}} days"
   },
   "weekday": {
     "short": {
@@ -625,14 +526,10 @@
     "invalid_email": "Enter a valid email address.",
     "invalid_contract_period": "The contract can't end before it starts.",
     "invalid_agent": "Only active agents can be assigned to a client.",
-    "invalid_sla_targets": "First response can't be longer than resolve or deliver.",
+    "invalid_sla_targets": "First response must be shorter than resolve and deliver.",
     "invalid_business_hours": "Opening time must be before closing time.",
-    "sla_plan_not_found": "Choose an SLA plan.",
     "client_name_taken": "A client with this name already exists.",
     "client_in_use": "This client still has requesters or tickets, so it can't be deleted.",
-    "sla_plan_name_taken": "A plan with this name already exists.",
-    "sla_plan_in_use": "Clients still use this plan. Move them to another plan first.",
-    "sla_plan_is_default": "The default plan can't be deleted. Make another plan the default first.",
     "holiday_date_taken": "That date is already a holiday.",
     "client_required": "Choose a client.",
     "client_not_found": "Choose one of your clients.",
@@ -646,23 +543,22 @@
     "invalid_subject": "Enter a short subject.",
     "invalid_description": "Describe the issue.",
     "invalid_message": "Write a message first.",
-    "invalid_system": "Choose a system from the list.",
     "invalid_catalog_item": "Choose an item from the catalogue.",
     "invalid_requester": "Choose a requester of this client.",
     "invalid_channel": "Choose how the request arrived.",
     "invalid_assignee": "This person can't take this client's tickets.",
-    "invalid_delivery_time": "Enter a delivery time.",
     "reason_required": "Say why the priority changes.",
     "invalid_status_change": "This status change isn't allowed.",
     "ticket_closed": "This ticket is closed and can't be changed.",
     "email_taken": "Someone already uses this email address.",
-    "system_name_taken": "A system with this name already exists.",
-    "system_in_use": "Tickets use this system. Hide it instead.",
     "catalog_item_name_taken": "A catalogue item with this name already exists.",
     "catalog_item_in_use": "Tickets use this item. Hide it instead.",
     "project_name_taken": "This client already has a project with this name.",
     "project_is_default": "This is the client's default project. Make another project the default first.",
-    "invalid_priority_levels": "Give every priority a name and a description."
+    "invalid_priority_levels": "Give every priority a name and a description.",
+    "invalid_project": "Choose one of the client's systems.",
+    "client_has_no_project": "This client has no project yet, so it can't take tickets.",
+    "project_in_use": "Tickets belong to this project, so it can't be deleted. Hide it from the report form instead."
   },
   "time": {
     "justNow": "Just now",
@@ -745,10 +641,10 @@
       "assignee": "Assignee",
       "reportedBy": "Reported by",
       "handledBy": "Handled by",
-      "plan": "SLA plan"
+      "project": "Project"
     },
     "sla": {
-      "agentTitle": "Service level · {{priority}}",
+      "agentTitle": "SLA · {{priority}} · {{project}} project",
       "requesterTitle": "Service level ({{priority}})",
       "firstResponse": "First response",
       "resolve": "Resolution",
@@ -758,10 +654,12 @@
       "deliveredWithin": "Delivered within {{duration}}",
       "always": "Runs 24/7",
       "business": "Business hours only",
-      "plan": "Plan: {{name}}",
-      "fromCatalog": "Delivery time of the catalogue item",
-      "pausedNote": "Time waiting for your reply or test doesn't count.",
-      "firstResponseMet": "First response sent {{when}}"
+      "row": "{{label}} · {{target}}",
+      "sentAt": "Sent {{when}}",
+      "replied": "Replied",
+      "pausedBoth": "Time waiting for the client's reply or test doesn't count.",
+      "pausedWaiting": "Time waiting for the client's reply doesn't count.",
+      "pausedUat": "Time waiting for the client's test doesn't count."
     },
     "message": {
       "conversation": "Conversation",
@@ -934,5 +832,11 @@
       "notifyPic": "Notify the client PIC when a P1 breaches",
       "notifyPicHint": "Email to the contact person on the client record"
     }
+  },
+  "durationCompact": {
+    "min": "{{count}}m",
+    "h": "{{count}}h",
+    "wd": "{{count}} wd",
+    "d": "{{count}}d"
   }
 }

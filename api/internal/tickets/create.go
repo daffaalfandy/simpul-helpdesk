@@ -26,7 +26,7 @@ type CreateInput struct {
 	Priority      sla.Priority
 	Subject       string
 	Description   string
-	SystemID      *uuid.UUID // incidents
+	ProjectID     *uuid.UUID // incidents; service requests go to the client's default project
 	CatalogItemID *uuid.UUID // service requests
 	AttachmentIDs []uuid.UUID
 
@@ -37,7 +37,7 @@ type CreateInput struct {
 	AssignToMe  bool
 }
 
-// Create opens a ticket and links its uploaded files, snapshotting the client's SLA plan.
+// Create opens a ticket and links its uploaded files, snapshotting its project's SLA.
 func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput) (Ticket, error) {
 	a, err := accessFor(p)
 	if err != nil {
@@ -70,21 +70,16 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 				return err
 			}
 		}
-		var catalogMinutes *int
-		if in.SystemID != nil {
-			if _, err := tx.Q.GetActiveSystem(ctx, *in.SystemID); err != nil {
-				return lookupError(err, apperr.CodeInvalidSystem, "Choose a system from the list")
-			}
+		projectID, err := ticketProject(ctx, tx.Q, clientID, in)
+		if err != nil {
+			return err
 		}
 		if in.CatalogItemID != nil {
-			item, err := tx.Q.GetActiveCatalogItem(ctx, *in.CatalogItemID)
-			if err != nil {
+			if _, err := tx.Q.GetActiveCatalogItem(ctx, *in.CatalogItemID); err != nil {
 				return lookupError(err, apperr.CodeInvalidCatalogItem, "Choose an item from the catalogue")
 			}
-			m := int(item.DeliveryMinutes)
-			catalogMinutes = &m
 		}
-		snap, err := SnapshotFor(ctx, tx.Q, clientID, catalogMinutes)
+		snap, err := SnapshotFor(ctx, tx.Q, projectID)
 		if err != nil {
 			return err
 		}
@@ -115,7 +110,7 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 		params := db.CreateTicketParams{
 			Number: number, Key: key, Type: string(in.Type), Status: string(status),
 			Priority: string(in.Priority), Channel: string(in.Channel), ClientID: clientID,
-			RequesterID: requesterID, CreatedBy: p.UserID, SystemID: in.SystemID,
+			RequesterID: requesterID, CreatedBy: p.UserID, ProjectID: projectID,
 			CatalogItemID: in.CatalogItemID, Subject: in.Subject, Description: in.Description,
 			SlaSnapshot: snapJSON,
 		}
@@ -131,14 +126,11 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 		}
 		data := map[string]any{
 			dataKey: key, dataType: in.Type, dataPriority: in.Priority, dataStatus: status,
-			dataChannel: in.Channel, dataClient: clientID, dataRequester: requesterID,
+			dataChannel: in.Channel, dataClient: clientID, dataRequester: requesterID, dataProject: projectID,
 			dataAttachmentIDs: nonNilIDs(in.AttachmentIDs),
 		}
 		if assignee != nil {
 			data[dataAssignee] = refData(assignee.ID, assignee.Name)
-		}
-		if in.SystemID != nil {
-			data[dataSystem] = *in.SystemID
 		}
 		if in.CatalogItemID != nil {
 			data[dataCatalogItem] = *in.CatalogItemID
@@ -149,6 +141,27 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 		return Ticket{}, err
 	}
 	return s.Get(ctx, p, key)
+}
+
+// ticketProject picks the ticket's project: the incident's chosen system, or the client's
+// default project for a service request. A client without a project can't take tickets.
+func ticketProject(ctx context.Context, q *db.Queries, clientID uuid.UUID, in CreateInput) (uuid.UUID, error) {
+	def, err := q.GetClientDefaultProject(ctx, clientID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, apperr.Invalid(apperr.CodeClientHasNoProject, "This client has no project yet",
+			"A supervisor adds one on the Projects page.")
+	}
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if in.Type == ticket.TypeRequest {
+		return def.ID, nil
+	}
+	p, err := q.GetActiveClientProject(ctx, db.GetActiveClientProjectParams{ID: *in.ProjectID, ClientID: clientID})
+	if err != nil {
+		return uuid.Nil, lookupError(err, apperr.CodeInvalidProject, "Choose one of the client's systems")
+	}
+	return p.ID, nil
 }
 
 // checkStaffTarget checks an agent may log tickets for the client and that the requester
@@ -181,8 +194,10 @@ func normalizeCreate(in CreateInput) (CreateInput, error) {
 		return in, apperr.Invalid(apperr.CodeInvalidSubject, "Enter a short subject", "")
 	case in.Description == "" || len([]rune(in.Description)) > MaxDescriptionLen:
 		return in, apperr.Invalid(apperr.CodeInvalidDescription, "Describe the issue", "")
-	case in.SystemID != nil && in.Type != ticket.TypeIncident:
-		return in, apperr.Invalid(apperr.CodeInvalidSystem, "Only incidents name a system", "")
+	case in.Type == ticket.TypeIncident && in.ProjectID == nil:
+		return in, apperr.Invalid(apperr.CodeInvalidProject, "Choose which system has the problem", "")
+	case in.ProjectID != nil && in.Type != ticket.TypeIncident:
+		return in, apperr.Invalid(apperr.CodeInvalidProject, "Service requests go to the client's default project", "")
 	case in.CatalogItemID != nil && in.Type != ticket.TypeRequest:
 		return in, apperr.Invalid(apperr.CodeInvalidCatalogItem, "Only service requests name a catalogue item", "")
 	}

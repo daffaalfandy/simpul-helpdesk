@@ -10,63 +10,63 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 )
 
-var standardTargets = []sla.Target{
-	{Priority: sla.P1, FirstResponseMinutes: 15, ResolveMinutes: 240, DeliverMinutes: 240, Calendar: sla.CalendarAlways},
-	{Priority: sla.P2, FirstResponseMinutes: 30, ResolveMinutes: 480, DeliverMinutes: 540, Calendar: sla.CalendarBusinessHours},
-	{Priority: sla.P3, FirstResponseMinutes: 120, ResolveMinutes: 1080, DeliverMinutes: 1080, DeliverFromCatalog: true, Calendar: sla.CalendarBusinessHours},
-	{Priority: sla.P4, FirstResponseMinutes: 240, ResolveMinutes: 2700, DeliverMinutes: 2700, Calendar: sla.CalendarBusinessHours},
-}
-
 func TestEffectiveSLA(t *testing.T) {
-	catalog := 2160
-	withItem := SLASnapshot{Version: SnapshotVersion, Targets: standardTargets, CatalogDeliverMinutes: &catalog}
-	noItem := SLASnapshot{Version: SnapshotVersion, Targets: standardTargets}
+	snap := SLASnapshot{Version: SnapshotVersion, ProjectSLA: sla.DefaultProjectSLA()}
+	snap.PauseOnUAT = false
 	tests := []struct {
-		name        string
-		snap        SLASnapshot
-		p           sla.Priority
-		typ         Type
-		resolution  int
-		fromCatalog bool
-		calendar    sla.CalendarKind
+		name       string
+		p          sla.Priority
+		typ        Type
+		first      sla.Duration
+		resolution sla.Duration
+		calendar   sla.CalendarKind
 	}{
-		{"incident uses resolve", noItem, sla.P1, TypeIncident, 240, false, sla.CalendarAlways},
-		{"request uses deliver", noItem, sla.P2, TypeRequest, 540, false, sla.CalendarBusinessHours},
-		{"request uses catalogue when flagged", withItem, sla.P3, TypeRequest, 2160, true, sla.CalendarBusinessHours},
-		{"flag without item falls back", noItem, sla.P3, TypeRequest, 1080, false, sla.CalendarBusinessHours},
-		{"catalogue ignored without flag", withItem, sla.P4, TypeRequest, 2700, false, sla.CalendarBusinessHours},
-		{"incident ignores catalogue", withItem, sla.P3, TypeIncident, 1080, false, sla.CalendarBusinessHours},
+		{"incident uses resolve", sla.P1, TypeIncident, sla.Duration{Value: 15, Unit: sla.UnitMinutes}, sla.Duration{Value: 4, Unit: sla.UnitHours}, sla.CalendarAlways},
+		{"request uses deliver", sla.P2, TypeRequest, sla.Duration{Value: 30, Unit: sla.UnitMinutes}, sla.Duration{Value: 1, Unit: sla.UnitWorkingDays}, sla.CalendarBusinessHours},
+		{"incident on business hours", sla.P2, TypeIncident, sla.Duration{Value: 30, Unit: sla.UnitMinutes}, sla.Duration{Value: 8, Unit: sla.UnitHours}, sla.CalendarBusinessHours},
 	}
 	for _, tt := range tests {
-		got, err := tt.snap.Effective(tt.p, tt.typ)
+		got, err := snap.Effective(tt.p, tt.typ)
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
 		}
-		if got.ResolutionMinutes != tt.resolution || got.FromCatalog != tt.fromCatalog ||
-			got.Calendar != tt.calendar || got.Priority != tt.p {
-			t.Errorf("%s: got %+v", tt.name, got)
+		want := EffectiveSLA{
+			Priority: tt.p, FirstResponse: tt.first, Resolution: tt.resolution, Calendar: tt.calendar,
+			PauseOnWaitingClient: true, PauseOnUAT: false,
+		}
+		if got != want {
+			t.Errorf("%s: got %+v, want %+v", tt.name, got, want)
 		}
 	}
-	if _, err := noItem.Effective("P9", TypeIncident); !errors.Is(err, ErrNoTarget) {
+	if _, err := snap.Effective("P9", TypeIncident); !errors.Is(err, ErrNoTarget) {
 		t.Errorf("unknown priority: err = %v", err)
 	}
 }
 
-// TestSnapshotJSON guards the stored form: tickets.sla_snapshot holds this JSON, so renaming
-// a tag on SLASnapshot or sla.Target would break every stored ticket.
+// TestSnapshotJSON guards the stored form: tickets.sla_snapshot holds this JSON (and migration
+// 00005 writes it), so renaming a tag on SLASnapshot or the sla types breaks stored tickets.
 func TestSnapshotJSON(t *testing.T) {
-	minutes := 540
 	snap := SLASnapshot{
-		Version: SnapshotVersion, PlanID: uuid.MustParse("019a0000-0000-7000-8000-000000000001"),
-		PlanName: "Gold", CatalogDeliverMinutes: &minutes,
-		Targets: []sla.Target{{
-			Priority: sla.P3, FirstResponseMinutes: 120, ResolveMinutes: 1080, DeliverMinutes: 1080,
-			DeliverFromCatalog: true, Calendar: sla.CalendarBusinessHours,
-		}},
+		Version: SnapshotVersion, ProjectID: uuid.MustParse("019a0000-0000-7000-8000-000000000001"),
+		ProjectName: "e-Office",
+		ProjectSLA: sla.ProjectSLA{
+			Targets: []sla.ProjectTarget{{
+				Priority:      sla.P3,
+				FirstResponse: sla.Duration{Value: 2, Unit: sla.UnitHours},
+				Resolve:       sla.Duration{Value: 2, Unit: sla.UnitWorkingDays},
+				Deliver:       sla.Duration{Value: 3, Unit: sla.UnitDays},
+				Calendar:      sla.CalendarBusinessHours,
+			}},
+			ProjectSettings: sla.ProjectSettings{
+				PauseOnWaitingClient: true, PauseOnUAT: false, AtRiskPercent: sla.AtRiskThreeQuarters,
+				NotifySupervisorOnBreach: true, NotifyPicOnP1Breach: false,
+			},
+		},
 	}
-	const golden = `{"version":1,"planId":"019a0000-0000-7000-8000-000000000001","planName":"Gold",` +
-		`"targets":[{"priority":"P3","firstResponseMinutes":120,"resolveMinutes":1080,"deliverMinutes":1080,` +
-		`"deliverFromCatalog":true,"calendar":"business_hours"}],"catalogDeliverMinutes":540}`
+	const golden = `{"version":2,"projectId":"019a0000-0000-7000-8000-000000000001","projectName":"e-Office",` +
+		`"targets":[{"priority":"P3","firstResponse":{"value":2,"unit":"h"},"resolve":{"value":2,"unit":"wd"},` +
+		`"deliver":{"value":3,"unit":"d"},"calendar":"business_hours"}],"pauseOnWaitingClient":true,"pauseOnUat":false,` +
+		`"atRiskPercent":75,"notifySupervisorOnBreach":true,"notifyPicOnP1Breach":false}`
 	b, err := json.Marshal(snap)
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestSnapshotJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(golden), &back); err != nil {
 		t.Fatal(err)
 	}
-	if back.PlanName != snap.PlanName || *back.CatalogDeliverMinutes != minutes || back.Targets[0] != snap.Targets[0] {
+	if back.ProjectName != snap.ProjectName || back.Targets[0] != snap.Targets[0] || back.ProjectSettings != snap.ProjectSettings {
 		t.Fatalf("round trip = %+v", back)
 	}
 }

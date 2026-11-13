@@ -2,9 +2,11 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { PROJECT_IDS, projectsApi } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
 import { state, USERS } from '../../test/server'
-import { TICKET_IDS, tickets } from '../../test/ticketsApi'
+import { IDS } from '../../test/settingsApi'
+import { tickets } from '../../test/ticketsApi'
 
 const REQUESTER = USERS['hendra@kominfo-jambi.test'] ?? null
 const AGENT = USERS['rina@demo-vendor.test'] ?? null
@@ -65,12 +67,21 @@ describe('report an issue', () => {
     renderApp('/portal/new')
     expect(await screen.findByRole('heading', { name: 'How can we help?' })).toBeInTheDocument()
     expect(screen.getByText(/Our team works 08:00 – 17:00 WIB, Monday – Friday\./)).toBeInTheDocument()
-    expect(screen.getByText(/P1 issues are handled 24\/7\./)).toBeInTheDocument()
+    // Times depend on the system's project, so they wait for the choice.
+    expect(screen.getByText('Choose the system first to see how fast each priority is handled.')).toBeInTheDocument()
+    expect(screen.queryByText(/First reply:/)).not.toBeInTheDocument()
 
+    await user.click(screen.getByRole('button', { name: /Which system\?/ }))
+    await user.click(await screen.findByRole('option', { name: /e-Office/ }))
+    expect(screen.getByText(/P1 issues are handled 24\/7\./)).toBeInTheDocument()
     const p1 = screen.getByRole('radio', { name: /Critical/ }).closest('label') as HTMLElement
     expect(within(p1).getByText('First reply: 15 min')).toBeInTheDocument()
-    expect(within(p1).getByText('Fixed within: 4 hours')).toBeInTheDocument()
+    expect(within(p1).getByText('Fixed within: 2 hours')).toBeInTheDocument()
     expect(within(p1).getByText('Handled 24/7')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Which system\?/ }))
+    await user.click(await screen.findByRole('option', { name: /Email/ }))
+    expect(within(p1).getByText('Fixed within: 4 hours')).toBeInTheDocument()
 
     await user.click(screen.getByRole('radio', { name: /I need something new/ }))
     expect(screen.getByRole('radio', { name: /Urgent/ })).toBeInTheDocument()
@@ -114,7 +125,7 @@ describe('report an issue', () => {
       priority: 'P2',
       subject: 'Printer offline',
       description: 'Since this morning.',
-      systemId: TICKET_IDS.eoffice,
+      projectId: PROJECT_IDS.eOffice,
     })
     expect(body.attachmentIds).toHaveLength(1)
 
@@ -138,6 +149,19 @@ describe('report an issue', () => {
     await waitFor(() => expect(tickets.uploads).toHaveLength(2))
     await user.click(screen.getByRole('button', { name: 'Remove huge.png' }))
     expect(screen.queryByText('huge.png')).not.toBeInTheDocument()
+  })
+})
+
+describe('report an issue without a project', () => {
+  beforeEach(() => {
+    state.me = REQUESTER
+    projectsApi.projects = projectsApi.projects.filter((p) => p.client.id !== IDS.jambi)
+  })
+
+  it('explains that reporting is not set up yet', async () => {
+    renderApp('/portal/new')
+    expect(await screen.findByRole('heading', { name: "Reporting isn't set up yet" })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Submit ticket' })).not.toBeInTheDocument()
   })
 })
 

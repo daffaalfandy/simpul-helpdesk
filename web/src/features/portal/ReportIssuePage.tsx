@@ -1,10 +1,10 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { CircleCheck } from 'lucide-react'
+import { CircleCheck, FolderX } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { Intake, Priority, Ticket, TicketType } from '../../api/client'
+import type { Intake, Priority, ProjectTarget, Ticket, TicketType } from '../../api/client'
 import { attachmentPolicyQueryOptions, usePriorityNames } from '../../api/queries'
 import { AttachmentPicker } from '../../components/AttachmentPicker'
 import { PriorityBadge } from '../../components/Badges'
@@ -12,6 +12,7 @@ import { BackLink } from '../../components/BackLink'
 import { Button, buttonClasses } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { Dropdown } from '../../components/Dropdown'
+import { EmptyState } from '../../components/EmptyState'
 import { ErrorAlert } from '../../components/ErrorAlert'
 import { OptionCard, OptionCardGroup } from '../../components/OptionCard'
 import { TextArea } from '../../components/TextArea'
@@ -20,7 +21,7 @@ import { DATE_LOCALE } from '../../i18n/locale'
 import { paths } from '../../lib/constants'
 import { zoneAbbreviation } from '../../lib/dates'
 import { megabytesOf } from '../../lib/files'
-import { formatDuration } from '../../lib/formatDuration'
+import { formatTarget } from '../../lib/formatDuration'
 import { weekdayRuns } from '../../lib/weekdays'
 import { priorityLong } from '../tickets/labels'
 import { intakeQueryOptions, useCreateTicket } from '../tickets/queries'
@@ -52,8 +53,11 @@ export function ReportIssuePage() {
   )
 }
 
-/** "08:00 – 17:00 WIB" and "Monday – Friday" from the organisation's business hours. */
-function useWorkingHours(intake: Intake) {
+/**
+ * "08:00 – 17:00 WIB" and "Monday – Friday" from the organisation's business hours, and which
+ * priorities the project handles around the clock.
+ */
+function useWorkingHours(intake: Intake, targets: ReadonlyArray<ProjectTarget> | null) {
   const { t } = useTranslation()
   const h = intake.businessHours
   const hours = t('portal.new.workingHours', {
@@ -67,37 +71,57 @@ function useWorkingHours(intake: Intake) {
         : t('common.range', { from: t(`weekday.long.${r.first}`), to: t(`weekday.long.${r.last}`) }),
     ),
   )
-  const always = intake.targets.filter((x) => x.calendar === 'always').map((x) => x.priority)
+  const always = (targets ?? []).filter((x) => x.calendar === 'always').map((x) => x.priority)
   return { hours, days, always }
 }
 
 function ReportForm({ onCreated }: { onCreated: (t: Ticket) => void }) {
-  const { t } = useTranslation()
   const { data: intake } = useSuspenseQuery(intakeQueryOptions(null))
+  // Every ticket belongs to a project; without one the client can't report yet.
+  if (intake.defaultProjectId === null) return <NoProject />
+  return <ReportFormFields intake={intake} onCreated={onCreated} />
+}
+
+function NoProject() {
+  const { t } = useTranslation()
+  return (
+    <>
+      <BackLink to={paths.portal}>{t('portal.new.back')}</BackLink>
+      <EmptyState icon={FolderX} title={t('portal.new.noProject.title')}>
+        {t('portal.new.noProject.body')}
+      </EmptyState>
+    </>
+  )
+}
+
+function ReportFormFields({ intake, onCreated }: { intake: Intake; onCreated: (t: Ticket) => void }) {
+  const { t } = useTranslation()
   const { data: policy } = useSuspenseQuery(attachmentPolicyQueryOptions)
   const create = useCreateTicket()
   const uploads = useAttachmentUploads(policy)
-  const working = useWorkingHours(intake)
 
   const [type, setType] = useState<TicketType>('incident')
   const [subject, setSubject] = useState('')
-  const [systemId, setSystemId] = useState<string | null>(null)
+  // With one system there is nothing to choose.
+  const [projectId, setProjectId] = useState<string | null>(intake.projects.length === 1 ? (intake.projects[0]?.id ?? null) : null)
   const [itemId, setItemId] = useState<string | null>(null)
   const [priority, setPriority] = useState<Priority | null>(null)
   const [details, setDetails] = useState('')
   const [submitted, setSubmitted] = useState(false)
 
-  const wd = intake.businessHours.workingDayMinutes
-  const item = intake.catalogItems.find((i) => i.id === itemId)
+  // Incidents follow the chosen system's SLA; service requests go to the default project.
+  const slaProjectId = type === 'incident' ? projectId : intake.defaultProjectId
+  const targets = intake.projects.find((p) => p.id === slaProjectId)?.targets ?? null
+  const working = useWorkingHours(intake, targets)
   const missing = {
     subject: subject.trim() === '',
-    system: type === 'incident' && intake.systems.length > 0 && !systemId,
+    system: type === 'incident' && !projectId,
     item: type === 'request' && intake.catalogItems.length > 0 && !itemId,
     priority: priority === null,
     details: details.trim() === '',
   }
-  const target = intake.targets.find((x) => x.priority === priority)
-  const eff = target ? targetFor(target, type, item?.deliveryMinutes) : null
+  const target = targets?.find((x) => x.priority === priority)
+  const eff = target ? targetFor(target, type) : null
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -109,7 +133,7 @@ function ReportForm({ onCreated }: { onCreated: (t: Ticket) => void }) {
         priority,
         subject: subject.trim(),
         description: details.trim(),
-        systemId: type === 'incident' ? (systemId ?? undefined) : undefined,
+        projectId: type === 'incident' ? (projectId ?? undefined) : undefined,
         catalogItemId: type === 'request' ? (itemId ?? undefined) : undefined,
         attachmentIds: uploads.attachmentIds,
       },
@@ -151,14 +175,14 @@ function ReportForm({ onCreated }: { onCreated: (t: Ticket) => void }) {
             errorMessage={t('portal.new.errors.subject')}
           />
 
-          {type === 'incident' && intake.systems.length > 0 && (
+          {type === 'incident' && (
             <Dropdown
               label={t('portal.new.system')}
               size="lg"
               placeholder={t('common.choose')}
-              options={intake.systems.map((s) => ({ id: s.id, label: s.name, description: s.description ?? undefined }))}
-              value={systemId}
-              onChange={setSystemId}
+              options={intake.projects.map((p) => ({ id: p.id, label: p.name, description: p.description ?? undefined }))}
+              value={projectId}
+              onChange={setProjectId}
               isRequired
               isInvalid={submitted && missing.system}
               errorMessage={t('portal.new.errors.system')}
@@ -169,13 +193,7 @@ function ReportForm({ onCreated }: { onCreated: (t: Ticket) => void }) {
               label={t('portal.new.item')}
               size="lg"
               placeholder={t('common.choose')}
-              options={intake.catalogItems.map((i) => ({
-                id: i.id,
-                label: i.name,
-                description: t('portal.new.deliveredWithin', {
-                  duration: formatDuration(t, i.deliveryMinutes, 'business_hours', wd),
-                }),
-              }))}
+              options={intake.catalogItems.map((i) => ({ id: i.id, label: i.name, description: i.description ?? undefined }))}
               value={itemId}
               onChange={setItemId}
               isRequired
@@ -185,10 +203,8 @@ function ReportForm({ onCreated }: { onCreated: (t: Ticket) => void }) {
           )}
 
           <PriorityCards
-            targets={intake.targets}
+            targets={targets}
             type={type}
-            catalogMinutes={item?.deliveryMinutes}
-            workingDayMinutes={wd}
             workingHours={working.hours}
             value={priority}
             onChange={setPriority}
@@ -225,8 +241,8 @@ function ReportForm({ onCreated }: { onCreated: (t: Ticket) => void }) {
                 <>
                   <PriorityBadge priority={priority} />
                   {t(type === 'request' ? 'portal.new.summaryRequest' : 'portal.new.summaryIncident', {
-                    response: formatDuration(t, eff.firstResponseMinutes, eff.calendar, wd),
-                    fix: formatDuration(t, eff.resolutionMinutes, eff.calendar, wd),
+                    response: formatTarget(t, eff.firstResponse),
+                    fix: formatTarget(t, eff.resolution),
                   })}
                 </>
               ) : (
@@ -250,9 +266,8 @@ function ReportSuccess({ ticket, onAnother }: { ticket: Ticket; onAnother: () =>
   const { t } = useTranslation()
   const names = usePriorityNames()
   const heading = useRef<HTMLHeadingElement>(null)
-  const { data: intake } = useSuspenseQuery(intakeQueryOptions(null))
   useEffect(() => heading.current?.focus(), [])
-  const response = formatDuration(t, ticket.sla.firstResponseMinutes, ticket.sla.calendar, intake.businessHours.workingDayMinutes)
+  const response = formatTarget(t, ticket.sla.firstResponse)
   return (
     <Card>
       <div className="flex flex-col items-center gap-4 py-6 text-center">

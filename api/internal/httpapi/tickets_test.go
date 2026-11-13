@@ -15,6 +15,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 )
 
 const (
@@ -27,12 +28,14 @@ const (
 var pngBytes = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01")
 
 // ticketEnv has two clients: A (the requester's, worked by the agent) and B (another
-// requester's, worked by nobody), plus an agent assigned to no client.
+// requester's, worked by nobody), plus an agent assigned to no client. A has two projects,
+// e-Office (its default) and Email; B has one.
 type ticketEnv struct {
 	*env
 	admin, supervisor, agent, requester session
 	otherAgent, otherRequester          session
 	clientA, clientB                    uuid.UUID
+	projectA, projectA2, projectB       uuid.UUID
 	agentID, requesterID, otherReqID    uuid.UUID
 }
 
@@ -49,6 +52,9 @@ func newTicketEnv(t *testing.T) *ticketEnv {
 	if te.clientB, err = e.st.Q().UpsertClient(ctx, otherClient); err != nil {
 		t.Fatal(err)
 	}
+	te.projectA = testdb.Project(t, e.st, te.clientA, "e-Office", true)
+	te.projectA2 = testdb.Project(t, e.st, te.clientA, "Email", false)
+	te.projectB = testdb.Project(t, e.st, te.clientB, "Network & infra support", true)
 	for _, u := range []auth.NewUser{
 		{Email: otherAgentEmail, Name: "Unlinked Agent", Password: password, Role: auth.RoleAgent},
 		{Email: otherRequesterEmail, Name: "Sri Lestari", Password: password, Role: auth.RoleRequester, ClientName: otherClient},
@@ -72,8 +78,11 @@ func newTicketEnv(t *testing.T) *ticketEnv {
 	return te
 }
 
-func incident(subject string) gen.TicketInput {
-	return gen.TicketInput{Type: gen.TicketTypeIncident, Priority: gen.PriorityP3, Subject: subject, Description: "It broke."}
+// incident is a P3 incident about one of the client's projects ("Which system?").
+func incident(project uuid.UUID, subject string) gen.TicketInput {
+	return gen.TicketInput{
+		Type: gen.TicketTypeIncident, Priority: gen.PriorityP3, Subject: subject, Description: "It broke.", ProjectId: &project,
+	}
 }
 
 // report opens a ticket from the portal.
@@ -175,7 +184,7 @@ var scopedOps = map[string]struct{ otherRequester, otherAgent int }{
 func TestTicketScope(t *testing.T) {
 	te := newTicketEnv(t)
 	file := te.requester.attach(t, "screen.png")
-	in := incident("Login fails")
+	in := incident(te.projectA, "Login fails")
 	in.AttachmentIds = &[]uuid.UUID{file.Id}
 	tk := te.requester.report(t, in)
 	path := "/tickets/" + tk.Key
@@ -249,7 +258,7 @@ func TestTicketScope(t *testing.T) {
 		}
 	}
 	rec := te.otherAgent.do(http.MethodPost, "/tickets", func() gen.TicketInput {
-		in := incident("Not mine")
+		in := incident(te.projectA, "Not mine")
 		phone := gen.TicketChannelPhone
 		in.ClientId, in.RequesterId, in.Channel = &te.clientA, &te.requesterID, &phone
 		return in
@@ -265,7 +274,7 @@ func TestTicketScope(t *testing.T) {
 
 func TestInternalNotesNeverReachRequesters(t *testing.T) {
 	te := newTicketEnv(t)
-	tk := te.requester.report(t, incident("Printer jam"))
+	tk := te.requester.report(t, incident(te.projectA, "Printer jam"))
 	before := te.requester.ticket(t, tk.Key)
 	listBefore := te.requester.keys(t, "")
 
@@ -302,10 +311,9 @@ func TestInternalNotesNeverReachRequesters(t *testing.T) {
 func TestCreateTickets(t *testing.T) {
 	ctx := context.Background()
 	te := newTicketEnv(t)
-	plan := defaultPlan(t, te.admin)
 
 	file := te.requester.attach(t, "error.png")
-	in := incident("e-Office login fails")
+	in := incident(te.projectA, "e-Office login fails")
 	in.AttachmentIds = &[]uuid.UUID{file.Id}
 	// Staff-only fields are ignored for requesters.
 	in.ClientId, in.RequesterId = &te.clientB, &te.otherReqID
@@ -317,8 +325,14 @@ func TestCreateTickets(t *testing.T) {
 	if len(tk.Attachments) != 1 || tk.Attachments[0].Id != file.Id {
 		t.Fatalf("attachments = %+v", tk.Attachments)
 	}
-	if len(tk.SlaTargets) != len(plan.Targets) || tk.Sla.ResolutionMinutes != plan.Targets[2].ResolveMinutes {
-		t.Fatalf("sla = %+v", tk.Sla)
+	// testdb.Project targets: 1 h first response, 4 h resolve and deliver, on business hours.
+	wantSla := gen.TicketSla{
+		Priority: gen.PriorityP3, FirstResponse: gen.Duration{Value: 1, Unit: gen.DurationUnitH},
+		Resolution: gen.Duration{Value: 4, Unit: gen.DurationUnitH}, Calendar: gen.SlaCalendarBusinessHours,
+		PauseOnWaitingClient: true, PauseOnUat: true,
+	}
+	if tk.Project.Id != te.projectA || len(tk.SlaTargets) != 4 || tk.Sla != wantSla {
+		t.Fatalf("project %+v, sla %+v", tk.Project, tk.Sla)
 	}
 	if len(tk.AllowedStatuses) != 0 || tk.Progress[0].State != gen.TicketProgressStateCurrent {
 		t.Fatalf("requester view: allowed %v progress %+v", tk.AllowedStatuses, tk.Progress)
@@ -327,25 +341,36 @@ func TestCreateTickets(t *testing.T) {
 		t.Fatalf("audit = %v", got)
 	}
 
-	// A catalogue item's delivery time becomes the P3 request target.
+	// Incidents go to the system the requester picks.
+	email := te.requester.report(t, incident(te.projectA2, "Mailbox full"))
+	if email.Project.Id != te.projectA2 {
+		t.Fatalf("incident project = %+v", email.Project)
+	}
+
+	// Service requests go to the client's default project and use its deliver target.
 	item := decode[gen.CatalogItem](t, te.admin.do(http.MethodPost, "/catalog-items", gen.CatalogItemInput{
-		Name: "VPN / remote access", DeliveryMinutes: 1080, SortOrder: 10, Active: true,
+		Name: "VPN / remote access", SortOrder: 10, Active: true,
 	}), http.StatusCreated)
 	req := gen.TicketInput{Type: gen.TicketTypeRequest, Priority: gen.PriorityP3, Subject: "VPN", Description: "Please", CatalogItemId: &item.Id}
 	rt := te.requester.report(t, req)
-	if !rt.Sla.FromCatalog || rt.Sla.ResolutionMinutes != 1080 || rt.CatalogItem == nil {
-		t.Fatalf("request sla = %+v", rt.Sla)
+	if rt.Project.Id != te.projectA || rt.CatalogItem == nil || rt.Sla.Resolution != (gen.Duration{Value: 4, Unit: gen.DurationUnitH}) {
+		t.Fatalf("request = project %+v, sla %+v", rt.Project, rt.Sla)
 	}
 
-	// The snapshot is frozen: editing the plan later doesn't change the ticket.
-	edited := planInput(plan.Name)
-	decode[gen.SlaPlan](t, te.admin.do(http.MethodPut, "/sla-plans/"+plan.Id.String(), edited), http.StatusOK)
+	// The snapshot is frozen: editing the project's SLA later doesn't change the ticket.
+	project := decode[gen.Project](t, te.supervisor.do(http.MethodGet, "/projects/"+te.projectA.String(), nil), http.StatusOK)
+	project.Sla.Targets[2].Resolve = gen.Duration{Value: 2, Unit: gen.DurationUnitWd}
+	project.Sla.PauseOnUat = false
+	decode[gen.Project](t, te.supervisor.do(http.MethodPut, "/projects/"+te.projectA.String()+"/sla", project.Sla), http.StatusOK)
 	if got := te.agent.ticket(t, tk.Key).Sla; got != tk.Sla {
-		t.Fatalf("SLA after plan edit = %+v, want %+v", got, tk.Sla)
+		t.Fatalf("SLA after project edit = %+v, want %+v", got, tk.Sla)
+	}
+	if got := te.requester.report(t, incident(te.projectA, "After the edit")).Sla; got.Resolution.Unit != gen.DurationUnitWd || got.PauseOnUat {
+		t.Fatalf("new ticket SLA = %+v", got)
 	}
 
 	// Agents log for a requester, and can take it straight away.
-	logged := incident("Called in")
+	logged := incident(te.projectA, "Called in")
 	logged.AssignToMe = new(bool)
 	*logged.AssignToMe = true
 	lt := te.agent.logFor(t, te.clientA, te.requesterID, logged)
@@ -359,39 +384,40 @@ func TestCreateTickets(t *testing.T) {
 		in   func() gen.TicketInput
 		code string
 	}{
-		"blank subject": {te.requester, func() gen.TicketInput { return incident("   ") }, "invalid_subject"},
-		"system on a request": {te.requester, func() gen.TicketInput {
+		"blank subject": {te.requester, func() gen.TicketInput { return incident(te.projectA, "   ") }, "invalid_subject"},
+		"project on a request": {te.requester, func() gen.TicketInput {
 			in := req
-			in.SystemId, in.CatalogItemId = &item.Id, nil
+			in.ProjectId = &te.projectA2
 			return in
-		}, "invalid_system"},
-		"unknown system": {te.requester, func() gen.TicketInput {
-			in := incident("x")
-			id := uuid.New()
-			in.SystemId = &id
+		}, "invalid_project"},
+		"incident without a project": {te.requester, func() gen.TicketInput {
+			in := incident(te.projectA, "x")
+			in.ProjectId = nil
 			return in
-		}, "invalid_system"},
-		"staff without client": {te.agent, func() gen.TicketInput { return incident("x") }, "client_required"},
+		}, "invalid_project"},
+		"unknown project":          {te.requester, func() gen.TicketInput { return incident(uuid.New(), "x") }, "invalid_project"},
+		"another client's project": {te.requester, func() gen.TicketInput { return incident(te.projectB, "x") }, "invalid_project"},
+		"staff without client":     {te.agent, func() gen.TicketInput { return incident(te.projectA, "x") }, "client_required"},
 		"portal channel by staff": {te.agent, func() gen.TicketInput {
-			in := incident("x")
+			in := incident(te.projectA, "x")
 			portal := gen.TicketChannelPortal
 			in.ClientId, in.RequesterId, in.Channel = &te.clientA, &te.requesterID, &portal
 			return in
 		}, "invalid_channel"},
 		"requester of another client": {te.admin, func() gen.TicketInput {
-			in := incident("x")
+			in := incident(te.projectA, "x")
 			phone := gen.TicketChannelPhone
 			in.ClientId, in.RequesterId, in.Channel = &te.clientA, &te.otherReqID, &phone
 			return in
 		}, "invalid_requester"},
 		"someone else's file": {te.requester, func() gen.TicketInput {
-			in := incident("x")
+			in := incident(te.projectA, "x")
 			other := te.agent.attach(t, "theirs.png")
 			in.AttachmentIds = &[]uuid.UUID{other.Id}
 			return in
 		}, "invalid_attachment"},
 		"file already used": {te.requester, func() gen.TicketInput {
-			in := incident("x")
+			in := incident(te.projectA, "x")
 			in.AttachmentIds = &[]uuid.UUID{file.Id}
 			return in
 		}, "invalid_attachment"},
@@ -406,14 +432,22 @@ func TestCreateTickets(t *testing.T) {
 	if _, err := te.st.Pool().Exec(ctx, `UPDATE attachments SET created_at = now() - interval '2 days' WHERE id = $1`, expired.Id); err != nil {
 		t.Fatal(err)
 	}
-	in = incident("late")
+	in = incident(te.projectA, "late")
 	in.AttachmentIds = &[]uuid.UUID{expired.Id}
 	expectProblem(t, te.requester.do(http.MethodPost, "/tickets", in), http.StatusBadRequest, "invalid_attachment")
+
+	// A client without a project can't take tickets.
+	if rec := te.supervisor.do(http.MethodDelete, "/projects/"+te.projectB.String(), nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete B's project: %d %s", rec.Code, rec.Body)
+	}
+	expectProblem(t, te.otherRequester.do(http.MethodPost, "/tickets", req), http.StatusBadRequest, "client_has_no_project")
+	// A project with tickets can't be deleted.
+	expectProblem(t, te.supervisor.do(http.MethodDelete, "/projects/"+te.projectA2.String(), nil), http.StatusConflict, "project_in_use")
 }
 
 func TestTicketActions(t *testing.T) {
 	te := newTicketEnv(t)
-	tk := te.requester.report(t, incident("Network down"))
+	tk := te.requester.report(t, incident(te.projectA, "Network down"))
 	path := "/tickets/" + tk.Key
 	status := func(s gen.TicketStatus) *httptest.ResponseRecorder {
 		return te.agent.do(http.MethodPut, path+"/status", gen.TicketStatusInput{Status: s})
@@ -460,7 +494,7 @@ func TestTicketActions(t *testing.T) {
 	}
 	expectProblem(t, pri(gen.PriorityP1, "   "), http.StatusBadRequest, "reason_required")
 	got = decode[gen.Ticket](t, pri(gen.PriorityP1, "Whole office is down"), http.StatusOK)
-	if got.Priority != gen.PriorityP1 || got.Sla.Priority != gen.PriorityP1 || got.Sla.FirstResponseMinutes != got.SlaTargets[0].FirstResponseMinutes {
+	if got.Priority != gen.PriorityP1 || got.Sla.Priority != gen.PriorityP1 || got.Sla.FirstResponse != got.SlaTargets[0].FirstResponse {
 		t.Fatalf("after priority change: %+v", got.Sla)
 	}
 	var reason string
@@ -507,7 +541,7 @@ func TestTicketActions(t *testing.T) {
 
 func TestMessagesAndFirstResponse(t *testing.T) {
 	te := newTicketEnv(t)
-	tk := te.requester.report(t, incident("Slow VPN"))
+	tk := te.requester.report(t, incident(te.projectA, "Slow VPN"))
 	decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityInternal, "Check the tunnel"), http.StatusCreated)
 	if te.agent.ticket(t, tk.Key).FirstResponseAt != nil {
 		t.Fatal("an internal note counted as the first response")
@@ -542,9 +576,9 @@ func TestMessagesAndFirstResponse(t *testing.T) {
 
 func TestListTickets(t *testing.T) {
 	te := newTicketEnv(t)
-	a := te.requester.report(t, incident("Printer offline"))
-	b := te.requester.report(t, incident("Email bounce 50% of the time"))
-	c := te.otherRequester.report(t, incident("Other client"))
+	a := te.requester.report(t, incident(te.projectA, "Printer offline"))
+	b := te.requester.report(t, incident(te.projectA, "Email bounce 50% of the time"))
+	c := te.otherRequester.report(t, incident(te.projectB, "Other client"))
 	decode[gen.Ticket](t, te.admin.do(http.MethodPut, "/tickets/"+a.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
 	decode[gen.Ticket](t, te.admin.do(http.MethodPut, "/tickets/"+b.Key+"/status", gen.TicketStatusInput{Status: gen.TicketStatusResolved}), http.StatusOK)
 
@@ -584,7 +618,7 @@ func TestAttachments(t *testing.T) {
 	if rec := te.requester.do(http.MethodGet, "/attachments/"+up.Id.String(), nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("pending file downloadable: %d", rec.Code)
 	}
-	in := incident("With file")
+	in := incident(te.projectA, "With file")
 	in.AttachmentIds = &[]uuid.UUID{up.Id}
 	te.requester.report(t, in)
 
@@ -627,7 +661,7 @@ func TestAttachments(t *testing.T) {
 	}
 
 	huge := strings.Repeat("a", 1<<20)
-	rec = te.requester.do(http.MethodPost, "/tickets", incident(huge))
+	rec = te.requester.do(http.MethodPost, "/tickets", incident(te.projectA, huge))
 	expectProblem(t, rec, http.StatusRequestEntityTooLarge, "request_too_large")
 
 	policy := decode[gen.AttachmentPolicy](t, te.requester.do(http.MethodGet, "/attachment-policy", nil), http.StatusOK)
@@ -636,57 +670,38 @@ func TestAttachments(t *testing.T) {
 	}
 }
 
-func TestCatalog(t *testing.T) {
+func TestCatalogAndIntake(t *testing.T) {
 	te := newTicketEnv(t)
-	desc := "Letters, dispositions, archives"
-	sys := decode[gen.System](t, te.admin.do(http.MethodPost, "/systems", gen.SystemInput{Name: "e-Office", Description: &desc, SortOrder: 10, Active: true}), http.StatusCreated)
-	hidden := decode[gen.System](t, te.admin.do(http.MethodPost, "/systems", gen.SystemInput{Name: "Old app", SortOrder: 20, Active: false}), http.StatusCreated)
-	expectProblem(t, te.admin.do(http.MethodPost, "/systems", gen.SystemInput{Name: "E-OFFICE", SortOrder: 1, Active: true}), http.StatusConflict, "system_name_taken")
-	if rec := te.agent.do(http.MethodPost, "/systems", gen.SystemInput{Name: "x", SortOrder: 1, Active: true}); rec.Code != http.StatusForbidden {
-		t.Fatalf("agent create: %d", rec.Code)
-	}
-	if list := decode[[]gen.System](t, te.agent.do(http.MethodGet, "/systems", nil), http.StatusOK); len(list) != 2 {
-		t.Fatalf("agent list = %+v", list)
-	}
 	intake := decode[gen.Intake](t, te.requester.do(http.MethodGet, "/intake", nil), http.StatusOK)
-	if len(intake.Systems) != 1 || intake.Systems[0].Id != sys.Id || intake.ClientId != te.clientA ||
-		len(intake.Targets) != 4 || intake.BusinessHours.WorkingDayMinutes == 0 {
+	if intake.ClientId != te.clientA || len(intake.Projects) != 2 || intake.Projects[0].Name != "e-Office" ||
+		intake.Projects[1].Id != te.projectA2 || len(intake.Projects[0].Targets) != 4 ||
+		intake.DefaultProjectId == nil || *intake.DefaultProjectId != te.projectA || intake.BusinessHours.WorkingDayMinutes == 0 {
 		t.Fatalf("intake = %+v", intake)
 	}
 	expectProblem(t, te.agent.do(http.MethodGet, "/intake", nil), http.StatusBadRequest, "client_required")
-	in := incident("Uses hidden")
-	in.SystemId = &hidden.Id
-	expectProblem(t, te.requester.do(http.MethodPost, "/tickets", in), http.StatusBadRequest, "invalid_system")
 
-	in.SystemId = &sys.Id
-	te.requester.report(t, in)
-	expectProblem(t, te.admin.do(http.MethodDelete, "/systems/"+sys.Id.String(), nil), http.StatusConflict, "system_in_use")
-	if rec := te.admin.do(http.MethodDelete, "/systems/"+hidden.Id.String(), nil); rec.Code != http.StatusNoContent {
-		t.Fatalf("delete unused: %d", rec.Code)
+	// A hidden project leaves the report form, and new incidents can't name it.
+	decode[gen.Project](t, te.supervisor.do(http.MethodPut, "/projects/"+te.projectA2.String(),
+		gen.ProjectUpdate{Name: "Email", Active: false}), http.StatusOK)
+	intake = decode[gen.Intake](t, te.requester.do(http.MethodGet, "/intake", nil), http.StatusOK)
+	if len(intake.Projects) != 1 || intake.Projects[0].Id != te.projectA {
+		t.Fatalf("intake after hiding = %+v", intake.Projects)
 	}
-	updated := decode[gen.System](t, te.admin.do(http.MethodPut, "/systems/"+sys.Id.String(),
-		gen.SystemInput{Name: "e-Office", SortOrder: 10, Active: false}), http.StatusOK)
-	if updated.Active || updated.TicketCount != 1 || updated.Description != nil {
-		t.Fatalf("updated = %+v", updated)
-	}
+	expectProblem(t, te.requester.do(http.MethodPost, "/tickets", incident(te.projectA2, "Hidden")), http.StatusBadRequest, "invalid_project")
 
 	item := decode[gen.CatalogItem](t, te.admin.do(http.MethodPost, "/catalog-items", gen.CatalogItemInput{
-		Name: "New email account", DeliveryMinutes: 540, SortOrder: 10, Active: true}), http.StatusCreated)
-	expectProblem(t, te.admin.do(http.MethodPut, "/catalog-items/"+item.Id.String(), gen.CatalogItemInput{
-		Name: "New email account", DeliveryMinutes: 0, SortOrder: 10, Active: true}), http.StatusBadRequest, "invalid_request")
-
-	var actions []string
-	rows, _ := te.st.Pool().Query(context.Background(),
-		`SELECT action FROM audit_log WHERE target_type IN ('system', 'catalog_item') ORDER BY at, id`)
-	for rows.Next() {
-		var a string
-		_ = rows.Scan(&a)
-		actions = append(actions, a)
+		Name: "New email account", SortOrder: 10, Active: true}), http.StatusCreated)
+	expectProblem(t, te.admin.do(http.MethodPost, "/catalog-items", gen.CatalogItemInput{
+		Name: "NEW EMAIL ACCOUNT", SortOrder: 20, Active: true}), http.StatusConflict, "catalog_item_name_taken")
+	if rec := te.agent.do(http.MethodPost, "/catalog-items", gen.CatalogItemInput{Name: "x", SortOrder: 1, Active: true}); rec.Code != http.StatusForbidden {
+		t.Fatalf("agent create: %d", rec.Code)
 	}
-	rows.Close()
-	want := []string{"system.created", "system.created", "system.deleted", "system.updated", "catalog_item.created"}
-	if !slices.Equal(actions, want) {
-		t.Fatalf("audit = %v", actions)
+	intake = decode[gen.Intake](t, te.requester.do(http.MethodGet, "/intake", nil), http.StatusOK)
+	if len(intake.CatalogItems) != 1 || intake.CatalogItems[0].Id != item.Id {
+		t.Fatalf("intake items = %+v", intake.CatalogItems)
+	}
+	if got := te.auditActionsLike(t, "catalog_item.%"); !slices.Equal(got, []string{"catalog_item.created"}) {
+		t.Fatalf("audit = %v", got)
 	}
 }
 
@@ -710,7 +725,7 @@ func TestRequestersAndAssignees(t *testing.T) {
 		t.Fatalf("requesters = %+v", list)
 	}
 	// A new requester can be named on a ticket straight away.
-	te.agent.logFor(t, te.clientA, r.Id, incident("Phoned in"))
+	te.agent.logFor(t, te.clientA, r.Id, incident(te.projectA, "Phoned in"))
 
 	names := []string{}
 	for _, a := range decode[[]gen.Assignee](t, te.agent.do(http.MethodGet, base+"/assignees", nil), http.StatusOK) {
@@ -723,7 +738,7 @@ func TestRequestersAndAssignees(t *testing.T) {
 
 func TestClientWithTicketsCantBeDeleted(t *testing.T) {
 	te := newTicketEnv(t)
-	te.otherRequester.report(t, incident("x"))
+	te.otherRequester.report(t, incident(te.projectB, "x"))
 	if _, err := te.st.Pool().Exec(context.Background(), `DELETE FROM users WHERE email = $1`, otherRequesterEmail); err == nil {
 		t.Fatal("deleted a requester with tickets")
 	}
@@ -734,7 +749,7 @@ func TestDownloadStreamsWholeFile(t *testing.T) {
 	te := newTicketEnv(t)
 	content := append(slices.Clone(pngBytes), bytes.Repeat([]byte{7}, 3<<20)...)
 	up := decode[gen.Attachment](t, te.requester.uploadFile("large.png", content), http.StatusCreated)
-	in := incident("Big screenshot")
+	in := incident(te.projectA, "Big screenshot")
 	in.AttachmentIds = &[]uuid.UUID{up.Id}
 	te.requester.report(t, in)
 	rec := te.agent.do(http.MethodGet, "/attachments/"+up.Id.String(), nil)

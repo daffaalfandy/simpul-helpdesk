@@ -121,6 +121,8 @@ func (s ProjectSLA) Target(p Priority) (ProjectTarget, bool) {
 }
 
 var (
+	ErrTargetsIncomplete  = errors.New("give exactly one target for each of P1, P2, P3 and P4")
+	ErrUnknownCalendar    = errors.New("hours must be business_hours or always")
 	ErrDurationRange      = fmt.Errorf("each target must be at least 1 and at most %d minutes long", MaxTargetMinutes)
 	ErrUnknownUnit        = errors.New("units must be min, h, wd or d")
 	ErrResponseNotShorter = errors.New("first response must be shorter than resolve and deliver")

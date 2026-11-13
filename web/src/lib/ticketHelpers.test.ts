@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { SlaTarget } from '../api/client'
+import type { ProjectTarget } from '../api/client'
 import { DONE_STATUSES, OPEN_STATUSES, statusesForPortalFilter, TICKET_STATUSES } from '../features/tickets/status'
 import { targetFor } from '../features/tickets/sla'
 import { formatClock, formatDayMonth, stampKind, zoneAbbreviation } from './dates'
@@ -66,24 +66,16 @@ describe('ticket statuses', () => {
 })
 
 describe('SLA preview', () => {
-  const p3: SlaTarget = {
+  const p3: ProjectTarget = {
     priority: 'P3',
-    firstResponseMinutes: 120,
-    resolveMinutes: 1080,
-    deliverMinutes: 1500,
-    deliverFromCatalog: true,
+    firstResponse: { value: 2, unit: 'h' },
+    resolve: { value: 2, unit: 'wd' },
+    deliver: { value: 3, unit: 'wd' },
     calendar: 'business_hours',
   }
 
-  it.each([
-    ['incident uses resolve', 'incident' as const, 540, 1080],
-    ['request uses the catalogue item', 'request' as const, 540, 540],
-    ['request without an item uses deliver', 'request' as const, undefined, 1500],
-  ])('%s', (_, type, catalog, want) => {
-    expect(targetFor(p3, type, catalog).resolutionMinutes).toBe(want)
-  })
-
-  it('ignores the catalogue when the target says so', () => {
-    expect(targetFor({ ...p3, deliverFromCatalog: false }, 'request', 540).resolutionMinutes).toBe(1500)
+  it('uses resolve for incidents and deliver for requests', () => {
+    expect(targetFor(p3, 'incident')).toEqual({ firstResponse: p3.firstResponse, resolution: p3.resolve, calendar: 'business_hours' })
+    expect(targetFor(p3, 'request').resolution).toEqual(p3.deliver)
   })
 })

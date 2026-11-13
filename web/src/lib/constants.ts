@@ -14,7 +14,6 @@ export const paths = {
   settings: '/settings',
   settingsGeneral: '/settings/general',
   settingsMembers: '/settings/members',
-  settingsSla: '/settings/sla',
   settingsPriorities: '/settings/priorities',
   settingsClients: '/settings/clients',
   settingsIntegrations: '/settings/integrations',

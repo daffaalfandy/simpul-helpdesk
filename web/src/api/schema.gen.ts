@@ -144,7 +144,7 @@ export interface paths {
         put?: never;
         /**
          * Add a client (admin only)
-         * @description Error codes are `invalid_name`, `invalid_email`, `invalid_contract_period`, `sla_plan_not_found` and `client_name_taken` (409).
+         * @description Error codes are `invalid_name`, `invalid_email`, `invalid_contract_period` and `client_name_taken` (409).
          */
         post: operations["createClient"];
         delete?: never;
@@ -249,70 +249,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/sla-plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SLA plans, the default first */
-        get: operations["listSlaPlans"];
-        put?: never;
-        /**
-         * Add an SLA plan (admin only)
-         * @description Error codes are `invalid_name`, `invalid_sla_targets` and `sla_plan_name_taken` (409).
-         */
-        post: operations["createSlaPlan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/sla-plans/{planId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planId: components["parameters"]["PlanId"];
-            };
-            cookie?: never;
-        };
-        /** One SLA plan */
-        get: operations["getSlaPlan"];
-        /** Replace a plan's name and targets (admin only) */
-        put: operations["updateSlaPlan"];
-        post?: never;
-        /**
-         * Delete a plan no client uses (admin only)
-         * @description Error codes `sla_plan_is_default` and `sla_plan_in_use` (409).
-         */
-        delete: operations["deleteSlaPlan"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/sla-plans/{planId}/default": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planId: components["parameters"]["PlanId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Make a plan the default for new clients (admin only) */
-        post: operations["setDefaultSlaPlan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/priorities": {
         parameters: {
             query?: never;
@@ -384,7 +320,8 @@ export interface paths {
         post?: never;
         /**
          * Delete a project (supervisors and admins)
-         * @description The default can't be deleted while the client has other active projects (`project_is_default`, 409).
+         * @description A project with tickets can't be deleted (`project_in_use`, 409): hide it instead. The default
+         *     can't be deleted while the client has other active projects (`project_is_default`, 409).
          */
         delete: operations["deleteProject"];
         options?: never;
@@ -525,7 +462,8 @@ export interface paths {
         };
         /**
          * What a report form offers for one client
-         * @description The client's SLA targets, the working hours, and the visible systems and catalogue items.
+         * @description The client's active projects with their SLA targets ("Which system?"), the project that
+         *     takes service requests, the working hours, and the visible catalogue items.
          *     Requesters always get their own client and leave `clientId` out; staff must pass a client
          *     they may see (`client_required`, 404).
          */
@@ -555,50 +493,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/systems": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Every system, in display order (staff) */
-        get: operations["listSystems"];
-        put?: never;
-        /**
-         * Add a system (admin only)
-         * @description Error codes are `invalid_name` and `system_name_taken` (409).
-         */
-        post: operations["createSystem"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/systems/{systemId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                systemId: components["parameters"]["SystemId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Replace a system (admin only) */
-        put: operations["updateSystem"];
-        post?: never;
-        /**
-         * Delete a system no ticket uses (admin only)
-         * @description Error code `system_in_use` (409); hide it instead.
-         */
-        delete: operations["deleteSystem"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/catalog-items": {
         parameters: {
             query?: never;
@@ -611,7 +505,7 @@ export interface paths {
         put?: never;
         /**
          * Add a catalogue item (admin only)
-         * @description Error codes are `invalid_name`, `invalid_delivery_time` and `catalog_item_name_taken` (409).
+         * @description Error codes are `invalid_name` and `catalog_item_name_taken` (409).
          */
         post: operations["createCatalogItem"];
         delete?: never;
@@ -664,10 +558,12 @@ export interface paths {
          * Open a ticket
          * @description Requesters report for themselves (channel `portal`); the staff-only fields are ignored.
          *     Staff log a ticket for a client's requester and must give `clientId`, `requesterId` and a
-         *     non-portal `channel`. Error codes are `invalid_subject`, `invalid_description`,
-         *     `invalid_system`, `invalid_catalog_item`, `client_required`, `client_not_found`,
-         *     `invalid_requester`, `invalid_channel`, `invalid_assignee`, `invalid_attachment` and
-         *     `too_many_attachments`.
+         *     non-portal `channel`. Incidents name one of the client's active projects (`projectId`);
+         *     service requests go to the client's default project. The ticket keeps a copy of that
+         *     project's SLA. Error codes are `invalid_subject`, `invalid_description`,
+         *     `invalid_project`, `invalid_catalog_item`, `client_has_no_project`, `client_required`,
+         *     `client_not_found`, `invalid_requester`, `invalid_channel`, `invalid_assignee`,
+         *     `invalid_attachment` and `too_many_attachments`.
          */
         post: operations["createTicket"];
         delete?: never;
@@ -968,7 +864,8 @@ export interface components {
             contractEnd: string | null;
             picName: string | null;
             picEmail: string | null;
-            slaPlan: components["schemas"]["Ref"];
+            /** @description The client's projects, by name. */
+            projects: components["schemas"]["Ref"][];
             requesterCount: number;
             /** @description Agents assigned to this client, by name. */
             agents: components["schemas"]["Ref"][];
@@ -986,36 +883,9 @@ export interface components {
             contractEnd?: string | null;
             picName?: string | null;
             picEmail?: string | null;
-            /** Format: uuid */
-            slaPlanId: string;
         };
         ClientAgentsInput: {
             userIds: string[];
-        };
-        SlaTarget: {
-            priority: components["schemas"]["Priority"];
-            firstResponseMinutes: number;
-            /** @description Incidents. */
-            resolveMinutes: number;
-            /** @description Service requests. */
-            deliverMinutes: number;
-            /** @description Service requests use the catalogue item's delivery time, falling back to deliverMinutes. */
-            deliverFromCatalog: boolean;
-            calendar: components["schemas"]["SlaCalendar"];
-        };
-        SlaPlan: {
-            /** Format: uuid */
-            id: string;
-            /** @example Standard */
-            name: string;
-            isDefault: boolean;
-            clientCount: number;
-            /** @description One per priority, P1 to P4. */
-            targets: components["schemas"]["SlaTarget"][];
-        };
-        SlaPlanInput: {
-            name: string;
-            targets: components["schemas"]["SlaTarget"][];
         };
         PriorityLevel: {
             code: components["schemas"]["Priority"];
@@ -1072,6 +942,8 @@ export interface components {
             /** @description Hidden projects keep their tickets but are left off the report form. */
             active: boolean;
             sla: components["schemas"]["ProjectSla"];
+            /** @description Tickets not yet resolved or closed. */
+            openTicketCount: number;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -1164,35 +1036,12 @@ export interface components {
             jobTitle: string | null;
             openTicketCount: number;
         };
-        System: {
-            /** Format: uuid */
-            id: string;
-            /** @example e-Office */
-            name: string;
-            /** @example Letters, dispositions, archives */
-            description: string | null;
-            sortOrder: number;
-            /** @description Shown on the report form. */
-            active: boolean;
-            ticketCount: number;
-        };
-        SystemInput: {
-            name: string;
-            description?: string | null;
-            sortOrder: number;
-            active: boolean;
-        };
         CatalogItem: {
             /** Format: uuid */
             id: string;
             /** @example VPN / remote access */
             name: string;
             description: string | null;
-            /**
-             * @description Working minutes.
-             * @example 1080
-             */
-            deliveryMinutes: number;
             sortOrder: number;
             /** @description Shown on the report form. */
             active: boolean;
@@ -1201,30 +1050,35 @@ export interface components {
         CatalogItemInput: {
             name: string;
             description?: string | null;
-            deliveryMinutes: number;
             sortOrder: number;
             active: boolean;
         };
-        IntakeSystem: {
+        /** @description A "Which system?" choice with the targets its tickets get. */
+        IntakeProject: {
             /** Format: uuid */
             id: string;
             name: string;
             description: string | null;
+            /** @description P1 to P4. */
+            targets: components["schemas"]["ProjectTarget"][];
         };
         IntakeCatalogItem: {
             /** Format: uuid */
             id: string;
             name: string;
             description: string | null;
-            deliveryMinutes: number;
         };
         Intake: {
             /** Format: uuid */
             clientId: string;
-            /** @description The client's plan, P1 to P4. */
-            targets: components["schemas"]["SlaTarget"][];
             businessHours: components["schemas"]["BusinessHours"];
-            systems: components["schemas"]["IntakeSystem"][];
+            /** @description The client's active projects, by name. */
+            projects: components["schemas"]["IntakeProject"][];
+            /**
+             * Format: uuid
+             * @description The project service requests go to; null while the client has no project.
+             */
+            defaultProjectId: string | null;
             catalogItems: components["schemas"]["IntakeCatalogItem"][];
         };
         AttachmentPolicy: {
@@ -1273,15 +1127,15 @@ export interface components {
          * @enum {string}
          */
         TicketStatusCause: "assignment" | "requester_reply";
-        /** @description The target for the current priority, from the plan the client had when the ticket was opened. */
+        /** @description The targets for the current priority, from the project's SLA when the ticket was opened. */
         TicketSla: {
             priority: components["schemas"]["Priority"];
-            firstResponseMinutes: number;
+            firstResponse: components["schemas"]["Duration"];
             /** @description Resolve time for incidents, delivery time for service requests. */
-            resolutionMinutes: number;
+            resolution: components["schemas"]["Duration"];
             calendar: components["schemas"]["SlaCalendar"];
-            /** @description resolutionMinutes is the catalogue item's delivery time. */
-            fromCatalog: boolean;
+            pauseOnWaitingClient: boolean;
+            pauseOnUat: boolean;
         };
         TicketProgress: {
             step: components["schemas"]["TicketProgressStep"];
@@ -1330,7 +1184,7 @@ export interface components {
             channel: components["schemas"]["TicketChannel"];
             description: string;
             requesterJobTitle: string | null;
-            system: components["schemas"]["Ref"] | null;
+            project: components["schemas"]["Ref"];
             catalogItem: components["schemas"]["Ref"] | null;
             createdBy: components["schemas"]["Ref"];
             /** @description An agent logged the ticket on the requester's behalf. */
@@ -1338,8 +1192,8 @@ export interface components {
             /** @description Files on the description. */
             attachments: components["schemas"]["Attachment"][];
             sla: components["schemas"]["TicketSla"];
-            /** @description Every priority's target from the ticket's plan snapshot, P1 to P4. */
-            slaTargets: components["schemas"]["SlaTarget"][];
+            /** @description Every priority's targets from the ticket's SLA snapshot, P1 to P4. */
+            slaTargets: components["schemas"]["ProjectTarget"][];
             /** Format: date-time */
             firstResponseAt: string | null;
             /** Format: date-time */
@@ -1356,9 +1210,9 @@ export interface components {
             description: string;
             /**
              * Format: uuid
-             * @description Incidents only.
+             * @description Incidents only, one of the client's active projects. Service requests go to the default project.
              */
-            systemId?: string;
+            projectId?: string;
             /**
              * Format: uuid
              * @description Service requests only.
@@ -1456,12 +1310,10 @@ export interface components {
     };
     parameters: {
         ClientId: string;
-        PlanId: string;
         /** @description A ticket key such as HD-24871 (case-insensitive). */
         TicketKey: string;
         AttachmentId: string;
         ProjectId: string;
-        SystemId: string;
         CatalogItemId: string;
     };
     requestBodies: never;
@@ -1875,167 +1727,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Assignee"][];
-                };
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    listSlaPlans: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Plans */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SlaPlan"][];
-                };
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    createSlaPlan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SlaPlanInput"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SlaPlan"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    getSlaPlan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planId: components["parameters"]["PlanId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Plan */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SlaPlan"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    updateSlaPlan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planId: components["parameters"]["PlanId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SlaPlanInput"];
-            };
-        };
-        responses: {
-            /** @description Updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SlaPlan"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteSlaPlan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planId: components["parameters"]["PlanId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    setDefaultSlaPlan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planId: components["parameters"]["PlanId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The new default plan */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SlaPlan"];
                 };
             };
             401: components["responses"]["Problem"];
@@ -2487,115 +2178,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    listSystems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Systems */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["System"][];
-                };
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    createSystem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SystemInput"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["System"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    updateSystem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                systemId: components["parameters"]["SystemId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SystemInput"];
-            };
-        };
-        responses: {
-            /** @description Updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["System"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteSystem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                systemId: components["parameters"]["SystemId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

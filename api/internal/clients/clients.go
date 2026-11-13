@@ -37,7 +37,6 @@ const (
 	dataContractEnd   = "contract_end"
 	dataPicName       = "pic_name"
 	dataPicEmail      = "pic_email"
-	dataSlaPlan       = "sla_plan_id"
 	dataAdded         = "added"
 	dataRemoved       = "removed"
 )
@@ -51,7 +50,6 @@ const (
 
 const (
 	constraintName     = "clients_name_key"
-	constraintPlanFK   = "clients_sla_plan_id_fkey"
 	constraintUserFK   = "users_client_id_fkey"
 	constraintTicketFK = "tickets_client_id_fkey"
 )
@@ -69,7 +67,7 @@ type Client struct {
 	ContractEnd    *calendar.Date
 	PicName        *string
 	PicEmail       *string
-	SlaPlan        Ref
+	Projects       []Ref // by name
 	RequesterCount int
 	Agents         []Ref
 	CreatedAt      time.Time
@@ -83,7 +81,6 @@ type Input struct {
 	ContractEnd   *calendar.Date
 	PicName       *string
 	PicEmail      *string
-	SlaPlanID     uuid.UUID
 }
 
 type Service struct {
@@ -113,9 +110,13 @@ func (s *Service) List(ctx context.Context, p *auth.Principal) ([]Client, error)
 	if err != nil {
 		return nil, err
 	}
+	projects, err := projectsByClient(ctx, q, nil)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Client, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, fromRow(db.GetClientRow(r), agents[r.ID]))
+		out = append(out, fromRow(db.GetClientRow(r), agents[r.ID], projects[r.ID]))
 	}
 	return out, nil
 }
@@ -132,18 +133,13 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, in Input) (Clie
 	}
 	var id uuid.UUID
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		if err := requirePlan(ctx, tx.Q, in.SlaPlanID); err != nil {
-			return err
-		}
 		if id, err = tx.Q.CreateClient(ctx, db.CreateClientParams{
 			Name: in.Name, ContractNo: in.ContractNo, ContractStart: in.ContractStart,
-			ContractEnd: in.ContractEnd, PicName: in.PicName, PicEmail: in.PicEmail, SlaPlanID: in.SlaPlanID,
+			ContractEnd: in.ContractEnd, PicName: in.PicName, PicEmail: in.PicEmail,
 		}); err != nil {
 			return err
 		}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionCreated, TargetClient, &id, map[string]any{
-			dataName: in.Name, dataSlaPlan: in.SlaPlanID,
-		}))
+		return audit.Write(ctx, tx.Q, actor.Entry(ActionCreated, TargetClient, &id, map[string]any{dataName: in.Name}))
 	})
 	if err != nil {
 		return Client{}, clientError(err)
@@ -161,12 +157,9 @@ func (s *Service) Update(ctx context.Context, actor audit.Actor, id uuid.UUID, i
 		if err != nil {
 			return notFound(err)
 		}
-		if err := requirePlan(ctx, tx.Q, in.SlaPlanID); err != nil {
-			return err
-		}
 		if err := tx.Q.UpdateClient(ctx, db.UpdateClientParams{
 			ID: id, Name: in.Name, ContractNo: in.ContractNo, ContractStart: in.ContractStart,
-			ContractEnd: in.ContractEnd, PicName: in.PicName, PicEmail: in.PicEmail, SlaPlanID: in.SlaPlanID,
+			ContractEnd: in.ContractEnd, PicName: in.PicName, PicEmail: in.PicEmail,
 		}); err != nil {
 			return err
 		}
@@ -177,7 +170,6 @@ func (s *Service) Update(ctx context.Context, actor audit.Actor, id uuid.UUID, i
 		audit.TrackPtr(changes, dataContractEnd, old.ContractEnd, in.ContractEnd)
 		audit.TrackPtr(changes, dataPicName, old.PicName, in.PicName)
 		audit.TrackPtr(changes, dataPicEmail, old.PicEmail, in.PicEmail)
-		audit.Track(changes, dataSlaPlan, old.SlaPlanID, in.SlaPlanID)
 		return audit.Write(ctx, tx.Q, actor.Entry(ActionUpdated, TargetClient, &id, changes))
 	})
 	if err != nil {
@@ -262,7 +254,11 @@ func get(ctx context.Context, q *db.Queries, id uuid.UUID, agentID *uuid.UUID) (
 	if err != nil {
 		return Client{}, err
 	}
-	return fromRow(r, agents[id]), nil
+	projects, err := projectsByClient(ctx, q, &id)
+	if err != nil {
+		return Client{}, err
+	}
+	return fromRow(r, agents[id], projects[id]), nil
 }
 
 func agentsByClient(ctx context.Context, q *db.Queries, clientID *uuid.UUID) (map[uuid.UUID][]Ref, error) {
@@ -277,27 +273,30 @@ func agentsByClient(ctx context.Context, q *db.Queries, clientID *uuid.UUID) (ma
 	return out, nil
 }
 
-func fromRow(r db.GetClientRow, agents []Ref) Client {
+func projectsByClient(ctx context.Context, q *db.Queries, clientID *uuid.UUID) (map[uuid.UUID][]Ref, error) {
+	rows, err := q.ListClientProjects(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID][]Ref)
+	for _, r := range rows {
+		out[r.ClientID] = append(out[r.ClientID], Ref{ID: r.ID, Name: r.Name})
+	}
+	return out, nil
+}
+
+func fromRow(r db.GetClientRow, agents, projects []Ref) Client {
 	if agents == nil {
 		agents = []Ref{}
 	}
+	if projects == nil {
+		projects = []Ref{}
+	}
 	return Client{
 		ID: r.ID, Name: r.Name, ContractNo: r.ContractNo, ContractStart: r.ContractStart,
-		ContractEnd: r.ContractEnd, PicName: r.PicName, PicEmail: r.PicEmail,
-		SlaPlan: Ref{ID: r.SlaPlanID, Name: r.SlaPlanName}, RequesterCount: int(r.RequesterCount),
-		Agents: agents, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		ContractEnd: r.ContractEnd, PicName: r.PicName, PicEmail: r.PicEmail, Projects: projects,
+		RequesterCount: int(r.RequesterCount), Agents: agents, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
-}
-
-func requirePlan(ctx context.Context, q *db.Queries, planID uuid.UUID) error {
-	ok, err := q.SlaPlanExists(ctx, planID)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return apperr.Invalid(apperr.CodeSlaPlanNotFound, "Choose an SLA plan", "")
-	}
-	return nil
 }
 
 // normalize trims text, turns blanks into "not set" and checks the fields.
@@ -359,8 +358,6 @@ func clientError(err error) error {
 		return nil
 	case store.IsViolation(err, store.SQLStateUniqueViolation, constraintName):
 		return apperr.Conflict(apperr.CodeClientNameTaken, "A client with this name already exists", "")
-	case store.IsViolation(err, store.SQLStateForeignKeyViolation, constraintPlanFK):
-		return apperr.Invalid(apperr.CodeSlaPlanNotFound, "Choose an SLA plan", "")
 	case store.IsViolation(err, store.SQLStateRestrictViolation, constraintTicketFK):
 		return errHasTickets()
 	case store.IsViolation(err, store.SQLStateRestrictViolation, constraintUserFK):

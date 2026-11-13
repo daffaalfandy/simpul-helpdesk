@@ -41,7 +41,7 @@ const (
 	dataClient        = "client_id"
 	dataRequester     = "requester_id"
 	dataAssignee      = "assignee"
-	dataSystem        = "system_id"
+	dataProject       = "project_id"
 	dataCatalogItem   = "catalog_item_id"
 	dataAttachmentIDs = "attachment_ids"
 	dataMessageID     = "message_id"
@@ -101,13 +101,13 @@ type Ticket struct {
 	Channel           ticket.Channel
 	Description       string
 	RequesterJobTitle *string
-	System            *Ref
+	Project           Ref
 	CatalogItem       *Ref
 	CreatedBy         Ref
 	LoggedByStaff     bool // an agent logged it on the requester's behalf
 	Attachments       []Attachment
 	SLA               ticket.EffectiveSLA
-	SLATargets        []sla.Target
+	SLATargets        []sla.ProjectTarget
 	FirstResponseAt   *time.Time
 	ClosedAt          *time.Time
 	Progress          []ticket.ProgressStep

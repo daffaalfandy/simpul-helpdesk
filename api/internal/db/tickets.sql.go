@@ -14,7 +14,7 @@ import (
 
 const createTicket = `-- name: CreateTicket :one
 INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
-                     created_by, system_id, catalog_item_id, subject, description, sla_snapshot)
+                     created_by, project_id, catalog_item_id, subject, description, sla_snapshot)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
         $10, $11, $12, $13, $14, $15)
 RETURNING id, created_at
@@ -31,7 +31,7 @@ type CreateTicketParams struct {
 	RequesterID   uuid.UUID
 	AssigneeID    *uuid.UUID
 	CreatedBy     uuid.UUID
-	SystemID      *uuid.UUID
+	ProjectID     uuid.UUID
 	CatalogItemID *uuid.UUID
 	Subject       string
 	Description   string
@@ -55,7 +55,7 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) (Cre
 		arg.RequesterID,
 		arg.AssigneeID,
 		arg.CreatedBy,
-		arg.SystemID,
+		arg.ProjectID,
 		arg.CatalogItemID,
 		arg.Subject,
 		arg.Description,
@@ -103,14 +103,14 @@ SELECT t.id, t.key, t.type, t.status, t.priority, t.channel, t.subject, t.descri
        t.requester_id, r.name AS requester_name, r.job_title AS requester_job_title,
        t.assignee_id, a.name AS assignee_name,
        t.created_by, cb.name AS created_by_name, cb.role AS created_by_role,
-       t.system_id, s.name AS system_name,
+       t.project_id, p.name AS project_name,
        t.catalog_item_id, ci.name AS catalog_item_name
 FROM tickets t
 JOIN clients c ON c.id = t.client_id
 JOIN users r ON r.id = t.requester_id
 JOIN users cb ON cb.id = t.created_by
 LEFT JOIN users a ON a.id = t.assignee_id
-LEFT JOIN systems s ON s.id = t.system_id
+JOIN projects p ON p.id = t.project_id
 LEFT JOIN catalog_items ci ON ci.id = t.catalog_item_id
 WHERE t.key = $1
   AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
@@ -150,8 +150,8 @@ type GetTicketRow struct {
 	CreatedBy         uuid.UUID
 	CreatedByName     string
 	CreatedByRole     string
-	SystemID          *uuid.UUID
-	SystemName        *string
+	ProjectID         uuid.UUID
+	ProjectName       string
 	CatalogItemID     *uuid.UUID
 	CatalogItemName   *string
 }
@@ -184,8 +184,8 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 		&i.CreatedBy,
 		&i.CreatedByName,
 		&i.CreatedByRole,
-		&i.SystemID,
-		&i.SystemName,
+		&i.ProjectID,
+		&i.ProjectName,
 		&i.CatalogItemID,
 		&i.CatalogItemName,
 	)
@@ -271,7 +271,7 @@ func (q *Queries) InsertSeedMessage(ctx context.Context, arg InsertSeedMessagePa
 
 const insertSeedTicket = `-- name: InsertSeedTicket :one
 INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
-                     created_by, system_id, catalog_item_id, subject, description, sla_snapshot,
+                     created_by, project_id, catalog_item_id, subject, description, sla_snapshot,
                      first_response_at, resolved_at, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
         $10, $11, $12, $13, $14, $15,
@@ -291,7 +291,7 @@ type InsertSeedTicketParams struct {
 	RequesterID     uuid.UUID
 	AssigneeID      *uuid.UUID
 	CreatedBy       uuid.UUID
-	SystemID        *uuid.UUID
+	ProjectID       uuid.UUID
 	CatalogItemID   *uuid.UUID
 	Subject         string
 	Description     string
@@ -315,7 +315,7 @@ func (q *Queries) InsertSeedTicket(ctx context.Context, arg InsertSeedTicketPara
 		arg.RequesterID,
 		arg.AssigneeID,
 		arg.CreatedBy,
-		arg.SystemID,
+		arg.ProjectID,
 		arg.CatalogItemID,
 		arg.Subject,
 		arg.Description,

@@ -1,14 +1,12 @@
 import { http, HttpResponse } from 'msw'
 
-import type { BusinessHours, Client, Holiday, HolidayPreset, SlaPlan, SlaTarget, User } from '../api/client'
+import type { BusinessHours, Client, Holiday, HolidayPreset, User } from '../api/client'
 
 const API = '*/api/v1'
 const WORKING_DAY = 540
 const MINUTES_PER_HOUR = 60
 
 export const IDS = {
-  standard: '01a1cedf-0000-7000-8000-00000000a001',
-  gold: '01a1cedf-0000-7000-8000-00000000a002',
   jambi: '01a1cedf-0000-7000-8000-0000000000c1',
   batam: '01a1cedf-0000-7000-8000-0000000000c2',
   rina: '01a1cedf-0000-7000-8000-000000000001',
@@ -18,24 +16,7 @@ export const IDS = {
 
 export const THIS_YEAR = new Date().getFullYear()
 
-export const standardTargets: SlaTarget[] = [
-  { priority: 'P1', firstResponseMinutes: 15, resolveMinutes: 240, deliverMinutes: 240, deliverFromCatalog: false, calendar: 'always' },
-  { priority: 'P2', firstResponseMinutes: 30, resolveMinutes: 480, deliverMinutes: 540, deliverFromCatalog: false, calendar: 'business_hours' },
-  { priority: 'P3', firstResponseMinutes: 120, resolveMinutes: 1080, deliverMinutes: 1080, deliverFromCatalog: true, calendar: 'business_hours' },
-  { priority: 'P4', firstResponseMinutes: 240, resolveMinutes: 2700, deliverMinutes: 2700, deliverFromCatalog: false, calendar: 'business_hours' },
-]
-
 function fixtures() {
-  const plans: SlaPlan[] = [
-    { id: IDS.standard, name: 'Standard', isDefault: true, clientCount: 1, targets: standardTargets },
-    {
-      id: IDS.gold,
-      name: 'Gold',
-      isDefault: false,
-      clientCount: 1,
-      targets: standardTargets.map((t) => (t.priority === 'P2' ? { ...t, calendar: 'always' } : t)),
-    },
-  ]
   const clients: Client[] = [
     {
       id: IDS.batam,
@@ -45,7 +26,7 @@ function fixtures() {
       contractEnd: '2027-02-28',
       picName: 'Sri Lestari',
       picEmail: 'sri@batam.test',
-      slaPlan: { id: IDS.standard, name: 'Standard' },
+      projects: [{ id: '01a1cedf-0000-7000-8000-00000000e003', name: 'Network & infra support' }],
       requesterCount: 0,
       agents: [],
       createdAt: '2026-11-12T00:00:00Z',
@@ -59,7 +40,10 @@ function fixtures() {
       contractEnd: '2026-12-31',
       picName: 'Hendra Gunawan',
       picEmail: null,
-      slaPlan: { id: IDS.gold, name: 'Gold' },
+      projects: [
+        { id: '01a1cedf-0000-7000-8000-00000000e001', name: 'e-Office' },
+        { id: '01a1cedf-0000-7000-8000-00000000e002', name: 'Email' },
+      ],
       requesterCount: 46,
       agents: [{ id: IDS.rina, name: 'Rina Pratiwi' }],
       createdAt: '2026-11-12T00:00:00Z',
@@ -80,7 +64,7 @@ function fixtures() {
     { id: IDS.rina, email: 'rina@demo-vendor.test', name: 'Rina Pratiwi', role: 'agent', status: 'active', jobTitle: 'L2' },
     { id: 'u-dewi', email: 'dewi@demo-vendor.test', name: 'Dewi Wulandari', role: 'supervisor', status: 'active' },
   ]
-  return { plans, clients, hours, holidays, presets, users }
+  return { clients, hours, holidays, presets, users }
 }
 
 type Recorded = { method: string; path: string; body: unknown }
@@ -109,15 +93,10 @@ async function record(request: Request) {
 let nextId = 0
 const newId = () => `01a1cedf-0000-7000-8000-${String(++nextId).padStart(12, '0')}`
 
-function planRef(id: string) {
-  const p = settings.plans.find((x) => x.id === id)
-  return { id, name: p?.name ?? '' }
-}
-
 export const settingsHandlers = [
   http.get(`${API}/clients`, () => HttpResponse.json(settings.clients)),
   http.post(`${API}/clients`, async ({ request }) => {
-    const body = (await record(request)) as Client & { slaPlanId: string }
+    const body = (await record(request)) as Client
     if (settings.clients.some((c) => c.name === body.name)) return problem(409, 'client_name_taken')
     const client: Client = {
       ...body,
@@ -127,7 +106,7 @@ export const settingsHandlers = [
       contractEnd: body.contractEnd ?? null,
       picName: body.picName ?? null,
       picEmail: body.picEmail ?? null,
-      slaPlan: planRef(body.slaPlanId),
+      projects: [],
       requesterCount: 0,
       agents: [],
       createdAt: '2026-11-12T00:00:00Z',
@@ -137,10 +116,10 @@ export const settingsHandlers = [
     return HttpResponse.json(client, { status: 201 })
   }),
   http.put(`${API}/clients/:id`, async ({ request, params }) => {
-    const body = (await record(request)) as Client & { slaPlanId: string }
+    const body = (await record(request)) as Client
     const c = settings.clients.find((x) => x.id === params.id)
     if (!c) return problem(404, 'not_found')
-    Object.assign(c, body, { slaPlan: planRef(body.slaPlanId) })
+    Object.assign(c, body)
     return HttpResponse.json(c)
   }),
   http.delete(`${API}/clients/:id`, async ({ request, params }) => {
@@ -159,37 +138,6 @@ export const settingsHandlers = [
     return HttpResponse.json(c)
   }),
   http.get(`${API}/users`, () => HttpResponse.json(settings.users)),
-  http.get(`${API}/sla-plans`, () => HttpResponse.json(settings.plans)),
-  http.post(`${API}/sla-plans`, async ({ request }) => {
-    const body = (await record(request)) as Pick<SlaPlan, 'name' | 'targets'>
-    if (settings.plans.some((p) => p.name.toLowerCase() === body.name.toLowerCase())) return problem(409, 'sla_plan_name_taken')
-    const plan: SlaPlan = { ...body, id: newId(), isDefault: false, clientCount: 0 }
-    settings.plans.push(plan)
-    return HttpResponse.json(plan, { status: 201 })
-  }),
-  http.put(`${API}/sla-plans/:id`, async ({ request, params }) => {
-    const body = (await record(request)) as Pick<SlaPlan, 'name' | 'targets'>
-    const p = settings.plans.find((x) => x.id === params.id)
-    if (!p) return problem(404, 'not_found')
-    Object.assign(p, body)
-    return HttpResponse.json(p)
-  }),
-  http.delete(`${API}/sla-plans/:id`, async ({ request, params }) => {
-    await record(request)
-    const p = settings.plans.find((x) => x.id === params.id)
-    if (!p) return problem(404, 'not_found')
-    if (p.isDefault) return problem(409, 'sla_plan_is_default')
-    if (p.clientCount > 0) return problem(409, 'sla_plan_in_use')
-    settings.plans = settings.plans.filter((x) => x !== p)
-    return new HttpResponse(null, { status: 204 })
-  }),
-  http.post(`${API}/sla-plans/:id/default`, async ({ request, params }) => {
-    await record(request)
-    const p = settings.plans.find((x) => x.id === params.id)
-    if (!p) return problem(404, 'not_found')
-    settings.plans.forEach((x) => (x.isDefault = x === p))
-    return HttpResponse.json(p)
-  }),
   http.get(`${API}/business-hours`, () => HttpResponse.json(settings.hours)),
   http.put(`${API}/business-hours`, async ({ request }) => {
     const body = (await record(request)) as Pick<BusinessHours, 'weekdays' | 'opens' | 'closes'>

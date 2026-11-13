@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { PROJECT_IDS } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
 import { state, USERS } from '../../test/server'
 import { IDS } from '../../test/settingsApi'
@@ -76,7 +77,7 @@ describe('board', () => {
       priority: 'P3',
       subject: 'Called about e-Office',
       description: 'Login fails.',
-      systemId: TICKET_IDS.eoffice,
+      projectId: PROJECT_IDS.eOffice,
       attachmentIds: [],
       assignToMe: true,
     })

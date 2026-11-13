@@ -48,14 +48,13 @@ type BusinessHour struct {
 }
 
 type CatalogItem struct {
-	ID              uuid.UUID
-	Name            string
-	Description     *string
-	DeliveryMinutes int32
-	SortOrder       int32
-	Active          bool
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID          uuid.UUID
+	Name        string
+	Description *string
+	SortOrder   int32
+	Active      bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type Client struct {
@@ -68,7 +67,6 @@ type Client struct {
 	ContractEnd   *calendar.Date
 	PicName       *string
 	PicEmail      *string
-	SlaPlanID     uuid.UUID
 }
 
 type ClientAgent struct {
@@ -89,6 +87,10 @@ type LoginAttempt struct {
 	ID  int64
 	Key string
 	At  time.Time
+}
+
+type M3bWorkingDay struct {
+	Minutes int32
 }
 
 type Organization struct {
@@ -158,35 +160,6 @@ type Session struct {
 	UserAgent  *string
 }
 
-type SlaPlan struct {
-	ID        uuid.UUID
-	Name      string
-	IsDefault bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-type SlaTarget struct {
-	PlanID               uuid.UUID
-	Priority             string
-	FirstResponseMinutes int32
-	ResolveMinutes       int32
-	DeliverMinutes       int32
-	DeliverFromCatalog   bool
-	Calendar             string
-	UpdatedAt            time.Time
-}
-
-type System struct {
-	ID          uuid.UUID
-	Name        string
-	Description *string
-	SortOrder   int32
-	Active      bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
-
 type Ticket struct {
 	ID              uuid.UUID
 	Number          int64
@@ -199,7 +172,6 @@ type Ticket struct {
 	RequesterID     uuid.UUID
 	AssigneeID      *uuid.UUID
 	CreatedBy       uuid.UUID
-	SystemID        *uuid.UUID
 	CatalogItemID   *uuid.UUID
 	Subject         string
 	Description     string
@@ -209,6 +181,7 @@ type Ticket struct {
 	ClosedAt        *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	ProjectID       uuid.UUID
 }
 
 type TicketMessage struct {

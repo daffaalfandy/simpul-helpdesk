@@ -7,7 +7,6 @@ import type {
   CatalogItem,
   Intake,
   Requester,
-  System,
   Ticket,
   TicketActivity,
   TicketMessage,
@@ -15,19 +14,16 @@ import type {
   TicketSummary,
 } from '../api/client'
 import { state } from './server'
-import { IDS, settings, standardTargets } from './settingsApi'
+import { defaultTargets, PROJECT_IDS, projectsApi } from './projectsApi'
+import { IDS, settings } from './settingsApi'
 
 const API = '*/api/v1'
-const WORKING_DAY = 540
 const MAX_BYTES = 10 * 1024 * 1024
 
 export const TICKET_IDS = {
   hendra: '01a1cedf-0000-7000-8000-000000000003',
   dian: '01a1cedf-0000-7000-8000-000000000005',
   sri: '01a1cedf-0000-7000-8000-000000000006',
-  eoffice: '01a1cedf-0000-7000-8000-0000000e0001',
-  email: '01a1cedf-0000-7000-8000-0000000e0002',
-  hidden: '01a1cedf-0000-7000-8000-0000000e0003',
   vpn: '01a1cedf-0000-7000-8000-0000000f0001',
   account: '01a1cedf-0000-7000-8000-0000000f0002',
 } as const
@@ -58,13 +54,20 @@ function ticket(over: Partial<Ticket> & Pick<Ticket, 'id' | 'key' | 'subject'>):
     channel: 'portal',
     description: 'It broke.',
     requesterJobTitle: 'IT Officer',
-    system: null,
+    project: ref(PROJECT_IDS.eOffice, 'e-Office'),
     catalogItem: null,
     createdBy: hendra,
     loggedByStaff: false,
     attachments: [],
-    sla: { priority: 'P3', firstResponseMinutes: 120, resolutionMinutes: 1080, calendar: 'business_hours', fromCatalog: false },
-    slaTargets: standardTargets,
+    sla: {
+      priority: 'P3',
+      firstResponse: { value: 2, unit: 'h' },
+      resolution: { value: 2, unit: 'wd' },
+      calendar: 'business_hours',
+      pauseOnWaitingClient: true,
+      pauseOnUat: true,
+    },
+    slaTargets: defaultTargets,
     firstResponseAt: null,
     closedAt: null,
     progress: [
@@ -89,9 +92,16 @@ function fixtures() {
       priority: 'P1',
       status: 'in_progress',
       assignee: rina,
-      system: ref(TICKET_IDS.eoffice, 'e-Office'),
       attachments: [file('a-shot', 'screenshot-login-error.png')],
-      sla: { priority: 'P1', firstResponseMinutes: 15, resolutionMinutes: 240, calendar: 'always', fromCatalog: false },
+      firstResponseAt: '2026-11-12T01:22:00Z',
+      sla: {
+        priority: 'P1',
+        firstResponse: { value: 15, unit: 'min' },
+        resolution: { value: 4, unit: 'h' },
+        calendar: 'always',
+        pauseOnWaitingClient: true,
+        pauseOnUat: true,
+      },
       allowedStatuses: ['assigned', 'waiting_on_client', 'in_uat', 'resolved'],
       progress: [
         { step: 'received', state: 'done', at: '2026-11-12T01:14:00Z' },
@@ -135,14 +145,9 @@ function fixtures() {
       { id: 'e-2', at: '2026-11-12T01:16:00Z', actorName: 'Rina Pratiwi', action: 'assignee_changed', from: null, to: 'Rina Pratiwi', reason: null, cause: null, channel: null },
     ],
   }
-  const systems: System[] = [
-    { id: TICKET_IDS.eoffice, name: 'e-Office', description: 'Letters, dispositions, archives', sortOrder: 10, active: true, ticketCount: 1 },
-    { id: TICKET_IDS.email, name: 'Email', description: 'Mailboxes and accounts', sortOrder: 20, active: true, ticketCount: 0 },
-    { id: TICKET_IDS.hidden, name: 'Old app', description: null, sortOrder: 30, active: false, ticketCount: 0 },
-  ]
   const catalogItems: CatalogItem[] = [
-    { id: TICKET_IDS.vpn, name: 'VPN / remote access', description: null, deliveryMinutes: 2 * WORKING_DAY, sortOrder: 10, active: true, ticketCount: 1 },
-    { id: TICKET_IDS.account, name: 'New email account', description: null, deliveryMinutes: WORKING_DAY, sortOrder: 20, active: true, ticketCount: 0 },
+    { id: TICKET_IDS.vpn, name: 'VPN / remote access', description: null, sortOrder: 10, active: true, ticketCount: 1 },
+    { id: TICKET_IDS.account, name: 'New email account', description: null, sortOrder: 20, active: true, ticketCount: 0 },
   ]
   const requesters: Record<string, Requester[]> = {
     [IDS.jambi]: [
@@ -154,7 +159,7 @@ function fixtures() {
     { id: IDS.rina, name: 'Rina Pratiwi', role: 'agent', jobTitle: 'L2', openTicketCount: 6 },
     { id: IDS.adi, name: 'Adi Saputra', role: 'agent', jobTitle: 'L2', openTicketCount: 4 },
   ]
-  return { tickets, messages, activity, systems, catalogItems, requesters, assignees }
+  return { tickets, messages, activity, catalogItems, requesters, assignees }
 }
 
 type Recorded = { method: string; path: string; search: string; body: unknown }
@@ -204,18 +209,29 @@ function summary(t: Ticket): TicketSummary {
 let nextId = 0
 const newId = (prefix: string) => `${prefix}-${++nextId}`
 
+/** The project a new ticket lands in: the incident's system, or the client's default. */
+function projectOf(body: Record<string, unknown>) {
+  const clientId = (body.clientId as string | undefined) ?? IDS.jambi
+  const p =
+    projectsApi.projects.find((x) => x.id === body.projectId) ??
+    projectsApi.projects.find((x) => x.client.id === clientId && x.isDefault)
+  return ref(p?.id ?? '', p?.name ?? '')
+}
+
 export const ticketsHandlers = [
   http.get(`${API}/attachment-policy`, () => HttpResponse.json(policy)),
   http.get(`${API}/intake`, async ({ request }) => {
     await record(request)
+    const clientId = new URL(request.url).searchParams.get('clientId') ?? IDS.jambi
+    const projects = projectsApi.projects.filter((p) => p.client.id === clientId)
     const intake: Intake = {
-      clientId: IDS.jambi,
-      targets: standardTargets,
+      clientId,
       businessHours: settings.hours,
-      systems: tickets.systems.filter((s) => s.active).map(({ id, name, description }) => ({ id, name, description })),
-      catalogItems: tickets.catalogItems
-        .filter((i) => i.active)
-        .map(({ id, name, description, deliveryMinutes }) => ({ id, name, description, deliveryMinutes })),
+      projects: projects
+        .filter((p) => p.active)
+        .map(({ id, name, description, sla }) => ({ id, name, description, targets: sla.targets })),
+      defaultProjectId: projects.find((p) => p.isDefault)?.id ?? null,
+      catalogItems: tickets.catalogItems.filter((i) => i.active).map(({ id, name, description }) => ({ id, name, description })),
     }
     return HttpResponse.json(intake)
   }),
@@ -249,12 +265,14 @@ export const ticketsHandlers = [
       createdBy: ref(me?.id ?? '', me?.name ?? ''),
       status: body.assignToMe ? 'assigned' : 'new',
       assignee: body.assignToMe && me ? ref(me.id, me.name) : null,
+      project: projectOf(body),
       sla: {
         priority: body.priority as Ticket['priority'],
-        firstResponseMinutes: 30,
-        resolutionMinutes: 480,
+        firstResponse: { value: 30, unit: 'min' },
+        resolution: { value: 8, unit: 'h' },
         calendar: 'business_hours',
-        fromCatalog: false,
+        pauseOnWaitingClient: true,
+        pauseOnUat: true,
       },
     })
     tickets.tickets.unshift(t)
@@ -345,28 +363,6 @@ export const ticketsHandlers = [
     return HttpResponse.json(r, { status: 201 })
   }),
   http.get(`${API}/clients/:id/assignees`, () => HttpResponse.json(tickets.assignees)),
-  http.get(`${API}/systems`, () => HttpResponse.json(tickets.systems)),
-  http.post(`${API}/systems`, async ({ request }) => {
-    const body = (await record(request)) as Omit<System, 'id' | 'ticketCount'>
-    const s: System = { ...body, description: body.description ?? null, id: newId('s'), ticketCount: 0 }
-    tickets.systems.push(s)
-    return HttpResponse.json(s, { status: 201 })
-  }),
-  http.put(`${API}/systems/:id`, async ({ request, params }) => {
-    const body = (await record(request)) as Partial<System>
-    const s = tickets.systems.find((x) => x.id === params.id)
-    if (!s) return problem(404, 'not_found')
-    Object.assign(s, body)
-    return HttpResponse.json(s)
-  }),
-  http.delete(`${API}/systems/:id`, async ({ request, params }) => {
-    await record(request)
-    const s = tickets.systems.find((x) => x.id === params.id)
-    if (!s) return problem(404, 'not_found')
-    if (s.ticketCount > 0) return problem(409, 'system_in_use')
-    tickets.systems = tickets.systems.filter((x) => x !== s)
-    return new HttpResponse(null, { status: 204 })
-  }),
   http.get(`${API}/catalog-items`, () => HttpResponse.json(tickets.catalogItems)),
   http.post(`${API}/catalog-items`, async ({ request }) => {
     const body = (await record(request)) as Omit<CatalogItem, 'id' | 'ticketCount'>

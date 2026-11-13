@@ -28,7 +28,6 @@ import { Route as AgentSettingsGeneralRouteImport } from './routes/_agent/settin
 import { Route as AgentSettingsIntegrationsRouteImport } from './routes/_agent/settings/integrations'
 import { Route as AgentSettingsMembersRouteImport } from './routes/_agent/settings/members'
 import { Route as AgentSettingsPrioritiesRouteImport } from './routes/_agent/settings/priorities'
-import { Route as AgentSettingsSlaRouteImport } from './routes/_agent/settings/sla'
 import { Route as AgentTicketsKeyRouteImport } from './routes/_agent/tickets/$key'
 import { Route as PortalPortalIndexRouteImport } from './routes/_portal/portal/index'
 import { Route as PortalPortalNewRouteImport } from './routes/_portal/portal/new'
@@ -128,11 +127,6 @@ const AgentSettingsPrioritiesRoute = AgentSettingsPrioritiesRouteImport.update({
   path: '/priorities',
   getParentRoute: () => AgentSettingsRoute,
 } as any)
-const AgentSettingsSlaRoute = AgentSettingsSlaRouteImport.update({
-  id: '/sla',
-  path: '/sla',
-  getParentRoute: () => AgentSettingsRoute,
-} as any)
 const AgentTicketsKeyRoute = AgentTicketsKeyRouteImport.update({
   id: '/tickets/$key',
   path: '/tickets/$key',
@@ -170,7 +164,6 @@ export interface FileRoutesByFullPath {
   '/settings/integrations': typeof AgentSettingsIntegrationsRoute
   '/settings/members': typeof AgentSettingsMembersRoute
   '/settings/priorities': typeof AgentSettingsPrioritiesRoute
-  '/settings/sla': typeof AgentSettingsSlaRoute
   '/tickets/$key': typeof AgentTicketsKeyRoute
   '/portal/new': typeof PortalPortalNewRoute
   '/projects/': typeof AgentProjectsIndexRoute
@@ -192,7 +185,6 @@ export interface FileRoutesByTo {
   '/settings/integrations': typeof AgentSettingsIntegrationsRoute
   '/settings/members': typeof AgentSettingsMembersRoute
   '/settings/priorities': typeof AgentSettingsPrioritiesRoute
-  '/settings/sla': typeof AgentSettingsSlaRoute
   '/tickets/$key': typeof AgentTicketsKeyRoute
   '/portal/new': typeof PortalPortalNewRoute
   '/projects': typeof AgentProjectsIndexRoute
@@ -219,7 +211,6 @@ export interface FileRoutesById {
   '/_agent/settings/integrations': typeof AgentSettingsIntegrationsRoute
   '/_agent/settings/members': typeof AgentSettingsMembersRoute
   '/_agent/settings/priorities': typeof AgentSettingsPrioritiesRoute
-  '/_agent/settings/sla': typeof AgentSettingsSlaRoute
   '/_agent/tickets/$key': typeof AgentTicketsKeyRoute
   '/_portal/portal/new': typeof PortalPortalNewRoute
   '/_agent/projects/': typeof AgentProjectsIndexRoute
@@ -245,7 +236,6 @@ export interface FileRouteTypes {
     | '/settings/integrations'
     | '/settings/members'
     | '/settings/priorities'
-    | '/settings/sla'
     | '/tickets/$key'
     | '/portal/new'
     | '/projects/'
@@ -267,7 +257,6 @@ export interface FileRouteTypes {
     | '/settings/integrations'
     | '/settings/members'
     | '/settings/priorities'
-    | '/settings/sla'
     | '/tickets/$key'
     | '/portal/new'
     | '/projects'
@@ -293,7 +282,6 @@ export interface FileRouteTypes {
     | '/_agent/settings/integrations'
     | '/_agent/settings/members'
     | '/_agent/settings/priorities'
-    | '/_agent/settings/sla'
     | '/_agent/tickets/$key'
     | '/_portal/portal/new'
     | '/_agent/projects/'
@@ -446,13 +434,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentSettingsPrioritiesRouteImport
       parentRoute: typeof AgentSettingsRoute
     }
-    '/_agent/settings/sla': {
-      id: '/_agent/settings/sla'
-      path: '/sla'
-      fullPath: '/settings/sla'
-      preLoaderRoute: typeof AgentSettingsSlaRouteImport
-      parentRoute: typeof AgentSettingsRoute
-    }
     '/_agent/tickets/$key': {
       id: '/_agent/tickets/$key'
       path: '/tickets/$key'
@@ -505,7 +486,6 @@ interface AgentSettingsRouteChildren {
   AgentSettingsIntegrationsRoute: typeof AgentSettingsIntegrationsRoute
   AgentSettingsMembersRoute: typeof AgentSettingsMembersRoute
   AgentSettingsPrioritiesRoute: typeof AgentSettingsPrioritiesRoute
-  AgentSettingsSlaRoute: typeof AgentSettingsSlaRoute
   AgentSettingsIndexRoute: typeof AgentSettingsIndexRoute
 }
 
@@ -516,7 +496,6 @@ const AgentSettingsRouteChildren: AgentSettingsRouteChildren = {
   AgentSettingsIntegrationsRoute: AgentSettingsIntegrationsRoute,
   AgentSettingsMembersRoute: AgentSettingsMembersRoute,
   AgentSettingsPrioritiesRoute: AgentSettingsPrioritiesRoute,
-  AgentSettingsSlaRoute: AgentSettingsSlaRoute,
   AgentSettingsIndexRoute: AgentSettingsIndexRoute,
 }
 

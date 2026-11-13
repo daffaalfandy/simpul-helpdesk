@@ -94,7 +94,8 @@ func (s *server) UpdateProjectSla(ctx context.Context, req gen.UpdateProjectSlaR
 func apiProject(p projects.Project) gen.Project {
 	return gen.Project{
 		Id: p.ID, Client: gen.Ref{Id: p.Client.ID, Name: p.Client.Name}, Name: p.Name, Description: p.Description,
-		IsDefault: p.IsDefault, Active: p.Active, Sla: apiProjectSLA(p.SLA), CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		IsDefault: p.IsDefault, Active: p.Active, Sla: apiProjectSLA(p.SLA), OpenTicketCount: p.OpenTicketCount,
+		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }
 

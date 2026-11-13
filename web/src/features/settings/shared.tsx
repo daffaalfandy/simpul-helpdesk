@@ -1,9 +1,7 @@
-import type { TFunction } from 'i18next'
 import { Hammer } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { SlaPlan } from '../../api/client'
 import { EmptyState } from '../../components/EmptyState'
 import type { SectionId } from './sections'
 
@@ -35,10 +33,3 @@ export function ComingSoonSection({ section }: { section: SectionId }) {
 
 export { errorMessage } from '../../api/errors'
 export { ErrorAlert } from '../../components/ErrorAlert'
-export { formatDuration } from '../../lib/formatDuration'
-
-/** Dropdown sub-line for a plan: which priorities run 24/7. */
-export function planSummary(t: TFunction, plan: SlaPlan): string {
-  const always = plan.targets.filter((x) => x.calendar === 'always').map((x) => x.priority)
-  return always.length > 0 ? t('settings.sla.summaryAlways', { priorities: always.join(', ') }) : t('settings.sla.summaryBusiness')
-}

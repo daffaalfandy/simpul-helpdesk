@@ -47,6 +47,20 @@ func MigrateUp(ctx context.Context, pool *pgxpool.Pool, out io.Writer) error {
 	return nil
 }
 
+// MigrateUpTo applies app migrations up to and including version, and nothing else. Tests use
+// it to load data in an older schema before a data migration runs.
+func MigrateUpTo(ctx context.Context, pool *pgxpool.Pool, version int64) error {
+	provider, closeDB, err := newProvider(pool)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+	if _, err := provider.UpTo(ctx, version); err != nil {
+		return fmt.Errorf("app migrations to %d: %w", version, err)
+	}
+	return nil
+}
+
 // MigrateDown rolls back the most recent app migration.
 func MigrateDown(ctx context.Context, pool *pgxpool.Pool, out io.Writer) error {
 	provider, closeDB, err := newProvider(pool)

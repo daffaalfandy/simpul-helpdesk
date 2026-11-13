@@ -13,49 +13,51 @@ function lastRequest(method: string, path: string) {
   return [...tickets.requests].reverse().find((r) => r.method === method && r.path.endsWith(path))
 }
 
-describe('systems & catalogue', () => {
+describe('catalogue', () => {
   beforeEach(() => {
     state.me = ADMIN
   })
 
-  it('lists both lists under Service desk', async () => {
+  it('lists the catalogue under Service desk', async () => {
     renderApp('/settings/catalog')
     const nav = await screen.findByRole('navigation', { name: 'Settings sections' })
-    expect(within(nav).getByRole('link', { name: 'Systems & catalogue' })).toHaveAttribute('aria-current', 'page')
-    const systems = screen.getByRole('table', { name: 'Systems' })
-    expect(within(systems).getByText('Old app').closest('tr')).toHaveTextContent('Hidden')
+    expect(within(nav).getByRole('link', { name: 'Catalogue' })).toHaveAttribute('aria-current', 'page')
     const items = screen.getByRole('table', { name: 'Catalogue items' })
-    expect(within(items).getByText('VPN / remote access').closest('tr')).toHaveTextContent('2 working days')
+    expect(within(items).getByText('VPN / remote access').closest('tr')).toHaveTextContent('Shown')
+    expect(screen.queryByRole('table', { name: 'Systems' })).not.toBeInTheDocument()
   })
 
-  it('adds a system and edits a delivery time', async () => {
+  it('adds an item and edits one', async () => {
     const user = userEvent.setup()
     renderApp('/settings/catalog')
-    await user.click(await screen.findByRole('button', { name: 'Add system' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Add a system' })
-    await user.click(within(dialog).getByRole('button', { name: 'Add system' }))
+    await user.click(await screen.findByRole('button', { name: 'Add item' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add a catalogue item' })
+    await user.click(within(dialog).getByRole('button', { name: 'Add item' }))
     expect(await within(dialog).findByText('Enter a name.')).toBeInTheDocument()
-    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'Website')
-    await user.click(within(dialog).getByRole('button', { name: 'Add system' }))
-    expect(await screen.findByRole('status')).toHaveTextContent('Website added.')
-    expect(lastRequest('POST', '/systems')?.body).toEqual({ name: 'Website', description: null, sortOrder: 40, active: true })
+    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'Install licensed software')
+    await user.click(within(dialog).getByRole('button', { name: 'Add item' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Install licensed software added.')
+    expect(lastRequest('POST', '/catalog-items')?.body).toEqual({
+      name: 'Install licensed software',
+      description: null,
+      sortOrder: 30,
+      active: true,
+    })
 
     await user.click(screen.getByRole('button', { name: 'Edit New email account' }))
     const edit = await screen.findByRole('dialog', { name: 'Edit New email account' })
-    const amount = within(edit).getByRole('textbox', { name: 'Delivery time' })
-    await user.clear(amount)
-    await user.type(amount, '3')
+    await user.click(within(edit).getByRole('checkbox', { name: 'Show on the report form' }))
     await user.click(within(edit).getByRole('button', { name: 'Save changes' }))
     await waitFor(() =>
-      expect(lastRequest('PUT', `/catalog-items/${TICKET_IDS.account}`)?.body).toMatchObject({ deliveryMinutes: 3 * 540 }),
+      expect(lastRequest('PUT', `/catalog-items/${TICKET_IDS.account}`)?.body).toMatchObject({ active: false }),
     )
   })
 
-  it("won't offer delete for an entry tickets use", async () => {
+  it("won't offer delete for an item tickets use", async () => {
     const user = userEvent.setup()
     renderApp('/settings/catalog')
-    await user.click(await screen.findByRole('button', { name: 'Edit e-Office' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Edit e-Office' })
+    await user.click(await screen.findByRole('button', { name: 'Edit VPN / remote access' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit VPN / remote access' })
     expect(within(dialog).queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
     expect(within(dialog).getByText(/Hide it instead/)).toBeInTheDocument()
   })

@@ -54,6 +54,17 @@ func (q *Queries) CountOtherActiveProjects(ctx context.Context, arg CountOtherAc
 	return column_1, err
 }
 
+const countProjectTickets = `-- name: CountProjectTickets :one
+SELECT count(*)::int FROM tickets WHERE project_id = $1
+`
+
+func (q *Queries) CountProjectTickets(ctx context.Context, projectID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countProjectTickets, projectID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createProject = `-- name: CreateProject :one
 INSERT INTO projects (client_id, name, description, is_default, active)
 VALUES ($1, $2, $3, $4, $5)
@@ -90,10 +101,50 @@ func (q *Queries) DeleteProject(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getActiveClientProject = `-- name: GetActiveClientProject :one
+SELECT id, name FROM projects WHERE id = $1 AND client_id = $2 AND active
+`
+
+type GetActiveClientProjectParams struct {
+	ID       uuid.UUID
+	ClientID uuid.UUID
+}
+
+type GetActiveClientProjectRow struct {
+	ID   uuid.UUID
+	Name string
+}
+
+// A project a new incident may name: active and belonging to the ticket's client.
+func (q *Queries) GetActiveClientProject(ctx context.Context, arg GetActiveClientProjectParams) (GetActiveClientProjectRow, error) {
+	row := q.db.QueryRow(ctx, getActiveClientProject, arg.ID, arg.ClientID)
+	var i GetActiveClientProjectRow
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
+const getClientDefaultProject = `-- name: GetClientDefaultProject :one
+SELECT id, name FROM projects WHERE client_id = $1 AND is_default
+`
+
+type GetClientDefaultProjectRow struct {
+	ID   uuid.UUID
+	Name string
+}
+
+func (q *Queries) GetClientDefaultProject(ctx context.Context, clientID uuid.UUID) (GetClientDefaultProjectRow, error) {
+	row := q.db.QueryRow(ctx, getClientDefaultProject, clientID)
+	var i GetClientDefaultProjectRow
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
 const getProject = `-- name: GetProject :one
 SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_default, p.active,
        p.sla_pause_on_waiting_client, p.sla_pause_on_uat, p.sla_at_risk_percent,
-       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at
+       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at,
+       (SELECT count(*) FROM tickets t
+        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
 FROM projects p
 JOIN clients c ON c.id = p.client_id
 WHERE p.id = $1
@@ -121,6 +172,7 @@ type GetProjectRow struct {
 	SlaNotifyPicOnP1Breach      bool
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
+	OpenTicketCount             int32
 }
 
 func (q *Queries) GetProject(ctx context.Context, arg GetProjectParams) (GetProjectRow, error) {
@@ -141,6 +193,7 @@ func (q *Queries) GetProject(ctx context.Context, arg GetProjectParams) (GetProj
 		&i.SlaNotifyPicOnP1Breach,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OpenTicketCount,
 	)
 	return i, err
 }
@@ -202,6 +255,37 @@ func (q *Queries) GetProjectForUpdate(ctx context.Context, id uuid.UUID) (GetPro
 	return i, err
 }
 
+const listActiveClientProjects = `-- name: ListActiveClientProjects :many
+SELECT id, name, description FROM projects WHERE client_id = $1 AND active ORDER BY lower(name)
+`
+
+type ListActiveClientProjectsRow struct {
+	ID          uuid.UUID
+	Name        string
+	Description *string
+}
+
+// The report form's "Which system?" choices.
+func (q *Queries) ListActiveClientProjects(ctx context.Context, clientID uuid.UUID) ([]ListActiveClientProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveClientProjects, clientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveClientProjectsRow{}
+	for rows.Next() {
+		var i ListActiveClientProjectsRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.Description); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjectSlaTargets = `-- name: ListProjectSlaTargets :many
 SELECT project_id, priority, first_response_value, first_response_unit, resolve_value, resolve_unit,
        deliver_value, deliver_unit, calendar
@@ -256,7 +340,9 @@ func (q *Queries) ListProjectSlaTargets(ctx context.Context, projectID *uuid.UUI
 const listProjects = `-- name: ListProjects :many
 SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_default, p.active,
        p.sla_pause_on_waiting_client, p.sla_pause_on_uat, p.sla_at_risk_percent,
-       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at
+       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at,
+       (SELECT count(*) FROM tickets t
+        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
 FROM projects p
 JOIN clients c ON c.id = p.client_id
 WHERE ($1::uuid IS NULL OR p.client_id = $1::uuid)
@@ -285,6 +371,7 @@ type ListProjectsRow struct {
 	SlaNotifyPicOnP1Breach      bool
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
+	OpenTicketCount             int32
 }
 
 // client_id NULL lists every client's projects; agent_id NULL skips the agent scope.
@@ -312,6 +399,7 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]L
 			&i.SlaNotifyPicOnP1Breach,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OpenTicketCount,
 		); err != nil {
 			return nil, err
 		}

@@ -1,15 +1,15 @@
-import type { SlaTarget, TicketType } from '../../api/client'
+import type { Duration, ProjectTarget, SlaCalendar, TicketType } from '../../api/client'
 
-export type EffectiveTarget = { firstResponseMinutes: number; resolutionMinutes: number; calendar: SlaTarget['calendar'] }
+export type EffectiveTarget = { firstResponse: Duration; resolution: Duration; calendar: SlaCalendar }
 
 /**
- * The target a new ticket would get (resolve time for incidents, delivery time for requests),
- * previewing the server's rule in api/internal/ticket/snapshot.go.
+ * The targets a new ticket would get: resolve for incidents, deliver for service requests.
+ * Previews the server's rule in api/internal/ticket/snapshot.go.
  */
-export function targetFor(target: SlaTarget, type: TicketType, catalogMinutes?: number): EffectiveTarget {
-  let resolutionMinutes = target.resolveMinutes
-  if (type === 'request') {
-    resolutionMinutes = target.deliverFromCatalog && catalogMinutes !== undefined ? catalogMinutes : target.deliverMinutes
+export function targetFor(target: ProjectTarget, type: TicketType): EffectiveTarget {
+  return {
+    firstResponse: target.firstResponse,
+    resolution: type === 'request' ? target.deliver : target.resolve,
+    calendar: target.calendar,
   }
-  return { firstResponseMinutes: target.firstResponseMinutes, resolutionMinutes, calendar: target.calendar }
 }

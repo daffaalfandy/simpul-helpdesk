@@ -54,9 +54,9 @@ func (q *Queries) CountUsersWithRoleAndStatus(ctx context.Context, arg CountUser
 }
 
 const createClient = `-- name: CreateClient :one
-INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email, sla_plan_id)
+INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email)
 VALUES ($1, $2, $3, $4,
-        $5, $6, $7)
+        $5, $6)
 RETURNING id
 `
 
@@ -67,7 +67,6 @@ type CreateClientParams struct {
 	ContractEnd   *calendar.Date
 	PicName       *string
 	PicEmail      *string
-	SlaPlanID     uuid.UUID
 }
 
 func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (uuid.UUID, error) {
@@ -78,7 +77,6 @@ func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (uui
 		arg.ContractEnd,
 		arg.PicName,
 		arg.PicEmail,
-		arg.SlaPlanID,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -105,10 +103,9 @@ func (q *Queries) DeleteClientAgents(ctx context.Context, clientID uuid.UUID) er
 
 const getClient = `-- name: GetClient :one
 SELECT c.id, c.name, c.contract_no, c.contract_start, c.contract_end, c.pic_name, c.pic_email,
-       c.sla_plan_id, p.name AS sla_plan_name, c.created_at, c.updated_at,
+       c.created_at, c.updated_at,
        (SELECT count(*) FROM users u WHERE u.client_id = c.id)::int AS requester_count
 FROM clients c
-JOIN sla_plans p ON p.id = c.sla_plan_id
 WHERE c.id = $1
   AND ($2::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
@@ -128,8 +125,6 @@ type GetClientRow struct {
 	ContractEnd    *calendar.Date
 	PicName        *string
 	PicEmail       *string
-	SlaPlanID      uuid.UUID
-	SlaPlanName    string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	RequesterCount int32
@@ -146,8 +141,6 @@ func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (GetClient
 		&i.ContractEnd,
 		&i.PicName,
 		&i.PicEmail,
-		&i.SlaPlanID,
-		&i.SlaPlanName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.RequesterCount,
@@ -172,7 +165,7 @@ func (q *Queries) GetClientByName(ctx context.Context, name string) (GetClientBy
 }
 
 const getClientForUpdate = `-- name: GetClientForUpdate :one
-SELECT id, name, contract_no, contract_start, contract_end, pic_name, pic_email, sla_plan_id
+SELECT id, name, contract_no, contract_start, contract_end, pic_name, pic_email
 FROM clients
 WHERE id = $1
 FOR UPDATE
@@ -186,7 +179,6 @@ type GetClientForUpdateRow struct {
 	ContractEnd   *calendar.Date
 	PicName       *string
 	PicEmail      *string
-	SlaPlanID     uuid.UUID
 }
 
 func (q *Queries) GetClientForUpdate(ctx context.Context, id uuid.UUID) (GetClientForUpdateRow, error) {
@@ -200,7 +192,6 @@ func (q *Queries) GetClientForUpdate(ctx context.Context, id uuid.UUID) (GetClie
 		&i.ContractEnd,
 		&i.PicName,
 		&i.PicEmail,
-		&i.SlaPlanID,
 	)
 	return i, err
 }
@@ -280,12 +271,44 @@ func (q *Queries) ListClientAgents(ctx context.Context, clientID *uuid.UUID) ([]
 	return items, nil
 }
 
+const listClientProjects = `-- name: ListClientProjects :many
+SELECT client_id, id, name FROM projects
+WHERE $1::uuid IS NULL OR client_id = $1::uuid
+ORDER BY lower(name)
+`
+
+type ListClientProjectsRow struct {
+	ClientID uuid.UUID
+	ID       uuid.UUID
+	Name     string
+}
+
+// client_id NULL lists every client's projects. For the Projects column on Settings › Clients.
+func (q *Queries) ListClientProjects(ctx context.Context, clientID *uuid.UUID) ([]ListClientProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listClientProjects, clientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListClientProjectsRow{}
+	for rows.Next() {
+		var i ListClientProjectsRow
+		if err := rows.Scan(&i.ClientID, &i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listClients = `-- name: ListClients :many
 SELECT c.id, c.name, c.contract_no, c.contract_start, c.contract_end, c.pic_name, c.pic_email,
-       c.sla_plan_id, p.name AS sla_plan_name, c.created_at, c.updated_at,
+       c.created_at, c.updated_at,
        (SELECT count(*) FROM users u WHERE u.client_id = c.id)::int AS requester_count
 FROM clients c
-JOIN sla_plans p ON p.id = c.sla_plan_id
 WHERE $1::uuid IS NULL
    OR EXISTS (SELECT 1 FROM client_agents ca
               WHERE ca.client_id = c.id AND ca.user_id = $1::uuid)
@@ -300,8 +323,6 @@ type ListClientsRow struct {
 	ContractEnd    *calendar.Date
 	PicName        *string
 	PicEmail       *string
-	SlaPlanID      uuid.UUID
-	SlaPlanName    string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	RequesterCount int32
@@ -326,8 +347,6 @@ func (q *Queries) ListClients(ctx context.Context, agentID *uuid.UUID) ([]ListCl
 			&i.ContractEnd,
 			&i.PicName,
 			&i.PicEmail,
-			&i.SlaPlanID,
-			&i.SlaPlanName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.RequesterCount,
@@ -349,9 +368,8 @@ SET name = $1,
     contract_start = $3,
     contract_end = $4,
     pic_name = $5,
-    pic_email = $6,
-    sla_plan_id = $7
-WHERE id = $8
+    pic_email = $6
+WHERE id = $7
 `
 
 type UpdateClientParams struct {
@@ -361,7 +379,6 @@ type UpdateClientParams struct {
 	ContractEnd   *calendar.Date
 	PicName       *string
 	PicEmail      *string
-	SlaPlanID     uuid.UUID
 	ID            uuid.UUID
 }
 
@@ -373,7 +390,6 @@ func (q *Queries) UpdateClient(ctx context.Context, arg UpdateClientParams) erro
 		arg.ContractEnd,
 		arg.PicName,
 		arg.PicEmail,
-		arg.SlaPlanID,
 		arg.ID,
 	)
 	return err
@@ -393,16 +409,15 @@ func (q *Queries) UpsertClient(ctx context.Context, name string) (uuid.UUID, err
 }
 
 const upsertClientDetails = `-- name: UpsertClientDetails :one
-INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email, sla_plan_id)
+INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email)
 VALUES ($1, $2, $3, $4,
-        $5, $6, $7)
+        $5, $6)
 ON CONFLICT (name) DO UPDATE
 SET contract_no = EXCLUDED.contract_no,
     contract_start = EXCLUDED.contract_start,
     contract_end = EXCLUDED.contract_end,
     pic_name = EXCLUDED.pic_name,
-    pic_email = EXCLUDED.pic_email,
-    sla_plan_id = EXCLUDED.sla_plan_id
+    pic_email = EXCLUDED.pic_email
 RETURNING id
 `
 
@@ -413,7 +428,6 @@ type UpsertClientDetailsParams struct {
 	ContractEnd   *calendar.Date
 	PicName       *string
 	PicEmail      *string
-	SlaPlanID     uuid.UUID
 }
 
 // Seed only: create or refresh a client by name.
@@ -425,7 +439,6 @@ func (q *Queries) UpsertClientDetails(ctx context.Context, arg UpsertClientDetai
 		arg.ContractEnd,
 		arg.PicName,
 		arg.PicEmail,
-		arg.SlaPlanID,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)

@@ -2,7 +2,9 @@
 -- client_id NULL lists every client's projects; agent_id NULL skips the agent scope.
 SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_default, p.active,
        p.sla_pause_on_waiting_client, p.sla_pause_on_uat, p.sla_at_risk_percent,
-       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at
+       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at,
+       (SELECT count(*) FROM tickets t
+        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
 FROM projects p
 JOIN clients c ON c.id = p.client_id
 WHERE (sqlc.narg(client_id)::uuid IS NULL OR p.client_id = sqlc.narg(client_id)::uuid)
@@ -13,7 +15,9 @@ ORDER BY lower(c.name), lower(p.name);
 -- name: GetProject :one
 SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_default, p.active,
        p.sla_pause_on_waiting_client, p.sla_pause_on_uat, p.sla_at_risk_percent,
-       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at
+       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at,
+       (SELECT count(*) FROM tickets t
+        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
 FROM projects p
 JOIN clients c ON c.id = p.client_id
 WHERE p.id = @id
@@ -81,3 +85,17 @@ DELETE FROM projects WHERE id = @id;
 -- name: GetProjectByName :one
 -- Seed only.
 SELECT id FROM projects WHERE client_id = @client_id AND lower(name) = lower(@name);
+
+-- name: CountProjectTickets :one
+SELECT count(*)::int FROM tickets WHERE project_id = @project_id;
+
+-- name: GetActiveClientProject :one
+-- A project a new incident may name: active and belonging to the ticket's client.
+SELECT id, name FROM projects WHERE id = @id AND client_id = @client_id AND active;
+
+-- name: GetClientDefaultProject :one
+SELECT id, name FROM projects WHERE client_id = @client_id AND is_default;
+
+-- name: ListActiveClientProjects :many
+-- The report form's "Which system?" choices.
+SELECT id, name, description FROM projects WHERE client_id = @client_id AND active ORDER BY lower(name);

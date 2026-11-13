@@ -31,16 +31,16 @@ func (s *server) GetIntake(ctx context.Context, req gen.GetIntakeRequestObject) 
 		return nil, err
 	}
 	out := gen.GetIntake200JSONResponse{
-		ClientId: in.ClientID, Targets: apiTargets(in.Targets), BusinessHours: apiHours(in.Hours),
-		Systems: make([]gen.IntakeSystem, len(in.Systems)), CatalogItems: make([]gen.IntakeCatalogItem, len(in.CatalogItems)),
+		ClientId: in.ClientID, BusinessHours: apiHours(in.Hours), DefaultProjectId: in.DefaultProjectID,
+		Projects: make([]gen.IntakeProject, len(in.Projects)), CatalogItems: make([]gen.IntakeCatalogItem, len(in.CatalogItems)),
 	}
-	for i, sys := range in.Systems {
-		out.Systems[i] = gen.IntakeSystem{Id: sys.ID, Name: sys.Name, Description: sys.Description}
+	for i, pr := range in.Projects {
+		out.Projects[i] = gen.IntakeProject{
+			Id: pr.ID, Name: pr.Name, Description: pr.Description, Targets: apiProjectTargets(pr.Targets),
+		}
 	}
 	for i, it := range in.CatalogItems {
-		out.CatalogItems[i] = gen.IntakeCatalogItem{
-			Id: it.ID, Name: it.Name, Description: it.Description, DeliveryMinutes: it.DeliveryMinutes,
-		}
+		out.CatalogItems[i] = gen.IntakeCatalogItem{Id: it.ID, Name: it.Name, Description: it.Description}
 	}
 	return out, nil
 }
@@ -84,7 +84,7 @@ func (s *server) CreateTicket(ctx context.Context, req gen.CreateTicketRequestOb
 	b := req.Body
 	in := tickets.CreateInput{
 		Type: ticket.Type(b.Type), Priority: sla.Priority(b.Priority), Subject: b.Subject, Description: b.Description,
-		SystemID: b.SystemId, CatalogItemID: b.CatalogItemId, ClientID: b.ClientId, RequesterID: b.RequesterId,
+		ProjectID: b.ProjectId, CatalogItemID: b.CatalogItemId, ClientID: b.ClientId, RequesterID: b.RequesterId,
 	}
 	if b.AttachmentIds != nil {
 		in.AttachmentIDs = *b.AttachmentIds
@@ -235,14 +235,14 @@ func apiTicket(t tickets.Ticket) gen.Ticket {
 		Priority: gen.Priority(t.Priority), Subject: t.Subject, Client: apiRef(t.Client),
 		Requester: apiRef(t.Requester), Assignee: apiRefPtr(t.Assignee), CreatedAt: t.CreatedAt,
 		UpdatedAt: t.UpdatedAt, ResolvedAt: t.ResolvedAt, Channel: gen.TicketChannel(t.Channel),
-		Description: t.Description, RequesterJobTitle: t.RequesterJobTitle, System: apiRefPtr(t.System),
+		Description: t.Description, RequesterJobTitle: t.RequesterJobTitle, Project: apiRef(t.Project),
 		CatalogItem: apiRefPtr(t.CatalogItem), CreatedBy: apiRef(t.CreatedBy), LoggedByStaff: t.LoggedByStaff,
-		Attachments: apiAttachments(t.Attachments), SlaTargets: apiTargets(t.SLATargets),
+		Attachments: apiAttachments(t.Attachments), SlaTargets: apiProjectTargets(t.SLATargets),
 		FirstResponseAt: t.FirstResponseAt, ClosedAt: t.ClosedAt,
 		Sla: gen.TicketSla{
-			Priority: gen.Priority(t.SLA.Priority), FirstResponseMinutes: t.SLA.FirstResponseMinutes,
-			ResolutionMinutes: t.SLA.ResolutionMinutes, Calendar: gen.SlaCalendar(t.SLA.Calendar),
-			FromCatalog: t.SLA.FromCatalog,
+			Priority: gen.Priority(t.SLA.Priority), FirstResponse: apiDuration(t.SLA.FirstResponse),
+			Resolution: apiDuration(t.SLA.Resolution), Calendar: gen.SlaCalendar(t.SLA.Calendar),
+			PauseOnWaitingClient: t.SLA.PauseOnWaitingClient, PauseOnUat: t.SLA.PauseOnUAT,
 		},
 		Progress:        make([]gen.TicketProgress, len(t.Progress)),
 		AllowedStatuses: make([]gen.TicketStatus, len(t.AllowedStatuses)),

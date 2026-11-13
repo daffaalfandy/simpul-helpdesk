@@ -13,7 +13,7 @@ import { OptionCard, OptionCardGroup } from '../../components/OptionCard'
 import { TextArea } from '../../components/TextArea'
 import { TextInput } from '../../components/TextInput'
 import { megabytesOf } from '../../lib/files'
-import { formatDuration } from '../../lib/formatDuration'
+import { formatTarget } from '../../lib/formatDuration'
 import { priorityLong } from '../tickets/labels'
 import { clientRequestersQueryOptions, intakeQueryOptions, useCreateTicket } from '../tickets/queries'
 import { targetFor } from '../tickets/sla'
@@ -43,7 +43,7 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
   const [channel, setChannel] = useState<TicketChannel>(DEFAULT_CHANNEL)
   const [priority, setPriority] = useState<Priority>(DEFAULT_PRIORITY)
   const [type, setType] = useState<TicketType>('incident')
-  const [systemId, setSystemId] = useState<string | null>(null)
+  const [projectId, setProjectId] = useState<string | null>(null)
   const [itemId, setItemId] = useState<string | null>(null)
   const [subject, setSubject] = useState('')
   const [details, setDetails] = useState('')
@@ -52,15 +52,20 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
 
   const intake = useQuery({ ...intakeQueryOptions(clientId ?? NO_CLIENT), enabled: clientId !== null })
   const requesters = useQuery({ ...clientRequestersQueryOptions(clientId ?? NO_CLIENT), enabled: clientId !== null })
-  const systems = intake.data?.systems ?? []
+  const projects = intake.data?.projects ?? []
   const items = intake.data?.catalogItems ?? []
-  const item = items.find((i) => i.id === itemId)
-  const wd = intake.data?.businessHours.workingDayMinutes ?? 0
+  const noProject = intake.data?.defaultProjectId === null
+  // With one system there is nothing to choose.
+  const chosenProject = projectId ?? (projects.length === 1 ? (projects[0]?.id ?? null) : null)
+  // Incidents follow the chosen system's SLA; service requests go to the default project.
+  const slaProjectId = type === 'incident' ? chosenProject : (intake.data?.defaultProjectId ?? null)
+  const targets = projects.find((p) => p.id === slaProjectId)?.targets
 
   const missing = {
     client: !clientId,
     requester: !requesterId,
-    system: type === 'incident' && systems.length > 0 && !systemId,
+    project: noProject,
+    system: type === 'incident' && !noProject && !chosenProject,
     item: type === 'request' && items.length > 0 && !itemId,
     subject: subject.trim() === '',
     details: details.trim() === '',
@@ -69,20 +74,20 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
   const changeClient = (id: string) => {
     setClientId(id)
     setRequesterId(null)
-    setSystemId(null)
+    setProjectId(null)
     setItemId(null)
   }
 
   const priorityOptions = (['P1', 'P2', 'P3', 'P4'] as const).map((p) => {
-    const target = intake.data?.targets.find((x) => x.priority === p)
-    const eff = target && targetFor(target, type, item?.deliveryMinutes)
+    const target = targets?.find((x) => x.priority === p)
+    const eff = target && targetFor(target, type)
     return {
       id: p,
       label: priorityLong(t, names, p, type),
       description: eff
         ? t(type === 'request' ? 'agent.logTicket.priorityOptionRequest' : 'agent.logTicket.priorityOption', {
-            response: formatDuration(t, eff.firstResponseMinutes, eff.calendar, wd),
-            fix: formatDuration(t, eff.resolutionMinutes, eff.calendar, wd),
+            response: formatTarget(t, eff.firstResponse),
+            fix: formatTarget(t, eff.resolution),
           })
         : undefined,
     }
@@ -100,7 +105,7 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
         priority,
         subject: subject.trim(),
         description: details.trim(),
-        systemId: type === 'incident' ? (systemId ?? undefined) : undefined,
+        projectId: type === 'incident' ? (chosenProject ?? undefined) : undefined,
         catalogItemId: type === 'request' ? (itemId ?? undefined) : undefined,
         attachmentIds: uploads.attachmentIds,
         assignToMe,
@@ -129,14 +134,18 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
         <Dropdown
           label={t('agent.logTicket.client')}
           placeholder={t('common.choose')}
-          options={clients.map((c) => ({ id: c.id, label: c.name, description: c.slaPlan.name }))}
+          options={clients.map((c) => ({
+            id: c.id,
+            label: c.name,
+            description: c.projects.length > 0 ? c.projects.map((p) => p.name).join(', ') : t('agent.logTicket.clientNoProjects'),
+          }))}
           value={clientId}
           onChange={changeClient}
           isRequired
           isDisabled={clients.length === 0}
           description={clients.length === 0 ? t('agent.logTicket.noClients') : undefined}
-          isInvalid={submitted && missing.client}
-          errorMessage={t('agent.logTicket.errors.client')}
+          isInvalid={(submitted && missing.client) || noProject}
+          errorMessage={noProject ? t('agent.logTicket.errors.noProject') : t('agent.logTicket.errors.client')}
         />
         <RequesterPicker
           clientId={clientId}
@@ -161,13 +170,13 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
           </OptionCard>
         ))}
       </OptionCardGroup>
-      {type === 'incident' && systems.length > 0 && (
+      {type === 'incident' && projects.length > 0 && (
         <Dropdown
           label={t('portal.new.system')}
           placeholder={t('common.choose')}
-          options={systems.map((s) => ({ id: s.id, label: s.name, description: s.description ?? undefined }))}
-          value={systemId}
-          onChange={setSystemId}
+          options={projects.map((p) => ({ id: p.id, label: p.name, description: p.description ?? undefined }))}
+          value={chosenProject}
+          onChange={setProjectId}
           isRequired
           isInvalid={submitted && missing.system}
           errorMessage={t('agent.logTicket.errors.system')}
@@ -177,11 +186,7 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
         <Dropdown
           label={t('portal.new.item')}
           placeholder={t('common.choose')}
-          options={items.map((i) => ({
-            id: i.id,
-            label: i.name,
-            description: t('portal.new.deliveredWithin', { duration: formatDuration(t, i.deliveryMinutes, 'business_hours', wd) }),
-          }))}
+          options={items.map((i) => ({ id: i.id, label: i.name, description: i.description ?? undefined }))}
           value={itemId}
           onChange={setItemId}
           isRequired

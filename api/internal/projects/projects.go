@@ -63,6 +63,7 @@ const (
 	constraintClientFK      = "projects_client_id_fkey"
 	constraintDefaultExists = "projects_default_exists"
 	constraintDefaultActive = "projects_default_active"
+	constraintTicketFK      = "tickets_project_fkey"
 )
 
 type Project struct {
@@ -73,8 +74,10 @@ type Project struct {
 	IsDefault   bool
 	Active      bool
 	SLA         sla.ProjectSLA
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// OpenTicketCount counts tickets not yet resolved or closed.
+	OpenTicketCount int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // CreateInput adds a project. A client's first project becomes its default.
@@ -116,7 +119,7 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, clientID *uuid.UU
 	if err != nil {
 		return nil, err
 	}
-	targets, err := targetsByProject(ctx, q, nil)
+	targets, err := TargetsByProject(ctx, q, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -236,6 +239,11 @@ func (s *Service) Delete(ctx context.Context, actor audit.Actor, id uuid.UUID) e
 		if _, err := tx.Q.GetClientForUpdate(ctx, old.ClientID); err != nil {
 			return err
 		}
+		if n, err := tx.Q.CountProjectTickets(ctx, id); err != nil {
+			return err
+		} else if n > 0 {
+			return errInUse()
+		}
 		if old.IsDefault {
 			others, err := tx.Q.CountOtherActiveProjects(ctx, db.CountOtherActiveProjectsParams{ClientID: old.ClientID, ID: id})
 			if err != nil {
@@ -276,7 +284,7 @@ func (s *Service) UpdateSLA(ctx context.Context, actor audit.Actor, id uuid.UUID
 		if err != nil {
 			return notFound(err)
 		}
-		oldTargets, err := targetsByProject(ctx, tx.Q, &id)
+		oldTargets, err := TargetsByProject(ctx, tx.Q, &id)
 		if err != nil {
 			return err
 		}
@@ -365,20 +373,26 @@ func slaChanges(prev, next sla.ProjectSLA) audit.Changes {
 	return c
 }
 
+// Load reads one project on q, unscoped, inside the caller's transaction (ticket creation
+// copies its SLA).
+func Load(ctx context.Context, q *db.Queries, id uuid.UUID) (Project, error) {
+	return get(ctx, q, id, nil)
+}
+
 func get(ctx context.Context, q *db.Queries, id uuid.UUID, agentID *uuid.UUID) (Project, error) {
 	r, err := q.GetProject(ctx, db.GetProjectParams{ID: id, AgentID: agentID})
 	if err != nil {
 		return Project{}, notFound(err)
 	}
-	targets, err := targetsByProject(ctx, q, &id)
+	targets, err := TargetsByProject(ctx, q, &id)
 	if err != nil {
 		return Project{}, err
 	}
 	return fromRow(r, targets[id]), nil
 }
 
-// targetsByProject reads targets for one project, or for all when id is nil, ordered P1–P4.
-func targetsByProject(ctx context.Context, q *db.Queries, id *uuid.UUID) (map[uuid.UUID][]sla.ProjectTarget, error) {
+// TargetsByProject reads targets for one project, or for all when id is nil, ordered P1–P4.
+func TargetsByProject(ctx context.Context, q *db.Queries, id *uuid.UUID) (map[uuid.UUID][]sla.ProjectTarget, error) {
 	rows, err := q.ListProjectSlaTargets(ctx, id)
 	if err != nil {
 		return nil, err
@@ -425,7 +439,7 @@ func fromRow(r db.GetProjectRow, targets []sla.ProjectTarget) Project {
 			NotifySupervisorOnBreach: r.SlaNotifySupervisorOnBreach,
 			NotifyPicOnP1Breach:      r.SlaNotifyPicOnP1Breach,
 		}},
-		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		OpenTicketCount: int(r.OpenTicketCount), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
 
@@ -455,6 +469,10 @@ func notFound(err error) error {
 	return err
 }
 
+func errInUse() error {
+	return apperr.Conflict(apperr.CodeProjectInUse, "Tickets belong to this project", "Hide it from the report form instead.")
+}
+
 func errDefaultHidden() error {
 	return apperr.Invalid(apperr.CodeProjectIsDefault, "The default project can't be hidden",
 		"Service requests go to it, so it stays on the report form.")
@@ -466,6 +484,8 @@ func projectError(err error) error {
 		return nil
 	case store.IsViolation(err, store.SQLStateUniqueViolation, constraintName):
 		return apperr.Conflict(apperr.CodeProjectNameTaken, "This client already has a project with this name", "")
+	case store.IsViolation(err, store.SQLStateRestrictViolation, constraintTicketFK):
+		return errInUse()
 	case store.IsViolation(err, store.SQLStateForeignKeyViolation, constraintClientFK):
 		return apperr.Invalid(apperr.CodeClientNotFound, "Choose a client", "")
 	case store.IsViolation(err, store.SQLStateCheckViolation, constraintDefaultExists),

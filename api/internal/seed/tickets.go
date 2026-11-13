@@ -13,17 +13,22 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
-// listEntry is a seeded system or catalogue item.
-type listEntry struct {
-	id      uuid.UUID
-	minutes int
-}
-
 // refs resolves the names used in the demo data to seeded IDs.
 type refs struct {
-	clients map[string]uuid.UUID
-	users   map[string]uuid.UUID // by email
-	lists   map[string]listEntry // systems and catalogue items by name
+	clients  map[string]uuid.UUID
+	users    map[string]uuid.UUID            // by email
+	projects map[string]map[string]uuid.UUID // by client, then project name
+	items    map[string]uuid.UUID            // catalogue items by name
+}
+
+// defaultProject is the client's first demo project, which seedProjects makes its default.
+func (r refs) defaultProject(client string) uuid.UUID {
+	for _, p := range demoProjects {
+		if p.client == client {
+			return r.projects[client][p.name]
+		}
+	}
+	panic("seed: no project for " + client)
 }
 
 func (r refs) user(email string) tickets.Ref {
@@ -56,7 +61,7 @@ type demoTicket struct {
 	priority                   sla.Priority
 	channel                    ticket.Channel
 	client, requester, creator string
-	list                       string // system (incident) or catalogue item (request)
+	what                       string // project (incident) or catalogue item (request)
 	subject, description       string
 	age                        int // minutes before the seed ran
 	steps                      []demoStep
@@ -69,12 +74,12 @@ const (
 	minutesPerDay  = 24 * minutesPerHour
 )
 
-// demoTickets are the mock's example tickets (HANDOFF §16), oldest first. Project and code
-// activity arrive with M6/M7.
+// demoTickets are the mock's example tickets (HANDOFF §16), oldest first. Code activity
+// arrives with M7.
 var demoTickets = []demoTicket{
 	{
 		number: 24826, typ: ticket.TypeIncident, priority: sla.P2, channel: ticket.ChannelPortal,
-		client: clientBatam, requester: emailSri, creator: emailSri, list: "SIPD / finance apps",
+		client: clientBatam, requester: emailSri, creator: emailSri, what: projectFinanceApps,
 		subject:     "SIPD export to Excel times out",
 		description: "Exporting the monthly budget realisation to Excel stops with a timeout after about a minute. Smaller exports still work.",
 		age:         2 * minutesPerDay,
@@ -85,7 +90,7 @@ var demoTickets = []demoTicket{
 	},
 	{
 		number: 24830, typ: ticket.TypeIncident, priority: sla.P3, channel: ticket.ChannelPortal,
-		client: RequesterClient, requester: emailHendra, creator: emailHendra, list: "e-Office",
+		client: RequesterClient, requester: emailHendra, creator: emailHendra, what: projectEOffice,
 		subject:     "Disposition letter PDF shows wrong date",
 		description: "Disposition letters printed to PDF after 17:00 show tomorrow's date.",
 		age:         40 * minutesPerHour,
@@ -100,7 +105,7 @@ var demoTickets = []demoTicket{
 	},
 	{
 		number: 24834, typ: ticket.TypeIncident, priority: sla.P3, channel: ticket.ChannelPhone,
-		client: RequesterClient, requester: emailDian, creator: emailRina, list: "Website",
+		client: RequesterClient, requester: emailDian, creator: emailRina, what: projectWebsite,
 		subject:     "News page still shows last month's banner",
 		description: "Bu Dian called: the news page shows the old event banner although the new one was uploaded yesterday.",
 		age:         3 * minutesPerDay,
@@ -114,7 +119,7 @@ var demoTickets = []demoTicket{
 	},
 	{
 		number: 24859, typ: ticket.TypeRequest, priority: sla.P3, channel: ticket.ChannelPortal,
-		client: RequesterClient, requester: emailHendra, creator: emailHendra, list: "VPN / remote access",
+		client: RequesterClient, requester: emailHendra, creator: emailHendra, what: "VPN / remote access",
 		subject:     "VPN access for the new finance officer",
 		description: "Our new finance officer starts next week and needs VPN access to the budgeting system.",
 		age:         minutesPerDay,
@@ -128,14 +133,14 @@ var demoTickets = []demoTicket{
 	},
 	{
 		number: 24866, typ: ticket.TypeIncident, priority: sla.P2, channel: ticket.ChannelEmail,
-		client: RequesterClient, requester: emailHendra, creator: emailRina, list: "Email",
+		client: RequesterClient, requester: emailHendra, creator: emailRina, what: projectEmail,
 		subject:     "Shared mailbox stopped receiving mail",
 		description: "Pak Hendra emailed: the public complaints mailbox has received nothing since this morning.",
 		age:         minutesPerHour,
 	},
 	{
 		number: 24871, typ: ticket.TypeIncident, priority: sla.P1, channel: ticket.ChannelPortal,
-		client: RequesterClient, requester: emailHendra, creator: emailHendra, list: "e-Office",
+		client: RequesterClient, requester: emailHendra, creator: emailHendra, what: projectEOffice,
 		subject:     "e-Office login fails for all staff after this morning's update",
 		description: "Since 08:00 nobody can sign in to e-Office. The page says \"Session expired\" right after the password is entered. Every department is affected.",
 		age:         3 * minutesPerHour,
@@ -147,27 +152,17 @@ var demoTickets = []demoTicket{
 	},
 }
 
-// seedCatalog upserts the mock's systems and catalogue items.
-func seedCatalog(ctx context.Context, q *db.Queries) (map[string]listEntry, error) {
-	out := map[string]listEntry{}
-	for i, e := range systems {
-		id, err := q.UpsertSystemByName(ctx, db.UpsertSystemByNameParams{
-			Name: e.name, Description: optional(e.description), SortOrder: int32((i + 1) * sortStep),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("system %s: %w", e.name, err)
-		}
-		out[e.name] = listEntry{id: id}
-	}
+// seedCatalog upserts the mock's catalogue items.
+func seedCatalog(ctx context.Context, q *db.Queries) (map[string]uuid.UUID, error) {
+	out := map[string]uuid.UUID{}
 	for i, e := range catalogItems {
 		id, err := q.UpsertCatalogItemByName(ctx, db.UpsertCatalogItemByNameParams{
-			Name: e.name, Description: optional(e.description), DeliveryMinutes: int32(e.deliveryMinutes),
-			SortOrder: int32((i + 1) * sortStep),
+			Name: e.name, Description: optional(e.description), SortOrder: int32((i + 1) * sortStep),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("catalogue item %s: %w", e.name, err)
 		}
-		out[e.name] = listEntry{id: id, minutes: e.deliveryMinutes}
+		out[e.name] = id
 	}
 	return out, nil
 }
@@ -181,16 +176,16 @@ func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs) erro
 	for _, d := range demoTickets {
 		created := now.Add(-time.Duration(d.age) * time.Minute)
 		at := func(after int) time.Time { return created.Add(time.Duration(after) * time.Minute) }
-		entry := r.lists[d.list]
 		t := tickets.SeedTicket{
 			Number: d.number, Prefix: org.TicketPrefix, Type: d.typ, Priority: d.priority, Channel: d.channel,
 			ClientID: r.clients[d.client], Requester: r.user(d.requester), CreatedBy: r.user(d.creator),
 			Subject: d.subject, Description: d.description, CreatedAt: created,
 		}
 		if d.typ == ticket.TypeIncident {
-			t.SystemID = &entry.id
+			t.ProjectID = r.projects[d.client][d.what]
 		} else {
-			t.CatalogItemID, t.CatalogMinutes = &entry.id, &entry.minutes
+			item := r.items[d.what]
+			t.ProjectID, t.CatalogItemID = r.defaultProject(d.client), &item
 		}
 		for _, st := range d.steps {
 			step := tickets.SeedStep{At: at(st.after), Actor: r.user(st.actor), Status: st.status}

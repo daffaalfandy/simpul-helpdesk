@@ -87,20 +87,23 @@ func (s *server) SetClientAgents(ctx context.Context, req gen.SetClientAgentsReq
 func clientInput(b gen.ClientInput) clients.Input {
 	return clients.Input{
 		Name: b.Name, ContractNo: b.ContractNo, ContractStart: domainDatePtr(b.ContractStart),
-		ContractEnd: domainDatePtr(b.ContractEnd), PicName: b.PicName, PicEmail: b.PicEmail, SlaPlanID: b.SlaPlanId,
+		ContractEnd: domainDatePtr(b.ContractEnd), PicName: b.PicName, PicEmail: b.PicEmail,
 	}
 }
 
 func apiClient(c clients.Client) gen.Client {
-	agents := make([]gen.Ref, len(c.Agents))
-	for i, a := range c.Agents {
-		agents[i] = gen.Ref{Id: a.ID, Name: a.Name}
+	refs := func(rs []clients.Ref) []gen.Ref {
+		out := make([]gen.Ref, len(rs))
+		for i, r := range rs {
+			out[i] = gen.Ref{Id: r.ID, Name: r.Name}
+		}
+		return out
 	}
 	return gen.Client{
 		Id: c.ID, Name: c.Name, ContractNo: c.ContractNo, ContractStart: apiDatePtr(c.ContractStart),
 		ContractEnd: apiDatePtr(c.ContractEnd), PicName: c.PicName, PicEmail: c.PicEmail,
-		SlaPlan: gen.Ref{Id: c.SlaPlan.ID, Name: c.SlaPlan.Name}, RequesterCount: c.RequesterCount,
-		Agents: agents, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
+		Projects: refs(c.Projects), RequesterCount: c.RequesterCount,
+		Agents: refs(c.Agents), CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }
 

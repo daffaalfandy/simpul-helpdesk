@@ -15,7 +15,6 @@ import { ProgressTracker } from '../../components/ProgressTracker'
 import { TextArea } from '../../components/TextArea'
 import { paths } from '../../lib/constants'
 import { megabytesOf } from '../../lib/files'
-import { businessHoursQueryOptions } from '../settings/queries'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { priorityLong, requesterStatus } from '../tickets/labels'
 import { MessageThread } from '../tickets/MessageThread'
@@ -32,7 +31,6 @@ export function PortalTicketPage({ ticketKey }: { ticketKey: string }) {
   const me = useSignedInUser()
   const { data: ticket } = useSuspenseQuery(ticketQueryOptions(ticketKey))
   const { data: messages } = useSuspenseQuery(ticketMessagesQueryOptions(ticketKey))
-  const { data: hours } = useSuspenseQuery(businessHoursQueryOptions)
   const { stamp, full } = useTimestamp()
 
   const detail = (p: TicketProgress) => {
@@ -45,7 +43,7 @@ export function PortalTicketPage({ ticketKey }: { ticketKey: string }) {
     }
     return stamp(p.at)
   }
-  const what = ticket.type === 'request' ? ticket.catalogItem : ticket.system
+  const what = ticket.type === 'request' ? ticket.catalogItem : ticket.project
 
   return (
     <>
@@ -100,7 +98,7 @@ export function PortalTicketPage({ ticketKey }: { ticketKey: string }) {
               ]}
             />
           </Card>
-          <ServiceLevelCard ticket={ticket} audience="requester" workingDayMinutes={hours.workingDayMinutes} />
+          <ServiceLevelCard ticket={ticket} audience="requester" />
         </aside>
       </div>
     </>

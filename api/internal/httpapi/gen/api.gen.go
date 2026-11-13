@@ -476,14 +476,9 @@ type BusinessHoursInput struct {
 // CatalogItem defines model for CatalogItem.
 type CatalogItem struct {
 	// Active Shown on the report form.
-	Active bool `json:"active"`
-
-	// DeliveryMinutes Working minutes.
-	//
-	// Example: 1080
-	DeliveryMinutes int                `json:"deliveryMinutes"`
-	Description     *string            `json:"description"`
-	Id              openapi_types.UUID `json:"id"`
+	Active      bool               `json:"active"`
+	Description *string            `json:"description"`
+	Id          openapi_types.UUID `json:"id"`
 
 	// Name Example: VPN / remote access
 	Name        string `json:"name"`
@@ -493,11 +488,10 @@ type CatalogItem struct {
 
 // CatalogItemInput defines model for CatalogItemInput.
 type CatalogItemInput struct {
-	Active          bool    `json:"active"`
-	DeliveryMinutes int     `json:"deliveryMinutes"`
-	Description     *string `json:"description,omitempty"`
-	Name            string  `json:"name"`
-	SortOrder       int     `json:"sortOrder"`
+	Active      bool    `json:"active"`
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+	SortOrder   int     `json:"sortOrder"`
 }
 
 // Client defines model for Client.
@@ -513,11 +507,13 @@ type Client struct {
 	Id            openapi_types.UUID  `json:"id"`
 
 	// Name Example: Dinas Kominfo Jambi
-	Name           string    `json:"name"`
-	PicEmail       *string   `json:"picEmail"`
-	PicName        *string   `json:"picName"`
+	Name     string  `json:"name"`
+	PicEmail *string `json:"picEmail"`
+	PicName  *string `json:"picName"`
+
+	// Projects The client's projects, by name.
+	Projects       []Ref     `json:"projects"`
 	RequesterCount int       `json:"requesterCount"`
-	SlaPlan        Ref       `json:"slaPlan"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
@@ -534,7 +530,6 @@ type ClientInput struct {
 	Name          string              `json:"name"`
 	PicEmail      *string             `json:"picEmail,omitempty"`
 	PicName       *string             `json:"picName,omitempty"`
-	SlaPlanId     openapi_types.UUID  `json:"slaPlanId"`
 }
 
 // ClientRef defines model for ClientRef.
@@ -598,25 +593,29 @@ type Intake struct {
 	BusinessHours BusinessHours       `json:"businessHours"`
 	CatalogItems  []IntakeCatalogItem `json:"catalogItems"`
 	ClientId      openapi_types.UUID  `json:"clientId"`
-	Systems       []IntakeSystem      `json:"systems"`
 
-	// Targets The client's plan, P1 to P4.
-	Targets []SlaTarget `json:"targets"`
+	// DefaultProjectId The project service requests go to; null while the client has no project.
+	DefaultProjectId *openapi_types.UUID `json:"defaultProjectId"`
+
+	// Projects The client's active projects, by name.
+	Projects []IntakeProject `json:"projects"`
 }
 
 // IntakeCatalogItem defines model for IntakeCatalogItem.
 type IntakeCatalogItem struct {
-	DeliveryMinutes int                `json:"deliveryMinutes"`
-	Description     *string            `json:"description"`
-	Id              openapi_types.UUID `json:"id"`
-	Name            string             `json:"name"`
-}
-
-// IntakeSystem defines model for IntakeSystem.
-type IntakeSystem struct {
 	Description *string            `json:"description"`
 	Id          openapi_types.UUID `json:"id"`
 	Name        string             `json:"name"`
+}
+
+// IntakeProject A "Which system?" choice with the targets its tickets get.
+type IntakeProject struct {
+	Description *string            `json:"description"`
+	Id          openapi_types.UUID `json:"id"`
+	Name        string             `json:"name"`
+
+	// Targets P1 to P4.
+	Targets []ProjectTarget `json:"targets"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -712,9 +711,12 @@ type Project struct {
 	IsDefault bool `json:"isDefault"`
 
 	// Name Example: e-Office
-	Name      string     `json:"name"`
-	Sla       ProjectSla `json:"sla"`
-	UpdatedAt time.Time  `json:"updatedAt"`
+	Name string `json:"name"`
+
+	// OpenTicketCount Tickets not yet resolved or closed.
+	OpenTicketCount int        `json:"openTicketCount"`
+	Sla             ProjectSla `json:"sla"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
 }
 
 // ProjectCreate defines model for ProjectCreate.
@@ -800,65 +802,6 @@ type Role string
 // SlaCalendar `business_hours` counts working minutes only; `always` runs 24/7.
 type SlaCalendar string
 
-// SlaPlan defines model for SlaPlan.
-type SlaPlan struct {
-	ClientCount int                `json:"clientCount"`
-	Id          openapi_types.UUID `json:"id"`
-	IsDefault   bool               `json:"isDefault"`
-
-	// Name Example: Standard
-	Name string `json:"name"`
-
-	// Targets One per priority, P1 to P4.
-	Targets []SlaTarget `json:"targets"`
-}
-
-// SlaPlanInput defines model for SlaPlanInput.
-type SlaPlanInput struct {
-	Name    string      `json:"name"`
-	Targets []SlaTarget `json:"targets"`
-}
-
-// SlaTarget defines model for SlaTarget.
-type SlaTarget struct {
-	// Calendar `business_hours` counts working minutes only; `always` runs 24/7.
-	Calendar SlaCalendar `json:"calendar"`
-
-	// DeliverFromCatalog Service requests use the catalogue item's delivery time, falling back to deliverMinutes.
-	DeliverFromCatalog bool `json:"deliverFromCatalog"`
-
-	// DeliverMinutes Service requests.
-	DeliverMinutes       int      `json:"deliverMinutes"`
-	FirstResponseMinutes int      `json:"firstResponseMinutes"`
-	Priority             Priority `json:"priority"`
-
-	// ResolveMinutes Incidents.
-	ResolveMinutes int `json:"resolveMinutes"`
-}
-
-// System defines model for System.
-type System struct {
-	// Active Shown on the report form.
-	Active bool `json:"active"`
-
-	// Description Example: Letters, dispositions, archives
-	Description *string            `json:"description"`
-	Id          openapi_types.UUID `json:"id"`
-
-	// Name Example: e-Office
-	Name        string `json:"name"`
-	SortOrder   int    `json:"sortOrder"`
-	TicketCount int    `json:"ticketCount"`
-}
-
-// SystemInput defines model for SystemInput.
-type SystemInput struct {
-	Active      bool    `json:"active"`
-	Description *string `json:"description,omitempty"`
-	Name        string  `json:"name"`
-	SortOrder   int     `json:"sortOrder"`
-}
-
 // Ticket defines model for Ticket.
 type Ticket struct {
 	// AllowedStatuses Manual status changes open to the user; empty for requesters.
@@ -886,20 +829,20 @@ type Ticket struct {
 
 	// Progress The requester's progress tracker, in order.
 	Progress          []TicketProgress `json:"progress"`
+	Project           Ref              `json:"project"`
 	Requester         Ref              `json:"requester"`
 	RequesterJobTitle *string          `json:"requesterJobTitle"`
 	ResolvedAt        *time.Time       `json:"resolvedAt"`
 
-	// Sla The target for the current priority, from the plan the client had when the ticket was opened.
+	// Sla The targets for the current priority, from the project's SLA when the ticket was opened.
 	Sla TicketSla `json:"sla"`
 
-	// SlaTargets Every priority's target from the ticket's plan snapshot, P1 to P4.
-	SlaTargets []SlaTarget  `json:"slaTargets"`
-	Status     TicketStatus `json:"status"`
-	Subject    string       `json:"subject"`
-	System     *Ref         `json:"system"`
-	Type       TicketType   `json:"type"`
-	UpdatedAt  time.Time    `json:"updatedAt"`
+	// SlaTargets Every priority's targets from the ticket's SLA snapshot, P1 to P4.
+	SlaTargets []ProjectTarget `json:"slaTargets"`
+	Status     TicketStatus    `json:"status"`
+	Subject    string          `json:"subject"`
+	Type       TicketType      `json:"type"`
+	UpdatedAt  time.Time       `json:"updatedAt"`
 }
 
 // TicketActivity One activity-log line. `from`/`to` hold statuses (status_changed), priorities
@@ -952,13 +895,13 @@ type TicketInput struct {
 	Description string              `json:"description"`
 	Priority    Priority            `json:"priority"`
 
+	// ProjectId Incidents only, one of the client's active projects. Service requests go to the default project.
+	ProjectId *openapi_types.UUID `json:"projectId,omitempty"`
+
 	// RequesterId Staff only; a requester of the client.
 	RequesterId *openapi_types.UUID `json:"requesterId,omitempty"`
 	Subject     string              `json:"subject"`
-
-	// SystemId Incidents only.
-	SystemId *openapi_types.UUID `json:"systemId,omitempty"`
-	Type     TicketType          `json:"type"`
+	Type        TicketType          `json:"type"`
 }
 
 // TicketMessage defines model for TicketMessage.
@@ -1005,18 +948,17 @@ type TicketProgressState string
 // TicketProgressStep defines model for TicketProgressStep.
 type TicketProgressStep string
 
-// TicketSla The target for the current priority, from the plan the client had when the ticket was opened.
+// TicketSla The targets for the current priority, from the project's SLA when the ticket was opened.
 type TicketSla struct {
 	// Calendar `business_hours` counts working minutes only; `always` runs 24/7.
 	Calendar             SlaCalendar `json:"calendar"`
-	FirstResponseMinutes int         `json:"firstResponseMinutes"`
+	FirstResponse        Duration    `json:"firstResponse"`
+	PauseOnUat           bool        `json:"pauseOnUat"`
+	PauseOnWaitingClient bool        `json:"pauseOnWaitingClient"`
+	Priority             Priority    `json:"priority"`
 
-	// FromCatalog resolutionMinutes is the catalogue item's delivery time.
-	FromCatalog bool     `json:"fromCatalog"`
-	Priority    Priority `json:"priority"`
-
-	// ResolutionMinutes Resolve time for incidents, delivery time for service requests.
-	ResolutionMinutes int `json:"resolutionMinutes"`
+	// Resolution Resolve time for incidents, delivery time for service requests.
+	Resolution Duration `json:"resolution"`
 }
 
 // TicketStatus defines model for TicketStatus.
@@ -1080,14 +1022,8 @@ type CatalogItemId = openapi_types.UUID
 // ClientId defines model for ClientId.
 type ClientId = openapi_types.UUID
 
-// PlanId defines model for PlanId.
-type PlanId = openapi_types.UUID
-
 // ProjectId defines model for ProjectId.
 type ProjectId = openapi_types.UUID
-
-// SystemId defines model for SystemId.
-type SystemId = openapi_types.UUID
 
 // TicketKey defines model for TicketKey.
 type TicketKey = string
@@ -1178,18 +1114,6 @@ type UpdateProjectJSONRequestBody = ProjectUpdate
 
 // UpdateProjectSlaJSONRequestBody defines body for UpdateProjectSla for application/json ContentType.
 type UpdateProjectSlaJSONRequestBody = ProjectSla
-
-// CreateSlaPlanJSONRequestBody defines body for CreateSlaPlan for application/json ContentType.
-type CreateSlaPlanJSONRequestBody = SlaPlanInput
-
-// UpdateSlaPlanJSONRequestBody defines body for UpdateSlaPlan for application/json ContentType.
-type UpdateSlaPlanJSONRequestBody = SlaPlanInput
-
-// CreateSystemJSONRequestBody defines body for CreateSystem for application/json ContentType.
-type CreateSystemJSONRequestBody = SystemInput
-
-// UpdateSystemJSONRequestBody defines body for UpdateSystem for application/json ContentType.
-type UpdateSystemJSONRequestBody = SystemInput
 
 // CreateTicketJSONRequestBody defines body for CreateTicket for application/json ContentType.
 type CreateTicketJSONRequestBody = TicketInput
@@ -1322,36 +1246,6 @@ type ServerInterface interface {
 	// UpdateProjectSla Replace a project's SLA targets and settings (supervisors and admins)
 	// (PUT /projects/{projectId}/sla)
 	UpdateProjectSla(w http.ResponseWriter, r *http.Request, projectId ProjectId)
-	// ListSlaPlans SLA plans, the default first
-	// (GET /sla-plans)
-	ListSlaPlans(w http.ResponseWriter, r *http.Request)
-	// CreateSlaPlan Add an SLA plan (admin only)
-	// (POST /sla-plans)
-	CreateSlaPlan(w http.ResponseWriter, r *http.Request)
-	// DeleteSlaPlan Delete a plan no client uses (admin only)
-	// (DELETE /sla-plans/{planId})
-	DeleteSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId)
-	// GetSlaPlan One SLA plan
-	// (GET /sla-plans/{planId})
-	GetSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId)
-	// UpdateSlaPlan Replace a plan's name and targets (admin only)
-	// (PUT /sla-plans/{planId})
-	UpdateSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId)
-	// SetDefaultSlaPlan Make a plan the default for new clients (admin only)
-	// (POST /sla-plans/{planId}/default)
-	SetDefaultSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId)
-	// ListSystems Every system, in display order (staff)
-	// (GET /systems)
-	ListSystems(w http.ResponseWriter, r *http.Request)
-	// CreateSystem Add a system (admin only)
-	// (POST /systems)
-	CreateSystem(w http.ResponseWriter, r *http.Request)
-	// DeleteSystem Delete a system no ticket uses (admin only)
-	// (DELETE /systems/{systemId})
-	DeleteSystem(w http.ResponseWriter, r *http.Request, systemId SystemId)
-	// UpdateSystem Replace a system (admin only)
-	// (PUT /systems/{systemId})
-	UpdateSystem(w http.ResponseWriter, r *http.Request, systemId SystemId)
 	// ListTickets Tickets the user may see, newest first
 	// (GET /tickets)
 	ListTickets(w http.ResponseWriter, r *http.Request, params ListTicketsParams)
@@ -1613,66 +1507,6 @@ func (_ Unimplemented) UpdateProject(w http.ResponseWriter, r *http.Request, pro
 // UpdateProjectSla Replace a project's SLA targets and settings (supervisors and admins)
 // (PUT /projects/{projectId}/sla)
 func (_ Unimplemented) UpdateProjectSla(w http.ResponseWriter, r *http.Request, projectId ProjectId) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// ListSlaPlans SLA plans, the default first
-// (GET /sla-plans)
-func (_ Unimplemented) ListSlaPlans(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// CreateSlaPlan Add an SLA plan (admin only)
-// (POST /sla-plans)
-func (_ Unimplemented) CreateSlaPlan(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// DeleteSlaPlan Delete a plan no client uses (admin only)
-// (DELETE /sla-plans/{planId})
-func (_ Unimplemented) DeleteSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// GetSlaPlan One SLA plan
-// (GET /sla-plans/{planId})
-func (_ Unimplemented) GetSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// UpdateSlaPlan Replace a plan's name and targets (admin only)
-// (PUT /sla-plans/{planId})
-func (_ Unimplemented) UpdateSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// SetDefaultSlaPlan Make a plan the default for new clients (admin only)
-// (POST /sla-plans/{planId}/default)
-func (_ Unimplemented) SetDefaultSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// ListSystems Every system, in display order (staff)
-// (GET /systems)
-func (_ Unimplemented) ListSystems(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// CreateSystem Add a system (admin only)
-// (POST /systems)
-func (_ Unimplemented) CreateSystem(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// DeleteSystem Delete a system no ticket uses (admin only)
-// (DELETE /systems/{systemId})
-func (_ Unimplemented) DeleteSystem(w http.ResponseWriter, r *http.Request, systemId SystemId) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// UpdateSystem Replace a system (admin only)
-// (PUT /systems/{systemId})
-func (_ Unimplemented) UpdateSystem(w http.ResponseWriter, r *http.Request, systemId SystemId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2526,218 +2360,6 @@ func (siw *ServerInterfaceWrapper) UpdateProjectSla(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
-// ListSlaPlans operation middleware
-func (siw *ServerInterfaceWrapper) ListSlaPlans(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListSlaPlans(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateSlaPlan operation middleware
-func (siw *ServerInterfaceWrapper) CreateSlaPlan(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateSlaPlan(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteSlaPlan operation middleware
-func (siw *ServerInterfaceWrapper) DeleteSlaPlan(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "planId" -------------
-	var planId PlanId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "planId", chi.URLParam(r, "planId"), &planId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteSlaPlan(w, r, planId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetSlaPlan operation middleware
-func (siw *ServerInterfaceWrapper) GetSlaPlan(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "planId" -------------
-	var planId PlanId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "planId", chi.URLParam(r, "planId"), &planId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetSlaPlan(w, r, planId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateSlaPlan operation middleware
-func (siw *ServerInterfaceWrapper) UpdateSlaPlan(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "planId" -------------
-	var planId PlanId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "planId", chi.URLParam(r, "planId"), &planId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateSlaPlan(w, r, planId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetDefaultSlaPlan operation middleware
-func (siw *ServerInterfaceWrapper) SetDefaultSlaPlan(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "planId" -------------
-	var planId PlanId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "planId", chi.URLParam(r, "planId"), &planId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetDefaultSlaPlan(w, r, planId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListSystems operation middleware
-func (siw *ServerInterfaceWrapper) ListSystems(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListSystems(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateSystem operation middleware
-func (siw *ServerInterfaceWrapper) CreateSystem(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateSystem(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteSystem operation middleware
-func (siw *ServerInterfaceWrapper) DeleteSystem(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "systemId" -------------
-	var systemId SystemId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "systemId", chi.URLParam(r, "systemId"), &systemId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "systemId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteSystem(w, r, systemId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateSystem operation middleware
-func (siw *ServerInterfaceWrapper) UpdateSystem(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "systemId" -------------
-	var systemId SystemId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "systemId", chi.URLParam(r, "systemId"), &systemId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "systemId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateSystem(w, r, systemId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListTickets operation middleware
 func (siw *ServerInterfaceWrapper) ListTickets(w http.ResponseWriter, r *http.Request) {
 
@@ -3208,24 +2830,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/clients/{clientId}/assignees", wrapper.ListClientAssignees)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/sla-plans", wrapper.ListSlaPlans)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/sla-plans", wrapper.CreateSlaPlan)
-	})
-	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/sla-plans/{planId}", wrapper.DeleteSlaPlan)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/sla-plans/{planId}", wrapper.GetSlaPlan)
-	})
-	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/sla-plans/{planId}", wrapper.UpdateSlaPlan)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/sla-plans/{planId}/default", wrapper.SetDefaultSlaPlan)
-	})
-	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/priorities", wrapper.ListPriorityLevels)
 	})
 	r.Group(func(r chi.Router) {
@@ -3275,18 +2879,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/attachment-policy", wrapper.GetAttachmentPolicy)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/systems", wrapper.ListSystems)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/systems", wrapper.CreateSystem)
-	})
-	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/systems/{systemId}", wrapper.DeleteSystem)
-	})
-	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/systems/{systemId}", wrapper.UpdateSystem)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/catalog-items", wrapper.ListCatalogItems)
@@ -6426,908 +6018,6 @@ func (response UpdateProjectSladefaultApplicationProblemPlusJSONResponse) VisitU
 	return err
 }
 
-type ListSlaPlansRequestObject struct {
-}
-
-type ListSlaPlansResponseObject interface {
-	VisitListSlaPlansResponse(w http.ResponseWriter) error
-}
-
-type ListSlaPlans200JSONResponse []SlaPlan
-
-func (response ListSlaPlans200JSONResponse) VisitListSlaPlansResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListSlaPlans401ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response ListSlaPlans401ApplicationProblemPlusJSONResponse) VisitListSlaPlansResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListSlaPlans403ApplicationProblemPlusJSONResponse Problem
-
-func (response ListSlaPlans403ApplicationProblemPlusJSONResponse) VisitListSlaPlansResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListSlaPlansdefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response ListSlaPlansdefaultApplicationProblemPlusJSONResponse) VisitListSlaPlansResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSlaPlanRequestObject struct {
-	Body *CreateSlaPlanJSONRequestBody
-}
-
-type CreateSlaPlanResponseObject interface {
-	VisitCreateSlaPlanResponse(w http.ResponseWriter) error
-}
-
-type CreateSlaPlan201JSONResponse SlaPlan
-
-func (response CreateSlaPlan201JSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSlaPlan400ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response CreateSlaPlan400ApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSlaPlan401ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateSlaPlan401ApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSlaPlan403ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateSlaPlan403ApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSlaPlan409ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateSlaPlan409ApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSlaPlandefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response CreateSlaPlandefaultApplicationProblemPlusJSONResponse) VisitCreateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSlaPlanRequestObject struct {
-	PlanId PlanId `json:"planId"`
-}
-
-type DeleteSlaPlanResponseObject interface {
-	VisitDeleteSlaPlanResponse(w http.ResponseWriter) error
-}
-
-type DeleteSlaPlan204Response struct {
-}
-
-func (response DeleteSlaPlan204Response) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type DeleteSlaPlan401ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response DeleteSlaPlan401ApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSlaPlan403ApplicationProblemPlusJSONResponse Problem
-
-func (response DeleteSlaPlan403ApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSlaPlan404ApplicationProblemPlusJSONResponse Problem
-
-func (response DeleteSlaPlan404ApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSlaPlan409ApplicationProblemPlusJSONResponse Problem
-
-func (response DeleteSlaPlan409ApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSlaPlandefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response DeleteSlaPlandefaultApplicationProblemPlusJSONResponse) VisitDeleteSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSlaPlanRequestObject struct {
-	PlanId PlanId `json:"planId"`
-}
-
-type GetSlaPlanResponseObject interface {
-	VisitGetSlaPlanResponse(w http.ResponseWriter) error
-}
-
-type GetSlaPlan200JSONResponse SlaPlan
-
-func (response GetSlaPlan200JSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSlaPlan401ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response GetSlaPlan401ApplicationProblemPlusJSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSlaPlan403ApplicationProblemPlusJSONResponse Problem
-
-func (response GetSlaPlan403ApplicationProblemPlusJSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSlaPlan404ApplicationProblemPlusJSONResponse Problem
-
-func (response GetSlaPlan404ApplicationProblemPlusJSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSlaPlandefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response GetSlaPlandefaultApplicationProblemPlusJSONResponse) VisitGetSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSlaPlanRequestObject struct {
-	PlanId PlanId `json:"planId"`
-	Body   *UpdateSlaPlanJSONRequestBody
-}
-
-type UpdateSlaPlanResponseObject interface {
-	VisitUpdateSlaPlanResponse(w http.ResponseWriter) error
-}
-
-type UpdateSlaPlan200JSONResponse SlaPlan
-
-func (response UpdateSlaPlan200JSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSlaPlan400ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response UpdateSlaPlan400ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSlaPlan401ApplicationProblemPlusJSONResponse Problem
-
-func (response UpdateSlaPlan401ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSlaPlan403ApplicationProblemPlusJSONResponse Problem
-
-func (response UpdateSlaPlan403ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSlaPlan404ApplicationProblemPlusJSONResponse Problem
-
-func (response UpdateSlaPlan404ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSlaPlan409ApplicationProblemPlusJSONResponse Problem
-
-func (response UpdateSlaPlan409ApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSlaPlandefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response UpdateSlaPlandefaultApplicationProblemPlusJSONResponse) VisitUpdateSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDefaultSlaPlanRequestObject struct {
-	PlanId PlanId `json:"planId"`
-}
-
-type SetDefaultSlaPlanResponseObject interface {
-	VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error
-}
-
-type SetDefaultSlaPlan200JSONResponse SlaPlan
-
-func (response SetDefaultSlaPlan200JSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDefaultSlaPlan401ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response SetDefaultSlaPlan401ApplicationProblemPlusJSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDefaultSlaPlan403ApplicationProblemPlusJSONResponse Problem
-
-func (response SetDefaultSlaPlan403ApplicationProblemPlusJSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDefaultSlaPlan404ApplicationProblemPlusJSONResponse Problem
-
-func (response SetDefaultSlaPlan404ApplicationProblemPlusJSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDefaultSlaPlandefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response SetDefaultSlaPlandefaultApplicationProblemPlusJSONResponse) VisitSetDefaultSlaPlanResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListSystemsRequestObject struct {
-}
-
-type ListSystemsResponseObject interface {
-	VisitListSystemsResponse(w http.ResponseWriter) error
-}
-
-type ListSystems200JSONResponse []System
-
-func (response ListSystems200JSONResponse) VisitListSystemsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListSystems401ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response ListSystems401ApplicationProblemPlusJSONResponse) VisitListSystemsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListSystems403ApplicationProblemPlusJSONResponse Problem
-
-func (response ListSystems403ApplicationProblemPlusJSONResponse) VisitListSystemsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListSystemsdefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response ListSystemsdefaultApplicationProblemPlusJSONResponse) VisitListSystemsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSystemRequestObject struct {
-	Body *CreateSystemJSONRequestBody
-}
-
-type CreateSystemResponseObject interface {
-	VisitCreateSystemResponse(w http.ResponseWriter) error
-}
-
-type CreateSystem201JSONResponse System
-
-func (response CreateSystem201JSONResponse) VisitCreateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSystem400ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response CreateSystem400ApplicationProblemPlusJSONResponse) VisitCreateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSystem401ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateSystem401ApplicationProblemPlusJSONResponse) VisitCreateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSystem403ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateSystem403ApplicationProblemPlusJSONResponse) VisitCreateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSystem409ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateSystem409ApplicationProblemPlusJSONResponse) VisitCreateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSystemdefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response CreateSystemdefaultApplicationProblemPlusJSONResponse) VisitCreateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSystemRequestObject struct {
-	SystemId SystemId `json:"systemId"`
-}
-
-type DeleteSystemResponseObject interface {
-	VisitDeleteSystemResponse(w http.ResponseWriter) error
-}
-
-type DeleteSystem204Response struct {
-}
-
-func (response DeleteSystem204Response) VisitDeleteSystemResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type DeleteSystem401ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response DeleteSystem401ApplicationProblemPlusJSONResponse) VisitDeleteSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSystem403ApplicationProblemPlusJSONResponse Problem
-
-func (response DeleteSystem403ApplicationProblemPlusJSONResponse) VisitDeleteSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSystem404ApplicationProblemPlusJSONResponse Problem
-
-func (response DeleteSystem404ApplicationProblemPlusJSONResponse) VisitDeleteSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSystem409ApplicationProblemPlusJSONResponse Problem
-
-func (response DeleteSystem409ApplicationProblemPlusJSONResponse) VisitDeleteSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteSystemdefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response DeleteSystemdefaultApplicationProblemPlusJSONResponse) VisitDeleteSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSystemRequestObject struct {
-	SystemId SystemId `json:"systemId"`
-	Body     *UpdateSystemJSONRequestBody
-}
-
-type UpdateSystemResponseObject interface {
-	VisitUpdateSystemResponse(w http.ResponseWriter) error
-}
-
-type UpdateSystem200JSONResponse System
-
-func (response UpdateSystem200JSONResponse) VisitUpdateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSystem400ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response UpdateSystem400ApplicationProblemPlusJSONResponse) VisitUpdateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSystem401ApplicationProblemPlusJSONResponse Problem
-
-func (response UpdateSystem401ApplicationProblemPlusJSONResponse) VisitUpdateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSystem403ApplicationProblemPlusJSONResponse Problem
-
-func (response UpdateSystem403ApplicationProblemPlusJSONResponse) VisitUpdateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSystem404ApplicationProblemPlusJSONResponse Problem
-
-func (response UpdateSystem404ApplicationProblemPlusJSONResponse) VisitUpdateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSystem409ApplicationProblemPlusJSONResponse Problem
-
-func (response UpdateSystem409ApplicationProblemPlusJSONResponse) VisitUpdateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSystemdefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response UpdateSystemdefaultApplicationProblemPlusJSONResponse) VisitUpdateSystemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type ListTicketsRequestObject struct {
 	Params ListTicketsParams
 }
@@ -8375,36 +7065,6 @@ type StrictServerInterface interface {
 	// UpdateProjectSla Replace a project's SLA targets and settings (supervisors and admins)
 	// (PUT /projects/{projectId}/sla)
 	UpdateProjectSla(ctx context.Context, request UpdateProjectSlaRequestObject) (UpdateProjectSlaResponseObject, error)
-	// ListSlaPlans SLA plans, the default first
-	// (GET /sla-plans)
-	ListSlaPlans(ctx context.Context, request ListSlaPlansRequestObject) (ListSlaPlansResponseObject, error)
-	// CreateSlaPlan Add an SLA plan (admin only)
-	// (POST /sla-plans)
-	CreateSlaPlan(ctx context.Context, request CreateSlaPlanRequestObject) (CreateSlaPlanResponseObject, error)
-	// DeleteSlaPlan Delete a plan no client uses (admin only)
-	// (DELETE /sla-plans/{planId})
-	DeleteSlaPlan(ctx context.Context, request DeleteSlaPlanRequestObject) (DeleteSlaPlanResponseObject, error)
-	// GetSlaPlan One SLA plan
-	// (GET /sla-plans/{planId})
-	GetSlaPlan(ctx context.Context, request GetSlaPlanRequestObject) (GetSlaPlanResponseObject, error)
-	// UpdateSlaPlan Replace a plan's name and targets (admin only)
-	// (PUT /sla-plans/{planId})
-	UpdateSlaPlan(ctx context.Context, request UpdateSlaPlanRequestObject) (UpdateSlaPlanResponseObject, error)
-	// SetDefaultSlaPlan Make a plan the default for new clients (admin only)
-	// (POST /sla-plans/{planId}/default)
-	SetDefaultSlaPlan(ctx context.Context, request SetDefaultSlaPlanRequestObject) (SetDefaultSlaPlanResponseObject, error)
-	// ListSystems Every system, in display order (staff)
-	// (GET /systems)
-	ListSystems(ctx context.Context, request ListSystemsRequestObject) (ListSystemsResponseObject, error)
-	// CreateSystem Add a system (admin only)
-	// (POST /systems)
-	CreateSystem(ctx context.Context, request CreateSystemRequestObject) (CreateSystemResponseObject, error)
-	// DeleteSystem Delete a system no ticket uses (admin only)
-	// (DELETE /systems/{systemId})
-	DeleteSystem(ctx context.Context, request DeleteSystemRequestObject) (DeleteSystemResponseObject, error)
-	// UpdateSystem Replace a system (admin only)
-	// (PUT /systems/{systemId})
-	UpdateSystem(ctx context.Context, request UpdateSystemRequestObject) (UpdateSystemResponseObject, error)
 	// ListTickets Tickets the user may see, newest first
 	// (GET /tickets)
 	ListTickets(ctx context.Context, request ListTicketsRequestObject) (ListTicketsResponseObject, error)
@@ -9538,286 +8198,6 @@ func (sh *strictHandler) UpdateProjectSla(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// ListSlaPlans operation middleware
-func (sh *strictHandler) ListSlaPlans(w http.ResponseWriter, r *http.Request) {
-	var request ListSlaPlansRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListSlaPlans(ctx, request.(ListSlaPlansRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListSlaPlans")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListSlaPlansResponseObject); ok {
-		if err := validResponse.VisitListSlaPlansResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreateSlaPlan operation middleware
-func (sh *strictHandler) CreateSlaPlan(w http.ResponseWriter, r *http.Request) {
-	var request CreateSlaPlanRequestObject
-
-	var body CreateSlaPlanJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateSlaPlan(ctx, request.(CreateSlaPlanRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateSlaPlan")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateSlaPlanResponseObject); ok {
-		if err := validResponse.VisitCreateSlaPlanResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// DeleteSlaPlan operation middleware
-func (sh *strictHandler) DeleteSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
-	var request DeleteSlaPlanRequestObject
-
-	request.PlanId = planId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteSlaPlan(ctx, request.(DeleteSlaPlanRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteSlaPlan")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DeleteSlaPlanResponseObject); ok {
-		if err := validResponse.VisitDeleteSlaPlanResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetSlaPlan operation middleware
-func (sh *strictHandler) GetSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
-	var request GetSlaPlanRequestObject
-
-	request.PlanId = planId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetSlaPlan(ctx, request.(GetSlaPlanRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetSlaPlan")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetSlaPlanResponseObject); ok {
-		if err := validResponse.VisitGetSlaPlanResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// UpdateSlaPlan operation middleware
-func (sh *strictHandler) UpdateSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
-	var request UpdateSlaPlanRequestObject
-
-	request.PlanId = planId
-
-	var body UpdateSlaPlanJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.UpdateSlaPlan(ctx, request.(UpdateSlaPlanRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "UpdateSlaPlan")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(UpdateSlaPlanResponseObject); ok {
-		if err := validResponse.VisitUpdateSlaPlanResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// SetDefaultSlaPlan operation middleware
-func (sh *strictHandler) SetDefaultSlaPlan(w http.ResponseWriter, r *http.Request, planId PlanId) {
-	var request SetDefaultSlaPlanRequestObject
-
-	request.PlanId = planId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.SetDefaultSlaPlan(ctx, request.(SetDefaultSlaPlanRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "SetDefaultSlaPlan")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(SetDefaultSlaPlanResponseObject); ok {
-		if err := validResponse.VisitSetDefaultSlaPlanResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListSystems operation middleware
-func (sh *strictHandler) ListSystems(w http.ResponseWriter, r *http.Request) {
-	var request ListSystemsRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListSystems(ctx, request.(ListSystemsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListSystems")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListSystemsResponseObject); ok {
-		if err := validResponse.VisitListSystemsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreateSystem operation middleware
-func (sh *strictHandler) CreateSystem(w http.ResponseWriter, r *http.Request) {
-	var request CreateSystemRequestObject
-
-	var body CreateSystemJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateSystem(ctx, request.(CreateSystemRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateSystem")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateSystemResponseObject); ok {
-		if err := validResponse.VisitCreateSystemResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// DeleteSystem operation middleware
-func (sh *strictHandler) DeleteSystem(w http.ResponseWriter, r *http.Request, systemId SystemId) {
-	var request DeleteSystemRequestObject
-
-	request.SystemId = systemId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteSystem(ctx, request.(DeleteSystemRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteSystem")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DeleteSystemResponseObject); ok {
-		if err := validResponse.VisitDeleteSystemResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// UpdateSystem operation middleware
-func (sh *strictHandler) UpdateSystem(w http.ResponseWriter, r *http.Request, systemId SystemId) {
-	var request UpdateSystemRequestObject
-
-	request.SystemId = systemId
-
-	var body UpdateSystemJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.UpdateSystem(ctx, request.(UpdateSystemRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "UpdateSystem")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(UpdateSystemResponseObject); ok {
-		if err := validResponse.VisitUpdateSystemResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // ListTickets operation middleware
 func (sh *strictHandler) ListTickets(w http.ResponseWriter, r *http.Request, params ListTicketsParams) {
 	var request ListTicketsRequestObject
@@ -10114,160 +8494,152 @@ func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"ncyiaflMuaZffNsE6L2vsjqqu893/y8AAP//",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

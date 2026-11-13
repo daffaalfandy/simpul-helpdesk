@@ -1,5 +1,5 @@
-// Package catalog manages the report form's lists: systems for incidents, and catalogue items
-// with delivery times for requests. Entries tickets use are hidden, not deleted.
+// Package catalog manages the service catalogue the report form offers for requests. Delivery
+// times come from each project's SLA (follow-up #1). Items tickets use are hidden, not deleted.
 package catalog
 
 import (
@@ -13,48 +13,39 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
-// Audit actions and target types written by this package.
+// Audit actions and target type written by this package.
 const (
-	ActionSystemCreated      = "system.created"
-	ActionSystemUpdated      = "system.updated"
-	ActionSystemDeleted      = "system.deleted"
 	ActionCatalogItemCreated = "catalog_item.created"
 	ActionCatalogItemUpdated = "catalog_item.updated"
 	ActionCatalogItemDeleted = "catalog_item.deleted"
 
-	TargetSystem      = "system"
 	TargetCatalogItem = "catalog_item"
 )
 
 const (
-	dataName            = "name"
-	dataDescription     = "description"
-	dataSortOrder       = "sort_order"
-	dataActive          = "active"
-	dataDeliveryMinutes = "delivery_minutes"
+	dataName        = "name"
+	dataDescription = "description"
+	dataSortOrder   = "sort_order"
+	dataActive      = "active"
 )
 
 // Field limits, matching the database CHECK constraints.
 const (
-	MaxNameLen         = 100
-	MaxDescriptionLen  = 300
-	MaxSortOrder       = 10000
-	MaxDeliveryMinutes = sla.MaxTargetMinutes
+	MaxNameLen        = 100
+	MaxDescriptionLen = 300
+	MaxSortOrder      = 10000
 )
 
 const (
-	constraintSystemName     = "systems_name_key"
-	constraintItemName       = "catalog_items_name_key"
-	constraintTicketSystemFK = "tickets_system_id_fkey"
-	constraintTicketItemFK   = "tickets_catalog_item_id_fkey"
+	constraintItemName     = "catalog_items_name_key"
+	constraintTicketItemFK = "tickets_catalog_item_id_fkey"
 )
 
-// System is an entry of "Which system?".
-type System struct {
+// Item is an entry of the service catalogue ("What do you need?").
+type Item struct {
 	ID          uuid.UUID
 	Name        string
 	Description *string
@@ -63,30 +54,11 @@ type System struct {
 	TicketCount int
 }
 
-type SystemInput struct {
+type ItemInput struct {
 	Name        string
 	Description *string
 	SortOrder   int
 	Active      bool
-}
-
-// Item is an entry of the service catalogue.
-type Item struct {
-	ID              uuid.UUID
-	Name            string
-	Description     *string
-	DeliveryMinutes int // working minutes
-	SortOrder       int
-	Active          bool
-	TicketCount     int
-}
-
-type ItemInput struct {
-	Name            string
-	Description     *string
-	DeliveryMinutes int
-	SortOrder       int
-	Active          bool
 }
 
 type Service struct {
@@ -94,100 +66,6 @@ type Service struct {
 }
 
 func NewService(st *store.Store) *Service { return &Service{store: st} }
-
-// ListSystems returns systems in display order; activeOnly leaves out hidden ones.
-func (s *Service) ListSystems(ctx context.Context, activeOnly bool) ([]System, error) {
-	rows, err := s.store.Q().ListSystems(ctx, activeFilter(activeOnly))
-	if err != nil {
-		return nil, err
-	}
-	out := make([]System, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, systemFromRow(db.GetSystemRow(r)))
-	}
-	return out, nil
-}
-
-func (s *Service) CreateSystem(ctx context.Context, actor audit.Actor, in SystemInput) (System, error) {
-	in, err := normalizeSystem(in)
-	if err != nil {
-		return System{}, err
-	}
-	var id uuid.UUID
-	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		if id, err = tx.Q.CreateSystem(ctx, db.CreateSystemParams{
-			Name: in.Name, Description: in.Description, SortOrder: int32(in.SortOrder), Active: in.Active,
-		}); err != nil {
-			return err
-		}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionSystemCreated, TargetSystem, &id, map[string]any{
-			dataName: in.Name, dataActive: in.Active,
-		}))
-	})
-	if err != nil {
-		return System{}, catalogError(err)
-	}
-	return s.getSystem(ctx, id)
-}
-
-func (s *Service) UpdateSystem(ctx context.Context, actor audit.Actor, id uuid.UUID, in SystemInput) (System, error) {
-	in, err := normalizeSystem(in)
-	if err != nil {
-		return System{}, err
-	}
-	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetSystemForUpdate(ctx, id)
-		if err != nil {
-			return notFound(err)
-		}
-		if err := tx.Q.UpdateSystem(ctx, db.UpdateSystemParams{
-			ID: id, Name: in.Name, Description: in.Description, SortOrder: int32(in.SortOrder), Active: in.Active,
-		}); err != nil {
-			return err
-		}
-		changes := audit.Changes{}
-		audit.Track(changes, dataName, old.Name, in.Name)
-		audit.TrackPtr(changes, dataDescription, old.Description, in.Description)
-		audit.Track(changes, dataSortOrder, int(old.SortOrder), in.SortOrder)
-		audit.Track(changes, dataActive, old.Active, in.Active)
-		if len(changes) == 0 {
-			return nil
-		}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionSystemUpdated, TargetSystem, &id, changes))
-	})
-	if err != nil {
-		return System{}, catalogError(err)
-	}
-	return s.getSystem(ctx, id)
-}
-
-// DeleteSystem removes a system no ticket uses.
-func (s *Service) DeleteSystem(ctx context.Context, actor audit.Actor, id uuid.UUID) error {
-	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetSystemForUpdate(ctx, id)
-		if err != nil {
-			return notFound(err)
-		}
-		if n, err := tx.Q.CountSystemTickets(ctx, &id); err != nil {
-			return err
-		} else if n > 0 {
-			return errSystemInUse()
-		}
-		if err := tx.Q.DeleteSystem(ctx, id); err != nil {
-			return err
-		}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionSystemDeleted, TargetSystem, &id, map[string]any{dataName: old.Name}))
-	})
-	return catalogError(err)
-}
-
-func (s *Service) getSystem(ctx context.Context, id uuid.UUID) (System, error) {
-	r, err := s.store.Q().GetSystem(ctx, id)
-	if err != nil {
-		return System{}, notFound(err)
-	}
-	return systemFromRow(r), nil
-}
 
 // ListItems returns catalogue items in display order; activeOnly leaves out hidden ones.
 func (s *Service) ListItems(ctx context.Context, activeOnly bool) ([]Item, error) {
@@ -210,13 +88,12 @@ func (s *Service) CreateItem(ctx context.Context, actor audit.Actor, in ItemInpu
 	var id uuid.UUID
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
 		if id, err = tx.Q.CreateCatalogItem(ctx, db.CreateCatalogItemParams{
-			Name: in.Name, Description: in.Description, DeliveryMinutes: int32(in.DeliveryMinutes),
-			SortOrder: int32(in.SortOrder), Active: in.Active,
+			Name: in.Name, Description: in.Description, SortOrder: int32(in.SortOrder), Active: in.Active,
 		}); err != nil {
 			return err
 		}
 		return audit.Write(ctx, tx.Q, actor.Entry(ActionCatalogItemCreated, TargetCatalogItem, &id, map[string]any{
-			dataName: in.Name, dataDeliveryMinutes: in.DeliveryMinutes, dataActive: in.Active,
+			dataName: in.Name, dataActive: in.Active,
 		}))
 	})
 	if err != nil {
@@ -225,8 +102,7 @@ func (s *Service) CreateItem(ctx context.Context, actor audit.Actor, in ItemInpu
 	return s.getItem(ctx, id)
 }
 
-// UpdateItem replaces a catalogue item. Open tickets keep the delivery time they were
-// created with (tickets.sla_snapshot).
+// UpdateItem replaces a catalogue item.
 func (s *Service) UpdateItem(ctx context.Context, actor audit.Actor, id uuid.UUID, in ItemInput) (Item, error) {
 	in, err := normalizeItem(in)
 	if err != nil {
@@ -238,15 +114,13 @@ func (s *Service) UpdateItem(ctx context.Context, actor audit.Actor, id uuid.UUI
 			return notFound(err)
 		}
 		if err := tx.Q.UpdateCatalogItem(ctx, db.UpdateCatalogItemParams{
-			ID: id, Name: in.Name, Description: in.Description, DeliveryMinutes: int32(in.DeliveryMinutes),
-			SortOrder: int32(in.SortOrder), Active: in.Active,
+			ID: id, Name: in.Name, Description: in.Description, SortOrder: int32(in.SortOrder), Active: in.Active,
 		}); err != nil {
 			return err
 		}
 		changes := audit.Changes{}
 		audit.Track(changes, dataName, old.Name, in.Name)
 		audit.TrackPtr(changes, dataDescription, old.Description, in.Description)
-		audit.Track(changes, dataDeliveryMinutes, int(old.DeliveryMinutes), in.DeliveryMinutes)
 		audit.Track(changes, dataSortOrder, int(old.SortOrder), in.SortOrder)
 		audit.Track(changes, dataActive, old.Active, in.Active)
 		if len(changes) == 0 {
@@ -288,17 +162,10 @@ func (s *Service) getItem(ctx context.Context, id uuid.UUID) (Item, error) {
 	return itemFromRow(r), nil
 }
 
-func systemFromRow(r db.GetSystemRow) System {
-	return System{
-		ID: r.ID, Name: r.Name, Description: r.Description, SortOrder: int(r.SortOrder), Active: r.Active,
-		TicketCount: int(r.TicketCount),
-	}
-}
-
 func itemFromRow(r db.GetCatalogItemRow) Item {
 	return Item{
-		ID: r.ID, Name: r.Name, Description: r.Description, DeliveryMinutes: int(r.DeliveryMinutes),
-		SortOrder: int(r.SortOrder), Active: r.Active, TicketCount: int(r.TicketCount),
+		ID: r.ID, Name: r.Name, Description: r.Description, SortOrder: int(r.SortOrder), Active: r.Active,
+		TicketCount: int(r.TicketCount),
 	}
 }
 
@@ -310,22 +177,10 @@ func activeFilter(activeOnly bool) *bool {
 	return &active
 }
 
-func normalizeSystem(in SystemInput) (SystemInput, error) {
-	var err error
-	in.Name, in.Description, err = normalizeEntry(in.Name, in.Description, in.SortOrder)
-	return in, err
-}
-
 func normalizeItem(in ItemInput) (ItemInput, error) {
 	var err error
 	in.Name, in.Description, err = normalizeEntry(in.Name, in.Description, in.SortOrder)
-	if err != nil {
-		return in, err
-	}
-	if in.DeliveryMinutes < 1 || in.DeliveryMinutes > MaxDeliveryMinutes {
-		return in, apperr.Invalid(apperr.CodeInvalidDeliveryTime, "Enter a delivery time", "")
-	}
-	return in, nil
+	return in, err
 }
 
 func normalizeEntry(name string, description *string, sortOrder int) (string, *string, error) {
@@ -352,20 +207,12 @@ func catalogError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case store.IsViolation(err, store.SQLStateUniqueViolation, constraintSystemName):
-		return apperr.Conflict(apperr.CodeSystemNameTaken, "A system with this name already exists", "")
 	case store.IsViolation(err, store.SQLStateUniqueViolation, constraintItemName):
 		return apperr.Conflict(apperr.CodeCatalogItemNameTaken, "A catalogue item with this name already exists", "")
-	case store.IsViolation(err, store.SQLStateRestrictViolation, constraintTicketSystemFK):
-		return errSystemInUse()
 	case store.IsViolation(err, store.SQLStateRestrictViolation, constraintTicketItemFK):
 		return errItemInUse()
 	}
 	return err
-}
-
-func errSystemInUse() error {
-	return apperr.Conflict(apperr.CodeSystemInUse, "Tickets use this system", "Hide it from the report form instead.")
 }
 
 func errItemInUse() error {

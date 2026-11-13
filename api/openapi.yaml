@@ -169,7 +169,7 @@ paths:
     post:
       operationId: createClient
       summary: Add a client (admin only)
-      description: Error codes are `invalid_name`, `invalid_email`, `invalid_contract_period`, `sla_plan_not_found` and `client_name_taken` (409).
+      description: Error codes are `invalid_name`, `invalid_email`, `invalid_contract_period` and `client_name_taken` (409).
       tags: [clients]
       requestBody:
         required: true
@@ -332,114 +332,6 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
-  /sla-plans:
-    get:
-      operationId: listSlaPlans
-      summary: SLA plans, the default first
-      tags: [sla]
-      responses:
-        "200":
-          description: Plans
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/SlaPlan" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-    post:
-      operationId: createSlaPlan
-      summary: Add an SLA plan (admin only)
-      description: Error codes are `invalid_name`, `invalid_sla_targets` and `sla_plan_name_taken` (409).
-      tags: [sla]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SlaPlanInput" }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SlaPlan" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-
-  /sla-plans/{planId}:
-    parameters:
-      - $ref: "#/components/parameters/PlanId"
-    get:
-      operationId: getSlaPlan
-      summary: One SLA plan
-      tags: [sla]
-      responses:
-        "200":
-          description: Plan
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SlaPlan" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-    put:
-      operationId: updateSlaPlan
-      summary: Replace a plan's name and targets (admin only)
-      tags: [sla]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SlaPlanInput" }
-      responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SlaPlan" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-    delete:
-      operationId: deleteSlaPlan
-      summary: Delete a plan no client uses (admin only)
-      description: Error codes `sla_plan_is_default` and `sla_plan_in_use` (409).
-      tags: [sla]
-      responses:
-        "204":
-          description: Deleted
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-
-  /sla-plans/{planId}/default:
-    parameters:
-      - $ref: "#/components/parameters/PlanId"
-    post:
-      operationId: setDefaultSlaPlan
-      summary: Make a plan the default for new clients (admin only)
-      tags: [sla]
-      responses:
-        "200":
-          description: The new default plan
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SlaPlan" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-
   /priorities:
     get:
       operationId: listPriorityLevels
@@ -577,7 +469,9 @@ paths:
     delete:
       operationId: deleteProject
       summary: Delete a project (supervisors and admins)
-      description: The default can't be deleted while the client has other active projects (`project_is_default`, 409).
+      description: |
+        A project with tickets can't be deleted (`project_in_use`, 409): hide it instead. The default
+        can't be deleted while the client has other active projects (`project_is_default`, 409).
       tags: [projects]
       responses:
         "204":
@@ -756,7 +650,8 @@ paths:
       operationId: getIntake
       summary: What a report form offers for one client
       description: |
-        The client's SLA targets, the working hours, and the visible systems and catalogue items.
+        The client's active projects with their SLA targets ("Which system?"), the project that
+        takes service requests, the working hours, and the visible catalogue items.
         Requesters always get their own client and leave `clientId` out; staff must pass a client
         they may see (`client_required`, 404).
       tags: [tickets]
@@ -791,82 +686,6 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
-  /systems:
-    get:
-      operationId: listSystems
-      summary: Every system, in display order (staff)
-      tags: [catalog]
-      responses:
-        "200":
-          description: Systems
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/System" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-    post:
-      operationId: createSystem
-      summary: Add a system (admin only)
-      description: Error codes are `invalid_name` and `system_name_taken` (409).
-      tags: [catalog]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SystemInput" }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/System" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-
-  /systems/{systemId}:
-    parameters:
-      - $ref: "#/components/parameters/SystemId"
-    put:
-      operationId: updateSystem
-      summary: Replace a system (admin only)
-      tags: [catalog]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SystemInput" }
-      responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/System" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-    delete:
-      operationId: deleteSystem
-      summary: Delete a system no ticket uses (admin only)
-      description: Error code `system_in_use` (409); hide it instead.
-      tags: [catalog]
-      responses:
-        "204":
-          description: Deleted
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        default: { $ref: "#/components/responses/Problem" }
-
   /catalog-items:
     get:
       operationId: listCatalogItems
@@ -886,7 +705,7 @@ paths:
     post:
       operationId: createCatalogItem
       summary: Add a catalogue item (admin only)
-      description: Error codes are `invalid_name`, `invalid_delivery_time` and `catalog_item_name_taken` (409).
+      description: Error codes are `invalid_name` and `catalog_item_name_taken` (409).
       tags: [catalog]
       requestBody:
         required: true
@@ -1000,10 +819,12 @@ paths:
       description: |
         Requesters report for themselves (channel `portal`); the staff-only fields are ignored.
         Staff log a ticket for a client's requester and must give `clientId`, `requesterId` and a
-        non-portal `channel`. Error codes are `invalid_subject`, `invalid_description`,
-        `invalid_system`, `invalid_catalog_item`, `client_required`, `client_not_found`,
-        `invalid_requester`, `invalid_channel`, `invalid_assignee`, `invalid_attachment` and
-        `too_many_attachments`.
+        non-portal `channel`. Incidents name one of the client's active projects (`projectId`);
+        service requests go to the client's default project. The ticket keeps a copy of that
+        project's SLA. Error codes are `invalid_subject`, `invalid_description`,
+        `invalid_project`, `invalid_catalog_item`, `client_has_no_project`, `client_required`,
+        `client_not_found`, `invalid_requester`, `invalid_channel`, `invalid_assignee`,
+        `invalid_attachment` and `too_many_attachments`.
       tags: [tickets]
       requestBody:
         required: true
@@ -1253,11 +1074,6 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
-    PlanId:
-      name: planId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
     TicketKey:
       name: ticketKey
       in: path
@@ -1271,11 +1087,6 @@ components:
       schema: { type: string, format: uuid }
     ProjectId:
       name: projectId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
-    SystemId:
-      name: systemId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -1430,7 +1241,7 @@ components:
 
     Client:
       type: object
-      required: [id, name, contractNo, contractStart, contractEnd, picName, picEmail, slaPlan,
+      required: [id, name, contractNo, contractStart, contractEnd, picName, picEmail, projects,
                  requesterCount, agents, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
@@ -1440,7 +1251,10 @@ components:
         contractEnd: { type: string, format: date, nullable: true }
         picName: { type: string, nullable: true }
         picEmail: { type: string, nullable: true }
-        slaPlan: { $ref: "#/components/schemas/Ref" }
+        projects:
+          type: array
+          description: The client's projects, by name.
+          items: { $ref: "#/components/schemas/Ref" }
         requesterCount: { type: integer }
         agents:
           type: array
@@ -1451,7 +1265,7 @@ components:
 
     ClientInput:
       type: object
-      required: [name, slaPlanId]
+      required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
         contractNo: { type: string, nullable: true, maxLength: 100 }
@@ -1459,7 +1273,6 @@ components:
         contractEnd: { type: string, format: date, nullable: true }
         picName: { type: string, nullable: true, maxLength: 200 }
         picEmail: { type: string, nullable: true, maxLength: 254 }
-        slaPlanId: { type: string, format: uuid }
 
     ClientAgentsInput:
       type: object
@@ -1469,51 +1282,6 @@ components:
           type: array
           maxItems: 500
           items: { type: string, format: uuid }
-
-    SlaTarget:
-      type: object
-      required: [priority, firstResponseMinutes, resolveMinutes, deliverMinutes, deliverFromCatalog, calendar]
-      properties:
-        priority: { $ref: "#/components/schemas/Priority" }
-        firstResponseMinutes: { type: integer, minimum: 1, maximum: 525600 }
-        resolveMinutes:
-          type: integer
-          minimum: 1
-          maximum: 525600
-          description: Incidents.
-        deliverMinutes:
-          type: integer
-          minimum: 1
-          maximum: 525600
-          description: Service requests.
-        deliverFromCatalog:
-          type: boolean
-          description: Service requests use the catalogue item's delivery time, falling back to deliverMinutes.
-        calendar: { $ref: "#/components/schemas/SlaCalendar" }
-
-    SlaPlan:
-      type: object
-      required: [id, name, isDefault, clientCount, targets]
-      properties:
-        id: { type: string, format: uuid }
-        name: { type: string, example: Standard }
-        isDefault: { type: boolean }
-        clientCount: { type: integer }
-        targets:
-          type: array
-          description: One per priority, P1 to P4.
-          items: { $ref: "#/components/schemas/SlaTarget" }
-
-    SlaPlanInput:
-      type: object
-      required: [name, targets]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 100 }
-        targets:
-          type: array
-          minItems: 4
-          maxItems: 4
-          items: { $ref: "#/components/schemas/SlaTarget" }
 
     PriorityLevel:
       type: object
@@ -1576,7 +1344,7 @@ components:
 
     Project:
       type: object
-      required: [id, client, name, description, isDefault, active, sla, createdAt, updatedAt]
+      required: [id, client, name, description, isDefault, active, sla, openTicketCount, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         client: { $ref: "#/components/schemas/Ref" }
@@ -1593,6 +1361,9 @@ components:
           type: boolean
           description: Hidden projects keep their tickets but are left off the report form.
         sla: { $ref: "#/components/schemas/ProjectSla" }
+        openTicketCount:
+          type: integer
+          description: Tickets not yet resolved or closed.
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
@@ -1706,18 +1477,18 @@ components:
         jobTitle: { type: string, nullable: true, example: L2 }
         openTicketCount: { type: integer }
 
-    System:
+    CatalogItem:
       type: object
       required: [id, name, description, sortOrder, active, ticketCount]
       properties:
         id: { type: string, format: uuid }
-        name: { type: string, example: e-Office }
-        description: { type: string, nullable: true, example: "Letters, dispositions, archives" }
+        name: { type: string, example: VPN / remote access }
+        description: { type: string, nullable: true }
         sortOrder: { type: integer }
         active: { type: boolean, description: Shown on the report form. }
         ticketCount: { type: integer }
 
-    SystemInput:
+    CatalogItemInput:
       type: object
       required: [name, sortOrder, active]
       properties:
@@ -1726,32 +1497,20 @@ components:
         sortOrder: { type: integer, minimum: 0, maximum: 10000 }
         active: { type: boolean }
 
-    CatalogItem:
+    IntakeProject:
       type: object
-      required: [id, name, description, deliveryMinutes, sortOrder, active, ticketCount]
+      required: [id, name, description, targets]
+      description: A "Which system?" choice with the targets its tickets get.
       properties:
         id: { type: string, format: uuid }
-        name: { type: string, example: VPN / remote access }
+        name: { type: string }
         description: { type: string, nullable: true }
-        deliveryMinutes:
-          type: integer
-          description: Working minutes.
-          example: 1080
-        sortOrder: { type: integer }
-        active: { type: boolean, description: Shown on the report form. }
-        ticketCount: { type: integer }
+        targets:
+          type: array
+          description: P1 to P4.
+          items: { $ref: "#/components/schemas/ProjectTarget" }
 
-    CatalogItemInput:
-      type: object
-      required: [name, deliveryMinutes, sortOrder, active]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 100 }
-        description: { type: string, nullable: true, maxLength: 300 }
-        deliveryMinutes: { type: integer, minimum: 1, maximum: 525600 }
-        sortOrder: { type: integer, minimum: 0, maximum: 10000 }
-        active: { type: boolean }
-
-    IntakeSystem:
+    IntakeCatalogItem:
       type: object
       required: [id, name, description]
       properties:
@@ -1759,28 +1518,21 @@ components:
         name: { type: string }
         description: { type: string, nullable: true }
 
-    IntakeCatalogItem:
-      type: object
-      required: [id, name, description, deliveryMinutes]
-      properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
-        description: { type: string, nullable: true }
-        deliveryMinutes: { type: integer }
-
     Intake:
       type: object
-      required: [clientId, targets, businessHours, systems, catalogItems]
+      required: [clientId, businessHours, projects, defaultProjectId, catalogItems]
       properties:
         clientId: { type: string, format: uuid }
-        targets:
-          type: array
-          description: The client's plan, P1 to P4.
-          items: { $ref: "#/components/schemas/SlaTarget" }
         businessHours: { $ref: "#/components/schemas/BusinessHours" }
-        systems:
+        projects:
           type: array
-          items: { $ref: "#/components/schemas/IntakeSystem" }
+          description: The client's active projects, by name.
+          items: { $ref: "#/components/schemas/IntakeProject" }
+        defaultProjectId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The project service requests go to; null while the client has no project.
         catalogItems:
           type: array
           items: { $ref: "#/components/schemas/IntakeCatalogItem" }
@@ -1845,18 +1597,17 @@ components:
 
     TicketSla:
       type: object
-      required: [priority, firstResponseMinutes, resolutionMinutes, calendar, fromCatalog]
-      description: The target for the current priority, from the plan the client had when the ticket was opened.
+      required: [priority, firstResponse, resolution, calendar, pauseOnWaitingClient, pauseOnUat]
+      description: The targets for the current priority, from the project's SLA when the ticket was opened.
       properties:
         priority: { $ref: "#/components/schemas/Priority" }
-        firstResponseMinutes: { type: integer }
-        resolutionMinutes:
-          type: integer
+        firstResponse: { $ref: "#/components/schemas/Duration" }
+        resolution:
           description: Resolve time for incidents, delivery time for service requests.
+          allOf: [{ $ref: "#/components/schemas/Duration" }]
         calendar: { $ref: "#/components/schemas/SlaCalendar" }
-        fromCatalog:
-          type: boolean
-          description: resolutionMinutes is the catalogue item's delivery time.
+        pauseOnWaitingClient: { type: boolean }
+        pauseOnUat: { type: boolean }
 
     TicketProgress:
       type: object
@@ -1888,7 +1639,7 @@ components:
     Ticket:
       type: object
       required: [id, key, type, status, priority, subject, client, requester, assignee, createdAt, updatedAt,
-                 resolvedAt, channel, description, requesterJobTitle, system, catalogItem, createdBy,
+                 resolvedAt, channel, description, requesterJobTitle, project, catalogItem, createdBy,
                  loggedByStaff, attachments, sla, slaTargets, firstResponseAt, closedAt, progress, allowedStatuses]
       properties:
         id: { type: string, format: uuid }
@@ -1908,9 +1659,7 @@ components:
         channel: { $ref: "#/components/schemas/TicketChannel" }
         description: { type: string }
         requesterJobTitle: { type: string, nullable: true }
-        system:
-          allOf: [{ $ref: "#/components/schemas/Ref" }]
-          nullable: true
+        project: { $ref: "#/components/schemas/Ref" }
         catalogItem:
           allOf: [{ $ref: "#/components/schemas/Ref" }]
           nullable: true
@@ -1925,8 +1674,8 @@ components:
         sla: { $ref: "#/components/schemas/TicketSla" }
         slaTargets:
           type: array
-          description: Every priority's target from the ticket's plan snapshot, P1 to P4.
-          items: { $ref: "#/components/schemas/SlaTarget" }
+          description: Every priority's targets from the ticket's SLA snapshot, P1 to P4.
+          items: { $ref: "#/components/schemas/ProjectTarget" }
         firstResponseAt: { type: string, format: date-time, nullable: true }
         closedAt: { type: string, format: date-time, nullable: true }
         progress:
@@ -1946,10 +1695,10 @@ components:
         priority: { $ref: "#/components/schemas/Priority" }
         subject: { type: string, minLength: 1, maxLength: 200 }
         description: { type: string, minLength: 1, maxLength: 20000 }
-        systemId:
+        projectId:
           type: string
           format: uuid
-          description: Incidents only.
+          description: Incidents only, one of the client's active projects. Service requests go to the default project.
         catalogItemId:
           type: string
           format: uuid

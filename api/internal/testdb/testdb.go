@@ -111,6 +111,18 @@ func buildTemplate(ctx context.Context) error {
 	return store.MigrateUp(ctx, pool, io.Discard)
 }
 
+// NewEmpty returns a Store on a new database with no migrations applied, dropped when the test
+// ends. Migration tests apply versions themselves.
+func NewEmpty(tb testing.TB) *store.Store {
+	tb.Helper()
+	ctx := context.Background()
+	name := fmt.Sprintf("e_%d_%d", os.Getpid(), counter.Add(1))
+	if err := adminExec(ctx, fmt.Sprintf("CREATE DATABASE %s", name)); err != nil {
+		tb.Fatalf("testdb: create database: %v", err)
+	}
+	return open(tb, name)
+}
+
 // New returns a Store on a new database cloned from the migrated template.
 // The database is dropped when the test ends.
 func New(tb testing.TB) *store.Store {
@@ -123,7 +135,13 @@ func New(tb testing.TB) *store.Store {
 	if err != nil {
 		tb.Fatalf("testdb: create database: %v", err)
 	}
-	pool, err := pgxpool.New(ctx, withDB(adminURL, name))
+	return open(tb, name)
+}
+
+// open connects to database name and drops it when the test ends.
+func open(tb testing.TB, name string) *store.Store {
+	tb.Helper()
+	pool, err := pgxpool.New(context.Background(), withDB(adminURL, name))
 	if err != nil {
 		tb.Fatalf("testdb: connect: %v", err)
 	}

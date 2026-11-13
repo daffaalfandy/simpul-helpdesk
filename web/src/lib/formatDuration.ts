@@ -1,7 +1,6 @@
 import type { TFunction } from 'i18next'
 
-import type { Duration, DurationUnit, SlaCalendar } from '../api/client'
-import { toParts } from './duration'
+import type { Duration, DurationUnit } from '../api/client'
 
 const LONG_KEY = { min: 'minutes', h: 'hours', wd: 'workingDays', d: 'days' } as const satisfies Record<DurationUnit, string>
 
@@ -10,13 +9,12 @@ export function formatTarget(t: TFunction, d: Duration): string {
   return t(`duration.${LONG_KEY[d.unit]}`, { count: d.value })
 }
 
+/** A project target in the agent's SLA box: "15m", "4h", "1 wd", "2d". */
+export function formatTargetCompact(t: TFunction, d: Duration): string {
+  return t(`durationCompact.${d.unit}`, { count: d.value })
+}
+
 /** A project target for chips: "15 min", "2 h", "1 wd", "2 d". */
 export function formatTargetShort(t: TFunction, d: Duration): string {
   return t(`durationShort.${d.unit}`, { count: d.value })
-}
-
-/** "2 working days", "15 min", "1 day". */
-export function formatDuration(t: TFunction, minutes: number, calendar: SlaCalendar, workingDayMinutes: number): string {
-  const { value, unit } = toParts(minutes, calendar, workingDayMinutes)
-  return t(`duration.${unit}`, { count: value })
 }
