@@ -1,9 +1,5 @@
-// Package holidaypreset ships official holiday lists that admins can load into the
-// holiday calendar. Lists are per country and year, embedded in the binary.
-//
-// Indonesia: national holidays and cuti bersama from each year's SKB 3 Menteri
-// (Menteri Agama, Menteri Ketenagakerjaan, Menteri PANRB). Lunar holidays can move after
-// the sidang isbat, so a new list needs a release; loading never overwrites admin edits.
+// Package holidaypreset embeds official holiday lists (Indonesia: each year's SKB 3 Menteri) for
+// admins to load. Loading never overwrites admin edits; a moved lunar date needs a release.
 package holidaypreset
 
 import (
@@ -27,7 +23,6 @@ const dataGlob = "data/id/*.json"
 //go:embed data/id/*.json
 var files embed.FS
 
-// Holiday is one day off.
 type Holiday struct {
 	Date calendar.Date `json:"date"`
 	Name string        `json:"name"`
@@ -99,7 +94,6 @@ func all() map[int]Preset {
 // Years lists the years that have a preset, ascending.
 func Years() []int { return slices.Sorted(maps.Keys(all())) }
 
-// ForYear returns the preset for year.
 func ForYear(year int) (Preset, bool) {
 	p, ok := all()[year]
 	return p, ok

@@ -64,7 +64,9 @@ export function Dropdown<K extends string>({
           size === 'lg' ? 'min-h-(--control-h-lg) text-md' : 'min-h-(--control-h-md) text-base',
         )}
       >
-        <SelectValue className="truncate font-bold data-placeholder:font-normal data-placeholder:text-muted" />
+        <SelectValue className="truncate font-bold data-placeholder:font-normal data-placeholder:text-muted">
+          {({ isPlaceholder, selectedText, defaultChildren }) => (isPlaceholder ? defaultChildren : selectedText)}
+        </SelectValue>
         <ChevronDown
           aria-hidden="true"
           className="size-(--icon-md) shrink-0 text-muted transition-transform duration-(--duration-base) group-data-[open]/select:rotate-180"

@@ -5,7 +5,6 @@ import "time"
 // Step is one stage of the requester's progress tracker (HANDOFF §4, PortalTicket).
 type Step string
 
-// Tracker steps, in order.
 const (
 	StepReceived     Step = "received"
 	StepAssigned     Step = "assigned"
@@ -20,7 +19,6 @@ var Steps = []Step{StepReceived, StepAssigned, StepInProgress, StepReadyForTest,
 // StepState is how far a step has come.
 type StepState string
 
-// Step states.
 const (
 	StateDone     StepState = "done"
 	StateCurrent  StepState = "current"
@@ -57,11 +55,8 @@ func StepOf(s Status) Step {
 	return StepReceived
 }
 
-// Progress builds the tracker from the current status, the creation time and the status
-// history (oldest first; the status at creation counts as the first change). Steps before
-// the current one are done, or skipped if the ticket never entered them; later steps are
-// upcoming. A resolved ticket's last step is done rather than current. After a reopen the
-// later steps are upcoming again.
+// Progress builds the tracker from the status history (oldest first, creation included). Earlier
+// steps are done or skipped, later ones upcoming; a reopen makes later steps upcoming again.
 func Progress(current Status, createdAt time.Time, history []StatusChange) []ProgressStep {
 	entered := map[Step]time.Time{StepReceived: createdAt}
 	for _, c := range history {

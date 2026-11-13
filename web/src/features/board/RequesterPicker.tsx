@@ -13,6 +13,7 @@ const EMAIL_AT = '@'
 type RequesterPickerProps = {
   clientId: string | null
   requesters: ReadonlyArray<Requester>
+  isLoading: boolean
   value: string | null
   onChange: (id: string | null) => void
   isInvalid: boolean
@@ -22,7 +23,7 @@ type RequesterPickerProps = {
  * Pick one of the client's requesters, or add someone new (they become an invited
  * requester; HANDOFF §4 "Log a ticket").
  */
-export function RequesterPicker({ clientId, requesters, value, onChange, isInvalid }: RequesterPickerProps) {
+export function RequesterPicker({ clientId, requesters, isLoading, value, onChange, isInvalid }: RequesterPickerProps) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState<{ name: string; email: string } | null>(null)
 
@@ -46,7 +47,7 @@ export function RequesterPicker({ clientId, requesters, value, onChange, isInval
       label={t('agent.logTicket.requester')}
       placeholder={t('agent.logTicket.requesterPlaceholder')}
       description={clientId ? undefined : t('agent.logTicket.chooseClientFirst')}
-      emptyText={t('agent.logTicket.noRequesters')}
+      emptyText={isLoading ? t('agent.logTicket.loadingRequesters') : t('agent.logTicket.noRequesters')}
       options={requesters.map((r) => ({ id: r.id, label: r.name, description: r.email, searchText: `${r.name} ${r.email}` }))}
       value={value}
       onChange={onChange}

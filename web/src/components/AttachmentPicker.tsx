@@ -78,11 +78,11 @@ export function AttachmentPicker({
               <span className="text-muted">{formatFileSize(item.size)}</span>
               {item.status === 'uploading' && <span className="text-muted">{t('attach.uploading')}</span>}
               {item.error && (
-                <span role="alert" className="font-semibold text-danger">
+                <span role="alert" className="font-semibold text-ink">
                   {item.error}
                 </span>
               )}
-              <span className="ml-auto flex gap-1">
+              <span className="ml-auto flex gap-2">
                 {item.status === 'failed' && (
                   <Button variant="ghost" size="sm" onPress={() => onRetry(item.localId)} aria-label={t('attach.retryLabel', { name: item.name })}>
                     <RotateCw aria-hidden="true" className="size-(--icon-sm)" />

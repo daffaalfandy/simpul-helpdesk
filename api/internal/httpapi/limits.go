@@ -16,9 +16,8 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
-// Request size limits and transfer time. JSON bodies are small; uploads carry one file plus
-// multipart framing. Uploads and downloads get their own deadline, since the server-wide read
-// and write timeouts would cut a 10 MB transfer on a slow link.
+// Uploads carry one file plus multipart framing. Transfers get their own deadline because the
+// server-wide read and write timeouts would cut a 10 MB transfer on a slow link.
 const (
 	maxJSONBodyBytes       = 1 << 20  // 1 MiB
 	multipartOverheadBytes = 64 << 10 // part headers and boundaries
@@ -35,9 +34,8 @@ const (
 // routeKey identifies a request by method and path, e.g. "POST /api/v1/attachments".
 func routeKey(method, path string) string { return method + routeKeySeparator + path }
 
-// streamedRoutes lists the operations with a multipart body. They skip the spec validator,
-// which would read the whole body into memory, and stream to disk instead; their handlers
-// check the request themselves. Derived from the spec so no path is written twice.
+// streamedRoutes lists the operations with a multipart body, read from the spec. They skip the
+// validator, which reads whole bodies into memory, and their handlers check the request.
 func streamedRoutes(spec *openapi3.T) map[string]bool {
 	out := map[string]bool{}
 	for path, item := range spec.Paths.Map() {

@@ -42,7 +42,6 @@ func (s *server) Logout(ctx context.Context, _ gen.LogoutRequestObject) (gen.Log
 	return gen.Logout204Response{Headers: gen.Logout204ResponseHeaders{SetCookie: &cookie}}, nil
 }
 
-// GetMe returns the signed-in user.
 func (s *server) GetMe(ctx context.Context, _ gen.GetMeRequestObject) (gen.GetMeResponseObject, error) {
 	p, ok := auth.PrincipalFrom(ctx)
 	if !ok {
@@ -59,7 +58,6 @@ func (s *server) ForgotPassword(ctx context.Context, req gen.ForgotPasswordReque
 	return gen.ForgotPassword202Response{}, nil
 }
 
-// ResetPassword sets a new password from a reset token.
 func (s *server) ResetPassword(ctx context.Context, req gen.ResetPasswordRequestObject) (gen.ResetPasswordResponseObject, error) {
 	if err := s.auth.ResetPassword(ctx, req.Body.Token, req.Body.Password); err != nil {
 		return nil, err

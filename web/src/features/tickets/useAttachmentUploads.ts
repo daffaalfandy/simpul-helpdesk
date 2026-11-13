@@ -10,9 +10,8 @@ import { checkFile, megabytesOf } from '../../lib/files'
 type Entry = UploadItem & { file: File; attachmentId?: string }
 
 /**
- * Files picked for one message. Each uploads as soon as it is picked; files the policy
- * rejects never reach the network. Uploads still running when the form unmounts are
- * cancelled; the server purges unlinked uploads after a day.
+ * Files picked for one message, each uploaded as soon as it is picked. Files the policy rejects
+ * never reach the network; uploads still running on unmount are cancelled.
  */
 export function useAttachmentUploads(policy: AttachmentPolicy | undefined) {
   const { t } = useTranslation()

@@ -10,7 +10,6 @@ import (
 // the table mirrors HANDOFF §3.
 type Capability string
 
-// Capabilities.
 const (
 	CapAgentApp       Capability = "app.agent"        // board, tickets, internal notes
 	CapPortal         Capability = "app.portal"       // client portal
@@ -31,7 +30,6 @@ var roleCapabilities = map[Role]map[Capability]bool{
 	RoleRequester:  {CapPortal: true},
 }
 
-// Can reports whether role has capability c.
 func Can(role Role, c Capability) bool {
 	return roleCapabilities[role][c]
 }

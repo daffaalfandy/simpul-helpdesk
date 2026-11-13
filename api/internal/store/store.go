@@ -11,7 +11,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 )
 
-// Store wraps the connection pool.
 type Store struct {
 	pool *pgxpool.Pool
 }
@@ -45,10 +44,8 @@ func New(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 // Pool exposes the pool for wiring River and migrations only.
 func (s *Store) Pool() *pgxpool.Pool { return s.pool }
 
-// Close closes the pool.
 func (s *Store) Close() { s.pool.Close() }
 
-// Ping checks the database is reachable.
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 
 // Q runs single statements outside a transaction.

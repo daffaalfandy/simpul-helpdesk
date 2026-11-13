@@ -12,7 +12,6 @@ import (
 	"strings"
 )
 
-// App environments.
 const (
 	EnvDev  = "dev"
 	EnvProd = "prod"
@@ -50,7 +49,6 @@ const (
 
 const listSeparator = ","
 
-// Config holds every runtime setting.
 type Config struct {
 	Env            string
 	AppURL         *url.URL
@@ -67,10 +65,8 @@ type Config struct {
 	StorageDir     string
 }
 
-// IsDev reports whether the app runs in development mode.
 func (c Config) IsDev() bool { return c.Env == EnvDev }
 
-// Load reads the configuration from the environment.
 func Load() (Config, error) {
 	var errs []error
 	c := Config{

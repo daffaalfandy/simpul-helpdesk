@@ -2,9 +2,8 @@
 @import './tokens.css';
 
 /*
- * Map the design tokens into Tailwind's theme. Default palettes and scales are
- * cleared, so only token-backed utilities exist (e.g. bg-primary, rounded-lg,
- * shadow-card). `inline` makes utilities reference the token variables directly.
+ * Tailwind's theme maps to the design tokens with default palettes cleared, so only token-backed
+ * utilities exist. `inline` makes utilities reference the token variables directly.
  */
 @theme inline {
   --color-*: initial;
@@ -126,7 +125,38 @@
   --ease-standard: var(--easing);
 }
 
+/* Grows a compact control's touch area to the 44px minimum without changing how it looks. */
+@utility hit-area {
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: calc((var(--control-h-sm) - var(--control-h-md)) / 2);
+  }
+}
+
 @layer base {
+  a[href],
+  button:not(:disabled),
+  summary,
+  label[for],
+  label:has(> input[type='checkbox'], > input[type='radio']),
+  [role='button'],
+  [role='tab'],
+  [role='option'],
+  [role='menuitem'],
+  [role='radio'],
+  [role='checkbox'] {
+    cursor: pointer;
+  }
+
+  :disabled,
+  [aria-disabled='true'],
+  [data-disabled] {
+    cursor: not-allowed;
+  }
+
   html {
     font-family: var(--font-sans);
     color: var(--color-ink);

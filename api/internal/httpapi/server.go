@@ -30,7 +30,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
-// Deps are the server's dependencies.
 type Deps struct {
 	Config  config.Config
 	Store   *store.Store
@@ -57,7 +56,6 @@ type server struct {
 
 var _ gen.StrictServerInterface = (*server)(nil)
 
-// New builds the HTTP handler.
 func New(d Deps) (http.Handler, error) {
 	spec, err := gen.GetSpec()
 	if err != nil {

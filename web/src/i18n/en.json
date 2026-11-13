@@ -11,7 +11,7 @@
     "save": "Save changes",
     "edit": "Edit",
     "delete": "Delete",
-    "none": "—",
+    "none": "Not set",
     "range": "{{from}} – {{to}}",
     "choose": "Choose…",
     "showMore": "Show more",
@@ -109,10 +109,12 @@
         "label": "Client",
         "all": "All clients"
       },
-      "empty": "Nothing here for this filter.",
       "created": "{{key}} created.",
       "createdAssigned": "{{key}} created and assigned to you.",
-      "openTicket": "Open {{key}}"
+      "openTicket": "Open {{key}}",
+      "emptyNone": "No open tickets. Reports from your clients and tickets you log show up here.",
+      "emptyFiltered": "No tickets match these filters.",
+      "clearFilters": "Clear filters"
     },
     "logTicket": {
       "title": "Log a ticket for a client",
@@ -135,8 +137,8 @@
       "priorityOption": "Reply {{response}} · fix {{fix}}",
       "priorityOptionRequest": "Reply {{response}} · delivered {{fix}}",
       "type": "Ticket type",
-      "typeIncident": "Incident — something broke",
-      "typeRequest": "Service request — needs something new",
+      "typeIncident": "Incident: something broke",
+      "typeRequest": "Service request: needs something new",
       "subject": "Subject",
       "subjectPlaceholder": "Short summary of the problem or request",
       "details": "Details",
@@ -152,7 +154,8 @@
         "item": "Choose what they need.",
         "subject": "Enter a short subject.",
         "details": "Describe the issue."
-      }
+      },
+      "loadingRequesters": "Loading this client's requesters…"
     },
     "ticket": {
       "back": "Back to board"
@@ -521,7 +524,7 @@
     "P4": {
       "name": "Low",
       "example": "Requests and minor issues",
-      "escalation": "—",
+      "escalation": "No escalation",
       "when": "Minor issue or question, no rush"
     },
     "request": {
@@ -727,7 +730,7 @@
       "fromClient": "{{name}} · {{client}}",
       "fromClientTitled": "{{name}} · {{title}}, {{client}}",
       "replied": "{{name}} · replied to client",
-      "internal": "Internal note · {{name}} — not visible to client",
+      "internal": "Internal note · {{name}} (not visible to client)",
       "you": "{{name}} · You",
       "colleague": "{{name}} · {{title}}",
       "support": "{{name}} · Support team",
@@ -753,7 +756,7 @@
     },
     "activity": {
       "title": "Activity log",
-      "footer": "Every change is logged and can't be edited — needed for audits.",
+      "footer": "Every change is logged and can't be edited, as audits require.",
       "system": "System",
       "created": "Created by {{actor}} via {{channel}}",
       "statusChanged": "Status changed from {{from}} to {{to}} by {{actor}}",
@@ -765,7 +768,8 @@
       "priorityChanged": "Priority changed from {{from}} to {{to}} by {{actor}}: {{reason}}",
       "replyAdded": "{{actor}} replied",
       "noteAdded": "{{actor}} added an internal note",
-      "firstResponded": "First response sent"
+      "firstResponded": "First response sent",
+      "loading": "Loading the activity log…"
     },
     "notFound": {
       "title": "Ticket not found",

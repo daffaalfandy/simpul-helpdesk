@@ -30,7 +30,7 @@ export function TicketTable({ tickets }: { tickets: ReadonlyArray<TicketSummary>
         {tickets.map((ticket) => (
           <tr key={ticket.id}>
             <RowHeader className="whitespace-nowrap">
-              <Link to={paths.ticket} params={{ key: ticket.key }} className="font-bold text-primary hover:text-primary-hover">
+              <Link to={paths.ticket} params={{ key: ticket.key }} className="hit-area inline-flex min-h-(--control-h-sm) items-center font-bold text-primary hover:text-primary-hover">
                 {ticket.key}
               </Link>
             </RowHeader>

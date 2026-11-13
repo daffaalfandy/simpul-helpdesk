@@ -76,7 +76,6 @@ type Error struct {
 	Err        error
 }
 
-// FieldError describes a problem with one request field.
 type FieldError struct {
 	Field   string
 	Message string

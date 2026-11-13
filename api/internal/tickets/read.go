@@ -17,7 +17,6 @@ import (
 // AssigneeFilter narrows a list by assignee.
 type AssigneeFilter string
 
-// Assignee filters.
 const (
 	AssigneeAny        AssigneeFilter = ""
 	AssigneeMe         AssigneeFilter = "me"

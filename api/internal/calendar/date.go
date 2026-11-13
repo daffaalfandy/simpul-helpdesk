@@ -51,13 +51,11 @@ func ParseDate(s string) (Date, error) {
 // String formats the date as "2006-01-02".
 func (d Date) String() string { return d.midnightUTC().Format(DateLayout) }
 
-// IsZero reports whether d is the zero value.
 func (d Date) IsZero() bool { return d == Date{} }
 
 // AddDays returns the date n days later (or earlier when n is negative).
 func (d Date) AddDays(n int) Date { return NewDate(d.Year, d.Month, d.Day+n) }
 
-// Weekday returns the day of the week.
 func (d Date) Weekday() time.Weekday { return d.midnightUTC().Weekday() }
 
 // Compare returns -1, 0 or +1 as d is before, equal to or after o.
@@ -72,10 +70,8 @@ func (d Date) Compare(o Date) int {
 	}
 }
 
-// Before reports whether d is before o.
 func (d Date) Before(o Date) bool { return d.Compare(o) < 0 }
 
-// After reports whether d is after o.
 func (d Date) After(o Date) bool { return d.Compare(o) > 0 }
 
 // In returns midnight at the start of d in loc.
@@ -83,10 +79,8 @@ func (d Date) In(loc *time.Location) time.Time {
 	return time.Date(d.Year, d.Month, d.Day, 0, 0, 0, 0, loc)
 }
 
-// MarshalText implements encoding.TextMarshaler.
 func (d Date) MarshalText() ([]byte, error) { return []byte(d.String()), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
 func (d *Date) UnmarshalText(b []byte) error {
 	parsed, err := ParseDate(string(b))
 	if err != nil {
@@ -111,7 +105,6 @@ func (d *Date) Scan(src any) error {
 	}
 }
 
-// Value implements driver.Valuer.
 func (d Date) Value() (driver.Value, error) { return d.midnightUTC(), nil }
 
 func (d Date) midnightUTC() time.Time { return d.In(time.UTC) }
@@ -119,7 +112,6 @@ func (d Date) midnightUTC() time.Time { return d.In(time.UTC) }
 // dayNumber counts days since 1970-01-01.
 func (d Date) dayNumber() int64 { return floorDiv(d.midnightUTC().Unix(), secondsPerDay) }
 
-// weekdayOf returns the weekday of a day number.
 func weekdayOf(day int64) time.Weekday {
 	return time.Weekday((day%daysPerWeek + daysPerWeek + int64(epochWeekday)) % daysPerWeek)
 }

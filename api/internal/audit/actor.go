@@ -11,13 +11,11 @@ type Actor struct {
 	Name   string
 }
 
-// UserActor is a signed-in user.
 func UserActor(id uuid.UUID, name string) Actor { return Actor{UserID: &id, Name: name} }
 
 // SystemActor is a non-user actor such as the CLI.
 func SystemActor(name string) Actor { return Actor{Name: name} }
 
-// Entry starts an audit entry for this actor.
 func (a Actor) Entry(action, targetType string, targetID *uuid.UUID, data map[string]any) Entry {
 	kind := ActorSystem
 	if a.UserID != nil {

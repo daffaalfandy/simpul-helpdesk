@@ -12,9 +12,8 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 )
 
-// spaHandler serves the built web app. Real files are served as-is (hashed
-// assets are cached forever); every other path gets index.html so client-side
-// routes work. Unknown /api paths get a JSON 404, never the app.
+// spaHandler serves real files as-is (hashed assets cached forever), index.html for any other
+// path so client routes work, and a JSON 404 for unknown /api paths.
 func spaHandler(webFS fs.FS, log *slog.Logger) http.Handler {
 	var index []byte
 	if webFS != nil {

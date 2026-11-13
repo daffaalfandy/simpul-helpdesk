@@ -80,7 +80,7 @@ export function SettingsNav() {
         <div className="flex items-center">
           <Button
             onPress={() => setOpen(anyOpen ? new Set() : new Set(GROUPS.map((g) => g.id)))}
-            className="min-h-(--control-h-sm) cursor-pointer rounded-md px-2 text-xs font-bold text-primary data-hovered:bg-surface-subtle"
+            className="hit-area min-h-(--control-h-sm) cursor-pointer rounded-md px-2 text-xs font-bold text-primary data-hovered:bg-surface-subtle"
           >
             {anyOpen ? t('settings.nav.collapseAll') : t('settings.nav.expandAll')}
           </Button>
@@ -100,7 +100,7 @@ export function SettingsNav() {
               aria-expanded={isOpen}
               aria-controls={listId}
               aria-label={t(isOpen ? 'settings.nav.collapseGroup' : 'settings.nav.expandGroup', { group: label })}
-              className="flex min-h-(--control-h-sm) cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left data-hovered:bg-surface-subtle"
+              className="hit-area flex min-h-(--control-h-sm) cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left data-hovered:bg-surface-subtle"
             >
               <span className="text-2xs font-extrabold tracking-caps text-muted uppercase">{label}</span>
               <span className="flex items-center gap-1.5">

@@ -117,7 +117,7 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
       submitLabel={t('agent.logTicket.submit')}
       onSubmit={submit}
       isPending={create.isPending}
-      error={<ErrorAlert error={create.error} />}
+      error={<ErrorAlert error={create.error ?? intake.error ?? requesters.error} />}
       footerStart={
         <Checkbox isSelected={assignToMe} onChange={setAssignToMe}>
           {t('agent.logTicket.assignToMe')}
@@ -140,6 +140,7 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
         <RequesterPicker
           clientId={clientId}
           requesters={requesters.data ?? []}
+          isLoading={clientId !== null && requesters.isPending}
           value={requesterId}
           onChange={setRequesterId}
           isInvalid={submitted && missing.requester}

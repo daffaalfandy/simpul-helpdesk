@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { createRouter, type RouterHistory } from '@tanstack/react-router'
 
 import { ApiError } from './api/client'
-import { RouteError } from './features/shell/pages'
+import { RouteError, RoutePending } from './features/shell/pages'
 import { routeTree } from './routeTree.gen'
 
 const MAX_QUERY_RETRIES = 2
@@ -30,6 +30,7 @@ export function createAppRouter(queryClient: QueryClient, history?: RouterHistor
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
     defaultErrorComponent: RouteError,
+    defaultPendingComponent: RoutePending,
   })
 }
 

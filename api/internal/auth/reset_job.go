@@ -17,7 +17,6 @@ import (
 )
 
 const (
-	// JobKindPasswordReset identifies the reset-email job in the queue.
 	JobKindPasswordReset = "send_password_reset"
 	resetJobMaxAttempts  = 5
 	resetJobUniqueWindow = 5 * time.Minute
@@ -34,7 +33,6 @@ type SendPasswordResetArgs struct {
 	UserID uuid.UUID `json:"user_id"`
 }
 
-// Kind identifies the job type.
 func (SendPasswordResetArgs) Kind() string { return JobKindPasswordReset }
 
 // InsertOpts de-duplicates repeated requests for the same user.
@@ -55,7 +53,7 @@ type ResetEmailWorker struct {
 	now    func() time.Time
 }
 
-// NewResetEmailWorker builds the worker. appURL is the public web app URL.
+// appURL is the public web app URL the reset link points to.
 func NewResetEmailWorker(st *store.Store, mailer mail.Sender, appURL *url.URL, ttl time.Duration) *ResetEmailWorker {
 	return &ResetEmailWorker{store: st, mailer: mailer, appURL: appURL, ttl: ttl, now: time.Now}
 }

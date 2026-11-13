@@ -23,7 +23,7 @@ export function Checkbox({ children, description, className, ...props }: Checkbo
     <AriaCheckbox
       {...props}
       className={cx(
-        'group flex min-h-(--control-h-sm) cursor-pointer items-start gap-2.5 py-1.5 text-base text-ink',
+        'group hit-area flex min-h-(--control-h-sm) cursor-pointer items-start gap-2.5 py-1.5 text-base text-ink',
         'data-disabled:cursor-not-allowed data-disabled:text-muted',
         className,
       )}

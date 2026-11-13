@@ -1,15 +1,5 @@
-// Package calendar does working-time arithmetic: when is a target of N working minutes
-// due, and how much working time lies between two instants. It is pure (no I/O) and is
-// shared by the SLA engine, UAT auto-approve and auto-close windows.
-//
-// Rules:
-//   - Working time is counted in the schedule's location, by wall clock.
-//   - A window is open at its start and closed at its end: [Open, Close).
-//   - A due time that lands exactly on a window's close stays there (Mon 08:00 + 9h on a
-//     08:00–17:00 day is Mon 17:00). Callers decide breach with now.After(due).
-//   - Holidays are civil dates in the schedule's location; a holiday has no working time.
-//   - Offset changes (DST) are exact: a skipped hour has no working time and a repeated
-//     hour counts twice, because time is measured on the wall clock between transitions.
+// Package calendar does working-time arithmetic in a schedule's location, by wall clock.
+// It is pure (no I/O) and shared by the SLA engine and the UAT and auto-close windows.
 package calendar
 
 import (
@@ -21,7 +11,6 @@ import (
 // DayLength is the span of one wall-clock day.
 const DayLength = 24 * time.Hour
 
-// Construction errors.
 var (
 	ErrNoLocation         = errors.New("calendar: location is required")
 	ErrInvalidWindow      = errors.New("calendar: window must satisfy 0 <= open < close <= 24:00")
@@ -31,8 +20,8 @@ var (
 
 // Schedule measures working time.
 type Schedule interface {
-	// Add returns the earliest instant t >= start with Between(start, t) == d.
-	// d <= 0 returns start unchanged.
+	// Add returns the earliest t >= start with Between(start, t) == d (start when d <= 0).
+	// A due time on a window's close stays there, so breach is now.After(due).
 	Add(start time.Time, d time.Duration) time.Time
 	// Between returns the working time in [a, b). It is negative when b is before a.
 	Between(a, b time.Time) time.Duration
@@ -45,7 +34,6 @@ type Always struct{}
 
 var _ Schedule = Always{}
 
-// Add implements Schedule.
 func (Always) Add(start time.Time, d time.Duration) time.Time {
 	if d <= 0 {
 		return start
@@ -53,19 +41,16 @@ func (Always) Add(start time.Time, d time.Duration) time.Time {
 	return start.Add(d)
 }
 
-// Between implements Schedule.
 func (Always) Between(a, b time.Time) time.Duration { return b.Sub(a) }
 
-// IsOpen implements Schedule.
 func (Always) IsOpen(time.Time) bool { return true }
 
-// Window is a span of a day, as offsets from local midnight.
+// Window is a span of a day from local midnight, open at Open and closed at Close.
 type Window struct {
 	Open  time.Duration
 	Close time.Duration
 }
 
-// Length is the window's duration.
 func (w Window) Length() time.Duration { return w.Close - w.Open }
 
 func (w Window) valid() bool { return w.Open >= 0 && w.Open < w.Close && w.Close <= DayLength }
@@ -99,14 +84,15 @@ func total(windows []Window) time.Duration {
 	return sum
 }
 
-// Config describes a business-hours schedule.
+// Config describes a business-hours schedule. Holidays are civil dates in Location.
 type Config struct {
 	Location *time.Location
 	Week     Week
 	Holidays []Date
 }
 
-// BusinessHours is a Schedule with weekly windows and holidays.
+// BusinessHours is a Schedule with weekly windows and holidays. Across DST a skipped hour
+// has no working time and a repeated hour counts twice.
 type BusinessHours struct {
 	loc       *time.Location
 	week      Week
@@ -150,10 +136,8 @@ func NewBusinessHours(cfg Config) (*BusinessHours, error) {
 	return b, nil
 }
 
-// Location returns the schedule's time zone.
 func (b *BusinessHours) Location() *time.Location { return b.loc }
 
-// IsOpen implements Schedule.
 func (b *BusinessHours) IsOpen(t time.Time) bool {
 	day, tod := split(b.wall(t))
 	if b.isHoliday(day) {
@@ -167,7 +151,6 @@ func (b *BusinessHours) IsOpen(t time.Time) bool {
 	return false
 }
 
-// Between implements Schedule.
 func (b *BusinessHours) Between(a, c time.Time) time.Duration {
 	switch {
 	case a.Equal(c):
@@ -188,7 +171,6 @@ func (b *BusinessHours) Between(a, c time.Time) time.Duration {
 	return sum
 }
 
-// Add implements Schedule.
 func (b *BusinessHours) Add(start time.Time, d time.Duration) time.Time {
 	if d <= 0 {
 		return start

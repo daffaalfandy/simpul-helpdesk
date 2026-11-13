@@ -30,7 +30,6 @@ type Params struct {
 	KeyLen  uint32
 }
 
-// OWASP minimum argon2id parameters.
 const (
 	defaultMemoryKiB = 19 * 1024 // 19 MiB
 	defaultTime      = 2
@@ -80,7 +79,6 @@ func NewHasher(p Params, maxConcurrent int) *Hasher {
 	return h
 }
 
-// ValidatePassword checks the password policy.
 func ValidatePassword(pw string) error {
 	n := utf8.RuneCountInString(pw)
 	if n < MinPasswordLen {

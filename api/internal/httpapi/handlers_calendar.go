@@ -23,7 +23,6 @@ func (s *server) GetBusinessHours(ctx context.Context, _ gen.GetBusinessHoursReq
 	return gen.GetBusinessHours200JSONResponse(apiHours(h)), nil
 }
 
-// UpdateBusinessHours replaces the working hours.
 func (s *server) UpdateBusinessHours(ctx context.Context, req gen.UpdateBusinessHoursRequestObject) (gen.UpdateBusinessHoursResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {
@@ -45,7 +44,6 @@ func (s *server) UpdateBusinessHours(ctx context.Context, req gen.UpdateBusiness
 	return gen.UpdateBusinessHours200JSONResponse(apiHours(h)), nil
 }
 
-// ListHolidays lists holidays, optionally for one year.
 func (s *server) ListHolidays(ctx context.Context, req gen.ListHolidaysRequestObject) (gen.ListHolidaysResponseObject, error) {
 	if _, err := auth.Require(ctx, auth.CapAgentApp); err != nil {
 		return nil, err
@@ -61,7 +59,6 @@ func (s *server) ListHolidays(ctx context.Context, req gen.ListHolidaysRequestOb
 	return out, nil
 }
 
-// CreateHoliday adds a holiday.
 func (s *server) CreateHoliday(ctx context.Context, req gen.CreateHolidayRequestObject) (gen.CreateHolidayResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {
@@ -74,7 +71,6 @@ func (s *server) CreateHoliday(ctx context.Context, req gen.CreateHolidayRequest
 	return gen.CreateHoliday201JSONResponse(apiHoliday(h)), nil
 }
 
-// DeleteHoliday removes a holiday.
 func (s *server) DeleteHoliday(ctx context.Context, req gen.DeleteHolidayRequestObject) (gen.DeleteHolidayResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {
@@ -86,7 +82,6 @@ func (s *server) DeleteHoliday(ctx context.Context, req gen.DeleteHolidayRequest
 	return gen.DeleteHoliday204Response{}, nil
 }
 
-// ListHolidayPresets lists the bundled holiday lists.
 func (s *server) ListHolidayPresets(ctx context.Context, _ gen.ListHolidayPresetsRequestObject) (gen.ListHolidayPresetsResponseObject, error) {
 	if _, err := auth.Require(ctx, auth.CapSettingsManage); err != nil {
 		return nil, err
@@ -102,7 +97,6 @@ func (s *server) ListHolidayPresets(ctx context.Context, _ gen.ListHolidayPreset
 	return out, nil
 }
 
-// LoadHolidayPreset adds a bundled year's missing holidays.
 func (s *server) LoadHolidayPreset(ctx context.Context, req gen.LoadHolidayPresetRequestObject) (gen.LoadHolidayPresetResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {

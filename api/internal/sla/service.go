@@ -30,7 +30,6 @@ const (
 	TargetHoliday       = "holiday"
 )
 
-// Audit data keys.
 const (
 	dataName    = "name"
 	dataTargets = "targets"
@@ -50,12 +49,10 @@ const (
 	constraintDefaultExists = "sla_plans_default_exists"
 )
 
-// Service manages SLA plans, business hours and holidays.
 type Service struct {
 	store *store.Store
 }
 
-// NewService returns a Service.
 func NewService(st *store.Store) *Service { return &Service{store: st} }
 
 // ListPlans returns every plan, the default first.
@@ -83,7 +80,6 @@ func (s *Service) ListPlans(ctx context.Context) ([]Plan, error) {
 	return plans, nil
 }
 
-// GetPlan returns one plan.
 func (s *Service) GetPlan(ctx context.Context, id uuid.UUID) (Plan, error) {
 	return getPlan(ctx, s.store.Q(), id)
 }

@@ -27,7 +27,6 @@ const (
 	SniffBytes = 512
 )
 
-// Attachment policy errors.
 var (
 	ErrTypeNotAllowed  = errors.New("this file type is not allowed")
 	ErrEmptyFile       = errors.New("the file is empty")
@@ -75,9 +74,8 @@ type fileType struct {
 	check       contentCheck
 }
 
-// allowedTypes is the upload allowlist by lower-case extension: screenshots, documents,
-// spreadsheets, archives and logs. SVG and HTML (scriptable), executables and anything else
-// are refused. Office Open XML and OpenDocument files are zip archives.
+// allowedTypes is the upload allowlist by lower-case extension. SVG and HTML (scriptable) and
+// executables are refused; Office Open XML and OpenDocument files are zip archives.
 var allowedTypes = map[string]fileType{
 	".png":  {ctPNG, sniffedAs(ctPNG)},
 	".jpg":  {ctJPEG, sniffedAs(ctJPEG)},
@@ -127,9 +125,8 @@ func Classify(filename string, head []byte) (string, error) {
 	return ft.contentType, nil
 }
 
-// SanitizeFilename keeps only the base name, drops control and bidirectional-override
-// characters (which can disguise "gpj.exe" as "exe.jpg") and trims the name to
-// MaxFilenameBytes, keeping the extension.
+// SanitizeFilename keeps the base name, drops control and bidi-override characters (which can
+// disguise "gpj.exe" as "exe.jpg") and trims to MaxFilenameBytes, keeping the extension.
 func SanitizeFilename(name string) (string, error) {
 	name = strings.ToValidUTF8(name, "")
 	if i := strings.LastIndexAny(name, `/\`); i >= 0 {

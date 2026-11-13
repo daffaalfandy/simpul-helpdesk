@@ -27,19 +27,16 @@ const (
 // Priorities lists every priority in order.
 var Priorities = []Priority{P1, P2, P3, P4}
 
-// Valid reports whether p is a known priority.
 func (p Priority) Valid() bool { return slices.Contains(Priorities, p) }
 
 // CalendarKind says which clock a target runs on. Values match the sla_targets.calendar CHECK.
 type CalendarKind string
 
-// Calendar kinds.
 const (
 	CalendarBusinessHours CalendarKind = "business_hours"
 	CalendarAlways        CalendarKind = "always" // 24/7
 )
 
-// Valid reports whether k is a known calendar kind.
 func (k CalendarKind) Valid() bool { return k == CalendarBusinessHours || k == CalendarAlways }
 
 // MaxTargetMinutes caps any single target: one year of wall-clock minutes.
@@ -73,13 +70,11 @@ type Plan struct {
 	Targets     []Target // ordered P1–P4
 }
 
-// PlanInput creates or replaces a plan.
 type PlanInput struct {
 	Name    string
 	Targets []Target
 }
 
-// Target validation errors.
 var (
 	ErrTargetsIncomplete = errors.New("give exactly one target for each of P1, P2, P3 and P4")
 	ErrTargetRange       = fmt.Errorf("targets must be between 1 and %d minutes", MaxTargetMinutes)
@@ -128,7 +123,6 @@ type Hours struct {
 	Closes   time.Duration
 }
 
-// WorkingDay is the length of one working day.
 func (h Hours) WorkingDay() time.Duration { return h.Closes - h.Opens }
 
 // HoursInput replaces the working window. The time zone is an organisation setting.
@@ -138,7 +132,6 @@ type HoursInput struct {
 	Closes   time.Duration
 }
 
-// Business-hours validation errors.
 var (
 	ErrNoWeekdays    = errors.New("choose at least one working day")
 	ErrBadWeekday    = errors.New("unknown or repeated weekday")
@@ -180,7 +173,6 @@ type PresetSummary struct {
 	MissingCount int
 }
 
-// PresetLoad is the result of loading a bundled list.
 type PresetLoad struct {
 	Year    int
 	Added   int
@@ -193,7 +185,6 @@ type Schedules struct {
 	Always   calendar.Schedule
 }
 
-// For returns the schedule for a calendar kind.
 func (s Schedules) For(k CalendarKind) calendar.Schedule {
 	if k == CalendarAlways {
 		return s.Always

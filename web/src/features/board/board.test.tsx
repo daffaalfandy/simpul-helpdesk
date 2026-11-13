@@ -42,6 +42,15 @@ describe('board', () => {
     await waitFor(() => expect(screen.queryByText('SIPD export times out')).not.toBeInTheDocument())
   })
 
+  it('explains an empty filter and clears it', async () => {
+    const user = userEvent.setup()
+    const { router } = renderApp(`/board?view=unassigned&client=${IDS.jambi}`)
+    expect(await screen.findByText('No tickets match these filters.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await waitFor(() => expect(router.state.location.search).toEqual({}))
+    expect(await screen.findByRole('table', { name: 'Tickets' })).toBeInTheDocument()
+  })
+
   it('logs a ticket for an existing requester', async () => {
     const { user, dialog } = await openDialog()
     await user.click(within(dialog).getByRole('button', { name: 'Create ticket' }))

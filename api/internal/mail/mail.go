@@ -41,7 +41,6 @@ type PasswordResetData struct {
 	ExpiresIn string
 }
 
-// Message is a rendered email.
 type Message struct {
 	To      string
 	ToName  string
@@ -50,12 +49,10 @@ type Message struct {
 	HTML    string
 }
 
-// Sender delivers messages.
 type Sender interface {
 	Send(ctx context.Context, m Message) error
 }
 
-// SMTPConfig configures the SMTP sender.
 type SMTPConfig struct {
 	Addr     string // host:port
 	User     string
@@ -64,7 +61,6 @@ type SMTPConfig struct {
 	FromName string
 }
 
-// SMTP sends mail through an SMTP server.
 type SMTP struct {
 	cfg  SMTPConfig
 	host string
@@ -84,7 +80,6 @@ func NewSMTP(cfg SMTPConfig) (*SMTP, error) {
 	return &SMTP{cfg: cfg, host: host, port: port}, nil
 }
 
-// Send delivers one message.
 func (s *SMTP) Send(ctx context.Context, m Message) error {
 	msg := gomail.NewMsg()
 	if err := msg.FromFormat(s.cfg.FromName, s.cfg.From); err != nil {
@@ -129,7 +124,6 @@ type Recorder struct {
 	messages []Message
 }
 
-// Send records the message.
 func (r *Recorder) Send(_ context.Context, m Message) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

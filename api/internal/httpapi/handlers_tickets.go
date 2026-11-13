@@ -21,7 +21,6 @@ func signedIn(ctx context.Context) (*auth.Principal, error) {
 	return p, nil
 }
 
-// GetIntake returns the report form's choices for a client.
 func (s *server) GetIntake(ctx context.Context, req gen.GetIntakeRequestObject) (gen.GetIntakeResponseObject, error) {
 	p, err := signedIn(ctx)
 	if err != nil {
@@ -46,7 +45,6 @@ func (s *server) GetIntake(ctx context.Context, req gen.GetIntakeRequestObject) 
 	return out, nil
 }
 
-// ListTickets lists the tickets the user may see.
 func (s *server) ListTickets(ctx context.Context, req gen.ListTicketsRequestObject) (gen.ListTicketsResponseObject, error) {
 	p, err := signedIn(ctx)
 	if err != nil {
@@ -78,7 +76,6 @@ func (s *server) ListTickets(ctx context.Context, req gen.ListTicketsRequestObje
 	return out, nil
 }
 
-// CreateTicket opens a ticket.
 func (s *server) CreateTicket(ctx context.Context, req gen.CreateTicketRequestObject) (gen.CreateTicketResponseObject, error) {
 	p, err := signedIn(ctx)
 	if err != nil {
@@ -105,7 +102,6 @@ func (s *server) CreateTicket(ctx context.Context, req gen.CreateTicketRequestOb
 	return gen.CreateTicket201JSONResponse(apiTicket(t)), nil
 }
 
-// GetTicket returns one ticket.
 func (s *server) GetTicket(ctx context.Context, req gen.GetTicketRequestObject) (gen.GetTicketResponseObject, error) {
 	p, err := signedIn(ctx)
 	if err != nil {
@@ -118,7 +114,6 @@ func (s *server) GetTicket(ctx context.Context, req gen.GetTicketRequestObject) 
 	return gen.GetTicket200JSONResponse(apiTicket(t)), nil
 }
 
-// ListTicketMessages returns the conversation.
 func (s *server) ListTicketMessages(ctx context.Context, req gen.ListTicketMessagesRequestObject) (gen.ListTicketMessagesResponseObject, error) {
 	p, err := signedIn(ctx)
 	if err != nil {
@@ -135,7 +130,6 @@ func (s *server) ListTicketMessages(ctx context.Context, req gen.ListTicketMessa
 	return out, nil
 }
 
-// CreateTicketMessage posts a reply or an internal note.
 func (s *server) CreateTicketMessage(ctx context.Context, req gen.CreateTicketMessageRequestObject) (gen.CreateTicketMessageResponseObject, error) {
 	p, err := signedIn(ctx)
 	if err != nil {
@@ -152,7 +146,6 @@ func (s *server) CreateTicketMessage(ctx context.Context, req gen.CreateTicketMe
 	return gen.CreateTicketMessage201JSONResponse(apiMessage(m)), nil
 }
 
-// SetTicketStatus moves a ticket.
 func (s *server) SetTicketStatus(ctx context.Context, req gen.SetTicketStatusRequestObject) (gen.SetTicketStatusResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapAgentApp)
 	if err != nil {
@@ -165,7 +158,6 @@ func (s *server) SetTicketStatus(ctx context.Context, req gen.SetTicketStatusReq
 	return gen.SetTicketStatus200JSONResponse(apiTicket(t)), nil
 }
 
-// SetTicketAssignee assigns or unassigns a ticket.
 func (s *server) SetTicketAssignee(ctx context.Context, req gen.SetTicketAssigneeRequestObject) (gen.SetTicketAssigneeResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapAgentApp)
 	if err != nil {
@@ -178,7 +170,6 @@ func (s *server) SetTicketAssignee(ctx context.Context, req gen.SetTicketAssigne
 	return gen.SetTicketAssignee200JSONResponse(apiTicket(t)), nil
 }
 
-// SetTicketPriority changes the priority with a reason.
 func (s *server) SetTicketPriority(ctx context.Context, req gen.SetTicketPriorityRequestObject) (gen.SetTicketPriorityResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapAgentApp)
 	if err != nil {
@@ -191,7 +182,6 @@ func (s *server) SetTicketPriority(ctx context.Context, req gen.SetTicketPriorit
 	return gen.SetTicketPriority200JSONResponse(apiTicket(t)), nil
 }
 
-// ListTicketActivity returns the activity log.
 func (s *server) ListTicketActivity(ctx context.Context, req gen.ListTicketActivityRequestObject) (gen.ListTicketActivityResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapAgentApp)
 	if err != nil {

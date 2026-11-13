@@ -24,7 +24,6 @@ func (s *server) ListSlaPlans(ctx context.Context, _ gen.ListSlaPlansRequestObje
 	return out, nil
 }
 
-// CreateSlaPlan adds a plan.
 func (s *server) CreateSlaPlan(ctx context.Context, req gen.CreateSlaPlanRequestObject) (gen.CreateSlaPlanResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {
@@ -37,7 +36,6 @@ func (s *server) CreateSlaPlan(ctx context.Context, req gen.CreateSlaPlanRequest
 	return gen.CreateSlaPlan201JSONResponse(apiPlan(plan)), nil
 }
 
-// GetSlaPlan returns one plan.
 func (s *server) GetSlaPlan(ctx context.Context, req gen.GetSlaPlanRequestObject) (gen.GetSlaPlanResponseObject, error) {
 	if _, err := auth.Require(ctx, auth.CapAgentApp); err != nil {
 		return nil, err
@@ -49,7 +47,6 @@ func (s *server) GetSlaPlan(ctx context.Context, req gen.GetSlaPlanRequestObject
 	return gen.GetSlaPlan200JSONResponse(apiPlan(plan)), nil
 }
 
-// UpdateSlaPlan replaces a plan's name and targets.
 func (s *server) UpdateSlaPlan(ctx context.Context, req gen.UpdateSlaPlanRequestObject) (gen.UpdateSlaPlanResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {
@@ -74,7 +71,6 @@ func (s *server) DeleteSlaPlan(ctx context.Context, req gen.DeleteSlaPlanRequest
 	return gen.DeleteSlaPlan204Response{}, nil
 }
 
-// SetDefaultSlaPlan makes a plan the default.
 func (s *server) SetDefaultSlaPlan(ctx context.Context, req gen.SetDefaultSlaPlanRequestObject) (gen.SetDefaultSlaPlanResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {

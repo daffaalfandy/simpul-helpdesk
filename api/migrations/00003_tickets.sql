@@ -91,9 +91,8 @@ CREATE TABLE ticket_messages (
 );
 CREATE INDEX ticket_messages_ticket_id_idx ON ticket_messages (ticket_id, created_at);
 
--- Uploaded files. A file is pending (ticket_id NULL) until a ticket or message links it.
--- Linked to a ticket without a message = attached to the ticket's description.
--- storage_key names the file in internal/storage; it never derives from the filename.
+-- Uploads stay pending (ticket_id NULL) until linked; linked without a message means the description's
+-- file. storage_key names the file in internal/storage and never derives from the filename.
 CREATE TABLE attachments (
   id           uuid PRIMARY KEY DEFAULT uuidv7(),
   storage_key  text NOT NULL CONSTRAINT attachments_storage_key_key UNIQUE,

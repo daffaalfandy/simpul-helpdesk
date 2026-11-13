@@ -20,7 +20,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
-// Output table layout.
 const (
 	tableMinWidth = 0
 	tableTabWidth = 0
@@ -31,8 +30,7 @@ const (
 const (
 	// DevPassword is the password of every seeded user.
 	DevPassword = "simdesk-dev"
-	// OrgName is the demo organisation's name.
-	OrgName = "Demo Vendor"
+	OrgName     = "Demo Vendor"
 	// orgFooterNote is the demo data-residency line shown in the footer.
 	orgFooterNote = "Data stored in Indonesia · Personal data handled under UU PDP"
 	// RequesterClient is the client the demo requester belongs to.
@@ -63,7 +61,6 @@ var goldTargets = []sla.Target{
 	{Priority: sla.P4, FirstResponseMinutes: 240, ResolveMinutes: 2700, DeliverMinutes: 2700, Calendar: sla.CalendarBusinessHours},
 }
 
-// ErrNotDev is returned when seeding outside development.
 var ErrNotDev = errors.New("seed only runs when APP_ENV=" + config.EnvDev)
 
 // client is a demo client from the mock (Settings › Clients). Empty plan means the default.

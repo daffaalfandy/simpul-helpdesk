@@ -34,6 +34,8 @@ describe('Dropdown', () => {
     const trigger = screen.getByRole('button', { name: /SLA plan/ })
     expect(trigger).toHaveAttribute('aria-haspopup', 'listbox')
     expect(trigger).toHaveTextContent('Standard')
+    // The trigger shows the chosen label only; descriptions belong to the open list.
+    expect(trigger).not.toHaveTextContent('P1 24/7')
 
     trigger.focus()
     await user.keyboard('{ArrowDown}')

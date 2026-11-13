@@ -25,7 +25,6 @@ func (s *server) ListClients(ctx context.Context, _ gen.ListClientsRequestObject
 	return out, nil
 }
 
-// CreateClient adds a client.
 func (s *server) CreateClient(ctx context.Context, req gen.CreateClientRequestObject) (gen.CreateClientResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {
@@ -38,7 +37,6 @@ func (s *server) CreateClient(ctx context.Context, req gen.CreateClientRequestOb
 	return gen.CreateClient201JSONResponse(apiClient(c)), nil
 }
 
-// GetClient returns one client the user may see.
 func (s *server) GetClient(ctx context.Context, req gen.GetClientRequestObject) (gen.GetClientResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapAgentApp)
 	if err != nil {
@@ -51,7 +49,6 @@ func (s *server) GetClient(ctx context.Context, req gen.GetClientRequestObject) 
 	return gen.GetClient200JSONResponse(apiClient(c)), nil
 }
 
-// UpdateClient replaces a client's details.
 func (s *server) UpdateClient(ctx context.Context, req gen.UpdateClientRequestObject) (gen.UpdateClientResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {
@@ -64,7 +61,6 @@ func (s *server) UpdateClient(ctx context.Context, req gen.UpdateClientRequestOb
 	return gen.UpdateClient200JSONResponse(apiClient(c)), nil
 }
 
-// DeleteClient removes a client without requesters.
 func (s *server) DeleteClient(ctx context.Context, req gen.DeleteClientRequestObject) (gen.DeleteClientResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {
@@ -76,7 +72,6 @@ func (s *server) DeleteClient(ctx context.Context, req gen.DeleteClientRequestOb
 	return gen.DeleteClient204Response{}, nil
 }
 
-// SetClientAgents replaces a client's assigned agents.
 func (s *server) SetClientAgents(ctx context.Context, req gen.SetClientAgentsRequestObject) (gen.SetClientAgentsResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapSettingsManage)
 	if err != nil {
@@ -109,7 +104,6 @@ func apiClient(c clients.Client) gen.Client {
 	}
 }
 
-// ListClientRequesters lists a client's requesters.
 func (s *server) ListClientRequesters(ctx context.Context, req gen.ListClientRequestersRequestObject) (gen.ListClientRequestersResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapAgentApp)
 	if err != nil {
@@ -141,7 +135,6 @@ func (s *server) CreateClientRequester(ctx context.Context, req gen.CreateClient
 	return gen.CreateClientRequester201JSONResponse(apiRequester(r)), nil
 }
 
-// ListClientAssignees lists who can take a client's tickets.
 func (s *server) ListClientAssignees(ctx context.Context, req gen.ListClientAssigneesRequestObject) (gen.ListClientAssigneesResponseObject, error) {
 	p, err := auth.Require(ctx, auth.CapAgentApp)
 	if err != nil {

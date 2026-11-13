@@ -15,9 +15,8 @@ const SnapshotVersion = 1
 // ErrNoTarget means the snapshot has no target for the priority.
 var ErrNoTarget = errors.New("no SLA target for this priority")
 
-// SLASnapshot is the client's SLA plan copied onto a ticket when it is created, so later
-// contract or plan edits never change an open ticket. It keeps every priority because an
-// agent may change the priority later. Its JSON form is stored; don't rename the tags.
+// SLASnapshot is the client's plan copied onto a ticket at creation, every priority included,
+// so plan edits never change an open ticket. Its JSON is stored: don't rename the tags.
 type SLASnapshot struct {
 	Version  int          `json:"version"`
 	PlanID   uuid.UUID    `json:"planId"`

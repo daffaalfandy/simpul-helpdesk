@@ -1,7 +1,5 @@
-// Package tickets is the ticket service: intake from the portal and from agents, reading
-// tickets and conversations, agent actions (status, assignee, priority), attachments and the
-// activity log. Every read and write goes through accessFor, the one place that decides which
-// tickets and messages a user may see.
+// Package tickets is the ticket service: intake, reads, agent actions, attachments and the
+// activity log. accessFor is the one place that decides which tickets and messages a user sees.
 package tickets
 
 import (
@@ -67,7 +65,6 @@ const (
 	MaxPageSize       = 200
 )
 
-// Ref names a related record.
 type Ref struct {
 	ID   uuid.UUID
 	Name string
@@ -130,7 +127,6 @@ type Message struct {
 	CreatedAt      time.Time
 }
 
-// Service handles tickets.
 type Service struct {
 	store *store.Store
 	files storage.Store
@@ -138,7 +134,6 @@ type Service struct {
 	now   func() time.Time
 }
 
-// NewService returns a Service.
 func NewService(st *store.Store, files storage.Store, slaSvc *sla.Service) *Service {
 	return &Service{store: st, files: files, sla: slaSvc, now: time.Now}
 }

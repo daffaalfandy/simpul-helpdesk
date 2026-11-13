@@ -15,7 +15,6 @@ export function initials(name: string): string {
     .join('')
 }
 
-/** First word of a full name. */
 export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name
 }

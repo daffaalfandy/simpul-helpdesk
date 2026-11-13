@@ -5,7 +5,6 @@ import (
 	"slices"
 )
 
-// Lifecycle errors.
 var (
 	ErrUnknownStatus   = errors.New("unknown status")
 	ErrMoveNotAllowed  = errors.New("this status change is not allowed")
@@ -14,9 +13,8 @@ var (
 	ErrNeedsNoAssignee = errors.New("unassign the ticket first")
 )
 
-// manualMoves are the status changes an agent may make by hand (HANDOFF §6). Closed is
-// reached only by the system (auto-close, M6); UAT approval and requester reopen are M6.
-// Moves to new require no assignee and moves to assigned require one; see CheckManualMove.
+// manualMoves are an agent's hand moves (HANDOFF §6). Closed is system-only; UAT and requester
+// reopen arrive in M6. CheckManualMove adds the assignee rules for new and assigned.
 var manualMoves = map[Status][]Status{
 	StatusNew:             {StatusInProgress, StatusWaitingOnClient, StatusResolved},
 	StatusAssigned:        {StatusInProgress, StatusWaitingOnClient, StatusResolved},

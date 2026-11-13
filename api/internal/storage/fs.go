@@ -113,7 +113,6 @@ func (s *FS) syncDir(dir string) {
 	_ = d.Close()
 }
 
-// Open returns the stored file.
 func (s *FS) Open(_ context.Context, key string) (io.ReadSeekCloser, int64, error) {
 	if !ValidKey(key) {
 		return nil, 0, ErrInvalidKey
@@ -133,7 +132,6 @@ func (s *FS) Open(_ context.Context, key string) (io.ReadSeekCloser, int64, erro
 	return f, info.Size(), nil
 }
 
-// Delete removes the stored file.
 func (s *FS) Delete(_ context.Context, key string) error {
 	if !ValidKey(key) {
 		return ErrInvalidKey
@@ -144,7 +142,6 @@ func (s *FS) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-// PurgeTemp removes temporary files older than olderThan.
 func (s *FS) PurgeTemp(_ context.Context, olderThan time.Duration) (int, error) {
 	d, err := s.root.Open(tmpDir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -172,5 +169,4 @@ func (s *FS) PurgeTemp(_ context.Context, olderThan time.Duration) (int, error) 
 	return removed, nil
 }
 
-// Close releases the directory handle.
 func (s *FS) Close() error { return s.root.Close() }

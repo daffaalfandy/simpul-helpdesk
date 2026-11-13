@@ -15,7 +15,6 @@ type Info struct {
 
 type key struct{}
 
-// With returns a context carrying info.
 func With(ctx context.Context, info Info) context.Context {
 	return context.WithValue(ctx, key{}, info)
 }

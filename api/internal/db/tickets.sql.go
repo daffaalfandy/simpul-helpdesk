@@ -507,13 +507,8 @@ const nextTicketNumber = `-- name: NextTicketNumber :one
 SELECT nextval('ticket_number_seq')::bigint
 `
 
-// Ticket scope, shared by every query that reads a ticket for a user:
-//
-//	scope_client_id  set for requesters: only their client's tickets.
-//	scope_agent_id   set for agents: only tickets of clients they are assigned to.
-//	both NULL        supervisors and admins: every ticket.
-//
-// internal/tickets/access.go is the only place that fills these in.
+// Scoped queries take scope_client_id (requesters: their client) and scope_agent_id (agents: their
+// assigned clients); both are NULL for supervisors and admins. Only internal/tickets/access.go sets them.
 func (q *Queries) NextTicketNumber(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextTicketNumber)
 	var column_1 int64

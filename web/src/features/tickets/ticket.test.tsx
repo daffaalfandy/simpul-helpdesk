@@ -31,7 +31,7 @@ describe('agent ticket detail', () => {
     expect(within(meta).getByText(/^Opened 12 Nov( 2026)?, 08:14 via client portal$/)).toBeInTheDocument()
     expect(within(meta).getByText('P1 · Critical')).toBeInTheDocument()
     expect(within(meta).getByText('In progress')).toBeInTheDocument()
-    expect(screen.getByText('Internal note · Rina Pratiwi — not visible to client')).toBeInTheDocument()
+    expect(screen.getByText('Internal note · Rina Pratiwi (not visible to client)')).toBeInTheDocument()
     expect(screen.getByText("Matches last night's SSO patch.")).toBeInTheDocument()
     const sla = screen.getByRole('heading', { name: 'Service level · P1' }).closest('section') as HTMLElement
     expect(within(sla).getByText('15 min')).toBeInTheDocument()
@@ -90,6 +90,7 @@ describe('agent ticket detail', () => {
     const confirm = within(dialog).getByRole('button', { name: 'Change priority' })
     expect(confirm).toBeDisabled()
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
     expect(lastRequest('PUT', '/tickets/HD-24871/priority')).toBeUndefined()
 
     await user.click(screen.getByRole('button', { name: /Priority$/ }))

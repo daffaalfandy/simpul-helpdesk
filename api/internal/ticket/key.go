@@ -12,7 +12,6 @@ const KeySeparator = "-"
 // keyPattern matches a stored key; it mirrors the tickets_key_format CHECK constraint.
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{0,9}-[1-9][0-9]*$`)
 
-// FormatKey builds the key for ticket number n.
 func FormatKey(prefix string, n int64) string {
 	return prefix + KeySeparator + strconv.FormatInt(n, 10)
 }

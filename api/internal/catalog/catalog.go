@@ -1,6 +1,5 @@
-// Package catalog manages the two lists the report form offers: systems ("Which system?" on
-// incidents) and catalogue items ("What do you need?" on service requests, each with a
-// delivery time). Admins maintain both; entries used by tickets are hidden, not deleted.
+// Package catalog manages the report form's lists: systems for incidents, and catalogue items
+// with delivery times for requests. Entries tickets use are hidden, not deleted.
 package catalog
 
 import (
@@ -31,7 +30,6 @@ const (
 	TargetCatalogItem = "catalog_item"
 )
 
-// Audit data keys.
 const (
 	dataName            = "name"
 	dataDescription     = "description"
@@ -65,7 +63,6 @@ type System struct {
 	TicketCount int
 }
 
-// SystemInput creates or replaces a system.
 type SystemInput struct {
 	Name        string
 	Description *string
@@ -84,7 +81,6 @@ type Item struct {
 	TicketCount     int
 }
 
-// ItemInput creates or replaces a catalogue item.
 type ItemInput struct {
 	Name            string
 	Description     *string
@@ -93,12 +89,10 @@ type ItemInput struct {
 	Active          bool
 }
 
-// Service manages systems and catalogue items.
 type Service struct {
 	store *store.Store
 }
 
-// NewService returns a Service.
 func NewService(st *store.Store) *Service { return &Service{store: st} }
 
 // ListSystems returns systems in display order; activeOnly leaves out hidden ones.
@@ -114,7 +108,6 @@ func (s *Service) ListSystems(ctx context.Context, activeOnly bool) ([]System, e
 	return out, nil
 }
 
-// CreateSystem adds a system.
 func (s *Service) CreateSystem(ctx context.Context, actor audit.Actor, in SystemInput) (System, error) {
 	in, err := normalizeSystem(in)
 	if err != nil {
@@ -137,7 +130,6 @@ func (s *Service) CreateSystem(ctx context.Context, actor audit.Actor, in System
 	return s.getSystem(ctx, id)
 }
 
-// UpdateSystem replaces a system.
 func (s *Service) UpdateSystem(ctx context.Context, actor audit.Actor, id uuid.UUID, in SystemInput) (System, error) {
 	in, err := normalizeSystem(in)
 	if err != nil {
@@ -210,7 +202,6 @@ func (s *Service) ListItems(ctx context.Context, activeOnly bool) ([]Item, error
 	return out, nil
 }
 
-// CreateItem adds a catalogue item.
 func (s *Service) CreateItem(ctx context.Context, actor audit.Actor, in ItemInput) (Item, error) {
 	in, err := normalizeItem(in)
 	if err != nil {

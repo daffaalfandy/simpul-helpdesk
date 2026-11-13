@@ -8,7 +8,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 )
 
-// Role is a user's role in the organisation.
 type Role string
 
 // Roles, from HANDOFF §3. Values match the users.role CHECK constraint.
@@ -22,7 +21,6 @@ const (
 // Roles lists every role, most privileged first.
 var Roles = []Role{RoleAdmin, RoleSupervisor, RoleAgent, RoleRequester}
 
-// Valid reports whether r is a known role.
 func (r Role) Valid() bool {
 	switch r {
 	case RoleAdmin, RoleSupervisor, RoleAgent, RoleRequester:
@@ -34,7 +32,6 @@ func (r Role) Valid() bool {
 // UserStatus is a user's account state. Values match the users.status CHECK constraint.
 type UserStatus string
 
-// User statuses.
 const (
 	UserStatusActive    UserStatus = "active"
 	UserStatusInvited   UserStatus = "invited"
@@ -58,7 +55,6 @@ type Principal struct {
 
 type principalKey struct{}
 
-// WithPrincipal returns a context carrying p.
 func WithPrincipal(ctx context.Context, p *Principal) context.Context {
 	return context.WithValue(ctx, principalKey{}, p)
 }
@@ -69,5 +65,4 @@ func PrincipalFrom(ctx context.Context) (*Principal, bool) {
 	return p, ok && p != nil
 }
 
-// AuditActor identifies the principal in audit entries.
 func (p *Principal) AuditActor() audit.Actor { return audit.UserActor(p.UserID, p.Name) }

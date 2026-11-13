@@ -9,7 +9,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
-// Upload and download framing.
 const (
 	uploadFieldFile          = "file"
 	dispositionAttachment    = "attachment"
@@ -19,7 +18,6 @@ const (
 	uploadNeedsFile = "send one file in the \"" + uploadFieldFile + "\" form field"
 )
 
-// GetAttachmentPolicy returns the upload limits.
 func (s *server) GetAttachmentPolicy(ctx context.Context, _ gen.GetAttachmentPolicyRequestObject) (gen.GetAttachmentPolicyResponseObject, error) {
 	if _, err := signedIn(ctx); err != nil {
 		return nil, err

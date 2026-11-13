@@ -21,7 +21,6 @@ func (s *Service) BusinessHours(ctx context.Context) (Hours, error) {
 	return readHours(ctx, s.store.Q())
 }
 
-// UpdateBusinessHours replaces the working window.
 func (s *Service) UpdateBusinessHours(ctx context.Context, actor audit.Actor, in HoursInput) (Hours, error) {
 	days, err := in.Validate()
 	if err != nil {
@@ -104,7 +103,6 @@ func (s *Service) ListHolidays(ctx context.Context, year *int) ([]Holiday, error
 	return out, nil
 }
 
-// CreateHoliday adds one holiday.
 func (s *Service) CreateHoliday(ctx context.Context, actor audit.Actor, date calendar.Date, name string) (Holiday, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len([]rune(name)) > MaxHolidayNameLen {
@@ -129,7 +127,6 @@ func (s *Service) CreateHoliday(ctx context.Context, actor audit.Actor, date cal
 	return Holiday{ID: id, Date: date, Name: name}, nil
 }
 
-// DeleteHoliday removes one holiday.
 func (s *Service) DeleteHoliday(ctx context.Context, actor audit.Actor, id uuid.UUID) error {
 	return s.store.Tx(ctx, func(tx store.Tx) error {
 		row, err := tx.Q.DeleteHoliday(ctx, id)

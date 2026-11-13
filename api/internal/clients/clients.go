@@ -1,6 +1,5 @@
-// Package clients manages the organisations the vendor supports: contract details, SLA
-// plan, PIC, and which agents work them. It is the one place that decides which clients a
-// user may see.
+// Package clients manages the organisations the vendor supports and the agents who work them.
+// It is the one place that decides which clients a user may see.
 package clients
 
 import (
@@ -31,7 +30,6 @@ const (
 	TargetClient = "client"
 )
 
-// Audit data keys.
 const (
 	dataName          = "name"
 	dataContractNo    = "contract_no"
@@ -58,13 +56,11 @@ const (
 	constraintTicketFK = "tickets_client_id_fkey"
 )
 
-// Ref names a related record.
 type Ref struct {
 	ID   uuid.UUID
 	Name string
 }
 
-// Client is a supported organisation.
 type Client struct {
 	ID             uuid.UUID
 	Name           string
@@ -80,7 +76,6 @@ type Client struct {
 	UpdatedAt      time.Time
 }
 
-// Input creates or replaces a client's details.
 type Input struct {
 	Name          string
 	ContractNo    *string
@@ -91,12 +86,10 @@ type Input struct {
 	SlaPlanID     uuid.UUID
 }
 
-// Service manages clients.
 type Service struct {
 	store *store.Store
 }
 
-// NewService returns a Service.
 func NewService(st *store.Store) *Service { return &Service{store: st} }
 
 // scope returns the agent filter for p: nil when p sees every client.
@@ -131,7 +124,6 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, id uuid.UUID) (Cli
 	return get(ctx, s.store.Q(), id, scope(p))
 }
 
-// Create adds a client.
 func (s *Service) Create(ctx context.Context, actor audit.Actor, in Input) (Client, error) {
 	in, err := normalize(in)
 	if err != nil {
@@ -158,7 +150,6 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, in Input) (Clie
 	return get(ctx, s.store.Q(), id, nil)
 }
 
-// Update replaces a client's details.
 func (s *Service) Update(ctx context.Context, actor audit.Actor, id uuid.UUID, in Input) (Client, error) {
 	in, err := normalize(in)
 	if err != nil {

@@ -31,6 +31,7 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
   const { data: clients } = useSuspenseQuery(clientsQueryOptions)
   const list = useSuspenseInfiniteQuery(boardListOptions(search))
   const tickets = list.data.pages.flat()
+  const filtered = Boolean(search.view || search.status || search.client)
   const [logging, setLogging] = useState(false)
   const [created, setCreated] = useState<Ticket | null>(null)
 
@@ -96,7 +97,14 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
           />
         </div>
         {tickets.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted">{t('agent.board.empty')}</p>
+          <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-muted">
+            <p>{filtered ? t('agent.board.emptyFiltered') : t('agent.board.emptyNone')}</p>
+            {filtered && (
+              <Button variant="outline" onPress={() => onSearchChange({})}>
+                {t('agent.board.clearFilters')}
+              </Button>
+            )}
+          </div>
         ) : (
           <TicketTable tickets={tickets} />
         )}

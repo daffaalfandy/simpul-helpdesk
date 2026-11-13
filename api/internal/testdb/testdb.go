@@ -1,8 +1,5 @@
-// Package testdb gives integration tests a fresh, migrated Postgres database.
-//
-// TestMain starts one Postgres container per test package (or uses TEST_PG_URL),
-// migrates a template database once, and every test clones it, which takes
-// milliseconds.
+// Package testdb gives each integration test a fresh database, cloned from a template migrated
+// once per package (one Postgres container per package, or TEST_PG_URL).
 package testdb
 
 import (

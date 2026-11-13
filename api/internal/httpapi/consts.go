@@ -2,7 +2,6 @@ package httpapi
 
 import "time"
 
-// Routes.
 const (
 	apiRoot        = "/api"
 	apiPathPrefix  = apiRoot + "/"
@@ -25,7 +24,6 @@ const (
 	cookiePath         = "/"
 )
 
-// Header names and values.
 const (
 	headerContentType     = "Content-Type"
 	headerCacheControl    = "Cache-Control"
@@ -55,21 +53,18 @@ const (
 	forwardedForSeparator = ","
 )
 
-// SPA files.
 const (
 	spaIndex        = "index.html"
 	spaAssetsPrefix = "assets/"
 	spaNotBuiltMsg  = "Web app not built. Run `make build`, or use the Vite dev server."
 )
 
-// Validation error formatting.
 const (
 	fieldPathSeparator    = "."
 	fieldMessageSeparator = ": "
 	invalidBodyDetail     = "Request body is not valid JSON for this operation."
 )
 
-// Limits and timeouts.
 const (
 	maxUserAgentLen = 512
 	readyzTimeout   = 2 * time.Second

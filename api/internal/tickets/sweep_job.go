@@ -13,7 +13,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
-// Attachment sweep job settings.
 const (
 	JobKindAttachmentSweep = "purge_pending_attachments"
 	// ActorNameAttachmentSweep names the job in audit entries.
@@ -27,7 +26,6 @@ const (
 // PurgePendingAttachmentsArgs deletes uploads nobody linked within PendingAttachmentTTL.
 type PurgePendingAttachmentsArgs struct{}
 
-// Kind identifies the job.
 func (PurgePendingAttachmentsArgs) Kind() string { return JobKindAttachmentSweep }
 
 // InsertOpts keeps one sweep per interval.
@@ -38,7 +36,6 @@ func (PurgePendingAttachmentsArgs) InsertOpts() river.InsertOpts {
 	}
 }
 
-// AttachmentSweeper runs PurgePendingAttachmentsArgs.
 type AttachmentSweeper struct {
 	river.WorkerDefaults[PurgePendingAttachmentsArgs]
 	store *store.Store
@@ -46,7 +43,6 @@ type AttachmentSweeper struct {
 	now   func() time.Time
 }
 
-// NewAttachmentSweeper returns the worker.
 func NewAttachmentSweeper(st *store.Store, files storage.Store) *AttachmentSweeper {
 	return &AttachmentSweeper{store: st, files: files, now: time.Now}
 }
@@ -58,9 +54,8 @@ func AttachmentSweepJob() *river.PeriodicJob {
 		&river.PeriodicJobOpts{ID: JobKindAttachmentSweep, RunOnStart: true})
 }
 
-// Work deletes expired pending uploads, files first. An expired row can no longer be linked
-// (LinkAttachments needs it unexpired) or downloaded (pending rows have no ticket), so a crash
-// between the two steps leaves nothing reachable; the next run removes the row.
+// Work deletes expired pending uploads, files first: an expired row can't be linked or
+// downloaded, so a crash between the two steps leaves nothing reachable.
 func (w *AttachmentSweeper) Work(ctx context.Context, _ *river.Job[PurgePendingAttachmentsArgs]) error {
 	cutoff := w.now().Add(-PendingAttachmentTTL)
 	for range sweepMaxBatches {

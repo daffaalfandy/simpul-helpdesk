@@ -14,16 +14,14 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
-// MessageInput adds to a ticket's conversation.
 type MessageInput struct {
 	Visibility    ticket.Visibility
 	Body          string
 	AttachmentIDs []uuid.UUID
 }
 
-// AddMessage posts a reply or, for staff, an internal note. The first public staff reply is
-// the first response (HANDOFF §6). A requester's reply while the desk waits on them hands
-// the ticket back. Internal notes leave updatedAt alone, since requesters can see it.
+// AddMessage posts a reply, or a staff internal note. The first public staff reply is the first
+// response; a requester reply resumes a ticket waiting on them; notes leave updatedAt alone.
 func (s *Service) AddMessage(ctx context.Context, p *auth.Principal, key string, in MessageInput) (Message, error) {
 	a, err := accessFor(p)
 	if err != nil {

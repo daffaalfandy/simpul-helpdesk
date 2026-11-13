@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { organizationQueryOptions } from '../../api/queries'
 import { Button, buttonClasses } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
+import { Spinner } from '../../components/Spinner'
 import { paths } from '../../lib/constants'
 import { AppHeader } from './AppHeader'
 import { Footer } from './Footer'
@@ -84,5 +85,16 @@ export function RouteError() {
         {t('common.retry')}
       </Button>
     </main>
+  )
+}
+
+/** Shown while a route loads its data. */
+export function RoutePending() {
+  const { t } = useTranslation()
+  return (
+    <p role="status" className="flex items-center justify-center gap-2 py-16 text-sm text-muted">
+      <Spinner />
+      {t('common.loading')}
+    </p>
   )
 }

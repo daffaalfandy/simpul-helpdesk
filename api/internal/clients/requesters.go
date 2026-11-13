@@ -22,7 +22,6 @@ const (
 	MaxJobTitleLen = 200
 )
 
-// Audit data keys for requesters.
 const (
 	dataRole   = "role"
 	dataClient = "client_id"
@@ -43,7 +42,6 @@ type Requester struct {
 	Status   auth.UserStatus
 }
 
-// RequesterInput adds a requester to a client.
 type RequesterInput struct {
 	Name     string
 	Email    string
@@ -139,9 +137,8 @@ func (s *Service) Assignees(ctx context.Context, p *auth.Principal, clientID uui
 // ErrNotAssignable means the user can't take the client's tickets.
 var ErrNotAssignable = errors.New("user can't take this client's tickets")
 
-// Assignable returns the user if they may take tickets of the client: an active user who
-// sees every client, or an active agent assigned to it. It runs on q so callers can check
-// inside their own transaction.
+// Assignable returns the user if they may take the client's tickets: an active user who sees
+// every client, or an active agent assigned to it. It runs on q to check inside a transaction.
 func Assignable(ctx context.Context, q *db.Queries, clientID, userID uuid.UUID) (Ref, error) {
 	r, err := q.GetAssignableUser(ctx, db.GetAssignableUserParams{
 		ID: userID, Status: string(auth.UserStatusActive),

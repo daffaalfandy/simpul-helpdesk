@@ -38,7 +38,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/webui"
 )
 
-// Commands and sub-commands.
 const (
 	cmdServe      = "serve"
 	cmdWorker     = "worker"
@@ -55,13 +54,11 @@ const (
 	migrateStatus = "status"
 )
 
-// Exit codes.
 const (
 	exitError = 1
 	exitUsage = 2
 )
 
-// Server and worker tuning.
 const (
 	readHeaderTimeout   = 10 * time.Second
 	readTimeout         = 30 * time.Second
@@ -147,7 +144,6 @@ type app struct {
 	files   storage.Store
 }
 
-// close releases the database pool and the file store.
 func (a *app) close() {
 	_ = a.files.Close()
 	a.store.Close()

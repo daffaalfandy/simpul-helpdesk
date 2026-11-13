@@ -14,7 +14,7 @@ export function AttachmentList({ items }: { items: ReadonlyArray<Attachment> }) 
           <a
             href={attachmentHref(a.id)}
             download={a.filename}
-            className="inline-flex min-h-(--control-h-sm) max-w-full items-center gap-1.5 rounded-md bg-tint px-2.5 text-sm font-semibold text-ink hover:bg-surface-subtle"
+            className="hit-area inline-flex min-h-(--control-h-sm) max-w-full items-center gap-1.5 rounded-md bg-tint px-2.5 text-sm font-semibold text-ink hover:bg-surface-subtle"
           >
             <Paperclip aria-hidden="true" className="size-(--icon-sm) shrink-0" />
             <span className="truncate">{a.filename}</span>

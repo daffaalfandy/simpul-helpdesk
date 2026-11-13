@@ -284,7 +284,7 @@ function HolidaysCard({ onFlash }: CardProps) {
                       onFlash(null)
                       setRemoving(h)
                     }}
-                    className="inline-flex size-(--control-h-sm) cursor-pointer items-center justify-center rounded-md text-muted data-hovered:bg-danger-tint data-hovered:text-danger"
+                    className="hit-area inline-flex size-(--control-h-sm) cursor-pointer items-center justify-center rounded-md text-muted data-hovered:bg-danger-tint data-hovered:text-danger"
                   >
                     <Trash2 aria-hidden="true" className="size-(--icon-md)" />
                   </AriaButton>

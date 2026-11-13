@@ -35,7 +35,6 @@ export function hasHint(status: TicketStatus): status is HintedStatus {
   return (STATUS_HINTS as readonly TicketStatus[]).includes(status)
 }
 
-/** Portal list filters. */
 export type PortalFilter = 'open' | 'resolved' | 'all'
 export const PORTAL_FILTERS: readonly PortalFilter[] = ['open', 'resolved', 'all']
 export const DEFAULT_PORTAL_FILTER: PortalFilter = 'open'

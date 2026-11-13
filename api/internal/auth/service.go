@@ -31,9 +31,7 @@ const (
 	ActionPasswordReset          = "auth.password_reset"
 	ActionUserCreated            = "user.created"
 
-	// TargetUser is the audit target type for users.
-	TargetUser = "user"
-	// auditDataRole is the audit data key holding a role.
+	TargetUser    = "user"
 	auditDataRole = "role"
 )
 
@@ -100,7 +98,6 @@ type Service struct {
 	now    func() time.Time
 }
 
-// NewService builds the auth service.
 func NewService(st *store.Store, hasher *Hasher, jobs JobInserter, opts Options, log *slog.Logger) *Service {
 	return &Service{store: st, hasher: hasher, jobs: jobs, opts: opts, log: log, now: time.Now}
 }
@@ -269,7 +266,6 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, e
 	}, nil
 }
 
-// Logout ends the given session.
 func (s *Service) Logout(ctx context.Context, p *Principal) error {
 	return s.store.Tx(ctx, func(tx store.Tx) error {
 		if err := tx.Q.DeleteSession(ctx, p.SessionID); err != nil {
@@ -350,7 +346,6 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 	})
 }
 
-// NewUser describes a user to create.
 type NewUser struct {
 	Email      string
 	Name       string

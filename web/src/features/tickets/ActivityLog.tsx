@@ -16,7 +16,12 @@ export function ActivityLog({ ticketKey, type }: { ticketKey: string; type: Tick
   return (
     <Card as="h2" title={t('ticket.activity.title')}>
       <ErrorAlert error={error} />
-      {isPending && <Spinner />}
+      {isPending && (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted">
+          <Spinner />
+          {t('ticket.activity.loading')}
+        </p>
+      )}
       {data && (
         <ol className="flex flex-col gap-2.5">
           {data.map((entry) => (

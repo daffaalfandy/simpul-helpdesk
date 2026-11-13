@@ -12,7 +12,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/reqinfo"
 )
 
-// Actor kinds.
 const (
 	ActorUser   = "user"
 	ActorSystem = "system"

@@ -26,7 +26,7 @@ const variants: Record<ButtonVariant, string> = {
 const disabled = 'data-disabled:bg-disabled data-disabled:text-on-primary data-disabled:border-transparent'
 
 const sizes: Record<ButtonSize, string> = {
-  sm: 'min-h-(--control-h-sm) px-3 rounded-md text-sm',
+  sm: 'hit-area min-h-(--control-h-sm) px-3 rounded-md text-sm',
   md: 'min-h-(--control-h-md) px-4 rounded-lg text-base',
   lg: 'min-h-(--control-h-lg) px-5 rounded-lg text-md font-extrabold',
 }

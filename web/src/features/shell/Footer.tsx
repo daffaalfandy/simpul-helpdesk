@@ -1,4 +1,3 @@
-import { ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { Organization } from '../../api/client'
@@ -26,12 +25,7 @@ export function Footer({ variant, org }: FooterProps) {
       <div className="border-t border-border-subtle">
         <div className="mx-auto flex max-w-app flex-wrap justify-between gap-x-6 gap-y-2 px-4 py-3 text-xs sm:px-7">
           <span>{portal ? t('footer.poweredBy') : t('footer.copyright', { year: new Date().getFullYear() })}</span>
-          {org?.footerNote && (
-            <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck aria-hidden="true" className="size-(--icon-sm)" />
-              {org.footerNote}
-            </span>
-          )}
+          {org?.footerNote && <span>{org.footerNote}</span>}
         </div>
       </div>
     </footer>

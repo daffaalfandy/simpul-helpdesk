@@ -44,7 +44,6 @@ type SeedStep struct {
 	Status   ticket.Status // move to this status
 }
 
-// SeedMessage is a conversation entry.
 type SeedMessage struct {
 	At          time.Time
 	Author      Ref

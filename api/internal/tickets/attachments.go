@@ -27,14 +27,12 @@ type Policy struct {
 	Extensions    []string
 }
 
-// AttachmentPolicy returns the upload limits and allowed extensions.
 func AttachmentPolicy() Policy {
 	return Policy{MaxBytes: MaxAttachmentBytes, MaxPerMessage: MaxAttachmentsPerMessage, Extensions: Extensions()}
 }
 
-// Upload stores one file as a pending attachment of p. It stays pending until a new ticket or
-// message links it, and is purged after PendingAttachmentTTL. The file streams to disk before
-// the short transaction, so no database connection waits on a slow upload.
+// Upload stores one file as p's pending attachment until a ticket or message links it. It streams
+// to disk before the short transaction, so no database connection waits on a slow upload.
 func (s *Service) Upload(ctx context.Context, p *auth.Principal, filename string, r io.Reader) (Attachment, error) {
 	if _, err := accessFor(p); err != nil {
 		return Attachment{}, err

@@ -8,9 +8,8 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
-// access is what one user may see. It feeds the scope parameters of every ticket query
-// (queries/tickets.sql), so requesters only ever get their client's tickets and public
-// messages, and agents only their assigned clients' tickets.
+// access is what one user may see. It fills the scope parameters of every ticket query, so
+// requesters get their client's tickets and public messages, and agents their clients' tickets.
 type access struct {
 	scopeClientID *uuid.UUID // requesters: their client
 	scopeAgentID  *uuid.UUID // agents: clients they are assigned to

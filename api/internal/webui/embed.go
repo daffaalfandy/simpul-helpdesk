@@ -9,7 +9,6 @@ import (
 //go:embed all:dist
 var embedded embed.FS
 
-// FS returns the built web app files.
 func FS() fs.FS {
 	sub, err := fs.Sub(embedded, "dist")
 	if err != nil {

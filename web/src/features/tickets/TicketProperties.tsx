@@ -22,7 +22,7 @@ export function TicketProperties({ ticket }: { ticket: Ticket }) {
   const setStatus = useSetStatus(ticket.key)
   const setAssignee = useSetAssignee(ticket.key)
   const setPriority = useSetPriority(ticket.key)
-  const { data: assignees } = useQuery(clientAssigneesQueryOptions(ticket.client.id))
+  const { data: assignees, error: assigneesError } = useQuery(clientAssigneesQueryOptions(ticket.client.id))
   const [pendingPriority, setPendingPriority] = useState<Priority | null>(null)
   const locked = ticket.allowedStatuses.length === 0
 
@@ -75,7 +75,7 @@ export function TicketProperties({ ticket }: { ticket: Ticket }) {
         onChange={(id) => setAssignee.mutate(id === UNASSIGNED ? null : id)}
         isDisabled={locked || setAssignee.isPending}
       />
-      <ErrorAlert error={setAssignee.error} />
+      <ErrorAlert error={setAssignee.error ?? assigneesError} />
       <Dropdown
         label={t('ticket.fields.priority')}
         options={PRIORITIES.map((p) => ({ id: p, label: priorityLong(t, p, ticket.type) }))}
