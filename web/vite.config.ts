@@ -8,6 +8,9 @@ const API_PREFIX = '/api'
 const API_TARGET = 'http://127.0.0.1:8080'
 // The Go binary embeds the built app from here (see api/internal/webui).
 const OUT_DIR = '../api/internal/webui/dist'
+// Tests render the whole app; with every file running in parallel a long form test can take
+// several times its solo run, so the 5s default is too tight.
+const TEST_TIMEOUT_MS = 15_000
 
 export default defineConfig({
   plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss()],
@@ -21,6 +24,7 @@ export default defineConfig({
   build: { outDir: OUT_DIR, emptyOutDir: true },
   test: {
     environment: 'jsdom',
+    testTimeout: TEST_TIMEOUT_MS,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
   },

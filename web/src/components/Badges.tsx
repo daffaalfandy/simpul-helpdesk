@@ -3,17 +3,32 @@ import type { ReactNode } from 'react'
 import type { Priority } from '../api/client'
 import { cx } from '../lib/text'
 
-const priorityClasses: Record<Priority, string> = {
+/** Background and text colours for a priority (HANDOFF §14.2 contrast rules). */
+export const priorityClasses: Record<Priority, string> = {
   P1: 'bg-priority-p1-bg text-priority-p1-fg',
   P2: 'bg-priority-p2-bg text-priority-p2-fg',
   P3: 'bg-priority-p3-bg text-priority-p3-fg',
   P4: 'bg-priority-p4-bg text-priority-p4-fg',
 }
 
+const badgeSizes = {
+  sm: 'rounded-xs px-2 py-0.5 text-xs',
+  /** As tall as a 44px field, for rows that pair the badge with inputs (Settings › Priorities). */
+  lg: 'rounded-md px-3 py-2.5 text-sm',
+}
+
 /** Priority badge per HANDOFF §14.3. Pass a long label ("P1 · Critical") as children. */
-export function PriorityBadge({ priority, children }: { priority: Priority; children?: ReactNode }) {
+export function PriorityBadge({
+  priority,
+  size = 'sm',
+  children,
+}: {
+  priority: Priority
+  size?: keyof typeof badgeSizes
+  children?: ReactNode
+}) {
   return (
-    <span className={cx('inline-flex rounded-xs px-2 py-0.5 text-xs font-extrabold whitespace-nowrap', priorityClasses[priority])}>
+    <span className={cx('inline-flex font-extrabold whitespace-nowrap', badgeSizes[size], priorityClasses[priority])}>
       {children ?? priority}
     </span>
   )

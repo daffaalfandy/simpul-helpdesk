@@ -19,12 +19,15 @@ import { Route as AgentBoardRouteImport } from './routes/_agent/board'
 import { Route as AgentProjectsRouteImport } from './routes/_agent/projects'
 import { Route as AgentReportsRouteImport } from './routes/_agent/reports'
 import { Route as AgentSettingsRouteImport } from './routes/_agent/settings'
+import { Route as AgentProjectsIndexRouteImport } from './routes/_agent/projects/index'
+import { Route as AgentProjectsProjectIdRouteImport } from './routes/_agent/projects/$projectId'
 import { Route as AgentSettingsIndexRouteImport } from './routes/_agent/settings/index'
 import { Route as AgentSettingsCatalogRouteImport } from './routes/_agent/settings/catalog'
 import { Route as AgentSettingsClientsRouteImport } from './routes/_agent/settings/clients'
 import { Route as AgentSettingsGeneralRouteImport } from './routes/_agent/settings/general'
 import { Route as AgentSettingsIntegrationsRouteImport } from './routes/_agent/settings/integrations'
 import { Route as AgentSettingsMembersRouteImport } from './routes/_agent/settings/members'
+import { Route as AgentSettingsPrioritiesRouteImport } from './routes/_agent/settings/priorities'
 import { Route as AgentSettingsSlaRouteImport } from './routes/_agent/settings/sla'
 import { Route as AgentTicketsKeyRouteImport } from './routes/_agent/tickets/$key'
 import { Route as PortalPortalIndexRouteImport } from './routes/_portal/portal/index'
@@ -79,6 +82,16 @@ const AgentSettingsRoute = AgentSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AgentRoute,
 } as any)
+const AgentProjectsIndexRoute = AgentProjectsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AgentProjectsRoute,
+} as any)
+const AgentProjectsProjectIdRoute = AgentProjectsProjectIdRouteImport.update({
+  id: '/$projectId',
+  path: '/$projectId',
+  getParentRoute: () => AgentProjectsRoute,
+} as any)
 const AgentSettingsIndexRoute = AgentSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -108,6 +121,11 @@ const AgentSettingsIntegrationsRoute =
 const AgentSettingsMembersRoute = AgentSettingsMembersRouteImport.update({
   id: '/members',
   path: '/members',
+  getParentRoute: () => AgentSettingsRoute,
+} as any)
+const AgentSettingsPrioritiesRoute = AgentSettingsPrioritiesRouteImport.update({
+  id: '/priorities',
+  path: '/priorities',
   getParentRoute: () => AgentSettingsRoute,
 } as any)
 const AgentSettingsSlaRoute = AgentSettingsSlaRouteImport.update({
@@ -142,17 +160,20 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/board': typeof AgentBoardRoute
-  '/projects': typeof AgentProjectsRoute
+  '/projects': typeof AgentProjectsRouteWithChildren
   '/reports': typeof AgentReportsRoute
   '/settings': typeof AgentSettingsRouteWithChildren
+  '/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/settings/catalog': typeof AgentSettingsCatalogRoute
   '/settings/clients': typeof AgentSettingsClientsRoute
   '/settings/general': typeof AgentSettingsGeneralRoute
   '/settings/integrations': typeof AgentSettingsIntegrationsRoute
   '/settings/members': typeof AgentSettingsMembersRoute
+  '/settings/priorities': typeof AgentSettingsPrioritiesRoute
   '/settings/sla': typeof AgentSettingsSlaRoute
   '/tickets/$key': typeof AgentTicketsKeyRoute
   '/portal/new': typeof PortalPortalNewRoute
+  '/projects/': typeof AgentProjectsIndexRoute
   '/settings/': typeof AgentSettingsIndexRoute
   '/portal/': typeof PortalPortalIndexRoute
   '/portal/tickets/$key': typeof PortalPortalTicketsKeyRoute
@@ -163,16 +184,18 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/board': typeof AgentBoardRoute
-  '/projects': typeof AgentProjectsRoute
   '/reports': typeof AgentReportsRoute
+  '/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/settings/catalog': typeof AgentSettingsCatalogRoute
   '/settings/clients': typeof AgentSettingsClientsRoute
   '/settings/general': typeof AgentSettingsGeneralRoute
   '/settings/integrations': typeof AgentSettingsIntegrationsRoute
   '/settings/members': typeof AgentSettingsMembersRoute
+  '/settings/priorities': typeof AgentSettingsPrioritiesRoute
   '/settings/sla': typeof AgentSettingsSlaRoute
   '/tickets/$key': typeof AgentTicketsKeyRoute
   '/portal/new': typeof PortalPortalNewRoute
+  '/projects': typeof AgentProjectsIndexRoute
   '/settings': typeof AgentSettingsIndexRoute
   '/portal': typeof PortalPortalIndexRoute
   '/portal/tickets/$key': typeof PortalPortalTicketsKeyRoute
@@ -186,17 +209,20 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_agent/board': typeof AgentBoardRoute
-  '/_agent/projects': typeof AgentProjectsRoute
+  '/_agent/projects': typeof AgentProjectsRouteWithChildren
   '/_agent/reports': typeof AgentReportsRoute
   '/_agent/settings': typeof AgentSettingsRouteWithChildren
+  '/_agent/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/_agent/settings/catalog': typeof AgentSettingsCatalogRoute
   '/_agent/settings/clients': typeof AgentSettingsClientsRoute
   '/_agent/settings/general': typeof AgentSettingsGeneralRoute
   '/_agent/settings/integrations': typeof AgentSettingsIntegrationsRoute
   '/_agent/settings/members': typeof AgentSettingsMembersRoute
+  '/_agent/settings/priorities': typeof AgentSettingsPrioritiesRoute
   '/_agent/settings/sla': typeof AgentSettingsSlaRoute
   '/_agent/tickets/$key': typeof AgentTicketsKeyRoute
   '/_portal/portal/new': typeof PortalPortalNewRoute
+  '/_agent/projects/': typeof AgentProjectsIndexRoute
   '/_agent/settings/': typeof AgentSettingsIndexRoute
   '/_portal/portal/': typeof PortalPortalIndexRoute
   '/_portal/portal/tickets/$key': typeof PortalPortalTicketsKeyRoute
@@ -212,14 +238,17 @@ export interface FileRouteTypes {
     | '/projects'
     | '/reports'
     | '/settings'
+    | '/projects/$projectId'
     | '/settings/catalog'
     | '/settings/clients'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/members'
+    | '/settings/priorities'
     | '/settings/sla'
     | '/tickets/$key'
     | '/portal/new'
+    | '/projects/'
     | '/settings/'
     | '/portal/'
     | '/portal/tickets/$key'
@@ -230,16 +259,18 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/board'
-    | '/projects'
     | '/reports'
+    | '/projects/$projectId'
     | '/settings/catalog'
     | '/settings/clients'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/members'
+    | '/settings/priorities'
     | '/settings/sla'
     | '/tickets/$key'
     | '/portal/new'
+    | '/projects'
     | '/settings'
     | '/portal'
     | '/portal/tickets/$key'
@@ -255,14 +286,17 @@ export interface FileRouteTypes {
     | '/_agent/projects'
     | '/_agent/reports'
     | '/_agent/settings'
+    | '/_agent/projects/$projectId'
     | '/_agent/settings/catalog'
     | '/_agent/settings/clients'
     | '/_agent/settings/general'
     | '/_agent/settings/integrations'
     | '/_agent/settings/members'
+    | '/_agent/settings/priorities'
     | '/_agent/settings/sla'
     | '/_agent/tickets/$key'
     | '/_portal/portal/new'
+    | '/_agent/projects/'
     | '/_agent/settings/'
     | '/_portal/portal/'
     | '/_portal/portal/tickets/$key'
@@ -349,6 +383,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentSettingsRouteImport
       parentRoute: typeof AgentRoute
     }
+    '/_agent/projects/': {
+      id: '/_agent/projects/'
+      path: '/'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof AgentProjectsIndexRouteImport
+      parentRoute: typeof AgentProjectsRoute
+    }
+    '/_agent/projects/$projectId': {
+      id: '/_agent/projects/$projectId'
+      path: '/$projectId'
+      fullPath: '/projects/$projectId'
+      preLoaderRoute: typeof AgentProjectsProjectIdRouteImport
+      parentRoute: typeof AgentProjectsRoute
+    }
     '/_agent/settings/': {
       id: '/_agent/settings/'
       path: '/'
@@ -391,6 +439,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentSettingsMembersRouteImport
       parentRoute: typeof AgentSettingsRoute
     }
+    '/_agent/settings/priorities': {
+      id: '/_agent/settings/priorities'
+      path: '/priorities'
+      fullPath: '/settings/priorities'
+      preLoaderRoute: typeof AgentSettingsPrioritiesRouteImport
+      parentRoute: typeof AgentSettingsRoute
+    }
     '/_agent/settings/sla': {
       id: '/_agent/settings/sla'
       path: '/sla'
@@ -429,12 +484,27 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AgentProjectsRouteChildren {
+  AgentProjectsProjectIdRoute: typeof AgentProjectsProjectIdRoute
+  AgentProjectsIndexRoute: typeof AgentProjectsIndexRoute
+}
+
+const AgentProjectsRouteChildren: AgentProjectsRouteChildren = {
+  AgentProjectsProjectIdRoute: AgentProjectsProjectIdRoute,
+  AgentProjectsIndexRoute: AgentProjectsIndexRoute,
+}
+
+const AgentProjectsRouteWithChildren = AgentProjectsRoute._addFileChildren(
+  AgentProjectsRouteChildren,
+)
+
 interface AgentSettingsRouteChildren {
   AgentSettingsCatalogRoute: typeof AgentSettingsCatalogRoute
   AgentSettingsClientsRoute: typeof AgentSettingsClientsRoute
   AgentSettingsGeneralRoute: typeof AgentSettingsGeneralRoute
   AgentSettingsIntegrationsRoute: typeof AgentSettingsIntegrationsRoute
   AgentSettingsMembersRoute: typeof AgentSettingsMembersRoute
+  AgentSettingsPrioritiesRoute: typeof AgentSettingsPrioritiesRoute
   AgentSettingsSlaRoute: typeof AgentSettingsSlaRoute
   AgentSettingsIndexRoute: typeof AgentSettingsIndexRoute
 }
@@ -445,6 +515,7 @@ const AgentSettingsRouteChildren: AgentSettingsRouteChildren = {
   AgentSettingsGeneralRoute: AgentSettingsGeneralRoute,
   AgentSettingsIntegrationsRoute: AgentSettingsIntegrationsRoute,
   AgentSettingsMembersRoute: AgentSettingsMembersRoute,
+  AgentSettingsPrioritiesRoute: AgentSettingsPrioritiesRoute,
   AgentSettingsSlaRoute: AgentSettingsSlaRoute,
   AgentSettingsIndexRoute: AgentSettingsIndexRoute,
 }
@@ -455,7 +526,7 @@ const AgentSettingsRouteWithChildren = AgentSettingsRoute._addFileChildren(
 
 interface AgentRouteChildren {
   AgentBoardRoute: typeof AgentBoardRoute
-  AgentProjectsRoute: typeof AgentProjectsRoute
+  AgentProjectsRoute: typeof AgentProjectsRouteWithChildren
   AgentReportsRoute: typeof AgentReportsRoute
   AgentSettingsRoute: typeof AgentSettingsRouteWithChildren
   AgentTicketsKeyRoute: typeof AgentTicketsKeyRoute
@@ -463,7 +534,7 @@ interface AgentRouteChildren {
 
 const AgentRouteChildren: AgentRouteChildren = {
   AgentBoardRoute: AgentBoardRoute,
-  AgentProjectsRoute: AgentProjectsRoute,
+  AgentProjectsRoute: AgentProjectsRouteWithChildren,
   AgentReportsRoute: AgentReportsRoute,
   AgentSettingsRoute: AgentSettingsRouteWithChildren,
   AgentTicketsKeyRoute: AgentTicketsKeyRoute,

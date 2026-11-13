@@ -38,6 +38,9 @@ const (
 	CodeInvalidSlaTargets     = "invalid_sla_targets"
 	CodeInvalidBusinessHours  = "invalid_business_hours"
 	CodeHolidayDateTaken      = "holiday_date_taken"
+	CodeInvalidPriorityLevels = "invalid_priority_levels"
+	CodeProjectNameTaken      = "project_name_taken"
+	CodeProjectIsDefault      = "project_is_default"
 
 	CodeRequestTooLarge           = "request_too_large"
 	CodeAttachmentTooLarge        = "attachment_too_large"

@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
@@ -46,6 +49,16 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		"TicketActivityAction": strs(tickets.ActivityCreated, tickets.ActivityStatusChanged,
 			tickets.ActivityAssigneeChanged, tickets.ActivityPriorityChanged, tickets.ActivityReplyAdded,
 			tickets.ActivityNoteAdded, tickets.ActivityFirstResponded),
+		"Priority":     strs(sla.Priorities...),
+		"SlaCalendar":  strs(sla.CalendarBusinessHours, sla.CalendarAlways),
+		"DurationUnit": strs(sla.Units...),
+		"AtRiskPercent": func() []string {
+			out := make([]string, len(sla.AtRiskPercents))
+			for i, p := range sla.AtRiskPercents {
+				out[i] = fmt.Sprint(int(p))
+			}
+			return out
+		}(),
 	}
 	for name, want := range enums {
 		if got := enum(name); !slices.Equal(got, want) {
@@ -64,6 +77,13 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		{"TicketMessageInput", "body", tickets.MaxMessageLen, 0},
 		{"TicketMessageInput", "attachmentIds", 0, tickets.MaxAttachmentsPerMessage},
 		{"TicketPriorityInput", "reason", tickets.MaxReasonLen, 0},
+		{"ProjectCreate", "name", projects.MaxNameLen, 0},
+		{"ProjectCreate", "description", projects.MaxDescriptionLen, 0},
+		{"ProjectUpdate", "name", projects.MaxNameLen, 0},
+		{"ProjectUpdate", "description", projects.MaxDescriptionLen, 0},
+		{"ProjectSla", "targets", 0, len(sla.Priorities)},
+		{"PriorityLevel", "name", priorities.MaxNameLen, 0},
+		{"PriorityLevel", "description", priorities.MaxDescriptionLen, 0},
 	}
 	for _, l := range limits {
 		prop := schemas[l.schema].Value.Properties[l.field].Value

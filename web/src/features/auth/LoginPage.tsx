@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
@@ -72,7 +73,7 @@ export function LoginPage({ redirectTo }: { redirectTo?: string }) {
   )
 }
 
-function loginErrorMessage(error: Error, t: ReturnType<typeof useTranslation>['t']): string {
+function loginErrorMessage(error: Error, t: TFunction): string {
   if (error instanceof ApiError) {
     if (error.code === ErrorCode.InvalidCredentials) return t('login.errors.invalidCredentials')
     if (error.code === ErrorCode.RateLimited) {

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Priority, Ticket, TicketStatus } from '../../api/client'
+import { usePriorityNames } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { DescriptionList } from '../../components/DescriptionList'
 import { ConfirmDialog } from '../../components/Dialog'
@@ -19,6 +20,7 @@ const UNASSIGNED = 'unassigned'
 /** Status, assignee and priority (with a reason), plus the ticket's read-only details. */
 export function TicketProperties({ ticket }: { ticket: Ticket }) {
   const { t } = useTranslation()
+  const names = usePriorityNames()
   const setStatus = useSetStatus(ticket.key)
   const setAssignee = useSetAssignee(ticket.key)
   const setPriority = useSetPriority(ticket.key)
@@ -78,7 +80,7 @@ export function TicketProperties({ ticket }: { ticket: Ticket }) {
       <ErrorAlert error={setAssignee.error ?? assigneesError} />
       <Dropdown
         label={t('ticket.fields.priority')}
-        options={PRIORITIES.map((p) => ({ id: p, label: priorityLong(t, p, ticket.type) }))}
+        options={PRIORITIES.map((p) => ({ id: p, label: priorityLong(t, names, p, ticket.type) }))}
         value={ticket.priority}
         onChange={(p) => p !== ticket.priority && setPendingPriority(p)}
         isDisabled={locked || setPriority.isPending}
@@ -93,7 +95,7 @@ export function TicketProperties({ ticket }: { ticket: Ticket }) {
               setPriority.reset()
             }
           }}
-          title={t('ticket.priorityChange.title', { priority: priorityLong(t, pendingPriority, ticket.type) })}
+          title={t('ticket.priorityChange.title', { priority: priorityLong(t, names, pendingPriority, ticket.type) })}
           reasonLabel={t('ticket.priorityChange.reason')}
           confirmLabel={t('ticket.priorityChange.confirm')}
           isPending={setPriority.isPending}

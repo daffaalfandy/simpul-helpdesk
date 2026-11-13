@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Intake, Priority, Ticket, TicketType } from '../../api/client'
-import { attachmentPolicyQueryOptions } from '../../api/queries'
+import { attachmentPolicyQueryOptions, usePriorityNames } from '../../api/queries'
 import { AttachmentPicker } from '../../components/AttachmentPicker'
 import { PriorityBadge } from '../../components/Badges'
 import { BackLink } from '../../components/BackLink'
@@ -248,6 +248,7 @@ const MAX_SUBJECT_LENGTH = 200
 
 function ReportSuccess({ ticket, onAnother }: { ticket: Ticket; onAnother: () => void }) {
   const { t } = useTranslation()
+  const names = usePriorityNames()
   const heading = useRef<HTMLHeadingElement>(null)
   const { data: intake } = useSuspenseQuery(intakeQueryOptions(null))
   useEffect(() => heading.current?.focus(), [])
@@ -260,7 +261,7 @@ function ReportSuccess({ ticket, onAnother }: { ticket: Ticket; onAnother: () =>
           {t('portal.new.success.title', { key: ticket.key })}
         </h1>
         <p className="max-w-xl text-md text-muted">
-          {t('portal.new.success.body', { priority: priorityLong(t, ticket.priority, ticket.type), response })}
+          {t('portal.new.success.body', { priority: priorityLong(t, names, ticket.priority, ticket.type), response })}
         </p>
         <div className="flex flex-wrap justify-center gap-3">
           <Button variant="outline" onPress={onAnother}>

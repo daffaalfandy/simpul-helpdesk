@@ -111,6 +111,42 @@ type PasswordResetToken struct {
 	UsedAt    *time.Time
 }
 
+type Priority struct {
+	Code        string
+	Name        string
+	Description string
+	UpdatedAt   time.Time
+}
+
+type Project struct {
+	ID                          uuid.UUID
+	ClientID                    uuid.UUID
+	Name                        string
+	Description                 *string
+	IsDefault                   bool
+	Active                      bool
+	SlaPauseOnWaitingClient     bool
+	SlaPauseOnUat               bool
+	SlaAtRiskPercent            int16
+	SlaNotifySupervisorOnBreach bool
+	SlaNotifyPicOnP1Breach      bool
+	CreatedAt                   time.Time
+	UpdatedAt                   time.Time
+}
+
+type ProjectSlaTarget struct {
+	ProjectID          uuid.UUID
+	Priority           string
+	FirstResponseValue int32
+	FirstResponseUnit  string
+	ResolveValue       int32
+	ResolveUnit        string
+	DeliverValue       int32
+	DeliverUnit        string
+	Calendar           string
+	UpdatedAt          time.Time
+}
+
 type Session struct {
 	ID         uuid.UUID
 	TokenHash  []byte

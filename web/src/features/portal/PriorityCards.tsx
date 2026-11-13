@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import type { Priority, SlaTarget, TicketType } from '../../api/client'
+import { usePriorityNames } from '../../api/queries'
 import { PriorityBadge } from '../../components/Badges'
 import { OptionCard, OptionCardGroup } from '../../components/OptionCard'
 import { formatDuration } from '../../lib/formatDuration'
@@ -31,6 +32,7 @@ export function PriorityCards({
   isInvalid,
 }: PriorityCardsProps) {
   const { t } = useTranslation()
+  const names = usePriorityNames()
   return (
     <OptionCardGroup
       label={t('portal.new.priority')}
@@ -49,10 +51,10 @@ export function PriorityCards({
           <OptionCard key={p} value={p}>
             <span className="flex items-center gap-2">
               <PriorityBadge priority={p} />
-              <span className="font-extrabold">{priorityName(t, p, type)}</span>
+              <span className="font-extrabold">{priorityName(t, names, p, type)}</span>
             </span>
             <span className="text-sm text-muted">
-              {type === 'request' ? t(`priority.request.${p}.when`) : t(`priority.${p}.when`)}
+              {type === 'request' ? t(`priority.request.${p}.when`) : names[p].description}
             </span>
             <span aria-hidden="true" className="border-t border-border" />
             <span className="text-sm">{t('portal.new.firstReply', { duration: duration(eff.firstResponseMinutes) })}</span>

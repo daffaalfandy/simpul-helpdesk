@@ -82,6 +82,7 @@ describe('route guards', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/board'))
     const nav = await screen.findByRole('navigation', { name: 'Main' })
     expect(nav).toHaveTextContent('Board')
+    expect(nav).toHaveTextContent('Projects')
     expect(nav).not.toHaveTextContent('Settings')
   })
 

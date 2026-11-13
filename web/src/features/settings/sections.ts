@@ -1,8 +1,8 @@
-import { Building2, Clock, GitBranch, ListChecks, Settings2, Users, type LucideIcon } from 'lucide-react'
+import { Building2, Clock, Flag, GitBranch, ListChecks, Settings2, Users, type LucideIcon } from 'lucide-react'
 
 import { paths } from '../../lib/constants'
 
-export type SectionId = 'general' | 'members' | 'sla' | 'clients' | 'catalog' | 'integrations'
+export type SectionId = 'general' | 'members' | 'priorities' | 'sla' | 'clients' | 'catalog' | 'integrations'
 export type GroupId = 'organisation' | 'serviceDesk' | 'integrations'
 
 export type Section = { id: SectionId; path: string; icon: LucideIcon }
@@ -20,6 +20,7 @@ export const GROUPS: Group[] = [
   {
     id: 'serviceDesk',
     sections: [
+      { id: 'priorities', path: paths.settingsPriorities, icon: Flag },
       { id: 'sla', path: paths.settingsSla, icon: Clock },
       { id: 'clients', path: paths.settingsClients, icon: Building2 },
       { id: 'catalog', path: paths.settingsCatalog, icon: ListChecks },

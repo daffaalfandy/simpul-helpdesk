@@ -16,7 +16,7 @@ export function AppHeader({ me, org }: { me: Me; org?: Organization }) {
   const { t } = useTranslation()
   const items = [
     { to: paths.board, label: t('nav.board'), show: true },
-    { to: paths.projects, label: t('nav.projects'), show: can.manageProjects(me.role) },
+    { to: paths.projects, label: t('nav.projects'), show: can.viewProjects(me.role) },
     { to: paths.reports, label: t('nav.reports'), show: can.viewReports(me.role) },
     { to: paths.settings, label: t('nav.settings'), show: can.manageSettings(me.role) },
   ].filter((item) => item.show)

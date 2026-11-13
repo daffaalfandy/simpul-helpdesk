@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Ticket, TicketProgress } from '../../api/client'
-import { attachmentPolicyQueryOptions } from '../../api/queries'
+import { attachmentPolicyQueryOptions, usePriorityNames } from '../../api/queries'
 import { AttachmentPicker } from '../../components/AttachmentPicker'
 import { Pill, PriorityBadge } from '../../components/Badges'
 import { BackLink } from '../../components/BackLink'
@@ -28,6 +28,7 @@ import { useAttachmentUploads } from '../tickets/useAttachmentUploads'
 /** Requester ticket view (HANDOFF §4, PortalTicket.dc.html), M3 parts. */
 export function PortalTicketPage({ ticketKey }: { ticketKey: string }) {
   const { t } = useTranslation()
+  const names = usePriorityNames()
   const me = useSignedInUser()
   const { data: ticket } = useSuspenseQuery(ticketQueryOptions(ticketKey))
   const { data: messages } = useSuspenseQuery(ticketMessagesQueryOptions(ticketKey))
@@ -56,7 +57,7 @@ export function PortalTicketPage({ ticketKey }: { ticketKey: string }) {
               {t('ticket.keyType', { key: ticket.key, type: t(`ticket.type.${ticket.type}`) })}
             </span>
             <span>{t('ticket.reported', { when: full(ticket.createdAt) })}</span>
-            <PriorityBadge priority={ticket.priority}>{priorityLong(t, ticket.priority, ticket.type)}</PriorityBadge>
+            <PriorityBadge priority={ticket.priority}>{priorityLong(t, names, ticket.priority, ticket.type)}</PriorityBadge>
           </div>
           <h1 className="text-2xl leading-tight font-extrabold tracking-title wrap-break-word">{ticket.subject}</h1>
         </div>

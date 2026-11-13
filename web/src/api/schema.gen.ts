@@ -313,6 +313,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/priorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Priority names and descriptions, P1 to P4
+         * @description Shared by every project. Requesters read them when they pick a priority.
+         */
+        get: operations["listPriorityLevels"];
+        /**
+         * Rename the priorities (admin only)
+         * @description Send all four levels. Error code `invalid_priority_levels`.
+         */
+        put: operations["updatePriorityLevels"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Projects the user may see, by client and name
+         * @description Staff only. Admins and supervisors see every project; agents see the projects of the
+         *     clients assigned to them. With `clientId`, a client the user can't see is a 404.
+         */
+        get: operations["listProjects"];
+        put?: never;
+        /**
+         * Add a project (supervisors and admins)
+         * @description The project starts with the default SLA. A client's first project becomes its default.
+         *     Error codes are `invalid_name`, `client_not_found`, `project_is_default` (a hidden default)
+         *     and `project_name_taken` (409).
+         */
+        post: operations["createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /** One project */
+        get: operations["getProject"];
+        /**
+         * Change a project's details (supervisors and admins)
+         * @description Making a project the default moves service requests to it. The default can't be unset
+         *     or hidden directly (`project_is_default`): make another project the default instead.
+         */
+        put: operations["updateProject"];
+        post?: never;
+        /**
+         * Delete a project (supervisors and admins)
+         * @description The default can't be deleted while the client has other active projects (`project_is_default`, 409).
+         */
+        delete: operations["deleteProject"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/sla": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a project's SLA targets and settings (supervisors and admins)
+         * @description New tickets use the new targets; open tickets keep the ones they started with. First
+         *     response must be shorter than resolve and deliver (`invalid_sla_targets`), comparing a
+         *     working day as one business-hours window and a day as 24 hours.
+         */
+        put: operations["updateProjectSla"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/business-hours": {
         parameters: {
             query?: never;
@@ -914,6 +1017,80 @@ export interface components {
             name: string;
             targets: components["schemas"]["SlaTarget"][];
         };
+        PriorityLevel: {
+            code: components["schemas"]["Priority"];
+            /** @example Critical */
+            name: string;
+            /** @example A public service or the whole office is down */
+            description: string;
+        };
+        /**
+         * @description `min` minutes, `h` hours, `wd` working days (one business-hours window), `d` calendar days.
+         * @enum {string}
+         */
+        DurationUnit: "min" | "h" | "wd" | "d";
+        Duration: {
+            value: number;
+            unit: components["schemas"]["DurationUnit"];
+        };
+        ProjectTarget: {
+            priority: components["schemas"]["Priority"];
+            firstResponse: components["schemas"]["Duration"];
+            /** @description Incidents. */
+            resolve: components["schemas"]["Duration"];
+            /** @description Service requests. */
+            deliver: components["schemas"]["Duration"];
+            calendar: components["schemas"]["SlaCalendar"];
+        };
+        /**
+         * @description Share of a target that may pass before a ticket counts as at risk.
+         * @enum {integer}
+         */
+        AtRiskPercent: 50 | 75 | 90;
+        ProjectSla: {
+            /** @description One per priority, P1 to P4. */
+            targets: components["schemas"]["ProjectTarget"][];
+            pauseOnWaitingClient: boolean;
+            pauseOnUat: boolean;
+            atRiskPercent: components["schemas"]["AtRiskPercent"];
+            notifySupervisorOnBreach: boolean;
+            notifyPicOnP1Breach: boolean;
+        };
+        Project: {
+            /** Format: uuid */
+            id: string;
+            client: components["schemas"]["Ref"];
+            /** @example e-Office */
+            name: string;
+            /**
+             * @description Shown under the name in the portal's "Which system?".
+             * @example Letters, dispositions, archives
+             */
+            description: string | null;
+            /** @description Service requests from this client go to its default project. */
+            isDefault: boolean;
+            /** @description Hidden projects keep their tickets but are left off the report form. */
+            active: boolean;
+            sla: components["schemas"]["ProjectSla"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ProjectCreate: {
+            /** Format: uuid */
+            clientId: string;
+            name: string;
+            description?: string | null;
+            isDefault: boolean;
+            active: boolean;
+        };
+        ProjectUpdate: {
+            name: string;
+            description?: string | null;
+            isDefault: boolean;
+            active: boolean;
+        };
         BusinessHours: {
             /** @example Asia/Jakarta */
             timezone: string;
@@ -1283,6 +1460,7 @@ export interface components {
         /** @description A ticket key such as HD-24871 (case-insensitive). */
         TicketKey: string;
         AttachmentId: string;
+        ProjectId: string;
         SystemId: string;
         CatalogItemId: string;
     };
@@ -1860,6 +2038,225 @@ export interface operations {
                     "application/json": components["schemas"]["SlaPlan"];
                 };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPriorityLevels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Priority levels, P1 first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriorityLevel"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updatePriorityLevels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriorityLevel"][];
+            };
+        };
+        responses: {
+            /** @description Updated, P1 first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriorityLevel"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listProjects: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Projects */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateProjectSla: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectSla"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

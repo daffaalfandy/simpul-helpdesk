@@ -25,21 +25,25 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
 type Deps struct {
-	Config  config.Config
-	Store   *store.Store
-	Auth    *auth.Service
-	Clients *clients.Service
-	SLA     *sla.Service
-	Catalog *catalog.Service
-	Tickets *tickets.Service
-	Logger  *slog.Logger
-	WebUI   fs.FS // built SPA; may be empty in development
+	Config     config.Config
+	Store      *store.Store
+	Auth       *auth.Service
+	Clients    *clients.Service
+	SLA        *sla.Service
+	Catalog    *catalog.Service
+	Projects   *projects.Service
+	Priorities *priorities.Service
+	Tickets    *tickets.Service
+	Logger     *slog.Logger
+	WebUI      fs.FS // built SPA; may be empty in development
 }
 
 type server struct {
@@ -49,6 +53,8 @@ type server struct {
 	clients    *clients.Service
 	sla        *sla.Service
 	catalog    *catalog.Service
+	projects   *projects.Service
+	priorities *priorities.Service
 	tickets    *tickets.Service
 	log        *slog.Logger
 	cookieName string
@@ -63,7 +69,8 @@ func New(d Deps) (http.Handler, error) {
 	}
 	s := &server{
 		cfg: d.Config, store: d.Store, auth: d.Auth, clients: d.Clients, sla: d.SLA, catalog: d.Catalog,
-		tickets: d.Tickets, log: d.Logger, cookieName: cookieName(d.Config.CookieSecure),
+		projects: d.Projects, priorities: d.Priorities, tickets: d.Tickets, log: d.Logger,
+		cookieName: cookieName(d.Config.CookieSecure),
 	}
 	streamed := streamedRoutes(spec)
 

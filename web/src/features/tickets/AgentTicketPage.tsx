@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import { usePriorityNames } from '../../api/queries'
 import { BackLink } from '../../components/BackLink'
 import { Pill, PriorityBadge } from '../../components/Badges'
 import { paths } from '../../lib/constants'
@@ -19,6 +20,7 @@ import { useTimestamp } from './time'
 /** Agent ticket detail (HANDOFF §4, Ticket.dc.html), M3 parts. */
 export function AgentTicketPage({ ticketKey }: { ticketKey: string }) {
   const { t } = useTranslation()
+  const names = usePriorityNames()
   const me = useSignedInUser()
   const { data: ticket } = useSuspenseQuery(ticketQueryOptions(ticketKey))
   const { data: messages } = useSuspenseQuery(ticketMessagesQueryOptions(ticketKey))
@@ -37,7 +39,7 @@ export function AgentTicketPage({ ticketKey }: { ticketKey: string }) {
             {t('ticket.openedVia', { when: stamp(ticket.createdAt), channel: t(`ticket.channel.${ticket.channel}`) })}
           </span>
           {ticket.loggedByStaff && <span>{t('ticket.loggedBy', { name: ticket.createdBy.name })}</span>}
-          <PriorityBadge priority={ticket.priority}>{priorityLong(t, ticket.priority, ticket.type)}</PriorityBadge>
+          <PriorityBadge priority={ticket.priority}>{priorityLong(t, names, ticket.priority, ticket.type)}</PriorityBadge>
           <Pill tone={STATUS_TONE[ticket.status]}>{agentStatus(t, ticket.status)}</Pill>
         </div>
         <h1 className="text-2xl leading-tight font-extrabold tracking-title wrap-break-word">{ticket.subject}</h1>

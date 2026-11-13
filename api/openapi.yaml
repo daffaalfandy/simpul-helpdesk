@@ -27,6 +27,7 @@ tags:
   - name: tickets
   - name: attachments
   - name: catalog
+  - name: projects
 
 paths:
   /organization:
@@ -434,6 +435,182 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SlaPlan" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /priorities:
+    get:
+      operationId: listPriorityLevels
+      summary: Priority names and descriptions, P1 to P4
+      description: Shared by every project. Requesters read them when they pick a priority.
+      tags: [sla]
+      responses:
+        "200":
+          description: Priority levels, P1 first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PriorityLevel" }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updatePriorityLevels
+      summary: Rename the priorities (admin only)
+      description: Send all four levels. Error code `invalid_priority_levels`.
+      tags: [sla]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 4
+              maxItems: 4
+              items: { $ref: "#/components/schemas/PriorityLevel" }
+      responses:
+        "200":
+          description: Updated, P1 first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PriorityLevel" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /projects:
+    get:
+      operationId: listProjects
+      summary: Projects the user may see, by client and name
+      description: |
+        Staff only. Admins and supervisors see every project; agents see the projects of the
+        clients assigned to them. With `clientId`, a client the user can't see is a 404.
+      tags: [projects]
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Project" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createProject
+      summary: Add a project (supervisors and admins)
+      description: |
+        The project starts with the default SLA. A client's first project becomes its default.
+        Error codes are `invalid_name`, `client_not_found`, `project_is_default` (a hidden default)
+        and `project_name_taken` (409).
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /projects/{projectId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: getProject
+      summary: One project
+      tags: [projects]
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateProject
+      summary: Change a project's details (supervisors and admins)
+      description: |
+        Making a project the default moves service requests to it. The default can't be unset
+        or hidden directly (`project_is_default`): make another project the default instead.
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteProject
+      summary: Delete a project (supervisors and admins)
+      description: The default can't be deleted while the client has other active projects (`project_is_default`, 409).
+      tags: [projects]
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /projects/{projectId}/sla:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    put:
+      operationId: updateProjectSla
+      summary: Replace a project's SLA targets and settings (supervisors and admins)
+      description: |
+        New tickets use the new targets; open tickets keep the ones they started with. First
+        response must be shorter than resolve and deliver (`invalid_sla_targets`), comparing a
+        working day as one business-hours window and a day as 24 hours.
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectSla" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -1092,6 +1269,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     SystemId:
       name: systemId
       in: path
@@ -1332,6 +1514,106 @@ components:
           minItems: 4
           maxItems: 4
           items: { $ref: "#/components/schemas/SlaTarget" }
+
+    PriorityLevel:
+      type: object
+      required: [code, name, description]
+      properties:
+        code: { $ref: "#/components/schemas/Priority" }
+        name: { type: string, minLength: 1, maxLength: 40, example: Critical }
+        description:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: A public service or the whole office is down
+
+    DurationUnit:
+      type: string
+      description: "`min` minutes, `h` hours, `wd` working days (one business-hours window), `d` calendar days."
+      enum: [min, h, wd, d]
+
+    Duration:
+      type: object
+      required: [value, unit]
+      properties:
+        value: { type: integer, minimum: 1, maximum: 525600 }
+        unit: { $ref: "#/components/schemas/DurationUnit" }
+
+    ProjectTarget:
+      type: object
+      required: [priority, firstResponse, resolve, deliver, calendar]
+      properties:
+        priority: { $ref: "#/components/schemas/Priority" }
+        firstResponse: { $ref: "#/components/schemas/Duration" }
+        resolve:
+          description: Incidents.
+          allOf: [{ $ref: "#/components/schemas/Duration" }]
+        deliver:
+          description: Service requests.
+          allOf: [{ $ref: "#/components/schemas/Duration" }]
+        calendar: { $ref: "#/components/schemas/SlaCalendar" }
+
+    AtRiskPercent:
+      type: integer
+      description: Share of a target that may pass before a ticket counts as at risk.
+      enum: [50, 75, 90]
+
+    ProjectSla:
+      type: object
+      required: [targets, pauseOnWaitingClient, pauseOnUat, atRiskPercent, notifySupervisorOnBreach, notifyPicOnP1Breach]
+      properties:
+        targets:
+          type: array
+          description: One per priority, P1 to P4.
+          minItems: 4
+          maxItems: 4
+          items: { $ref: "#/components/schemas/ProjectTarget" }
+        pauseOnWaitingClient: { type: boolean }
+        pauseOnUat: { type: boolean }
+        atRiskPercent: { $ref: "#/components/schemas/AtRiskPercent" }
+        notifySupervisorOnBreach: { type: boolean }
+        notifyPicOnP1Breach: { type: boolean }
+
+    Project:
+      type: object
+      required: [id, client, name, description, isDefault, active, sla, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        client: { $ref: "#/components/schemas/Ref" }
+        name: { type: string, example: e-Office }
+        description:
+          type: string
+          nullable: true
+          description: Shown under the name in the portal's "Which system?".
+          example: Letters, dispositions, archives
+        isDefault:
+          type: boolean
+          description: Service requests from this client go to its default project.
+        active:
+          type: boolean
+          description: Hidden projects keep their tickets but are left off the report form.
+        sla: { $ref: "#/components/schemas/ProjectSla" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ProjectCreate:
+      type: object
+      required: [clientId, name, isDefault, active]
+      properties:
+        clientId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, nullable: true, maxLength: 300 }
+        isDefault: { type: boolean }
+        active: { type: boolean }
+
+    ProjectUpdate:
+      type: object
+      required: [name, isDefault, active]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, nullable: true, maxLength: 300 }
+        isDefault: { type: boolean }
+        active: { type: boolean }
 
     BusinessHours:
       type: object

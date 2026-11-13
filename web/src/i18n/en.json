@@ -19,7 +19,8 @@
     "showMore": "Show more",
     "completed": "Completed",
     "retry": "Try again",
-    "errorTitle": "Something went wrong"
+    "errorTitle": "Something went wrong",
+    "separator": " · "
   },
   "roles": {
     "admin": "Admin",
@@ -292,6 +293,10 @@
         "title": "Members & roles",
         "description": "Who is in your organisation and what each role can do."
       },
+      "priorities": {
+        "title": "Priorities",
+        "description": "Priority names requesters see, and guidance for agents. SLA targets live on each project."
+      },
       "sla": {
         "title": "SLA & priority",
         "description": "Response and resolution targets used by every ticket."
@@ -501,6 +506,34 @@
       "created": "{{name}} added.",
       "saved": "{{name}} saved.",
       "deleted": "{{name}} deleted."
+    },
+    "priorities": {
+      "banner": "SLA targets are set on each project. Tickets follow the SLA of the project they belong to.",
+      "setSla": "Set SLA in Projects",
+      "namesTitle": "Priority names",
+      "namesHelper": "Shown to requesters when they pick a priority, and on every ticket. Same for all projects.",
+      "name": "Name",
+      "description": "Description for requesters",
+      "forPriority": "for {{priority}}",
+      "required": "Enter a name and a description.",
+      "unsaved": "You have unsaved changes to priority names.",
+      "saved": "Priority names saved.",
+      "matrix": {
+        "title": "Priority matrix",
+        "helper": "Guidance for agents when they set or change a ticket's priority. Requesters pick priority themselves using the names and descriptions above.",
+        "caption": "Priority by impact and urgency",
+        "impact": "Impact",
+        "impacts": {
+          "office": "Whole office",
+          "team": "Team",
+          "user": "One user"
+        },
+        "urgencies": {
+          "canWait": "Can wait",
+          "slowed": "Slowed",
+          "stopped": "Stopped"
+        }
+      }
     }
   },
   "priority": {
@@ -626,7 +659,10 @@
     "system_name_taken": "A system with this name already exists.",
     "system_in_use": "Tickets use this system. Hide it instead.",
     "catalog_item_name_taken": "A catalogue item with this name already exists.",
-    "catalog_item_in_use": "Tickets use this item. Hide it instead."
+    "catalog_item_in_use": "Tickets use this item. Hide it instead.",
+    "project_name_taken": "This client already has a project with this name.",
+    "project_is_default": "This is the client's default project. Make another project the default first.",
+    "invalid_priority_levels": "Give every priority a name and a description."
   },
   "time": {
     "justNow": "Just now",
@@ -783,5 +819,120 @@
     "openTickets_one": "{{count}} open ticket",
     "openTickets_other": "{{count}} open tickets",
     "assigneeOption": "{{title}} · {{open}}"
+  },
+  "durationShort": {
+    "min": "{{count}} min",
+    "h": "{{count}} h",
+    "wd": "{{count}} wd",
+    "d": "{{count}} d"
+  },
+  "projects": {
+    "title": "Projects",
+    "subtitle": "Each project belongs to a client and sets the service level its tickets follow.",
+    "listLabel": "Projects",
+    "newProject": "New project",
+    "editProject": "Edit project",
+    "empty": {
+      "title": "No projects yet",
+      "body": "Add a project for each system a client reports problems with. Its SLA decides how fast those tickets are handled.",
+      "bodyReadOnly": "A supervisor adds projects for your clients."
+    },
+    "chips": {
+      "sla": "P1 fix {{duration}}",
+      "default": "Default",
+      "hidden": "Hidden"
+    },
+    "header": {
+      "default": "Service requests from this client go here.",
+      "hidden": "Hidden from the report form."
+    },
+    "dialog": {
+      "createTitle": "New project",
+      "editTitle": "Edit {{name}}",
+      "client": "Client",
+      "name": "Name",
+      "description": "Description",
+      "descriptionHint": "Shown under the name when a requester picks a system.",
+      "isDefault": "Use for service requests",
+      "isDefaultHint": "Service requests from this client go to this project.",
+      "isDefaultLocked": "This is the client's default. Make another project the default to change it.",
+      "active": "Show on the report form",
+      "activeHint": "Hidden projects keep their tickets.",
+      "create": "Add project",
+      "save": "Save project",
+      "delete": "Delete project",
+      "deleteTitle": "Delete {{name}}?",
+      "deleteBody": "The project and its SLA settings are removed.",
+      "errors": {
+        "client": "Choose a client.",
+        "name": "Enter a name."
+      }
+    },
+    "sla": {
+      "title": "Service level (SLA) · {{project}}",
+      "description": "Every ticket in this project uses these targets. First response is the first public reply from your team; resolve applies to incidents, deliver to service requests.",
+      "edit": "Edit SLA",
+      "save": "Save SLA",
+      "saved": "SLA saved. New targets apply to tickets created from now on; open tickets keep the targets they started with.",
+      "caption": "SLA targets per priority",
+      "cols": {
+        "priority": "Priority",
+        "firstResponse": "First response",
+        "resolve": "Resolve (incident)",
+        "deliver": "Deliver (request)",
+        "clock": "Clock runs"
+      },
+      "clock": {
+        "business_hours": "Business hours",
+        "always": "24/7"
+      },
+      "clockHint": {
+        "business_hours": "Working hours only, holidays excluded",
+        "always": "Every hour, every day"
+      },
+      "pausesWhile": "Clock pauses while",
+      "pauses": {
+        "waiting": "Waiting on client",
+        "uat": "In UAT",
+        "never": "Never"
+      },
+      "atRiskAt": "At risk at",
+      "atRiskValue": "{{percent}}% of the time used",
+      "breachAlerts": "Breach alerts",
+      "alerts": {
+        "supervisor": "Supervisor",
+        "pic": "Client PIC (P1)",
+        "none": "None"
+      },
+      "fields": {
+        "firstResponse": "First response within",
+        "resolve": "Resolve within (incident)",
+        "deliver": "Deliver within (request)",
+        "clock": "Clock runs",
+        "value": "Amount",
+        "unit": "Unit"
+      },
+      "units": {
+        "min": "min",
+        "h": "h",
+        "wd": "working days",
+        "d": "days"
+      },
+      "errors": {
+        "resolve": "First response must be shorter than the resolve time.",
+        "deliver": "First response must be shorter than the deliver time."
+      },
+      "pauseTitle": "Pause the clock while",
+      "pauseWaitingHint": "The team is waiting for the client to reply",
+      "pauseUatHint": "The client is testing a fix",
+      "hoursNote": "Business hours and holidays come from <link>Settings › General</link>.",
+      "hoursNotePlain": "Business hours and holidays come from Settings › General.",
+      "alertsTitle": "Alerts",
+      "atRiskLabel": "Mark as “at risk” when this much time is used",
+      "notifySupervisor": "Notify the supervisor on breach",
+      "notifySupervisorHint": "Email + highlight on the board",
+      "notifyPic": "Notify the client PIC when a P1 breaches",
+      "notifyPicHint": "Email to the contact person on the client record"
+    }
   }
 }

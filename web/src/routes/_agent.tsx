@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
+import { priorityLevelsQueryOptions } from '../api/queries'
 import { AgentLayout } from '../features/shell/pages'
 import { requireRole, requireUser } from '../lib/guards'
 import { can } from '../lib/roles'
@@ -11,5 +12,7 @@ export const Route = createFileRoute('/_agent')({
     requireRole(me, can.useAgentApp)
     return { me }
   },
+  // Priority names label tickets everywhere; load them once per session.
+  loader: ({ context }) => context.queryClient.ensureQueryData(priorityLevelsQueryOptions),
   component: AgentLayout,
 })

@@ -47,6 +47,15 @@ export type Requester = components['schemas']['Requester']
 export type RequesterInput = components['schemas']['RequesterInput']
 export type Assignee = components['schemas']['Assignee']
 export type Ref = components['schemas']['Ref']
+export type PriorityLevel = components['schemas']['PriorityLevel']
+export type Project = components['schemas']['Project']
+export type ProjectCreate = components['schemas']['ProjectCreate']
+export type ProjectUpdate = components['schemas']['ProjectUpdate']
+export type ProjectSla = components['schemas']['ProjectSla']
+export type ProjectTarget = components['schemas']['ProjectTarget']
+export type Duration = components['schemas']['Duration']
+export type DurationUnit = components['schemas']['DurationUnit']
+export type AtRiskPercent = components['schemas']['AtRiskPercent']
 
 /** Stable error codes returned by the API (api/internal/apperr). */
 export const ErrorCode = {
@@ -62,6 +71,8 @@ export const ErrorCode = {
   SlaPlanIsDefault: 'sla_plan_is_default',
   HolidayDateTaken: 'holiday_date_taken',
   EmailTaken: 'email_taken',
+  ProjectNameTaken: 'project_name_taken',
+  ProjectIsDefault: 'project_is_default',
   AttachmentTooLarge: 'attachment_too_large',
   AttachmentTypeNotAllowed: 'attachment_type_not_allowed',
 } as const

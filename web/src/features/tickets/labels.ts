@@ -1,15 +1,19 @@
 import type { TFunction } from 'i18next'
 
 import type { Priority, TicketActivity, TicketStatus, TicketType } from '../../api/client'
+import type { PriorityNames } from '../../api/queries'
 
-/** "Critical", or "Urgent" for a P1 service request (HANDOFF §4 report form). */
-export function priorityName(t: TFunction, priority: Priority, type: TicketType): string {
-  return type === 'request' ? t(`priority.request.${priority}.name`) : t(`priority.${priority}.name`)
+/**
+ * "Critical" (Settings › Priorities), or the report form's request wording, e.g. "Urgent" for a
+ * P1 service request (NewTicket mock).
+ */
+export function priorityName(t: TFunction, names: PriorityNames, priority: Priority, type: TicketType): string {
+  return type === 'request' ? t(`priority.request.${priority}.name`) : names[priority].name
 }
 
 /** "P1 · Critical" */
-export function priorityLong(t: TFunction, priority: Priority, type: TicketType): string {
-  return t('priority.long', { priority, name: priorityName(t, priority, type) })
+export function priorityLong(t: TFunction, names: PriorityNames, priority: Priority, type: TicketType): string {
+  return t('priority.long', { priority, name: priorityName(t, names, priority, type) })
 }
 
 export function agentStatus(t: TFunction, status: TicketStatus): string {
@@ -21,10 +25,10 @@ export function requesterStatus(t: TFunction, status: TicketStatus): string {
 }
 
 /** One activity-log line in plain words. */
-export function activityText(t: TFunction, entry: TicketActivity, type: TicketType): string {
+export function activityText(t: TFunction, names: PriorityNames, entry: TicketActivity, type: TicketType): string {
   const actor = entry.actorName ?? t('ticket.activity.system')
   const status = (s: string | null) => (s ? agentStatus(t, s as TicketStatus) : '')
-  const priority = (p: string | null) => (p ? priorityLong(t, p as Priority, type) : '')
+  const priority = (p: string | null) => (p ? priorityLong(t, names, p as Priority, type) : '')
   switch (entry.action) {
     case 'created':
       return t('ticket.activity.created', { actor, channel: t(`ticket.channel.${entry.channel ?? 'portal'}`) })

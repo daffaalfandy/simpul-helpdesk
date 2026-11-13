@@ -12,6 +12,8 @@ export const Roles = {
 export const can = {
   useAgentApp: (role: Role) => role !== Roles.Requester,
   usePortal: (role: Role) => role === Roles.Requester,
+  /** Agents read the projects of their clients; supervisors and admins also change them. */
+  viewProjects: (role: Role) => role !== Roles.Requester,
   manageProjects: (role: Role) => role === Roles.Admin || role === Roles.Supervisor,
   viewReports: (role: Role) => role === Roles.Admin || role === Roles.Supervisor,
   manageSettings: (role: Role) => role === Roles.Admin,

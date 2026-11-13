@@ -92,8 +92,9 @@ type Service struct {
 
 func NewService(st *store.Store) *Service { return &Service{store: st} }
 
-// scope returns the agent filter for p: nil when p sees every client.
-func scope(p *auth.Principal) *uuid.UUID {
+// AgentScope returns the agent filter for p: nil when p sees every client. Anything scoped by
+// client (projects, tickets) filters on it the same way.
+func AgentScope(p *auth.Principal) *uuid.UUID {
 	if auth.Can(p.Role, auth.CapClientsViewAll) {
 		return nil
 	}
@@ -104,7 +105,7 @@ func scope(p *auth.Principal) *uuid.UUID {
 // List returns the clients p may see, by name.
 func (s *Service) List(ctx context.Context, p *auth.Principal) ([]Client, error) {
 	q := s.store.Q()
-	rows, err := q.ListClients(ctx, scope(p))
+	rows, err := q.ListClients(ctx, AgentScope(p))
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +122,7 @@ func (s *Service) List(ctx context.Context, p *auth.Principal) ([]Client, error)
 
 // Get returns one client, or 404 if p may not see it.
 func (s *Service) Get(ctx context.Context, p *auth.Principal, id uuid.UUID) (Client, error) {
-	return get(ctx, s.store.Q(), id, scope(p))
+	return get(ctx, s.store.Q(), id, AgentScope(p))
 }
 
 func (s *Service) Create(ctx context.Context, actor audit.Actor, in Input) (Client, error) {

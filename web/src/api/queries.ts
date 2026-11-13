@@ -2,7 +2,7 @@ import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from '@ta
 import { notFound } from '@tanstack/react-router'
 
 import { ME_STALE_TIME_MS } from '../lib/constants'
-import { api, ApiError, HttpStatus, type Me } from './client'
+import { api, ApiError, HttpStatus, type Me, type Priority, type PriorityLevel } from './client'
 import { unwrap } from './unwrap'
 
 export const queryKeys = {
@@ -10,6 +10,9 @@ export const queryKeys = {
   organization: ['organization'],
   users: ['users'],
   clients: ['clients'],
+  priorities: ['priorities'],
+  projects: ['projects'],
+  project: (id: string) => ['projects', id] as const,
   slaPlans: ['sla-plans'],
   businessHours: ['business-hours'],
   holidays: ['holidays'],
@@ -50,6 +53,24 @@ export const clientsQueryOptions = queryOptions({
   queryKey: queryKeys.clients,
   queryFn: () => unwrap(api.GET('/clients')),
 })
+
+/** Priority names and descriptions (Settings › Priorities); the signed-in layouts preload them. */
+export const priorityLevelsQueryOptions = queryOptions({
+  queryKey: queryKeys.priorities,
+  queryFn: () => unwrap(api.GET('/priorities')),
+  staleTime: Infinity,
+})
+
+export type PriorityNames = Record<Priority, { name: string; description: string }>
+
+function toNames(levels: PriorityLevel[]): PriorityNames {
+  return Object.fromEntries(levels.map((l) => [l.code, { name: l.name, description: l.description }])) as PriorityNames
+}
+
+/** Priority names by code, for labels like "P1 · Critical". */
+export function usePriorityNames(): PriorityNames {
+  return useSuspenseQuery({ ...priorityLevelsQueryOptions, select: toNames }).data
+}
 
 export const attachmentPolicyQueryOptions = queryOptions({
   queryKey: queryKeys.attachmentPolicy,

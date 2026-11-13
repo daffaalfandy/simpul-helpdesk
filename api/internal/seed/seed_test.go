@@ -51,6 +51,10 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"invited":          count(`SELECT count(*) FROM users WHERE status = 'invited' AND password_hash IS NULL`),
 		"systems":          count(`SELECT count(*) FROM systems`),
 		"catalog items":    count(`SELECT count(*) FROM catalog_items`),
+		"projects":         count(`SELECT count(*) FROM projects`),
+		"project targets":  count(`SELECT count(*) FROM project_sla_targets`),
+		"default projects": count(`SELECT count(*) FROM projects WHERE is_default`),
+		"e-Office P1 fix":  count(`SELECT resolve_value FROM project_sla_targets t JOIN projects p ON p.id = t.project_id WHERE p.name = 'e-Office' AND t.priority = 'P1'`),
 		"tickets":          count(`SELECT count(*) FROM tickets`),
 		"messages":         count(`SELECT count(*) FROM ticket_messages`),
 		"internal notes":   count(`SELECT count(*) FROM ticket_messages WHERE visibility = 'internal'`),
@@ -60,6 +64,7 @@ func TestSeedIsIdempotent(t *testing.T) {
 	want := map[string]int{
 		"users": 8, "clients": 8, "plans": 2, "gold targets": 4, "gold clients": 2, "agent links": 7,
 		"holidays": presetDays, "standard default": 1, "invited": 1, "systems": 7, "catalog items": 5,
+		"projects": 7, "project targets": 28, "default projects": 4, "e-Office P1 fix": 2,
 		"tickets": 6, "messages": 7, "internal notes": 1, "ticket history": 6, "next number": 24872,
 	}
 	for k, w := range want {

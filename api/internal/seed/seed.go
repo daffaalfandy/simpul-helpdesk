@@ -45,7 +45,9 @@ const (
 	emailDian   = "dian@kominfo-jambi.test"
 	emailSri    = "sri.lestari@bpkad-batam.test"
 
-	clientBatam = "BPKAD Kota Batam"
+	clientBatam  = "BPKAD Kota Batam"
+	clientRiau   = "Bappeda Prov. Riau"
+	clientBintan = "Diskominfo Kab. Bintan"
 
 	// workingDay is one 08:00–17:00 working day in minutes (the default business hours).
 	workingDay = 540
@@ -72,8 +74,8 @@ type client struct {
 var clients = []client{
 	{RequesterClient, "KTR/KOMINFO-JMB/006/2026", "2026-01-01", "2026-12-31", GoldPlan, "Hendra Gunawan", "hendra@kominfo-jambi.test", []string{emailRina, emailAdi}},
 	{clientBatam, "KTR/BPKAD-BTM/014/2026", "2026-03-01", "2027-02-28", "", "Sri Lestari", emailSri, []string{emailYoga}},
-	{"Bappeda Prov. Riau", "SPK/BAPPEDA-RIAU/031/2026", "2026-01-01", "2026-12-31", "", "Fajar Nugroho", "fajar@bappeda-riau.test", []string{emailYoga}},
-	{"Diskominfo Kab. Bintan", "KTR/KOMINFO-BTN/009/2026", "2026-06-01", "2027-05-31", "", "Maya Sari", "maya@kominfo-bintan.test", []string{emailYoga}},
+	{clientRiau, "SPK/BAPPEDA-RIAU/031/2026", "2026-01-01", "2026-12-31", "", "Fajar Nugroho", "fajar@bappeda-riau.test", []string{emailYoga}},
+	{clientBintan, "KTR/KOMINFO-BTN/009/2026", "2026-06-01", "2027-05-31", "", "Maya Sari", "maya@kominfo-bintan.test", []string{emailYoga}},
 	{"Kementerian PANRB", "KTR/PANRB/112/2026", "2026-01-01", "2026-12-31", GoldPlan, "Arif Rahman", "arif@panrb.test", []string{emailRina, emailAdi}},
 	{name: "Setda Kab. Muaro Jambi"},
 	{name: "Sekretariat DPRD Kota Batam"},
@@ -187,6 +189,9 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		if err := seedHolidays(ctx, tx.Q); err != nil {
 			return err
 		}
+		if _, err := seedProjects(ctx, tx.Q, clientIDs); err != nil {
+			return err
+		}
 		lists, err := seedCatalog(ctx, tx.Q)
 		if err != nil {
 			return err
@@ -197,8 +202,8 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		return err
 	}
 
-	fmt.Fprintf(out, "Seeded organisation %q with %d clients, %d users, %d tickets and holidays for %v.\n\n",
-		OrgName, len(clients), len(people), len(demoTickets), holidaypreset.Years())
+	fmt.Fprintf(out, "Seeded organisation %q with %d clients, %d projects, %d users, %d tickets and holidays for %v.\n\n",
+		OrgName, len(clients), len(demoProjects), len(people), len(demoTickets), holidaypreset.Years())
 	tw := tabwriter.NewWriter(out, tableMinWidth, tableTabWidth, tablePadding, tablePadChar, 0)
 	fmt.Fprintln(tw, "EMAIL\tNAME\tROLE")
 	for _, p := range people {

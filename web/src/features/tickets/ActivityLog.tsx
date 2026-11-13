@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import type { TicketType } from '../../api/client'
+import { usePriorityNames } from '../../api/queries'
 import { Card } from '../../components/Card'
 import { ErrorAlert } from '../../components/ErrorAlert'
 import { Spinner } from '../../components/Spinner'
@@ -12,6 +13,7 @@ import { Timestamp } from './Timestamp'
 /** The ticket's audit trail (staff only). */
 export function ActivityLog({ ticketKey, type }: { ticketKey: string; type: TicketType }) {
   const { t } = useTranslation()
+  const names = usePriorityNames()
   const { data, error, isPending } = useQuery(ticketActivityQueryOptions(ticketKey))
   return (
     <Card as="h2" title={t('ticket.activity.title')}>
@@ -29,7 +31,7 @@ export function ActivityLog({ ticketKey, type }: { ticketKey: string; type: Tick
               <span className="text-xs whitespace-nowrap text-muted tabular-nums">
                 <Timestamp iso={entry.at} />
               </span>
-              <span className="text-ink">{activityText(t, entry, type)}</span>
+              <span className="text-ink">{activityText(t, names, entry, type)}</span>
             </li>
           ))}
         </ol>

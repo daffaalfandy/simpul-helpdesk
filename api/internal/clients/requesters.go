@@ -60,7 +60,7 @@ type Assignee struct {
 // Requesters lists a client's active and invited requesters, by name.
 func (s *Service) Requesters(ctx context.Context, p *auth.Principal, clientID uuid.UUID) ([]Requester, error) {
 	q := s.store.Q()
-	if _, err := get(ctx, q, clientID, scope(p)); err != nil {
+	if _, err := get(ctx, q, clientID, AgentScope(p)); err != nil {
 		return nil, err
 	}
 	rows, err := q.ListClientRequesters(ctx, db.ListClientRequestersParams{
@@ -87,7 +87,7 @@ func (s *Service) CreateRequester(ctx context.Context, p *auth.Principal, client
 	}
 	out := Requester{Name: in.Name, Email: in.Email, JobTitle: in.JobTitle, Status: auth.UserStatusInvited}
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		if _, err := get(ctx, tx.Q, clientID, scope(p)); err != nil {
+		if _, err := get(ctx, tx.Q, clientID, AgentScope(p)); err != nil {
 			return err
 		}
 		id, err := tx.Q.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
@@ -114,7 +114,7 @@ func (s *Service) CreateRequester(ctx context.Context, p *auth.Principal, client
 // Assignees lists who can take the client's tickets, with their open workload.
 func (s *Service) Assignees(ctx context.Context, p *auth.Principal, clientID uuid.UUID) ([]Assignee, error) {
 	q := s.store.Q()
-	if _, err := get(ctx, q, clientID, scope(p)); err != nil {
+	if _, err := get(ctx, q, clientID, AgentScope(p)); err != nil {
 		return nil, err
 	}
 	rows, err := q.ListAssignableUsers(ctx, db.ListAssignableUsersParams{

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Priority, Ticket, TicketChannel, TicketType } from '../../api/client'
-import { attachmentPolicyQueryOptions, clientsQueryOptions } from '../../api/queries'
+import { attachmentPolicyQueryOptions, clientsQueryOptions, usePriorityNames } from '../../api/queries'
 import { AttachmentPicker } from '../../components/AttachmentPicker'
 import { Checkbox } from '../../components/Checkbox'
 import { FormDialog } from '../../components/Dialog'
@@ -32,6 +32,7 @@ type LogTicketDialogProps = { onClose: () => void; onCreated: (ticket: Ticket) =
 /** "Log a ticket for a client" (HANDOFF §4, Main.dc.html). */
 export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
   const { t } = useTranslation()
+  const names = usePriorityNames()
   const { data: clients } = useSuspenseQuery(clientsQueryOptions)
   const { data: policy } = useSuspenseQuery(attachmentPolicyQueryOptions)
   const create = useCreateTicket()
@@ -77,7 +78,7 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
     const eff = target && targetFor(target, type, item?.deliveryMinutes)
     return {
       id: p,
-      label: priorityLong(t, p, type),
+      label: priorityLong(t, names, p, type),
       description: eff
         ? t(type === 'request' ? 'agent.logTicket.priorityOptionRequest' : 'agent.logTicket.priorityOption', {
             response: formatDuration(t, eff.firstResponseMinutes, eff.calendar, wd),

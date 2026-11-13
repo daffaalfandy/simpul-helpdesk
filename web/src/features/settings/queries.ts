@@ -1,6 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import type { BusinessHoursInput, CatalogItemInput, ClientInput, SlaPlanInput, SystemInput } from '../../api/client'
+import type { BusinessHoursInput, CatalogItemInput, ClientInput, PriorityLevel, SlaPlanInput, SystemInput } from '../../api/client'
 import { api } from '../../api/client'
 import { clientsQueryOptions, queryKeys, useInvalidate } from '../../api/queries'
 import { unwrap } from '../../api/unwrap'
@@ -95,6 +95,15 @@ export function useSetDefaultPlan() {
   return useMutation({
     mutationFn: (id: string) => unwrap(api.POST('/sla-plans/{planId}/default', { params: { path: { planId: id } } })),
     onSuccess: () => invalidate(queryKeys.slaPlans),
+  })
+}
+
+/** Renames the priorities; every ticket label and report-form card reads the new names. */
+export function useSavePriorityLevels() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (levels: PriorityLevel[]) => unwrap(api.PUT('/priorities', { body: levels })),
+    onSuccess: (levels) => queryClient.setQueryData(queryKeys.priorities, levels),
   })
 }
 
