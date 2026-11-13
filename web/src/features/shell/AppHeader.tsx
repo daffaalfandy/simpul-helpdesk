@@ -23,11 +23,11 @@ export function AppHeader({ me, org }: { me: Me; org?: Organization }) {
 
   return (
     <header className="border-b border-border bg-surface">
-      <div className="mx-auto flex max-w-app flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-7">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-7">
         <Link to={paths.board} className="flex items-center gap-2.5 text-ink no-underline hover:text-ink">
           <BrandMark />
           <span className="flex flex-col">
-            <span className="text-base font-extrabold">{BRAND_NAME}</span>
+            <span className="text-md font-extrabold">{BRAND_NAME}</span>
             <span className="text-xs text-muted">{t('agent.organization', { org: org?.name ?? '' })}</span>
           </span>
         </Link>

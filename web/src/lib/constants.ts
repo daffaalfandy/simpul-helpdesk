@@ -2,6 +2,14 @@
 export const BRAND_NAME = 'SimDesk'
 export const BRAND_MONOGRAM = 'SD'
 
+/**
+ * The public source repository, linked from the footer (AGPL-3.0 offers the source to everyone
+ * who uses the app). Installs that change the code should point these at their own fork (M10).
+ */
+export const SOURCE_URL = 'https://github.com/daffaalfandy/simpul-helpdesk'
+export const DOCS_URL = `${SOURCE_URL}#readme`
+export const ISSUES_URL = `${SOURCE_URL}/issues`
+
 /** App routes, shared by navigation and redirects. */
 export const paths = {
   home: '/',

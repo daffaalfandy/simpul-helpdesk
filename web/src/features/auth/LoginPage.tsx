@@ -34,7 +34,7 @@ export function LoginPage({ redirectTo }: { redirectTo?: string }) {
   }
 
   return (
-    <AuthLayout title={t('login.title', { org: org?.name ?? '' })}>
+    <AuthLayout title={t('login.title', { org: org?.name ?? '' })} intro={window.location.host}>
       <Form onSubmit={onSubmit} className={authCard}>
         {login.error && <Alert tone="error">{loginErrorMessage(login.error, t)}</Alert>}
         <TextInput
@@ -43,6 +43,7 @@ export function LoginPage({ redirectTo }: { redirectTo?: string }) {
           autoComplete="username"
           isRequired
           label={t('login.email')}
+          size="lg"
           placeholder={t('login.emailPlaceholder')}
           value={email}
           onChange={setEmail}
@@ -54,6 +55,7 @@ export function LoginPage({ redirectTo }: { redirectTo?: string }) {
           autoComplete="current-password"
           isRequired
           label={t('login.password')}
+          size="lg"
           labelAction={
             <Link to={paths.forgotPassword} className="text-sm font-bold">
               {t('login.forgot')}

@@ -23,7 +23,7 @@
     "separator": " · "
   },
   "roles": {
-    "admin": "Admin",
+    "admin": "Administrator",
     "supervisor": "Supervisor",
     "agent": "Agent",
     "requester": "Requester"
@@ -263,8 +263,12 @@
   "footer": {
     "tagline": "Service desk for {{org}}.",
     "portalTagline": "Support for clients of {{org}}.",
-    "copyright": "© {{year}} SimDesk",
-    "poweredBy": "Powered by SimDesk"
+    "poweredBy": "Powered by SimDesk, open-source software",
+    "openSource": "SimDesk · Open source under AGPL-3.0",
+    "linksLabel": "SimDesk project links",
+    "docs": "Documentation",
+    "source": "Source code",
+    "bug": "Report a bug"
   },
   "notFound": {
     "title": "Page not found",
