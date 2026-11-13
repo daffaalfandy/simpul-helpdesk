@@ -3,10 +3,11 @@ import { setupServer } from 'msw/node'
 
 import type { Me, Organization, Problem } from '../api/client'
 import { resetSettings, settingsHandlers } from './settingsApi'
+import { resetTickets, ticketsHandlers } from './ticketsApi'
 
 export const PASSWORD = 'correct-horse-battery'
 
-export const ORG: Organization = { name: 'Demo Vendor', footerNote: 'Data stored in Indonesia' }
+export const ORG: Organization = { name: 'Demo Vendor', timezone: 'Asia/Jakarta', footerNote: 'Data stored in Indonesia' }
 
 export const USERS: Record<string, Me> = {
   'rina@demo-vendor.test': {
@@ -44,6 +45,7 @@ export function resetApi() {
   state.forgotRequests = []
   state.resetBodies = []
   resetSettings()
+  resetTickets()
 }
 
 export function problem(status: number, code: string, headers?: Record<string, string>) {
@@ -78,4 +80,4 @@ const handlers = [
   }),
 ]
 
-export const server = setupServer(...handlers, ...settingsHandlers)
+export const server = setupServer(...handlers, ...settingsHandlers, ...ticketsHandlers)

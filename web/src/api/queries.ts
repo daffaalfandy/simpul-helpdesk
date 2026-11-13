@@ -1,7 +1,9 @@
-import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
+import { notFound } from '@tanstack/react-router'
 
 import { ME_STALE_TIME_MS } from '../lib/constants'
 import { api, ApiError, HttpStatus, type Me } from './client'
+import { unwrap } from './unwrap'
 
 export const queryKeys = {
   me: ['me'],
@@ -13,7 +15,47 @@ export const queryKeys = {
   holidays: ['holidays'],
   holidaysForYear: (year: number) => ['holidays', year] as const,
   holidayPresets: ['holiday-presets'],
+  systems: ['systems'],
+  catalogItems: ['catalog-items'],
+  attachmentPolicy: ['attachment-policy'],
+  intake: ['intake'],
+  intakeFor: (clientId: string | null) => ['intake', clientId ?? 'own'] as const,
+  tickets: ['tickets'],
+  ticketList: (filters: object) => ['tickets', 'list', filters] as const,
+  ticket: (key: string) => ['tickets', 'detail', key] as const,
+  ticketMessages: (key: string) => ['tickets', 'messages', key] as const,
+  ticketActivity: (key: string) => ['tickets', 'activity', key] as const,
+  clientRequesters: (clientId: string) => ['clients', clientId, 'requesters'] as const,
+  clientAssignees: (clientId: string) => ['clients', clientId, 'assignees'] as const,
 } as const
+
+/** Invalidates queries by key prefix. */
+export function useInvalidate() {
+  const queryClient = useQueryClient()
+  return (...keys: ReadonlyArray<readonly unknown[]>) =>
+    Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })))
+}
+
+/** Runs a route loader's fetch, turning a 404 into the router's not-found page. */
+export async function loadOrNotFound<T>(load: () => Promise<T>): Promise<T> {
+  try {
+    return await load()
+  } catch (error) {
+    if (error instanceof ApiError && error.status === HttpStatus.NotFound) throw notFound()
+    throw error
+  }
+}
+
+export const clientsQueryOptions = queryOptions({
+  queryKey: queryKeys.clients,
+  queryFn: () => unwrap(api.GET('/clients')),
+})
+
+export const attachmentPolicyQueryOptions = queryOptions({
+  queryKey: queryKeys.attachmentPolicy,
+  queryFn: () => unwrap(api.GET('/attachment-policy')),
+  staleTime: Infinity,
+})
 
 /** The signed-in user, or null when signed out. */
 export const meQueryOptions = queryOptions({
@@ -36,6 +78,11 @@ export const organizationQueryOptions = queryOptions({
   },
   staleTime: Infinity,
 })
+
+/** The organisation's time zone; every timestamp is shown in it. Routes preload the organisation. */
+export function useOrgTimeZone(): string {
+  return useSuspenseQuery(organizationQueryOptions).data.timezone
+}
 
 export function useLogin() {
   const queryClient = useQueryClient()

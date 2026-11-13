@@ -18,7 +18,7 @@ const (
 	CapReportsView    Capability = "reports.view"     // SLA reports
 	CapUsersManage    Capability = "users.manage"     // members & roles
 	CapSettingsManage Capability = "settings.manage"  // organisation, SLA, clients, integrations
-	CapClientsViewAll Capability = "clients.view_all" // every client; agents see only assigned ones
+	CapClientsViewAll Capability = "clients.view_all" // every client and its tickets; agents see only assigned ones
 )
 
 var roleCapabilities = map[Role]map[Capability]bool{
@@ -34,6 +34,17 @@ var roleCapabilities = map[Role]map[Capability]bool{
 // Can reports whether role has capability c.
 func Can(role Role, c Capability) bool {
 	return roleCapabilities[role][c]
+}
+
+// RolesWith lists the roles that have capability c, in a fixed order.
+func RolesWith(c Capability) []Role {
+	out := []Role{}
+	for _, r := range Roles {
+		if Can(r, c) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // Require returns the principal if it has capability c, otherwise a 401 or 403 error.

@@ -16,6 +16,9 @@ GEMINI.md
 .idea/
 .vscode/
 
+# Uploaded files (development)
+/data/
+
 # Environment
 .env
 .env.*

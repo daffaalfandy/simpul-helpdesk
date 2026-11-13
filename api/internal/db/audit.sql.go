@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"net/netip"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -47,4 +48,91 @@ func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) error 
 		arg.RequestID,
 	)
 	return err
+}
+
+const insertAuditAt = `-- name: InsertAuditAt :exec
+INSERT INTO audit_log (at, actor_kind, actor_user_id, actor_name, action, target_type, target_id, data, reason)
+VALUES ($1, $2, $3, $4, $5, $6,
+        $7, $8, $9)
+`
+
+type InsertAuditAtParams struct {
+	At          time.Time
+	ActorKind   string
+	ActorUserID *uuid.UUID
+	ActorName   *string
+	Action      string
+	TargetType  *string
+	TargetID    *uuid.UUID
+	Data        []byte
+	Reason      *string
+}
+
+// Seed only: history with explicit times.
+func (q *Queries) InsertAuditAt(ctx context.Context, arg InsertAuditAtParams) error {
+	_, err := q.db.Exec(ctx, insertAuditAt,
+		arg.At,
+		arg.ActorKind,
+		arg.ActorUserID,
+		arg.ActorName,
+		arg.Action,
+		arg.TargetType,
+		arg.TargetID,
+		arg.Data,
+		arg.Reason,
+	)
+	return err
+}
+
+const listAuditByTarget = `-- name: ListAuditByTarget :many
+SELECT id, at, actor_kind, actor_user_id, actor_name, action, data, reason
+FROM audit_log
+WHERE target_type = $1 AND target_id = $2
+ORDER BY at, id
+`
+
+type ListAuditByTargetParams struct {
+	TargetType *string
+	TargetID   *uuid.UUID
+}
+
+type ListAuditByTargetRow struct {
+	ID          uuid.UUID
+	At          time.Time
+	ActorKind   string
+	ActorUserID *uuid.UUID
+	ActorName   *string
+	Action      string
+	Data        []byte
+	Reason      *string
+}
+
+// Oldest first. Entries of one transaction share "at"; uuidv7 ids keep their insert order.
+func (q *Queries) ListAuditByTarget(ctx context.Context, arg ListAuditByTargetParams) ([]ListAuditByTargetRow, error) {
+	rows, err := q.db.Query(ctx, listAuditByTarget, arg.TargetType, arg.TargetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAuditByTargetRow{}
+	for rows.Next() {
+		var i ListAuditByTargetRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.ActorKind,
+			&i.ActorUserID,
+			&i.ActorName,
+			&i.Action,
+			&i.Data,
+			&i.Reason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

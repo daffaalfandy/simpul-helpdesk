@@ -48,10 +48,19 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"agent links":      count(`SELECT count(*) FROM client_agents`),
 		"holidays":         count(`SELECT count(*) FROM holidays`),
 		"standard default": count(`SELECT count(*) FROM sla_plans WHERE is_default AND name = 'Standard'`),
+		"invited":          count(`SELECT count(*) FROM users WHERE status = 'invited' AND password_hash IS NULL`),
+		"systems":          count(`SELECT count(*) FROM systems`),
+		"catalog items":    count(`SELECT count(*) FROM catalog_items`),
+		"tickets":          count(`SELECT count(*) FROM tickets`),
+		"messages":         count(`SELECT count(*) FROM ticket_messages`),
+		"internal notes":   count(`SELECT count(*) FROM ticket_messages WHERE visibility = 'internal'`),
+		"ticket history":   count(`SELECT count(DISTINCT target_id) FROM audit_log WHERE action = 'ticket.created'`),
+		"next number":      count(`SELECT nextval('ticket_number_seq')::int`),
 	}
 	want := map[string]int{
-		"users": 6, "clients": 8, "plans": 2, "gold targets": 4, "gold clients": 2, "agent links": 7,
-		"holidays": presetDays, "standard default": 1,
+		"users": 8, "clients": 8, "plans": 2, "gold targets": 4, "gold clients": 2, "agent links": 7,
+		"holidays": presetDays, "standard default": 1, "invited": 1, "systems": 7, "catalog items": 5,
+		"tickets": 6, "messages": 7, "internal notes": 1, "ticket history": 6, "next number": 24872,
 	}
 	for k, w := range want {
 		if got[k] != w {

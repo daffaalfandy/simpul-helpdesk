@@ -130,6 +130,12 @@
   --container-table: 720px;          /* tables scroll sideways below this width */
   --sidebar-w: 230px;
   --sidebar-rail-w: 72px;
+  --option-card-min-w: 200px;  /* priority and type cards wrap below this */
+  --tracker-step-min-w: 120px; /* progress tracker steps wrap below this */
+  --ticket-aside-w: 340px;     /* ticket detail side column */
+  --tracker-bar-h: 6px;        /* progress tracker bar (HANDOFF §14.3) */
+  --tracker-dot: 22px;         /* progress tracker numbered dot */
+  --tab-bar-h: 3px;            /* selected tab underline */
 
   /* ---------- Focus & motion ---------- */
   --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);

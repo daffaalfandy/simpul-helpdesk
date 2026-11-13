@@ -12,6 +12,20 @@ import (
 	"github.com/google/uuid"
 )
 
+type Attachment struct {
+	ID          uuid.UUID
+	StorageKey  string
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	Sha256      []byte
+	UploadedBy  uuid.UUID
+	TicketID    *uuid.UUID
+	MessageID   *uuid.UUID
+	CreatedAt   time.Time
+	LinkedAt    *time.Time
+}
+
 type AuditLog struct {
 	ID          uuid.UUID
 	At          time.Time
@@ -31,6 +45,17 @@ type BusinessHour struct {
 	Weekday     int16
 	OpenMinute  int16
 	CloseMinute int16
+}
+
+type CatalogItem struct {
+	ID              uuid.UUID
+	Name            string
+	Description     *string
+	DeliveryMinutes int32
+	SortOrder       int32
+	Active          bool
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type Client struct {
@@ -114,6 +139,49 @@ type SlaTarget struct {
 	DeliverFromCatalog   bool
 	Calendar             string
 	UpdatedAt            time.Time
+}
+
+type System struct {
+	ID          uuid.UUID
+	Name        string
+	Description *string
+	SortOrder   int32
+	Active      bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type Ticket struct {
+	ID              uuid.UUID
+	Number          int64
+	Key             string
+	Type            string
+	Status          string
+	Priority        string
+	Channel         string
+	ClientID        uuid.UUID
+	RequesterID     uuid.UUID
+	AssigneeID      *uuid.UUID
+	CreatedBy       uuid.UUID
+	SystemID        *uuid.UUID
+	CatalogItemID   *uuid.UUID
+	Subject         string
+	Description     string
+	SlaSnapshot     []byte
+	FirstResponseAt *time.Time
+	ResolvedAt      *time.Time
+	ClosedAt        *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type TicketMessage struct {
+	ID         uuid.UUID
+	TicketID   uuid.UUID
+	AuthorID   uuid.UUID
+	Visibility string
+	Body       string
+	CreatedAt  time.Time
 }
 
 type User struct {

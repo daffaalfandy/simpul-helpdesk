@@ -13,6 +13,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const countClientTickets = `-- name: CountClientTickets :one
+SELECT count(*)::int FROM tickets WHERE client_id = $1
+`
+
+func (q *Queries) CountClientTickets(ctx context.Context, clientID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countClientTickets, clientID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countClientUsers = `-- name: CountClientUsers :one
 SELECT count(*)::int FROM users WHERE client_id = $1
 `
@@ -208,30 +219,6 @@ type InsertClientAgentsParams struct {
 func (q *Queries) InsertClientAgents(ctx context.Context, arg InsertClientAgentsParams) error {
 	_, err := q.db.Exec(ctx, insertClientAgents, arg.ClientID, arg.UserIds)
 	return err
-}
-
-const listAgentClientIDs = `-- name: ListAgentClientIDs :many
-SELECT client_id FROM client_agents WHERE user_id = $1 ORDER BY client_id
-`
-
-func (q *Queries) ListAgentClientIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listAgentClientIDs, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var client_id uuid.UUID
-		if err := rows.Scan(&client_id); err != nil {
-			return nil, err
-		}
-		items = append(items, client_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listClientAgentIDs = `-- name: ListClientAgentIDs :many

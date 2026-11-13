@@ -12,7 +12,12 @@
     "edit": "Edit",
     "delete": "Delete",
     "none": "—",
-    "range": "{{from}} – {{to}}"
+    "range": "{{from}} – {{to}}",
+    "choose": "Choose…",
+    "showMore": "Show more",
+    "completed": "Completed",
+    "retry": "Try again",
+    "errorTitle": "Something went wrong"
   },
   "roles": {
     "admin": "Admin",
@@ -77,14 +82,171 @@
       "afternoon": "Good afternoon, {{name}}",
       "evening": "Good evening, {{name}}"
     },
-    "boardEmptyTitle": "No tickets yet",
-    "boardEmpty": "Tickets for your clients will show up here."
+    "board": {
+      "logTicket": "Log a ticket",
+      "caption": "Tickets",
+      "cols": {
+        "key": "Ticket",
+        "subject": "Subject",
+        "client": "Client",
+        "priority": "Priority",
+        "status": "Status",
+        "assignee": "Assignee",
+        "updated": "Updated"
+      },
+      "view": {
+        "label": "Show tickets",
+        "all": "All",
+        "mine": "My queue",
+        "unassigned": "Unassigned"
+      },
+      "statusFilter": {
+        "label": "Status",
+        "open": "Open",
+        "all": "All statuses"
+      },
+      "clientFilter": {
+        "label": "Client",
+        "all": "All clients"
+      },
+      "empty": "Nothing here for this filter.",
+      "created": "{{key}} created.",
+      "createdAssigned": "{{key}} created and assigned to you.",
+      "openTicket": "Open {{key}}"
+    },
+    "logTicket": {
+      "title": "Log a ticket for a client",
+      "subtitle": "For requests that came by phone, email, WhatsApp or in person.",
+      "client": "Client",
+      "noClients": "You aren't assigned to any client yet.",
+      "requester": "Requester",
+      "requesterPlaceholder": "Name or email",
+      "chooseClientFirst": "Choose a client first.",
+      "noRequesters": "No requester matches.",
+      "addRequester": "Add “{{query}}” as a new requester",
+      "newRequester": "New requester",
+      "newRequesterHelp": "They're added to the client's requesters and can be invited to the portal later.",
+      "newName": "Name",
+      "newEmail": "Email",
+      "addRequesterButton": "Add requester",
+      "pickExisting": "Pick an existing requester instead",
+      "channel": "Received via",
+      "priority": "Priority",
+      "priorityOption": "Reply {{response}} · fix {{fix}}",
+      "priorityOptionRequest": "Reply {{response}} · delivered {{fix}}",
+      "type": "Ticket type",
+      "typeIncident": "Incident — something broke",
+      "typeRequest": "Service request — needs something new",
+      "subject": "Subject",
+      "subjectPlaceholder": "Short summary of the problem or request",
+      "details": "Details",
+      "detailsPlaceholder": "What the requester told you",
+      "assignToMe": "Assign to me",
+      "submit": "Create ticket",
+      "errors": {
+        "client": "Choose a client.",
+        "requester": "Choose who reported this.",
+        "name": "Enter the requester's name.",
+        "email": "Enter a valid email address.",
+        "system": "Choose a system.",
+        "item": "Choose what they need.",
+        "subject": "Enter a short subject.",
+        "details": "Describe the issue."
+      }
+    },
+    "ticket": {
+      "back": "Back to board"
+    }
   },
   "portal": {
     "support": "{{org}} Support",
     "hello": "Hello, {{name}}",
-    "emptyTitle": "No tickets yet",
-    "empty": "When you report an issue, you can follow its progress here."
+    "home": {
+      "report": "Report an issue",
+      "intro": "Follow your tickets here, or report something new.",
+      "myTickets": "My tickets",
+      "filterLabel": "Filter tickets",
+      "filters": {
+        "open": "Open",
+        "resolved": "Resolved",
+        "all": "All"
+      },
+      "viewDetails": "View details",
+      "viewDetailsLabel": "View details of {{key}}",
+      "empty": {
+        "open": "No open tickets. Report an issue when something needs our help.",
+        "resolved": "No resolved tickets yet.",
+        "all": "No tickets yet."
+      },
+      "reportedBy": "Reported by {{name}}",
+      "updated": "Updated {{when}}",
+      "resolvedOn": "Resolved {{when}}"
+    },
+    "new": {
+      "back": "Back to my tickets",
+      "title": "How can we help?",
+      "hours": "Our team works {{hours}}, {{days}}.",
+      "hoursAlways": "{{priorities}} issues are handled 24/7.",
+      "typeLegend": "What kind of ticket is this?",
+      "incident": {
+        "title": "Something isn't working",
+        "description": "An app, network or device that worked before has stopped"
+      },
+      "request": {
+        "title": "I need something new",
+        "description": "An account, access, software or equipment"
+      },
+      "subject": "Subject",
+      "subjectPlaceholder": "e.g. e-Office login fails for all staff",
+      "system": "Which system?",
+      "item": "What do you need?",
+      "deliveredWithin": "Delivered within {{duration}}",
+      "priority": "Priority",
+      "priorityHint": "Not sure? Pick the closest one. Our agent may adjust it and will tell you why.",
+      "firstReply": "First reply: {{duration}}",
+      "fixedWithin": "Fixed within: {{duration}}",
+      "deliveredWithinCard": "Delivered within: {{duration}}",
+      "handledAlways": "Handled 24/7",
+      "handledBusiness": "Working hours, {{hours}}",
+      "details": "Details",
+      "detailsPlaceholder": "What happened, since when, any error message…",
+      "summaryIncident": "First reply within {{response}} · fix target {{fix}}",
+      "summaryRequest": "First reply within {{response}} · delivered within {{fix}}",
+      "summaryChoose": "Choose a priority to see how fast we respond.",
+      "submit": "Submit ticket",
+      "errors": {
+        "subject": "Enter a short subject.",
+        "system": "Choose a system.",
+        "item": "Choose what you need.",
+        "priority": "Choose a priority.",
+        "details": "Tell us what happened."
+      },
+      "success": {
+        "title": "Ticket {{key}} received",
+        "body": "Priority is {{priority}}, so you'll hear from us within {{response}}. You can follow progress on your portal home.",
+        "another": "Report another issue",
+        "view": "View ticket"
+      },
+      "workingHours": "{{range}} {{zone}}"
+    },
+    "ticket": {
+      "back": "My tickets",
+      "progress": "Progress",
+      "steps": {
+        "received": "Received",
+        "assigned": "Assigned",
+        "in_progress": "In progress",
+        "ready_for_test": "Ready for your test",
+        "resolved": "Resolved"
+      },
+      "waitingForYou": "Waiting for your reply",
+      "assignedTo": "{{name}} · {{when}}",
+      "replyLabel": "Add a reply",
+      "replyPlaceholder": "Write to the support team…",
+      "send": "Send reply",
+      "details": "Details",
+      "notAssigned": "Not assigned yet"
+    }
   },
   "footer": {
     "tagline": "Service desk for {{org}}.",
@@ -136,6 +298,10 @@
       "integrations": {
         "title": "GitHub / GitLab",
         "description": "Reads commits, pull requests and merge requests that mention a ticket ID, and moves tickets forward by their project's Definition of Done. Read-only: it never writes to your code."
+      },
+      "catalog": {
+        "title": "Systems & catalogue",
+        "description": "What the report form offers: the systems clients pick for incidents, and the service catalogue with delivery times."
       }
     },
     "hours": {
@@ -283,6 +449,53 @@
       "created": "{{name}} added.",
       "saved": "{{name}} saved.",
       "deleted": "{{name}} deleted."
+    },
+    "catalog": {
+      "systems": {
+        "title": "Which system?",
+        "description": "Clients pick one when something isn't working.",
+        "add": "Add system",
+        "caption": "Systems",
+        "empty": "No systems yet. The report form skips the question until you add one.",
+        "dialogNew": "Add a system",
+        "dialogEdit": "Edit {{name}}"
+      },
+      "items": {
+        "title": "Service catalogue",
+        "description": "What clients can ask for. A P3 service request is due within the item's delivery time.",
+        "add": "Add item",
+        "caption": "Catalogue items",
+        "empty": "No catalogue items yet. The report form skips the question until you add one.",
+        "dialogNew": "Add a catalogue item",
+        "dialogEdit": "Edit {{name}}",
+        "deliveryTime": "Delivery time",
+        "deliveryUnit": "Unit",
+        "positive": "Enter a delivery time of at least 1."
+      },
+      "cols": {
+        "name": "Name",
+        "description": "Description",
+        "delivery": "Delivery time",
+        "shown": "On the form",
+        "tickets": "Tickets",
+        "actions": "Actions"
+      },
+      "name": "Name",
+      "nameRequired": "Enter a name.",
+      "description": "Description",
+      "order": "Order",
+      "orderHelp": "Lower numbers come first.",
+      "shown": "Show on the report form",
+      "shownYes": "Shown",
+      "shownNo": "Hidden",
+      "inUse": "Tickets use it, so it can't be deleted. Hide it instead.",
+      "editLabel": "Edit {{name}}",
+      "delete": "Delete",
+      "deleteTitle": "Delete {{name}}?",
+      "deleteBody": "It disappears from the report form.",
+      "created": "{{name}} added.",
+      "saved": "{{name}} saved.",
+      "deleted": "{{name}} deleted."
     }
   },
   "priority": {
@@ -290,22 +503,44 @@
     "P1": {
       "name": "Critical",
       "example": "Public service or whole office down",
-      "escalation": "Supervisor + client PIC at 50%"
+      "escalation": "Supervisor + client PIC at 50%",
+      "when": "A public service or the whole office is down"
     },
     "P2": {
       "name": "High",
       "example": "A team can't work",
-      "escalation": "Supervisor at 75%"
+      "escalation": "Supervisor at 75%",
+      "when": "A team or department cannot work"
     },
     "P3": {
       "name": "Standard",
       "example": "One user slowed down",
-      "escalation": "Supervisor at breach"
+      "escalation": "Supervisor at breach",
+      "when": "One person is slowed down, with a workaround"
     },
     "P4": {
       "name": "Low",
       "example": "Requests and minor issues",
-      "escalation": "—"
+      "escalation": "—",
+      "when": "Minor issue or question, no rush"
+    },
+    "request": {
+      "P1": {
+        "name": "Urgent",
+        "when": "Needed today to keep a public service running"
+      },
+      "P2": {
+        "name": "High",
+        "when": "A team is blocked until this is done"
+      },
+      "P3": {
+        "name": "Standard",
+        "when": "Normal request, e.g. a new account or access"
+      },
+      "P4": {
+        "name": "Low",
+        "when": "Whenever possible, no deadline"
+      }
     }
   },
   "duration": {
@@ -356,10 +591,190 @@
     "invalid_business_hours": "Opening time must be before closing time.",
     "sla_plan_not_found": "Choose an SLA plan.",
     "client_name_taken": "A client with this name already exists.",
-    "client_in_use": "This client still has requesters. Move or remove them first.",
+    "client_in_use": "This client still has requesters or tickets, so it can't be deleted.",
     "sla_plan_name_taken": "A plan with this name already exists.",
     "sla_plan_in_use": "Clients still use this plan. Move them to another plan first.",
     "sla_plan_is_default": "The default plan can't be deleted. Make another plan the default first.",
-    "holiday_date_taken": "That date is already a holiday."
+    "holiday_date_taken": "That date is already a holiday.",
+    "client_required": "Choose a client.",
+    "client_not_found": "Choose one of your clients.",
+    "request_too_large": "That's too much to send at once.",
+    "attachment_too_large": "The file is larger than the upload limit.",
+    "attachment_type_not_allowed": "This file type isn't allowed.",
+    "attachment_empty": "The file is empty.",
+    "too_many_attachments": "Too many files for one message.",
+    "too_many_pending_attachments": "Too many files are waiting to be sent. Send or remove some first.",
+    "invalid_attachment": "One of the files is no longer available. Upload it again.",
+    "invalid_subject": "Enter a short subject.",
+    "invalid_description": "Describe the issue.",
+    "invalid_message": "Write a message first.",
+    "invalid_system": "Choose a system from the list.",
+    "invalid_catalog_item": "Choose an item from the catalogue.",
+    "invalid_requester": "Choose a requester of this client.",
+    "invalid_channel": "Choose how the request arrived.",
+    "invalid_assignee": "This person can't take this client's tickets.",
+    "invalid_delivery_time": "Enter a delivery time.",
+    "reason_required": "Say why the priority changes.",
+    "invalid_status_change": "This status change isn't allowed.",
+    "ticket_closed": "This ticket is closed and can't be changed.",
+    "email_taken": "Someone already uses this email address.",
+    "system_name_taken": "A system with this name already exists.",
+    "system_in_use": "Tickets use this system. Hide it instead.",
+    "catalog_item_name_taken": "A catalogue item with this name already exists.",
+    "catalog_item_in_use": "Tickets use this item. Hide it instead."
+  },
+  "time": {
+    "justNow": "Just now",
+    "dayTime": "{{date}}, {{time}}"
+  },
+  "attach": {
+    "button": "Attach file",
+    "buttonLong": "Attach screenshot or file",
+    "hint": "Max {{max}} MB · don't attach ID cards or citizen data",
+    "uploading": "Uploading…",
+    "tooLarge": "Larger than {{max}} MB",
+    "typeNotAllowed": "This file type isn't allowed",
+    "tooMany": "Up to {{max}} files per message",
+    "removeLabel": "Remove {{name}}",
+    "retryLabel": "Upload {{name}} again",
+    "waitForUploads": "Wait for the files to finish uploading, or remove the ones that failed."
+  },
+  "ticket": {
+    "type": {
+      "incident": "Incident",
+      "request": "Request"
+    },
+    "channel": {
+      "portal": "client portal",
+      "phone": "phone",
+      "email": "email",
+      "whatsapp": "WhatsApp",
+      "in_person": "in person"
+    },
+    "channelOption": {
+      "portal": "Client portal",
+      "phone": "Phone",
+      "email": "Email",
+      "whatsapp": "WhatsApp",
+      "in_person": "In person"
+    },
+    "status": {
+      "agent": {
+        "new": "New",
+        "assigned": "Assigned",
+        "in_progress": "In progress",
+        "waiting_on_client": "Waiting on client",
+        "in_uat": "In UAT",
+        "resolved": "Resolved",
+        "closed": "Closed"
+      },
+      "agentHint": {
+        "waiting_on_client": "Pauses the SLA clock",
+        "in_uat": "Client is testing the fix",
+        "resolved": "Client can reopen within 3 working days"
+      },
+      "requester": {
+        "new": "Received",
+        "assigned": "Assigned",
+        "in_progress": "In progress",
+        "waiting_on_client": "Waiting on you",
+        "in_uat": "Ready for your test",
+        "resolved": "Resolved",
+        "closed": "Closed"
+      }
+    },
+    "keyType": "{{key}} · {{type}}",
+    "keyTypePriority": "{{key}} · {{type}} · {{priority}}",
+    "openedVia": "Opened {{when}} via {{channel}}",
+    "loggedBy": "logged by {{name}}",
+    "reported": "Reported {{when}}",
+    "unassigned": "Unassigned",
+    "assigneeLabel": "Assignee: {{name}}",
+    "properties": "Properties",
+    "details": "Details",
+    "fields": {
+      "client": "Client",
+      "requester": "Requester",
+      "system": "System",
+      "catalogItem": "Request",
+      "channel": "Received via",
+      "type": "Type",
+      "priority": "Priority",
+      "status": "Status",
+      "assignee": "Assignee",
+      "reportedBy": "Reported by",
+      "handledBy": "Handled by",
+      "plan": "SLA plan"
+    },
+    "sla": {
+      "agentTitle": "Service level · {{priority}}",
+      "requesterTitle": "Service level ({{priority}})",
+      "firstResponse": "First response",
+      "resolve": "Resolution",
+      "deliver": "Delivery",
+      "firstReplyWithin": "First reply within {{duration}}",
+      "fixWithin": "Fix within {{duration}}",
+      "deliveredWithin": "Delivered within {{duration}}",
+      "always": "Runs 24/7",
+      "business": "Business hours only",
+      "plan": "Plan: {{name}}",
+      "fromCatalog": "Delivery time of the catalogue item",
+      "pausedNote": "Time waiting for your reply or test doesn't count.",
+      "firstResponseMet": "First response sent {{when}}"
+    },
+    "message": {
+      "conversation": "Conversation",
+      "fromClient": "{{name}} · {{client}}",
+      "fromClientTitled": "{{name}} · {{title}}, {{client}}",
+      "replied": "{{name}} · replied to client",
+      "internal": "Internal note · {{name}} — not visible to client",
+      "you": "{{name}} · You",
+      "colleague": "{{name}} · {{title}}",
+      "support": "{{name}} · Support team",
+      "description": "Original report"
+    },
+    "composer": {
+      "tabs": "Message type",
+      "reply": "Reply to client",
+      "note": "Internal note",
+      "replyLabel": "Message to {{name}}",
+      "noteLabel": "Note for the support team only",
+      "replyPlaceholder": "Write an update for the client…",
+      "notePlaceholder": "Only agents and supervisors can see this…",
+      "sendReply": "Send reply",
+      "saveNote": "Save note",
+      "bodyRequired": "Write a message first."
+    },
+    "priorityChange": {
+      "title": "Change priority to {{priority}}?",
+      "body": "The ticket's targets change with it. Tell the client why in your next reply.",
+      "reason": "Reason for the change (saved to the activity log)",
+      "confirm": "Change priority"
+    },
+    "activity": {
+      "title": "Activity log",
+      "footer": "Every change is logged and can't be edited — needed for audits.",
+      "system": "System",
+      "created": "Created by {{actor}} via {{channel}}",
+      "statusChanged": "Status changed from {{from}} to {{to}} by {{actor}}",
+      "statusByAssignment": "Status changed from {{from}} to {{to}} when the assignee changed",
+      "statusByReply": "Status changed from {{from}} to {{to}} when the client replied",
+      "assigned": "Assigned to {{to}} by {{actor}}",
+      "reassigned": "Reassigned from {{from}} to {{to}} by {{actor}}",
+      "unassigned": "Unassigned from {{from}} by {{actor}}",
+      "priorityChanged": "Priority changed from {{from}} to {{to}} by {{actor}}: {{reason}}",
+      "replyAdded": "{{actor}} replied",
+      "noteAdded": "{{actor}} added an internal note",
+      "firstResponded": "First response sent"
+    },
+    "notFound": {
+      "title": "Ticket not found",
+      "body": "It doesn't exist, or you don't have access to it.",
+      "backBoard": "Back to board",
+      "backPortal": "Back to my tickets"
+    },
+    "openTickets_one": "{{count}} open ticket",
+    "openTickets_other": "{{count}} open tickets",
+    "assigneeOption": "{{title}} · {{open}}"
   }
 }

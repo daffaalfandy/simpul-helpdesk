@@ -12,6 +12,36 @@ import (
 	"github.com/google/uuid"
 )
 
+const createInvitedUser = `-- name: CreateInvitedUser :one
+INSERT INTO users (email, name, role, client_id, job_title, status)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id
+`
+
+type CreateInvitedUserParams struct {
+	Email    string
+	Name     string
+	Role     string
+	ClientID *uuid.UUID
+	JobTitle *string
+	Status   string
+}
+
+// No password: the user can't sign in until an invite (M9) sets one.
+func (q *Queries) CreateInvitedUser(ctx context.Context, arg CreateInvitedUserParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, createInvitedUser,
+		arg.Email,
+		arg.Name,
+		arg.Role,
+		arg.ClientID,
+		arg.JobTitle,
+		arg.Status,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, name, password_hash, role, client_id, job_title)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -39,6 +69,66 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (uuid.UU
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const getAssignableUser = `-- name: GetAssignableUser :one
+SELECT u.id, u.name
+FROM users u
+WHERE u.id = $1
+  AND u.status = $2
+  AND (u.role = ANY($3::text[])
+       OR (u.role = $4
+           AND EXISTS (SELECT 1 FROM client_agents ca WHERE ca.client_id = $5 AND ca.user_id = u.id)))
+`
+
+type GetAssignableUserParams struct {
+	ID             uuid.UUID
+	Status         string
+	AllClientRoles []string
+	AgentRole      string
+	ClientID       uuid.UUID
+}
+
+type GetAssignableUserRow struct {
+	ID   uuid.UUID
+	Name string
+}
+
+// Same rule as ListAssignableUsers, for one user.
+func (q *Queries) GetAssignableUser(ctx context.Context, arg GetAssignableUserParams) (GetAssignableUserRow, error) {
+	row := q.db.QueryRow(ctx, getAssignableUser,
+		arg.ID,
+		arg.Status,
+		arg.AllClientRoles,
+		arg.AgentRole,
+		arg.ClientID,
+	)
+	var i GetAssignableUserRow
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
+const getClientRequester = `-- name: GetClientRequester :one
+SELECT id, name, status FROM users WHERE id = $1 AND client_id = $2 AND role = $3
+`
+
+type GetClientRequesterParams struct {
+	ID       uuid.UUID
+	ClientID *uuid.UUID
+	Role     string
+}
+
+type GetClientRequesterRow struct {
+	ID     uuid.UUID
+	Name   string
+	Status string
+}
+
+func (q *Queries) GetClientRequester(ctx context.Context, arg GetClientRequesterParams) (GetClientRequesterRow, error) {
+	row := q.db.QueryRow(ctx, getClientRequester, arg.ID, arg.ClientID, arg.Role)
+	var i GetClientRequesterRow
+	err := row.Scan(&i.ID, &i.Name, &i.Status)
+	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -110,6 +200,115 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.Status,
 	)
 	return i, err
+}
+
+const listAssignableUsers = `-- name: ListAssignableUsers :many
+SELECT u.id, u.name, u.role, u.job_title,
+       (SELECT count(*) FROM tickets t
+        WHERE t.assignee_id = u.id AND t.status = ANY($1::text[]))::int AS open_ticket_count
+FROM users u
+WHERE u.status = $2
+  AND (u.role = ANY($3::text[])
+       OR (u.role = $4
+           AND EXISTS (SELECT 1 FROM client_agents ca WHERE ca.client_id = $5 AND ca.user_id = u.id)))
+ORDER BY lower(u.name), u.id
+`
+
+type ListAssignableUsersParams struct {
+	OpenStatuses   []string
+	Status         string
+	AllClientRoles []string
+	AgentRole      string
+	ClientID       uuid.UUID
+}
+
+type ListAssignableUsersRow struct {
+	ID              uuid.UUID
+	Name            string
+	Role            string
+	JobTitle        *string
+	OpenTicketCount int32
+}
+
+// Who can take a client's tickets: active users whose role sees every client, plus active
+// agents assigned to the client. open_statuses counts each person's open workload.
+func (q *Queries) ListAssignableUsers(ctx context.Context, arg ListAssignableUsersParams) ([]ListAssignableUsersRow, error) {
+	rows, err := q.db.Query(ctx, listAssignableUsers,
+		arg.OpenStatuses,
+		arg.Status,
+		arg.AllClientRoles,
+		arg.AgentRole,
+		arg.ClientID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAssignableUsersRow{}
+	for rows.Next() {
+		var i ListAssignableUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Role,
+			&i.JobTitle,
+			&i.OpenTicketCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listClientRequesters = `-- name: ListClientRequesters :many
+SELECT id, name, email, job_title, status
+FROM users
+WHERE client_id = $1 AND role = $2 AND status = ANY($3::text[])
+ORDER BY lower(name), email
+`
+
+type ListClientRequestersParams struct {
+	ClientID *uuid.UUID
+	Role     string
+	Statuses []string
+}
+
+type ListClientRequestersRow struct {
+	ID       uuid.UUID
+	Name     string
+	Email    string
+	JobTitle *string
+	Status   string
+}
+
+func (q *Queries) ListClientRequesters(ctx context.Context, arg ListClientRequestersParams) ([]ListClientRequestersRow, error) {
+	rows, err := q.db.Query(ctx, listClientRequesters, arg.ClientID, arg.Role, arg.Statuses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListClientRequestersRow{}
+	for rows.Next() {
+		var i ListClientRequestersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.JobTitle,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listUsers = `-- name: ListUsers :many

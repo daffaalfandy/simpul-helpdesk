@@ -100,13 +100,17 @@ func planInput(b gen.SlaPlanInput) sla.PlanInput {
 }
 
 func apiPlan(p sla.Plan) gen.SlaPlan {
-	targets := make([]gen.SlaTarget, len(p.Targets))
-	for i, t := range p.Targets {
-		targets[i] = gen.SlaTarget{
+	return gen.SlaPlan{Id: p.ID, Name: p.Name, IsDefault: p.IsDefault, ClientCount: p.ClientCount, Targets: apiTargets(p.Targets)}
+}
+
+func apiTargets(ts []sla.Target) []gen.SlaTarget {
+	out := make([]gen.SlaTarget, len(ts))
+	for i, t := range ts {
+		out[i] = gen.SlaTarget{
 			Priority: gen.Priority(t.Priority), FirstResponseMinutes: t.FirstResponseMinutes,
 			ResolveMinutes: t.ResolveMinutes, DeliverMinutes: t.DeliverMinutes,
 			DeliverFromCatalog: t.DeliverFromCatalog, Calendar: gen.SlaCalendar(t.Calendar),
 		}
 	}
-	return gen.SlaPlan{Id: p.ID, Name: p.Name, IsDefault: p.IsDefault, ClientCount: p.ClientCount, Targets: targets}
+	return out
 }

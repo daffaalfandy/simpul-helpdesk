@@ -2,6 +2,9 @@ SHELL := /bin/bash
 
 # Local settings (copy .env.example to .env).
 -include .env
+# Uploaded files in development; absolute, so it doesn't depend on `cd api`.
+DEV_STORAGE_DIR := $(CURDIR)/data/storage
+STORAGE_DIR ?= $(DEV_STORAGE_DIR)
 export
 
 API := api
@@ -21,8 +24,9 @@ up: ## Start Postgres and Mailpit
 down: ## Stop dev services (keeps data)
 	$(COMPOSE) down
 
-reset-db: ## Delete the dev database volume
+reset-db: ## Delete the dev database volume and uploaded files
 	$(COMPOSE) down -v
+	rm -rf "$(DEV_STORAGE_DIR)"
 
 migrate: ## Apply database migrations
 	cd $(API) && go run ./cmd/simdesk migrate up

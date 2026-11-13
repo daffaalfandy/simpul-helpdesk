@@ -19,9 +19,11 @@ export function PriorityBadge({ priority, children }: { priority: Priority; chil
   )
 }
 
-export type PillTone = 'info' | 'success' | 'warning' | 'danger' | 'paused'
+export type PillTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'paused' | 'code'
 
 const pillClasses: Record<PillTone, string> = {
+  neutral: 'bg-tint text-ink-2',
+  code: 'bg-chip-code-bg text-chip-code-fg',
   info: 'bg-chip-info-bg text-chip-info-fg',
   success: 'bg-chip-success-bg text-chip-success-fg',
   warning: 'bg-chip-warning-bg text-chip-warning-fg',
@@ -29,10 +31,16 @@ const pillClasses: Record<PillTone, string> = {
   paused: 'bg-chip-paused-bg text-chip-paused-fg',
 }
 
-/** Status pill: text always explains the state. */
-export function Pill({ tone = 'info', children }: { tone?: PillTone; children: ReactNode }) {
+/** Status pill: text always explains the state. md is the larger pill in page headers. */
+export function Pill({ tone = 'info', size = 'sm', children }: { tone?: PillTone; size?: 'sm' | 'md'; children: ReactNode }) {
   return (
-    <span className={cx('inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap', pillClasses[tone])}>
+    <span
+      className={cx(
+        'inline-flex rounded-full font-bold whitespace-nowrap',
+        size === 'md' ? 'px-3 py-1 text-sm' : 'px-2.5 py-0.5 text-xs',
+        pillClasses[tone],
+      )}
+    >
       {children}
     </span>
   )

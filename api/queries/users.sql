@@ -47,3 +47,41 @@ UPDATE users SET status = @status WHERE id = @id;
 
 -- name: TouchUserLogin :exec
 UPDATE users SET last_login_at = now() WHERE id = @id;
+
+-- name: CreateInvitedUser :one
+-- No password: the user can't sign in until an invite (M9) sets one.
+INSERT INTO users (email, name, role, client_id, job_title, status)
+VALUES (@email, @name, @role, sqlc.narg(client_id), sqlc.narg(job_title), @status)
+RETURNING id;
+
+-- name: ListClientRequesters :many
+SELECT id, name, email, job_title, status
+FROM users
+WHERE client_id = @client_id AND role = @role AND status = ANY(@statuses::text[])
+ORDER BY lower(name), email;
+
+-- name: GetClientRequester :one
+SELECT id, name, status FROM users WHERE id = @id AND client_id = @client_id AND role = @role;
+
+-- name: ListAssignableUsers :many
+-- Who can take a client's tickets: active users whose role sees every client, plus active
+-- agents assigned to the client. open_statuses counts each person's open workload.
+SELECT u.id, u.name, u.role, u.job_title,
+       (SELECT count(*) FROM tickets t
+        WHERE t.assignee_id = u.id AND t.status = ANY(@open_statuses::text[]))::int AS open_ticket_count
+FROM users u
+WHERE u.status = @status
+  AND (u.role = ANY(@all_client_roles::text[])
+       OR (u.role = @agent_role
+           AND EXISTS (SELECT 1 FROM client_agents ca WHERE ca.client_id = @client_id AND ca.user_id = u.id)))
+ORDER BY lower(u.name), u.id;
+
+-- name: GetAssignableUser :one
+-- Same rule as ListAssignableUsers, for one user.
+SELECT u.id, u.name
+FROM users u
+WHERE u.id = @id
+  AND u.status = @status
+  AND (u.role = ANY(@all_client_roles::text[])
+       OR (u.role = @agent_role
+           AND EXISTS (SELECT 1 FROM client_agents ca WHERE ca.client_id = @client_id AND ca.user_id = u.id)));

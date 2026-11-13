@@ -108,3 +108,56 @@ func apiClient(c clients.Client) gen.Client {
 		Agents: agents, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }
+
+// ListClientRequesters lists a client's requesters.
+func (s *server) ListClientRequesters(ctx context.Context, req gen.ListClientRequestersRequestObject) (gen.ListClientRequestersResponseObject, error) {
+	p, err := auth.Require(ctx, auth.CapAgentApp)
+	if err != nil {
+		return nil, err
+	}
+	list, err := s.clients.Requesters(ctx, p, req.ClientId)
+	if err != nil {
+		return nil, err
+	}
+	out := make(gen.ListClientRequesters200JSONResponse, len(list))
+	for i, r := range list {
+		out[i] = apiRequester(r)
+	}
+	return out, nil
+}
+
+// CreateClientRequester adds an invited requester to a client.
+func (s *server) CreateClientRequester(ctx context.Context, req gen.CreateClientRequesterRequestObject) (gen.CreateClientRequesterResponseObject, error) {
+	p, err := auth.Require(ctx, auth.CapAgentApp)
+	if err != nil {
+		return nil, err
+	}
+	r, err := s.clients.CreateRequester(ctx, p, req.ClientId, clients.RequesterInput{
+		Name: req.Body.Name, Email: req.Body.Email, JobTitle: req.Body.JobTitle,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return gen.CreateClientRequester201JSONResponse(apiRequester(r)), nil
+}
+
+// ListClientAssignees lists who can take a client's tickets.
+func (s *server) ListClientAssignees(ctx context.Context, req gen.ListClientAssigneesRequestObject) (gen.ListClientAssigneesResponseObject, error) {
+	p, err := auth.Require(ctx, auth.CapAgentApp)
+	if err != nil {
+		return nil, err
+	}
+	list, err := s.clients.Assignees(ctx, p, req.ClientId)
+	if err != nil {
+		return nil, err
+	}
+	out := make(gen.ListClientAssignees200JSONResponse, len(list))
+	for i, a := range list {
+		out[i] = gen.Assignee{Id: a.ID, Name: a.Name, Role: gen.Role(a.Role), JobTitle: a.JobTitle, OpenTicketCount: a.OpenTickets}
+	}
+	return out, nil
+}
+
+func apiRequester(r clients.Requester) gen.Requester {
+	return gen.Requester{Id: r.ID, Name: r.Name, Email: r.Email, JobTitle: r.JobTitle, Status: gen.UserStatus(r.Status)}
+}

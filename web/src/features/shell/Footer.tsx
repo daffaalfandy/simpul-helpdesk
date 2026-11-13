@@ -14,7 +14,7 @@ export function Footer({ variant, org }: FooterProps) {
   const portal = variant === 'portal'
   return (
     <footer className="border-t border-border bg-surface text-sm text-muted">
-      <div className="mx-auto flex max-w-app flex-wrap items-start justify-between gap-x-8 gap-y-4 px-7 py-5">
+      <div className="mx-auto flex max-w-app flex-wrap items-start justify-between gap-x-8 gap-y-4 px-4 py-5 sm:px-7">
         <div className="flex flex-col gap-1.5">
           <span className="flex items-center gap-2 text-base font-extrabold text-ink">
             <BrandMark size="sm" />
@@ -24,7 +24,7 @@ export function Footer({ variant, org }: FooterProps) {
         </div>
       </div>
       <div className="border-t border-border-subtle">
-        <div className="mx-auto flex max-w-app flex-wrap justify-between gap-x-6 gap-y-2 px-7 py-3 text-xs">
+        <div className="mx-auto flex max-w-app flex-wrap justify-between gap-x-6 gap-y-2 px-4 py-3 text-xs sm:px-7">
           <span>{portal ? t('footer.poweredBy') : t('footer.copyright', { year: new Date().getFullYear() })}</span>
           {org?.footerNote && (
             <span className="inline-flex items-center gap-1.5">

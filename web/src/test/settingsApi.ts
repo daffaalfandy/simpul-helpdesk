@@ -18,7 +18,7 @@ export const IDS = {
 
 export const THIS_YEAR = new Date().getFullYear()
 
-const standardTargets: SlaTarget[] = [
+export const standardTargets: SlaTarget[] = [
   { priority: 'P1', firstResponseMinutes: 15, resolveMinutes: 240, deliverMinutes: 240, deliverFromCatalog: false, calendar: 'always' },
   { priority: 'P2', firstResponseMinutes: 30, resolveMinutes: 480, deliverMinutes: 540, deliverFromCatalog: false, calendar: 'business_hours' },
   { priority: 'P3', firstResponseMinutes: 120, resolveMinutes: 1080, deliverMinutes: 1080, deliverFromCatalog: true, calendar: 'business_hours' },

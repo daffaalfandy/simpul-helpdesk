@@ -19,6 +19,9 @@ const (
 	RoleRequester  Role = "requester"
 )
 
+// Roles lists every role, most privileged first.
+var Roles = []Role{RoleAdmin, RoleSupervisor, RoleAgent, RoleRequester}
+
 // Valid reports whether r is a known role.
 func (r Role) Valid() bool {
 	switch r {

@@ -52,7 +52,7 @@ export function FormDialog({
       <Modal className={cx(panel, 'max-w-dialog-form')}>
         <AriaDialog className="outline-none">
           {({ close }) => (
-            <Form onSubmit={submit} className="flex flex-col gap-5">
+            <Form onSubmit={submit} validationBehavior="aria" className="flex flex-col gap-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex flex-col gap-1">
                   <Heading slot="title" className="text-xl font-extrabold tracking-title">

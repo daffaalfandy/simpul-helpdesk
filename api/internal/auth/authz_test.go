@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
@@ -22,6 +23,9 @@ func TestCapabilitiesMatchHandoffRoleTable(t *testing.T) {
 	}
 	all := []Role{RoleAdmin, RoleSupervisor, RoleAgent, RoleRequester}
 	for c, allowed := range want {
+		if got := RolesWith(c); !slices.Equal(got, allowed) {
+			t.Errorf("RolesWith(%s) = %v, want %v", c, got, allowed)
+		}
 		for _, r := range all {
 			expected := false
 			for _, a := range allowed {

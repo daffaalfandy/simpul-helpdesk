@@ -1,14 +1,11 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import type { BusinessHoursInput, ClientInput, SlaPlanInput } from '../../api/client'
+import type { BusinessHoursInput, CatalogItemInput, ClientInput, SlaPlanInput, SystemInput } from '../../api/client'
 import { api } from '../../api/client'
-import { queryKeys } from '../../api/queries'
+import { clientsQueryOptions, queryKeys, useInvalidate } from '../../api/queries'
 import { unwrap } from '../../api/unwrap'
 
-export const clientsQueryOptions = queryOptions({
-  queryKey: queryKeys.clients,
-  queryFn: () => unwrap(api.GET('/clients')),
-})
+export { clientsQueryOptions }
 
 export const slaPlansQueryOptions = queryOptions({
   queryKey: queryKeys.slaPlans,
@@ -35,12 +32,6 @@ export const usersQueryOptions = queryOptions({
   queryKey: queryKeys.users,
   queryFn: () => unwrap(api.GET('/users')),
 })
-
-function useInvalidate() {
-  const queryClient = useQueryClient()
-  return (...keys: ReadonlyArray<readonly unknown[]>) =>
-    Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })))
-}
 
 export type SaveClient = {
   id?: string
@@ -136,5 +127,54 @@ export function useLoadHolidayPreset() {
   return useMutation({
     mutationFn: (year: number) => unwrap(api.POST('/holiday-presets/{year}/load', { params: { path: { year } } })),
     onSuccess: () => invalidate(queryKeys.holidays, queryKeys.holidayPresets),
+  })
+}
+
+export const systemsQueryOptions = queryOptions({
+  queryKey: queryKeys.systems,
+  queryFn: () => unwrap(api.GET('/systems')),
+})
+
+export const catalogItemsQueryOptions = queryOptions({
+  queryKey: queryKeys.catalogItems,
+  queryFn: () => unwrap(api.GET('/catalog-items')),
+})
+
+export function useSaveSystem() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: SystemInput }) =>
+      id
+        ? unwrap(api.PUT('/systems/{systemId}', { params: { path: { systemId: id } }, body: input }))
+        : unwrap(api.POST('/systems', { body: input })),
+    onSuccess: () => invalidate(queryKeys.systems, queryKeys.intake),
+  })
+}
+
+export function useDeleteSystem() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => unwrap(api.DELETE('/systems/{systemId}', { params: { path: { systemId: id } } })),
+    onSuccess: () => invalidate(queryKeys.systems, queryKeys.intake),
+  })
+}
+
+export function useSaveCatalogItem() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: CatalogItemInput }) =>
+      id
+        ? unwrap(api.PUT('/catalog-items/{catalogItemId}', { params: { path: { catalogItemId: id } }, body: input }))
+        : unwrap(api.POST('/catalog-items', { body: input })),
+    onSuccess: () => invalidate(queryKeys.catalogItems, queryKeys.intake),
+  })
+}
+
+export function useDeleteCatalogItem() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/catalog-items/{catalogItemId}', { params: { path: { catalogItemId: id } } })),
+    onSuccess: () => invalidate(queryKeys.catalogItems, queryKeys.intake),
   })
 }

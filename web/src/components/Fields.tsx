@@ -8,6 +8,7 @@ import {
   Input,
   Label,
   NumberField,
+  Text,
   TimeField,
   type DateFieldProps,
   type DateValue,
@@ -32,14 +33,20 @@ type Common = { label: ReactNode; hideLabel?: boolean; errorMessage?: string; cl
 export function NumberInput({
   label,
   hideLabel,
+  description,
   errorMessage,
   className,
   ...props
-}: Common & Omit<NumberFieldProps, 'children' | 'className'>) {
+}: Common & { description?: ReactNode } & Omit<NumberFieldProps, 'children' | 'className'>) {
   return (
     <NumberField {...props} className={cx(field, className)}>
       <Label className={hideLabel ? 'sr-only' : labelClass}>{label}</Label>
       <Input className={cx(box, 'tabular-nums')} />
+      {description && (
+        <Text slot="description" className="text-xs text-muted">
+          {description}
+        </Text>
+      )}
       <FieldError className={errorClass}>{errorMessage}</FieldError>
     </NumberField>
   )

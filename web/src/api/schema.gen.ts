@@ -168,8 +168,8 @@ export interface paths {
         put: operations["updateClient"];
         post?: never;
         /**
-         * Delete a client with no requesters (admin only)
-         * @description Error code `client_in_use` (409) while requesters belong to the client.
+         * Delete a client with no requesters and no tickets (admin only)
+         * @description Error code `client_in_use` (409) while requesters or tickets belong to the client.
          */
         delete: operations["deleteClient"];
         options?: never;
@@ -192,6 +192,56 @@ export interface paths {
          * @description Every user must be an active agent (`invalid_agent`).
          */
         put: operations["setClientAgents"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{clientId}/requesters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A client's active and invited requesters, by name
+         * @description Staff only; agents see only their assigned clients (404 otherwise).
+         */
+        get: operations["listClientRequesters"];
+        put?: never;
+        /**
+         * Add a requester to a client
+         * @description For agents logging a call from someone new. The requester is `invited` and has no
+         *     password until an invite sets one. Error codes are `invalid_name`, `invalid_email` and
+         *     `email_taken` (409).
+         */
+        post: operations["createClientRequester"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{clientId}/assignees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Who can take a client's tickets
+         * @description Active supervisors and admins, plus active agents assigned to the client, with their open tickets.
+         */
+        get: operations["listClientAssignees"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -363,6 +413,351 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/intake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What a report form offers for one client
+         * @description The client's SLA targets, the working hours, and the visible systems and catalogue items.
+         *     Requesters always get their own client and leave `clientId` out; staff must pass a client
+         *     they may see (`client_required`, 404).
+         */
+        get: operations["getIntake"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attachment-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Upload limits and allowed file extensions */
+        get: operations["getAttachmentPolicy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every system, in display order (staff) */
+        get: operations["listSystems"];
+        put?: never;
+        /**
+         * Add a system (admin only)
+         * @description Error codes are `invalid_name` and `system_name_taken` (409).
+         */
+        post: operations["createSystem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{systemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                systemId: components["parameters"]["SystemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a system (admin only) */
+        put: operations["updateSystem"];
+        post?: never;
+        /**
+         * Delete a system no ticket uses (admin only)
+         * @description Error code `system_in_use` (409); hide it instead.
+         */
+        delete: operations["deleteSystem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every catalogue item, in display order (staff) */
+        get: operations["listCatalogItems"];
+        put?: never;
+        /**
+         * Add a catalogue item (admin only)
+         * @description Error codes are `invalid_name`, `invalid_delivery_time` and `catalog_item_name_taken` (409).
+         */
+        post: operations["createCatalogItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalog-items/{catalogItemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalogItemId: components["parameters"]["CatalogItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a catalogue item (admin only)
+         * @description Open tickets keep the delivery time they were created with.
+         */
+        put: operations["updateCatalogItem"];
+        post?: never;
+        /**
+         * Delete a catalogue item no ticket uses (admin only)
+         * @description Error code `catalog_item_in_use` (409); hide it instead.
+         */
+        delete: operations["deleteCatalogItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tickets the user may see, newest first
+         * @description Requesters see their client's tickets; agents the tickets of their assigned clients;
+         *     supervisors and admins every ticket. Page with `before` = the last id of the previous page.
+         */
+        get: operations["listTickets"];
+        put?: never;
+        /**
+         * Open a ticket
+         * @description Requesters report for themselves (channel `portal`); the staff-only fields are ignored.
+         *     Staff log a ticket for a client's requester and must give `clientId`, `requesterId` and a
+         *     non-portal `channel`. Error codes are `invalid_subject`, `invalid_description`,
+         *     `invalid_system`, `invalid_catalog_item`, `client_required`, `client_not_found`,
+         *     `invalid_requester`, `invalid_channel`, `invalid_assignee`, `invalid_attachment` and
+         *     `too_many_attachments`.
+         */
+        post: operations["createTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One ticket
+         * @description 404 when the user may not see it.
+         */
+        get: operations["getTicket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The ticket's conversation, oldest first
+         * @description Requesters get public messages only.
+         */
+        get: operations["listTicketMessages"];
+        put?: never;
+        /**
+         * Reply, or add an internal note (staff)
+         * @description A requester asking for `internal` gets 403. Error codes are `invalid_message`,
+         *     `invalid_attachment`, `too_many_attachments` and `ticket_closed` (409).
+         */
+        post: operations["createTicketMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Move the ticket (staff)
+         * @description Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409).
+         */
+        put: operations["setTicketStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/assignee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assign or unassign the ticket (staff)
+         * @description Error codes are `invalid_assignee` and `ticket_closed` (409).
+         */
+        put: operations["setTicketAssignee"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/priority": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change the priority, with a reason (staff)
+         * @description The reason goes to the audit log. Error codes are `reason_required` and `ticket_closed` (409).
+         */
+        put: operations["setTicketPriority"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        /** The ticket's activity log, oldest first (staff) */
+        get: operations["listTicketActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload one file
+         * @description The file waits, unlinked, until a new ticket or message names it in `attachmentIds`; unlinked
+         *     files are deleted after 24 hours. Error codes are `attachment_too_large` (413),
+         *     `attachment_type_not_allowed`, `attachment_empty`, `invalid_attachment` and
+         *     `too_many_pending_attachments` (409).
+         */
+        post: operations["uploadAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: components["parameters"]["AttachmentId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Download a file on a ticket the user may see
+         * @description Always served as a download. Files on internal notes are hidden from requesters (404).
+         */
+        get: operations["downloadAttachment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -399,6 +794,11 @@ export interface components {
         Organization: {
             /** @example Demo Vendor */
             name: string;
+            /**
+             * @description IANA time zone; times are shown in it.
+             * @example Asia/Jakarta
+             */
+            timezone: string;
             logoUrl?: string | null;
             /** @example Data stored in Indonesia · Personal data handled under UU PDP */
             footerNote?: string | null;
@@ -562,6 +962,298 @@ export interface components {
             /** @description Dates that already had a holiday. */
             skippedCount: number;
         };
+        Requester: {
+            /** Format: uuid */
+            id: string;
+            /** @example Hendra Gunawan */
+            name: string;
+            email: string;
+            /** @example IT Officer */
+            jobTitle: string | null;
+            status: components["schemas"]["UserStatus"];
+        };
+        RequesterInput: {
+            name: string;
+            email: string;
+            jobTitle?: string | null;
+        };
+        Assignee: {
+            /** Format: uuid */
+            id: string;
+            /** @example Rina Pratiwi */
+            name: string;
+            role: components["schemas"]["Role"];
+            /** @example L2 */
+            jobTitle: string | null;
+            openTicketCount: number;
+        };
+        System: {
+            /** Format: uuid */
+            id: string;
+            /** @example e-Office */
+            name: string;
+            /** @example Letters, dispositions, archives */
+            description: string | null;
+            sortOrder: number;
+            /** @description Shown on the report form. */
+            active: boolean;
+            ticketCount: number;
+        };
+        SystemInput: {
+            name: string;
+            description?: string | null;
+            sortOrder: number;
+            active: boolean;
+        };
+        CatalogItem: {
+            /** Format: uuid */
+            id: string;
+            /** @example VPN / remote access */
+            name: string;
+            description: string | null;
+            /**
+             * @description Working minutes.
+             * @example 1080
+             */
+            deliveryMinutes: number;
+            sortOrder: number;
+            /** @description Shown on the report form. */
+            active: boolean;
+            ticketCount: number;
+        };
+        CatalogItemInput: {
+            name: string;
+            description?: string | null;
+            deliveryMinutes: number;
+            sortOrder: number;
+            active: boolean;
+        };
+        IntakeSystem: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string | null;
+        };
+        IntakeCatalogItem: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string | null;
+            deliveryMinutes: number;
+        };
+        Intake: {
+            /** Format: uuid */
+            clientId: string;
+            /** @description The client's plan, P1 to P4. */
+            targets: components["schemas"]["SlaTarget"][];
+            businessHours: components["schemas"]["BusinessHours"];
+            systems: components["schemas"]["IntakeSystem"][];
+            catalogItems: components["schemas"]["IntakeCatalogItem"][];
+        };
+        AttachmentPolicy: {
+            /**
+             * Format: int64
+             * @example 10485760
+             */
+            maxBytes: number;
+            /** @example 5 */
+            maxPerMessage: number;
+            extensions: string[];
+        };
+        Attachment: {
+            /** Format: uuid */
+            id: string;
+            /** @example screenshot-login-error.png */
+            filename: string;
+            /** @example image/png */
+            contentType: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        TicketType: "incident" | "request";
+        /** @enum {string} */
+        TicketStatus: "new" | "assigned" | "in_progress" | "waiting_on_client" | "in_uat" | "resolved" | "closed";
+        /** @enum {string} */
+        TicketChannel: "portal" | "phone" | "email" | "whatsapp" | "in_person";
+        /**
+         * @description `internal` notes are never shown to requesters.
+         * @enum {string}
+         */
+        MessageVisibility: "public" | "internal";
+        /** @enum {string} */
+        TicketAssigneeFilter: "me" | "unassigned";
+        /** @enum {string} */
+        TicketProgressStep: "received" | "assigned" | "in_progress" | "ready_for_test" | "resolved";
+        /** @enum {string} */
+        TicketProgressState: "done" | "current" | "upcoming" | "skipped";
+        /** @enum {string} */
+        TicketActivityAction: "created" | "status_changed" | "assignee_changed" | "priority_changed" | "reply_added" | "note_added" | "first_responded";
+        /**
+         * @description Why the system changed the status on its own.
+         * @enum {string}
+         */
+        TicketStatusCause: "assignment" | "requester_reply";
+        /** @description The target for the current priority, from the plan the client had when the ticket was opened. */
+        TicketSla: {
+            priority: components["schemas"]["Priority"];
+            firstResponseMinutes: number;
+            /** @description Resolve time for incidents, delivery time for service requests. */
+            resolutionMinutes: number;
+            calendar: components["schemas"]["SlaCalendar"];
+            /** @description resolutionMinutes is the catalogue item's delivery time. */
+            fromCatalog: boolean;
+        };
+        TicketProgress: {
+            step: components["schemas"]["TicketProgressStep"];
+            state: components["schemas"]["TicketProgressState"];
+            /** Format: date-time */
+            at: string | null;
+        };
+        TicketSummary: {
+            /** Format: uuid */
+            id: string;
+            /** @example HD-24871 */
+            key: string;
+            type: components["schemas"]["TicketType"];
+            status: components["schemas"]["TicketStatus"];
+            priority: components["schemas"]["Priority"];
+            /** @example e-Office login fails for all staff */
+            subject: string;
+            client: components["schemas"]["Ref"];
+            requester: components["schemas"]["Ref"];
+            assignee: components["schemas"]["Ref"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            resolvedAt: string | null;
+        };
+        Ticket: {
+            /** Format: uuid */
+            id: string;
+            /** @example HD-24871 */
+            key: string;
+            type: components["schemas"]["TicketType"];
+            status: components["schemas"]["TicketStatus"];
+            priority: components["schemas"]["Priority"];
+            subject: string;
+            client: components["schemas"]["Ref"];
+            requester: components["schemas"]["Ref"];
+            assignee: components["schemas"]["Ref"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            resolvedAt: string | null;
+            channel: components["schemas"]["TicketChannel"];
+            description: string;
+            requesterJobTitle: string | null;
+            system: components["schemas"]["Ref"] | null;
+            catalogItem: components["schemas"]["Ref"] | null;
+            createdBy: components["schemas"]["Ref"];
+            /** @description An agent logged the ticket on the requester's behalf. */
+            loggedByStaff: boolean;
+            /** @description Files on the description. */
+            attachments: components["schemas"]["Attachment"][];
+            sla: components["schemas"]["TicketSla"];
+            /** @description Every priority's target from the ticket's plan snapshot, P1 to P4. */
+            slaTargets: components["schemas"]["SlaTarget"][];
+            /** Format: date-time */
+            firstResponseAt: string | null;
+            /** Format: date-time */
+            closedAt: string | null;
+            /** @description The requester's progress tracker, in order. */
+            progress: components["schemas"]["TicketProgress"][];
+            /** @description Manual status changes open to the user; empty for requesters. */
+            allowedStatuses: components["schemas"]["TicketStatus"][];
+        };
+        TicketInput: {
+            type: components["schemas"]["TicketType"];
+            priority: components["schemas"]["Priority"];
+            subject: string;
+            description: string;
+            /**
+             * Format: uuid
+             * @description Incidents only.
+             */
+            systemId?: string;
+            /**
+             * Format: uuid
+             * @description Service requests only.
+             */
+            catalogItemId?: string;
+            attachmentIds?: string[];
+            /**
+             * Format: uuid
+             * @description Staff only.
+             */
+            clientId?: string;
+            /**
+             * Format: uuid
+             * @description Staff only; a requester of the client.
+             */
+            requesterId?: string;
+            /** @description Staff only; any channel except portal. */
+            channel?: components["schemas"]["TicketChannel"];
+            /** @description Staff only. */
+            assignToMe?: boolean;
+        };
+        TicketMessage: {
+            /** Format: uuid */
+            id: string;
+            author: components["schemas"]["Ref"];
+            authorJobTitle: string | null;
+            /** @description Written by vendor staff rather than the client. */
+            fromSupport: boolean;
+            visibility: components["schemas"]["MessageVisibility"];
+            body: string;
+            attachments: components["schemas"]["Attachment"][];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TicketMessageInput: {
+            visibility: components["schemas"]["MessageVisibility"];
+            body: string;
+            attachmentIds?: string[];
+        };
+        TicketStatusInput: {
+            status: components["schemas"]["TicketStatus"];
+        };
+        TicketAssigneeInput: {
+            /**
+             * Format: uuid
+             * @description null unassigns.
+             */
+            assigneeId: string | null;
+        };
+        TicketPriorityInput: {
+            priority: components["schemas"]["Priority"];
+            reason: string;
+        };
+        /**
+         * @description One activity-log line. `from`/`to` hold statuses (status_changed), priorities
+         *     (priority_changed) or assignee names (assignee_changed; null = unassigned).
+         */
+        TicketActivity: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            at: string;
+            /** @description null for the system. */
+            actorName: string | null;
+            action: components["schemas"]["TicketActivityAction"];
+            from: string | null;
+            to: string | null;
+            reason: string | null;
+            cause: components["schemas"]["TicketStatusCause"] | null;
+            /** @description Set on created. */
+            channel: components["schemas"]["TicketChannel"] | null;
+        };
     };
     responses: {
         /** @description Error (RFC 9457 problem details) */
@@ -588,6 +1280,11 @@ export interface components {
     parameters: {
         ClientId: string;
         PlanId: string;
+        /** @description A ticket key such as HD-24871 (case-insensitive). */
+        TicketKey: string;
+        AttachmentId: string;
+        SystemId: string;
+        CatalogItemId: string;
     };
     requestBodies: never;
     headers: never;
@@ -918,6 +1615,90 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listClientRequesters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Requesters */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requester"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createClientRequester: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequesterInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requester"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listClientAssignees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignees */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignee"][];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
@@ -1259,6 +2040,607 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getIntake: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Form choices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Intake"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAttachmentPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentPolicy"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listSystems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Systems */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["System"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createSystem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["System"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateSystem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                systemId: components["parameters"]["SystemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["System"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteSystem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                systemId: components["parameters"]["SystemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCatalogItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Catalogue items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogItem"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createCatalogItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogItemInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogItem"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateCatalogItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalogItemId: components["parameters"]["CatalogItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogItemInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogItem"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteCatalogItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalogItemId: components["parameters"]["CatalogItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTickets: {
+        parameters: {
+            query?: {
+                /** @description Any of these statuses; all when left out. */
+                status?: components["schemas"]["TicketStatus"][];
+                clientId?: string;
+                assignee?: components["schemas"]["TicketAssigneeFilter"];
+                /** @description A ticket key, or words in the subject. */
+                q?: string;
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tickets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketSummary"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ticket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTicketMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Messages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketMessage"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createTicketMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketMessageInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketMessage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setTicketStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketStatusInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setTicketAssignee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketAssigneeInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setTicketPriority: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketPriorityInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTicketActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketActivity"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    uploadAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Uploaded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    downloadAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: components["parameters"]["AttachmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Cache-Control"?: string;
+                    "Content-Security-Policy"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };

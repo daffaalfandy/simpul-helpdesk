@@ -19,13 +19,17 @@ import { Route as AgentBoardRouteImport } from './routes/_agent/board'
 import { Route as AgentProjectsRouteImport } from './routes/_agent/projects'
 import { Route as AgentReportsRouteImport } from './routes/_agent/reports'
 import { Route as AgentSettingsRouteImport } from './routes/_agent/settings'
-import { Route as PortalPortalRouteImport } from './routes/_portal/portal'
 import { Route as AgentSettingsIndexRouteImport } from './routes/_agent/settings/index'
+import { Route as AgentSettingsCatalogRouteImport } from './routes/_agent/settings/catalog'
 import { Route as AgentSettingsClientsRouteImport } from './routes/_agent/settings/clients'
 import { Route as AgentSettingsGeneralRouteImport } from './routes/_agent/settings/general'
 import { Route as AgentSettingsIntegrationsRouteImport } from './routes/_agent/settings/integrations'
 import { Route as AgentSettingsMembersRouteImport } from './routes/_agent/settings/members'
 import { Route as AgentSettingsSlaRouteImport } from './routes/_agent/settings/sla'
+import { Route as AgentTicketsKeyRouteImport } from './routes/_agent/tickets/$key'
+import { Route as PortalPortalIndexRouteImport } from './routes/_portal/portal/index'
+import { Route as PortalPortalNewRouteImport } from './routes/_portal/portal/new'
+import { Route as PortalPortalTicketsKeyRouteImport } from './routes/_portal/portal/tickets/$key'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -75,14 +79,14 @@ const AgentSettingsRoute = AgentSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AgentRoute,
 } as any)
-const PortalPortalRoute = PortalPortalRouteImport.update({
-  id: '/portal',
-  path: '/portal',
-  getParentRoute: () => PortalRoute,
-} as any)
 const AgentSettingsIndexRoute = AgentSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AgentSettingsRoute,
+} as any)
+const AgentSettingsCatalogRoute = AgentSettingsCatalogRouteImport.update({
+  id: '/catalog',
+  path: '/catalog',
   getParentRoute: () => AgentSettingsRoute,
 } as any)
 const AgentSettingsClientsRoute = AgentSettingsClientsRouteImport.update({
@@ -111,6 +115,26 @@ const AgentSettingsSlaRoute = AgentSettingsSlaRouteImport.update({
   path: '/sla',
   getParentRoute: () => AgentSettingsRoute,
 } as any)
+const AgentTicketsKeyRoute = AgentTicketsKeyRouteImport.update({
+  id: '/tickets/$key',
+  path: '/tickets/$key',
+  getParentRoute: () => AgentRoute,
+} as any)
+const PortalPortalIndexRoute = PortalPortalIndexRouteImport.update({
+  id: '/portal/',
+  path: '/portal/',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalPortalNewRoute = PortalPortalNewRouteImport.update({
+  id: '/portal/new',
+  path: '/portal/new',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalPortalTicketsKeyRoute = PortalPortalTicketsKeyRouteImport.update({
+  id: '/portal/tickets/$key',
+  path: '/portal/tickets/$key',
+  getParentRoute: () => PortalRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -121,13 +145,17 @@ export interface FileRoutesByFullPath {
   '/projects': typeof AgentProjectsRoute
   '/reports': typeof AgentReportsRoute
   '/settings': typeof AgentSettingsRouteWithChildren
-  '/portal': typeof PortalPortalRoute
+  '/settings/catalog': typeof AgentSettingsCatalogRoute
   '/settings/clients': typeof AgentSettingsClientsRoute
   '/settings/general': typeof AgentSettingsGeneralRoute
   '/settings/integrations': typeof AgentSettingsIntegrationsRoute
   '/settings/members': typeof AgentSettingsMembersRoute
   '/settings/sla': typeof AgentSettingsSlaRoute
+  '/tickets/$key': typeof AgentTicketsKeyRoute
+  '/portal/new': typeof PortalPortalNewRoute
   '/settings/': typeof AgentSettingsIndexRoute
+  '/portal/': typeof PortalPortalIndexRoute
+  '/portal/tickets/$key': typeof PortalPortalTicketsKeyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -137,13 +165,17 @@ export interface FileRoutesByTo {
   '/board': typeof AgentBoardRoute
   '/projects': typeof AgentProjectsRoute
   '/reports': typeof AgentReportsRoute
-  '/portal': typeof PortalPortalRoute
+  '/settings/catalog': typeof AgentSettingsCatalogRoute
   '/settings/clients': typeof AgentSettingsClientsRoute
   '/settings/general': typeof AgentSettingsGeneralRoute
   '/settings/integrations': typeof AgentSettingsIntegrationsRoute
   '/settings/members': typeof AgentSettingsMembersRoute
   '/settings/sla': typeof AgentSettingsSlaRoute
+  '/tickets/$key': typeof AgentTicketsKeyRoute
+  '/portal/new': typeof PortalPortalNewRoute
   '/settings': typeof AgentSettingsIndexRoute
+  '/portal': typeof PortalPortalIndexRoute
+  '/portal/tickets/$key': typeof PortalPortalTicketsKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -157,13 +189,17 @@ export interface FileRoutesById {
   '/_agent/projects': typeof AgentProjectsRoute
   '/_agent/reports': typeof AgentReportsRoute
   '/_agent/settings': typeof AgentSettingsRouteWithChildren
-  '/_portal/portal': typeof PortalPortalRoute
+  '/_agent/settings/catalog': typeof AgentSettingsCatalogRoute
   '/_agent/settings/clients': typeof AgentSettingsClientsRoute
   '/_agent/settings/general': typeof AgentSettingsGeneralRoute
   '/_agent/settings/integrations': typeof AgentSettingsIntegrationsRoute
   '/_agent/settings/members': typeof AgentSettingsMembersRoute
   '/_agent/settings/sla': typeof AgentSettingsSlaRoute
+  '/_agent/tickets/$key': typeof AgentTicketsKeyRoute
+  '/_portal/portal/new': typeof PortalPortalNewRoute
   '/_agent/settings/': typeof AgentSettingsIndexRoute
+  '/_portal/portal/': typeof PortalPortalIndexRoute
+  '/_portal/portal/tickets/$key': typeof PortalPortalTicketsKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -176,13 +212,17 @@ export interface FileRouteTypes {
     | '/projects'
     | '/reports'
     | '/settings'
-    | '/portal'
+    | '/settings/catalog'
     | '/settings/clients'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/members'
     | '/settings/sla'
+    | '/tickets/$key'
+    | '/portal/new'
     | '/settings/'
+    | '/portal/'
+    | '/portal/tickets/$key'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -192,13 +232,17 @@ export interface FileRouteTypes {
     | '/board'
     | '/projects'
     | '/reports'
-    | '/portal'
+    | '/settings/catalog'
     | '/settings/clients'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/members'
     | '/settings/sla'
+    | '/tickets/$key'
+    | '/portal/new'
     | '/settings'
+    | '/portal'
+    | '/portal/tickets/$key'
   id:
     | '__root__'
     | '/'
@@ -211,13 +255,17 @@ export interface FileRouteTypes {
     | '/_agent/projects'
     | '/_agent/reports'
     | '/_agent/settings'
-    | '/_portal/portal'
+    | '/_agent/settings/catalog'
     | '/_agent/settings/clients'
     | '/_agent/settings/general'
     | '/_agent/settings/integrations'
     | '/_agent/settings/members'
     | '/_agent/settings/sla'
+    | '/_agent/tickets/$key'
+    | '/_portal/portal/new'
     | '/_agent/settings/'
+    | '/_portal/portal/'
+    | '/_portal/portal/tickets/$key'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -301,18 +349,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentSettingsRouteImport
       parentRoute: typeof AgentRoute
     }
-    '/_portal/portal': {
-      id: '/_portal/portal'
-      path: '/portal'
-      fullPath: '/portal'
-      preLoaderRoute: typeof PortalPortalRouteImport
-      parentRoute: typeof PortalRoute
-    }
     '/_agent/settings/': {
       id: '/_agent/settings/'
       path: '/'
       fullPath: '/settings/'
       preLoaderRoute: typeof AgentSettingsIndexRouteImport
+      parentRoute: typeof AgentSettingsRoute
+    }
+    '/_agent/settings/catalog': {
+      id: '/_agent/settings/catalog'
+      path: '/catalog'
+      fullPath: '/settings/catalog'
+      preLoaderRoute: typeof AgentSettingsCatalogRouteImport
       parentRoute: typeof AgentSettingsRoute
     }
     '/_agent/settings/clients': {
@@ -350,10 +398,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentSettingsSlaRouteImport
       parentRoute: typeof AgentSettingsRoute
     }
+    '/_agent/tickets/$key': {
+      id: '/_agent/tickets/$key'
+      path: '/tickets/$key'
+      fullPath: '/tickets/$key'
+      preLoaderRoute: typeof AgentTicketsKeyRouteImport
+      parentRoute: typeof AgentRoute
+    }
+    '/_portal/portal/': {
+      id: '/_portal/portal/'
+      path: '/portal'
+      fullPath: '/portal/'
+      preLoaderRoute: typeof PortalPortalIndexRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/portal/new': {
+      id: '/_portal/portal/new'
+      path: '/portal/new'
+      fullPath: '/portal/new'
+      preLoaderRoute: typeof PortalPortalNewRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/portal/tickets/$key': {
+      id: '/_portal/portal/tickets/$key'
+      path: '/portal/tickets/$key'
+      fullPath: '/portal/tickets/$key'
+      preLoaderRoute: typeof PortalPortalTicketsKeyRouteImport
+      parentRoute: typeof PortalRoute
+    }
   }
 }
 
 interface AgentSettingsRouteChildren {
+  AgentSettingsCatalogRoute: typeof AgentSettingsCatalogRoute
   AgentSettingsClientsRoute: typeof AgentSettingsClientsRoute
   AgentSettingsGeneralRoute: typeof AgentSettingsGeneralRoute
   AgentSettingsIntegrationsRoute: typeof AgentSettingsIntegrationsRoute
@@ -363,6 +440,7 @@ interface AgentSettingsRouteChildren {
 }
 
 const AgentSettingsRouteChildren: AgentSettingsRouteChildren = {
+  AgentSettingsCatalogRoute: AgentSettingsCatalogRoute,
   AgentSettingsClientsRoute: AgentSettingsClientsRoute,
   AgentSettingsGeneralRoute: AgentSettingsGeneralRoute,
   AgentSettingsIntegrationsRoute: AgentSettingsIntegrationsRoute,
@@ -380,6 +458,7 @@ interface AgentRouteChildren {
   AgentProjectsRoute: typeof AgentProjectsRoute
   AgentReportsRoute: typeof AgentReportsRoute
   AgentSettingsRoute: typeof AgentSettingsRouteWithChildren
+  AgentTicketsKeyRoute: typeof AgentTicketsKeyRoute
 }
 
 const AgentRouteChildren: AgentRouteChildren = {
@@ -387,16 +466,21 @@ const AgentRouteChildren: AgentRouteChildren = {
   AgentProjectsRoute: AgentProjectsRoute,
   AgentReportsRoute: AgentReportsRoute,
   AgentSettingsRoute: AgentSettingsRouteWithChildren,
+  AgentTicketsKeyRoute: AgentTicketsKeyRoute,
 }
 
 const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)
 
 interface PortalRouteChildren {
-  PortalPortalRoute: typeof PortalPortalRoute
+  PortalPortalNewRoute: typeof PortalPortalNewRoute
+  PortalPortalIndexRoute: typeof PortalPortalIndexRoute
+  PortalPortalTicketsKeyRoute: typeof PortalPortalTicketsKeyRoute
 }
 
 const PortalRouteChildren: PortalRouteChildren = {
-  PortalPortalRoute: PortalPortalRoute,
+  PortalPortalNewRoute: PortalPortalNewRoute,
+  PortalPortalIndexRoute: PortalPortalIndexRoute,
+  PortalPortalTicketsKeyRoute: PortalPortalTicketsKeyRoute,
 }
 
 const PortalRouteWithChildren =

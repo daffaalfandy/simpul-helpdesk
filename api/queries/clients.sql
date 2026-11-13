@@ -96,5 +96,5 @@ ON CONFLICT DO NOTHING;
 SELECT count(*)::int FROM users
 WHERE id = ANY(@ids::uuid[]) AND role = @role AND status = @status;
 
--- name: ListAgentClientIDs :many
-SELECT client_id FROM client_agents WHERE user_id = @user_id ORDER BY client_id;
+-- name: CountClientTickets :one
+SELECT count(*)::int FROM tickets WHERE client_id = @client_id;

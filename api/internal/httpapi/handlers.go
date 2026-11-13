@@ -14,7 +14,9 @@ func (s *server) GetOrganization(ctx context.Context, _ gen.GetOrganizationReque
 	if err != nil {
 		return nil, err
 	}
-	return gen.GetOrganization200JSONResponse{Name: org.Name, LogoUrl: org.LogoUrl, FooterNote: org.FooterNote}, nil
+	return gen.GetOrganization200JSONResponse{
+		Name: org.Name, LogoUrl: org.LogoUrl, FooterNote: org.FooterNote, Timezone: org.Timezone,
+	}, nil
 }
 
 // Login signs in and sets the session cookie.

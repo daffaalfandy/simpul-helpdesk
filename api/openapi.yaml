@@ -24,6 +24,9 @@ tags:
   - name: clients
   - name: sla
   - name: calendar
+  - name: tickets
+  - name: attachments
+  - name: catalog
 
 paths:
   /organization:
@@ -224,8 +227,8 @@ paths:
         default: { $ref: "#/components/responses/Problem" }
     delete:
       operationId: deleteClient
-      summary: Delete a client with no requesters (admin only)
-      description: Error code `client_in_use` (409) while requesters belong to the client.
+      summary: Delete a client with no requesters and no tickets (admin only)
+      description: Error code `client_in_use` (409) while requesters or tickets belong to the client.
       tags: [clients]
       responses:
         "204":
@@ -256,6 +259,73 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Client" }
         "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /clients/{clientId}/requesters:
+    parameters:
+      - $ref: "#/components/parameters/ClientId"
+    get:
+      operationId: listClientRequesters
+      summary: A client's active and invited requesters, by name
+      description: Staff only; agents see only their assigned clients (404 otherwise).
+      tags: [clients]
+      responses:
+        "200":
+          description: Requesters
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Requester" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createClientRequester
+      summary: Add a requester to a client
+      description: |
+        For agents logging a call from someone new. The requester is `invited` and has no
+        password until an invite sets one. Error codes are `invalid_name`, `invalid_email` and
+        `email_taken` (409).
+      tags: [clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequesterInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Requester" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /clients/{clientId}/assignees:
+    parameters:
+      - $ref: "#/components/parameters/ClientId"
+    get:
+      operationId: listClientAssignees
+      summary: Who can take a client's tickets
+      description: Active supervisors and admins, plus active agents assigned to the client, with their open tickets.
+      tags: [clients]
+      responses:
+        "200":
+          description: Assignees
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Assignee" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -504,6 +574,494 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /intake:
+    get:
+      operationId: getIntake
+      summary: What a report form offers for one client
+      description: |
+        The client's SLA targets, the working hours, and the visible systems and catalogue items.
+        Requesters always get their own client and leave `clientId` out; staff must pass a client
+        they may see (`client_required`, 404).
+      tags: [tickets]
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Form choices
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Intake" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /attachment-policy:
+    get:
+      operationId: getAttachmentPolicy
+      summary: Upload limits and allowed file extensions
+      tags: [attachments]
+      responses:
+        "200":
+          description: Policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttachmentPolicy" }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /systems:
+    get:
+      operationId: listSystems
+      summary: Every system, in display order (staff)
+      tags: [catalog]
+      responses:
+        "200":
+          description: Systems
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/System" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createSystem
+      summary: Add a system (admin only)
+      description: Error codes are `invalid_name` and `system_name_taken` (409).
+      tags: [catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /systems/{systemId}:
+    parameters:
+      - $ref: "#/components/parameters/SystemId"
+    put:
+      operationId: updateSystem
+      summary: Replace a system (admin only)
+      tags: [catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteSystem
+      summary: Delete a system no ticket uses (admin only)
+      description: Error code `system_in_use` (409); hide it instead.
+      tags: [catalog]
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /catalog-items:
+    get:
+      operationId: listCatalogItems
+      summary: Every catalogue item, in display order (staff)
+      tags: [catalog]
+      responses:
+        "200":
+          description: Catalogue items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogItem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createCatalogItem
+      summary: Add a catalogue item (admin only)
+      description: Error codes are `invalid_name`, `invalid_delivery_time` and `catalog_item_name_taken` (409).
+      tags: [catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogItemInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogItem" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /catalog-items/{catalogItemId}:
+    parameters:
+      - $ref: "#/components/parameters/CatalogItemId"
+    put:
+      operationId: updateCatalogItem
+      summary: Replace a catalogue item (admin only)
+      description: Open tickets keep the delivery time they were created with.
+      tags: [catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogItemInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogItem" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteCatalogItem
+      summary: Delete a catalogue item no ticket uses (admin only)
+      description: Error code `catalog_item_in_use` (409); hide it instead.
+      tags: [catalog]
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets:
+    get:
+      operationId: listTickets
+      summary: Tickets the user may see, newest first
+      description: |
+        Requesters see their client's tickets; agents the tickets of their assigned clients;
+        supervisors and admins every ticket. Page with `before` = the last id of the previous page.
+      tags: [tickets]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Any of these statuses; all when left out.
+          schema:
+            type: array
+            maxItems: 7
+            items: { $ref: "#/components/schemas/TicketStatus" }
+        - name: clientId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: assignee
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/TicketAssigneeFilter" }
+        - name: q
+          in: query
+          required: false
+          description: A ticket key, or words in the subject.
+          schema: { type: string, maxLength: 100 }
+        - name: before
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TicketSummary" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createTicket
+      summary: Open a ticket
+      description: |
+        Requesters report for themselves (channel `portal`); the staff-only fields are ignored.
+        Staff log a ticket for a client's requester and must give `clientId`, `requesterId` and a
+        non-portal `channel`. Error codes are `invalid_subject`, `invalid_description`,
+        `invalid_system`, `invalid_catalog_item`, `client_required`, `client_not_found`,
+        `invalid_requester`, `invalid_channel`, `invalid_assignee`, `invalid_attachment` and
+        `too_many_attachments`.
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    get:
+      operationId: getTicket
+      summary: One ticket
+      description: 404 when the user may not see it.
+      tags: [tickets]
+      responses:
+        "200":
+          description: Ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/messages:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    get:
+      operationId: listTicketMessages
+      summary: The ticket's conversation, oldest first
+      description: Requesters get public messages only.
+      tags: [tickets]
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TicketMessage" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createTicketMessage
+      summary: Reply, or add an internal note (staff)
+      description: |
+        A requester asking for `internal` gets 403. Error codes are `invalid_message`,
+        `invalid_attachment`, `too_many_attachments` and `ticket_closed` (409).
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketMessageInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketMessage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/status:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    put:
+      operationId: setTicketStatus
+      summary: Move the ticket (staff)
+      description: Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409).
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketStatusInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/assignee:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    put:
+      operationId: setTicketAssignee
+      summary: Assign or unassign the ticket (staff)
+      description: Error codes are `invalid_assignee` and `ticket_closed` (409).
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketAssigneeInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/priority:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    put:
+      operationId: setTicketPriority
+      summary: Change the priority, with a reason (staff)
+      description: The reason goes to the audit log. Error codes are `reason_required` and `ticket_closed` (409).
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketPriorityInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/activity:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    get:
+      operationId: listTicketActivity
+      summary: The ticket's activity log, oldest first (staff)
+      tags: [tickets]
+      responses:
+        "200":
+          description: Activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TicketActivity" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /attachments:
+    post:
+      operationId: uploadAttachment
+      summary: Upload one file
+      description: |
+        The file waits, unlinked, until a new ticket or message names it in `attachmentIds`; unlinked
+        files are deleted after 24 hours. Error codes are `attachment_too_large` (413),
+        `attachment_type_not_allowed`, `attachment_empty`, `invalid_attachment` and
+        `too_many_pending_attachments` (409).
+      tags: [attachments]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Uploaded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /attachments/{attachmentId}:
+    parameters:
+      - $ref: "#/components/parameters/AttachmentId"
+    get:
+      operationId: downloadAttachment
+      summary: Download a file on a ticket the user may see
+      description: Always served as a download. Files on internal notes are hidden from requesters (404).
+      tags: [attachments]
+      responses:
+        "200":
+          description: The file
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+            Content-Security-Policy:
+              schema: { type: string }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -520,6 +1078,27 @@ components:
       schema: { type: string, format: uuid }
     PlanId:
       name: planId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TicketKey:
+      name: ticketKey
+      in: path
+      required: true
+      description: A ticket key such as HD-24871 (case-insensitive).
+      schema: { type: string, maxLength: 30, pattern: "^[A-Za-z][A-Za-z0-9]{0,9}-[0-9]{1,18}$" }
+    AttachmentId:
+      name: attachmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SystemId:
+      name: systemId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CatalogItemId:
+      name: catalogItemId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -581,9 +1160,13 @@ components:
 
     Organization:
       type: object
-      required: [name]
+      required: [name, timezone]
       properties:
         name: { type: string, example: Demo Vendor }
+        timezone:
+          type: string
+          description: IANA time zone; times are shown in it.
+          example: Asia/Jakarta
         logoUrl: { type: string, nullable: true }
         footerNote:
           type: string
@@ -812,3 +1395,374 @@ components:
         skippedCount:
           type: integer
           description: Dates that already had a holiday.
+
+    Requester:
+      type: object
+      required: [id, name, email, jobTitle, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Hendra Gunawan }
+        email: { type: string }
+        jobTitle: { type: string, nullable: true, example: IT Officer }
+        status: { $ref: "#/components/schemas/UserStatus" }
+
+    RequesterInput:
+      type: object
+      required: [name, email]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        email: { type: string, minLength: 3, maxLength: 254 }
+        jobTitle: { type: string, nullable: true, maxLength: 200 }
+
+    Assignee:
+      type: object
+      required: [id, name, role, jobTitle, openTicketCount]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Rina Pratiwi }
+        role: { $ref: "#/components/schemas/Role" }
+        jobTitle: { type: string, nullable: true, example: L2 }
+        openTicketCount: { type: integer }
+
+    System:
+      type: object
+      required: [id, name, description, sortOrder, active, ticketCount]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: e-Office }
+        description: { type: string, nullable: true, example: "Letters, dispositions, archives" }
+        sortOrder: { type: integer }
+        active: { type: boolean, description: Shown on the report form. }
+        ticketCount: { type: integer }
+
+    SystemInput:
+      type: object
+      required: [name, sortOrder, active]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, nullable: true, maxLength: 300 }
+        sortOrder: { type: integer, minimum: 0, maximum: 10000 }
+        active: { type: boolean }
+
+    CatalogItem:
+      type: object
+      required: [id, name, description, deliveryMinutes, sortOrder, active, ticketCount]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: VPN / remote access }
+        description: { type: string, nullable: true }
+        deliveryMinutes:
+          type: integer
+          description: Working minutes.
+          example: 1080
+        sortOrder: { type: integer }
+        active: { type: boolean, description: Shown on the report form. }
+        ticketCount: { type: integer }
+
+    CatalogItemInput:
+      type: object
+      required: [name, deliveryMinutes, sortOrder, active]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, nullable: true, maxLength: 300 }
+        deliveryMinutes: { type: integer, minimum: 1, maximum: 525600 }
+        sortOrder: { type: integer, minimum: 0, maximum: 10000 }
+        active: { type: boolean }
+
+    IntakeSystem:
+      type: object
+      required: [id, name, description]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+
+    IntakeCatalogItem:
+      type: object
+      required: [id, name, description, deliveryMinutes]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        deliveryMinutes: { type: integer }
+
+    Intake:
+      type: object
+      required: [clientId, targets, businessHours, systems, catalogItems]
+      properties:
+        clientId: { type: string, format: uuid }
+        targets:
+          type: array
+          description: The client's plan, P1 to P4.
+          items: { $ref: "#/components/schemas/SlaTarget" }
+        businessHours: { $ref: "#/components/schemas/BusinessHours" }
+        systems:
+          type: array
+          items: { $ref: "#/components/schemas/IntakeSystem" }
+        catalogItems:
+          type: array
+          items: { $ref: "#/components/schemas/IntakeCatalogItem" }
+
+    AttachmentPolicy:
+      type: object
+      required: [maxBytes, maxPerMessage, extensions]
+      properties:
+        maxBytes: { type: integer, format: int64, example: 10485760 }
+        maxPerMessage: { type: integer, example: 5 }
+        extensions:
+          type: array
+          items: { type: string, example: .png }
+
+    Attachment:
+      type: object
+      required: [id, filename, contentType, sizeBytes, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string, example: screenshot-login-error.png }
+        contentType: { type: string, example: image/png }
+        sizeBytes: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+
+    TicketType:
+      type: string
+      enum: [incident, request]
+
+    TicketStatus:
+      type: string
+      enum: [new, assigned, in_progress, waiting_on_client, in_uat, resolved, closed]
+
+    TicketChannel:
+      type: string
+      enum: [portal, phone, email, whatsapp, in_person]
+
+    MessageVisibility:
+      type: string
+      description: "`internal` notes are never shown to requesters."
+      enum: [public, internal]
+
+    TicketAssigneeFilter:
+      type: string
+      enum: [me, unassigned]
+
+    TicketProgressStep:
+      type: string
+      enum: [received, assigned, in_progress, ready_for_test, resolved]
+
+    TicketProgressState:
+      type: string
+      enum: [done, current, upcoming, skipped]
+
+    TicketActivityAction:
+      type: string
+      enum: [created, status_changed, assignee_changed, priority_changed, reply_added, note_added, first_responded]
+
+    TicketStatusCause:
+      type: string
+      description: Why the system changed the status on its own.
+      enum: [assignment, requester_reply]
+
+    TicketSla:
+      type: object
+      required: [priority, firstResponseMinutes, resolutionMinutes, calendar, fromCatalog]
+      description: The target for the current priority, from the plan the client had when the ticket was opened.
+      properties:
+        priority: { $ref: "#/components/schemas/Priority" }
+        firstResponseMinutes: { type: integer }
+        resolutionMinutes:
+          type: integer
+          description: Resolve time for incidents, delivery time for service requests.
+        calendar: { $ref: "#/components/schemas/SlaCalendar" }
+        fromCatalog:
+          type: boolean
+          description: resolutionMinutes is the catalogue item's delivery time.
+
+    TicketProgress:
+      type: object
+      required: [step, state, at]
+      properties:
+        step: { $ref: "#/components/schemas/TicketProgressStep" }
+        state: { $ref: "#/components/schemas/TicketProgressState" }
+        at: { type: string, format: date-time, nullable: true }
+
+    TicketSummary:
+      type: object
+      required: [id, key, type, status, priority, subject, client, requester, assignee, createdAt, updatedAt, resolvedAt]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string, example: HD-24871 }
+        type: { $ref: "#/components/schemas/TicketType" }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        priority: { $ref: "#/components/schemas/Priority" }
+        subject: { type: string, example: e-Office login fails for all staff }
+        client: { $ref: "#/components/schemas/Ref" }
+        requester: { $ref: "#/components/schemas/Ref" }
+        assignee:
+          allOf: [{ $ref: "#/components/schemas/Ref" }]
+          nullable: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+
+    Ticket:
+      type: object
+      required: [id, key, type, status, priority, subject, client, requester, assignee, createdAt, updatedAt,
+                 resolvedAt, channel, description, requesterJobTitle, system, catalogItem, createdBy,
+                 loggedByStaff, attachments, sla, slaTargets, firstResponseAt, closedAt, progress, allowedStatuses]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string, example: HD-24871 }
+        type: { $ref: "#/components/schemas/TicketType" }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        priority: { $ref: "#/components/schemas/Priority" }
+        subject: { type: string }
+        client: { $ref: "#/components/schemas/Ref" }
+        requester: { $ref: "#/components/schemas/Ref" }
+        assignee:
+          allOf: [{ $ref: "#/components/schemas/Ref" }]
+          nullable: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        channel: { $ref: "#/components/schemas/TicketChannel" }
+        description: { type: string }
+        requesterJobTitle: { type: string, nullable: true }
+        system:
+          allOf: [{ $ref: "#/components/schemas/Ref" }]
+          nullable: true
+        catalogItem:
+          allOf: [{ $ref: "#/components/schemas/Ref" }]
+          nullable: true
+        createdBy: { $ref: "#/components/schemas/Ref" }
+        loggedByStaff:
+          type: boolean
+          description: An agent logged the ticket on the requester's behalf.
+        attachments:
+          type: array
+          description: Files on the description.
+          items: { $ref: "#/components/schemas/Attachment" }
+        sla: { $ref: "#/components/schemas/TicketSla" }
+        slaTargets:
+          type: array
+          description: Every priority's target from the ticket's plan snapshot, P1 to P4.
+          items: { $ref: "#/components/schemas/SlaTarget" }
+        firstResponseAt: { type: string, format: date-time, nullable: true }
+        closedAt: { type: string, format: date-time, nullable: true }
+        progress:
+          type: array
+          description: The requester's progress tracker, in order.
+          items: { $ref: "#/components/schemas/TicketProgress" }
+        allowedStatuses:
+          type: array
+          description: Manual status changes open to the user; empty for requesters.
+          items: { $ref: "#/components/schemas/TicketStatus" }
+
+    TicketInput:
+      type: object
+      required: [type, priority, subject, description]
+      properties:
+        type: { $ref: "#/components/schemas/TicketType" }
+        priority: { $ref: "#/components/schemas/Priority" }
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 20000 }
+        systemId:
+          type: string
+          format: uuid
+          description: Incidents only.
+        catalogItemId:
+          type: string
+          format: uuid
+          description: Service requests only.
+        attachmentIds:
+          type: array
+          maxItems: 5
+          items: { type: string, format: uuid }
+        clientId:
+          type: string
+          format: uuid
+          description: Staff only.
+        requesterId:
+          type: string
+          format: uuid
+          description: Staff only; a requester of the client.
+        channel:
+          allOf: [{ $ref: "#/components/schemas/TicketChannel" }]
+          description: Staff only; any channel except portal.
+        assignToMe:
+          type: boolean
+          description: Staff only.
+
+    TicketMessage:
+      type: object
+      required: [id, author, authorJobTitle, fromSupport, visibility, body, attachments, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        author: { $ref: "#/components/schemas/Ref" }
+        authorJobTitle: { type: string, nullable: true }
+        fromSupport:
+          type: boolean
+          description: Written by vendor staff rather than the client.
+        visibility: { $ref: "#/components/schemas/MessageVisibility" }
+        body: { type: string }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/Attachment" }
+        createdAt: { type: string, format: date-time }
+
+    TicketMessageInput:
+      type: object
+      required: [visibility, body]
+      properties:
+        visibility: { $ref: "#/components/schemas/MessageVisibility" }
+        body: { type: string, minLength: 1, maxLength: 20000 }
+        attachmentIds:
+          type: array
+          maxItems: 5
+          items: { type: string, format: uuid }
+
+    TicketStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/TicketStatus" }
+
+    TicketAssigneeInput:
+      type: object
+      required: [assigneeId]
+      properties:
+        assigneeId:
+          type: string
+          format: uuid
+          nullable: true
+          description: null unassigns.
+
+    TicketPriorityInput:
+      type: object
+      required: [priority, reason]
+      properties:
+        priority: { $ref: "#/components/schemas/Priority" }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+
+    TicketActivity:
+      type: object
+      required: [id, at, actorName, action, from, to, reason, cause, channel]
+      description: |
+        One activity-log line. `from`/`to` hold statuses (status_changed), priorities
+        (priority_changed) or assignee names (assignee_changed; null = unassigned).
+      properties:
+        id: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        actorName:
+          type: string
+          nullable: true
+          description: null for the system.
+        action: { $ref: "#/components/schemas/TicketActivityAction" }
+        from: { type: string, nullable: true }
+        to: { type: string, nullable: true }
+        reason: { type: string, nullable: true }
+        cause:
+          allOf: [{ $ref: "#/components/schemas/TicketStatusCause" }]
+          nullable: true
+        channel:
+          allOf: [{ $ref: "#/components/schemas/TicketChannel" }]
+          nullable: true
+          description: Set on created.

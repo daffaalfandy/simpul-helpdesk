@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -31,6 +32,7 @@ const (
 	VarMailFrom       = "MAIL_FROM"
 	VarMailFromName   = "MAIL_FROM_NAME"
 	VarDocsEnabled    = "DOCS_ENABLED"
+	VarStorageDir     = "STORAGE_DIR"
 )
 
 // Defaults used when a variable is unset.
@@ -41,6 +43,9 @@ const (
 	DefaultSMTPAddr     = "localhost:25"
 	DefaultMailFrom     = "simdesk@localhost"
 	DefaultMailFromName = "SimDesk"
+	// DefaultDevStorageDir is relative to the working directory; production needs an
+	// absolute STORAGE_DIR on persistent, backed-up disk.
+	DefaultDevStorageDir = "data/storage"
 )
 
 const listSeparator = ","
@@ -59,6 +64,7 @@ type Config struct {
 	MailFrom       string
 	MailFromName   string
 	DocsEnabled    bool
+	StorageDir     string
 }
 
 // IsDev reports whether the app runs in development mode.
@@ -103,6 +109,15 @@ func Load() (Config, error) {
 	}
 	if c.TrustedProxies, err = parsePrefixes(os.Getenv(VarTrustedProxies)); err != nil {
 		errs = append(errs, err)
+	}
+	c.StorageDir = strings.TrimSpace(os.Getenv(VarStorageDir))
+	switch {
+	case c.StorageDir == "" && c.IsDev():
+		c.StorageDir = DefaultDevStorageDir
+	case c.StorageDir == "":
+		errs = append(errs, fmt.Errorf("%s is required", VarStorageDir))
+	case !c.IsDev() && !filepath.IsAbs(c.StorageDir):
+		errs = append(errs, fmt.Errorf("%s must be an absolute path, got %q", VarStorageDir, c.StorageDir))
 	}
 	return c, errors.Join(errs...)
 }

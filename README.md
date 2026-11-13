@@ -33,7 +33,9 @@ make dev       # API on :8080, web on :5173
 
 ## Self-hosting
 
-A production image and guide are coming. To create the first admin on a fresh install:
+A production image and guide are coming. Uploaded attachments live on local disk in
+`STORAGE_DIR` (an absolute path; back it up with the database). To create the first admin on a
+fresh install:
 
 ```sh
 simdesk migrate

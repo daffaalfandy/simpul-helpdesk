@@ -25,13 +25,16 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/catalog"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/seed"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/storage"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/webui"
 )
 
@@ -139,6 +142,15 @@ type app struct {
 	auth    *auth.Service
 	clients *clients.Service
 	sla     *sla.Service
+	catalog *catalog.Service
+	tickets *tickets.Service
+	files   storage.Store
+}
+
+// close releases the database pool and the file store.
+func (a *app) close() {
+	_ = a.files.Close()
+	a.store.Close()
 }
 
 func newApp(ctx context.Context, runJobs bool) (*app, error) {
@@ -158,24 +170,36 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 		st.Close()
 		return nil, err
 	}
+	files, err := storage.NewFS(cfg.StorageDir)
+	if err != nil {
+		st.Close()
+		return nil, err
+	}
 	opts := auth.DefaultOptions()
 	workers := river.NewWorkers()
 	river.AddWorker(workers, auth.NewResetEmailWorker(st, mailer, cfg.AppURL, opts.ResetTokenTTL))
+	river.AddWorker(workers, tickets.NewAttachmentSweeper(st, files))
 	riverCfg := &river.Config{Workers: workers, Logger: log.With("component", "jobs")}
 	if runJobs {
+		// Periodic jobs only on clients that run jobs: River refuses them on insert-only clients.
 		riverCfg.Queues = map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: jobMaxWorkers}}
+		riverCfg.PeriodicJobs = []*river.PeriodicJob{tickets.AttachmentSweepJob()}
 	}
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), riverCfg)
 	if err != nil {
+		_ = files.Close()
 		st.Close()
 		return nil, fmt.Errorf("job client: %w", err)
 	}
 	hasher := auth.NewHasher(auth.DefaultParams, auth.DefaultMaxConcurrentHashes)
+	slaSvc := sla.NewService(st)
 	return &app{
-		cfg: cfg, log: log, store: st, hasher: hasher, jobs: jobs,
+		cfg: cfg, log: log, store: st, hasher: hasher, jobs: jobs, files: files,
 		auth:    auth.NewService(st, hasher, jobs, opts, log),
 		clients: clients.NewService(st),
-		sla:     sla.NewService(st),
+		sla:     slaSvc,
+		catalog: catalog.NewService(st),
+		tickets: tickets.NewService(st, files, slaSvc),
 	}, nil
 }
 
@@ -196,10 +220,11 @@ func runServe(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.store.Close()
+	defer a.close()
 
 	handler, err := httpapi.New(httpapi.Deps{
-		Config: a.cfg, Store: a.store, Auth: a.auth, Clients: a.clients, SLA: a.sla, Logger: a.log, WebUI: webui.FS(),
+		Config: a.cfg, Store: a.store, Auth: a.auth, Clients: a.clients, SLA: a.sla, Catalog: a.catalog,
+		Tickets: a.tickets, Logger: a.log, WebUI: webui.FS(),
 	})
 	if err != nil {
 		return err
@@ -249,7 +274,7 @@ func runWorker(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer a.store.Close()
+	defer a.close()
 	if err := a.jobs.Start(ctx); err != nil {
 		return fmt.Errorf("start jobs: %w", err)
 	}
@@ -291,7 +316,7 @@ func runSeed(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer a.store.Close()
+	defer a.close()
 	return seed.Run(ctx, a.cfg.Env, a.store, a.hasher, os.Stdout)
 }
 
@@ -321,7 +346,7 @@ func runUser(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.store.Close()
+	defer a.close()
 	id, err := a.auth.CreateUser(ctx, auth.NewUser{
 		Email: *email, Name: *name, Password: password, Role: auth.Role(*role),
 		ClientName: *client, JobTitle: *jobTitle,
@@ -343,7 +368,7 @@ func runHolidays(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.store.Close()
+	defer a.close()
 	switch args[0] {
 	case subPresets:
 		presets, err := a.sla.HolidayPresets(ctx)

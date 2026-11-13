@@ -104,7 +104,7 @@ describe('settings', () => {
       await user.click(await screen.findByRole('button', { name: 'Delete client' }))
       const confirm = await screen.findByRole('alertdialog', { name: 'Delete Dinas Kominfo Jambi?' })
       await user.click(within(confirm).getByRole('button', { name: 'Delete client' }))
-      expect(await within(confirm).findByRole('alert')).toHaveTextContent('This client still has requesters.')
+      expect(await within(confirm).findByRole('alert')).toHaveTextContent('This client still has requesters or tickets')
     })
   })
 

@@ -52,9 +52,10 @@ const (
 )
 
 const (
-	constraintName   = "clients_name_key"
-	constraintPlanFK = "clients_sla_plan_id_fkey"
-	constraintUserFK = "users_client_id_fkey"
+	constraintName     = "clients_name_key"
+	constraintPlanFK   = "clients_sla_plan_id_fkey"
+	constraintUserFK   = "users_client_id_fkey"
+	constraintTicketFK = "tickets_client_id_fkey"
 )
 
 // Ref names a related record.
@@ -130,11 +131,6 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, id uuid.UUID) (Cli
 	return get(ctx, s.store.Q(), id, scope(p))
 }
 
-// AgentClientIDs lists the clients assigned to an agent.
-func (s *Service) AgentClientIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
-	return s.store.Q().ListAgentClientIDs(ctx, userID)
-}
-
 // Create adds a client.
 func (s *Service) Create(ctx context.Context, actor audit.Actor, in Input) (Client, error) {
 	in, err := normalize(in)
@@ -198,17 +194,22 @@ func (s *Service) Update(ctx context.Context, actor audit.Actor, id uuid.UUID, i
 	return get(ctx, s.store.Q(), id, nil)
 }
 
-// Delete removes a client that has no users. Tickets will block deletion too (M3).
+// Delete removes a client that has no requesters and no tickets.
 func (s *Service) Delete(ctx context.Context, actor audit.Actor, id uuid.UUID) error {
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
 		old, err := tx.Q.GetClientForUpdate(ctx, id)
 		if err != nil {
 			return notFound(err)
 		}
+		if n, err := tx.Q.CountClientTickets(ctx, id); err != nil {
+			return err
+		} else if n > 0 {
+			return errHasTickets()
+		}
 		if n, err := tx.Q.CountClientUsers(ctx, &id); err != nil {
 			return err
 		} else if n > 0 {
-			return errInUse()
+			return errHasRequesters()
 		}
 		if err := tx.Q.DeleteClient(ctx, id); err != nil {
 			return err
@@ -368,14 +369,20 @@ func clientError(err error) error {
 		return apperr.Conflict(apperr.CodeClientNameTaken, "A client with this name already exists", "")
 	case store.IsViolation(err, store.SQLStateForeignKeyViolation, constraintPlanFK):
 		return apperr.Invalid(apperr.CodeSlaPlanNotFound, "Choose an SLA plan", "")
+	case store.IsViolation(err, store.SQLStateRestrictViolation, constraintTicketFK):
+		return errHasTickets()
 	case store.IsViolation(err, store.SQLStateRestrictViolation, constraintUserFK):
-		return errInUse()
+		return errHasRequesters()
 	}
 	return err
 }
 
-func errInUse() error {
+func errHasRequesters() error {
 	return apperr.Conflict(apperr.CodeClientInUse, "This client still has requesters", "Remove or move them first.")
+}
+
+func errHasTickets() error {
+	return apperr.Conflict(apperr.CodeClientInUse, "This client has tickets", "Clients with tickets are kept for the record.")
 }
 
 func notFound(err error) error {

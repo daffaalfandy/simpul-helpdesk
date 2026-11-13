@@ -3,11 +3,8 @@ import { Hammer } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ApiError, type SlaCalendar, type SlaPlan } from '../../api/client'
-import { Alert } from '../../components/Alert'
+import type { SlaPlan } from '../../api/client'
 import { EmptyState } from '../../components/EmptyState'
-import en from '../../i18n/en.json'
-import { toParts } from '../../lib/duration'
 import type { SectionId } from './sections'
 
 /** Section title and description at the top of a settings page. */
@@ -36,29 +33,9 @@ export function ComingSoonSection({ section }: { section: SectionId }) {
   )
 }
 
-type ErrorCodeKey = keyof typeof en.errors
-
-function isErrorCode(code: string): code is ErrorCodeKey {
-  return Object.hasOwn(en.errors, code)
-}
-
-/** A translated message for an API error, or the generic one. */
-export function errorMessage(t: TFunction, error: unknown): string {
-  if (error instanceof ApiError && isErrorCode(error.code)) return t(`errors.${error.code}`)
-  return t('common.errorGeneric')
-}
-
-export function ErrorAlert({ error }: { error: unknown }) {
-  const { t } = useTranslation()
-  if (!error) return null
-  return <Alert tone="error">{errorMessage(t, error)}</Alert>
-}
-
-/** "2 working days", "15 min", "1 day". */
-export function formatDuration(t: TFunction, minutes: number, calendar: SlaCalendar, workingDayMinutes: number): string {
-  const { value, unit } = toParts(minutes, calendar, workingDayMinutes)
-  return t(`duration.${unit}`, { count: value })
-}
+export { errorMessage } from '../../api/errors'
+export { ErrorAlert } from '../../components/ErrorAlert'
+export { formatDuration } from '../../lib/formatDuration'
 
 /** Dropdown sub-line for a plan: which priorities run 24/7. */
 export function planSummary(t: TFunction, plan: SlaPlan): string {

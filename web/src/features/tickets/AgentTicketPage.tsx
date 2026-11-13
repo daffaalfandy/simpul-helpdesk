@@ -1,0 +1,58 @@
+import { useSuspenseQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+
+import { BackLink } from '../../components/BackLink'
+import { Pill, PriorityBadge } from '../../components/Badges'
+import { paths } from '../../lib/constants'
+import { businessHoursQueryOptions } from '../settings/queries'
+import { useSignedInUser } from '../shell/useSignedInUser'
+import { ActivityLog } from './ActivityLog'
+import { AgentComposer } from './AgentComposer'
+import { agentStatus, priorityLong } from './labels'
+import { MessageThread } from './MessageThread'
+import { ticketMessagesQueryOptions, ticketQueryOptions } from './queries'
+import { ServiceLevelCard } from './ServiceLevelCard'
+import { STATUS_TONE } from './status'
+import { TicketProperties } from './TicketProperties'
+import { useTimestamp } from './time'
+
+/** Agent ticket detail (HANDOFF §4, Ticket.dc.html), M3 parts. */
+export function AgentTicketPage({ ticketKey }: { ticketKey: string }) {
+  const { t } = useTranslation()
+  const me = useSignedInUser()
+  const { data: ticket } = useSuspenseQuery(ticketQueryOptions(ticketKey))
+  const { data: messages } = useSuspenseQuery(ticketMessagesQueryOptions(ticketKey))
+  const { data: hours } = useSuspenseQuery(businessHoursQueryOptions)
+  const { stamp } = useTimestamp()
+
+  return (
+    <>
+      <BackLink to={paths.board}>{t('agent.ticket.back')}</BackLink>
+      <header className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted">
+          <span className="font-bold text-ink">
+            {t('ticket.keyType', { key: ticket.key, type: t(`ticket.type.${ticket.type}`) })}
+          </span>
+          <span>
+            {t('ticket.openedVia', { when: stamp(ticket.createdAt), channel: t(`ticket.channel.${ticket.channel}`) })}
+          </span>
+          {ticket.loggedByStaff && <span>{t('ticket.loggedBy', { name: ticket.createdBy.name })}</span>}
+          <PriorityBadge priority={ticket.priority}>{priorityLong(t, ticket.priority, ticket.type)}</PriorityBadge>
+          <Pill tone={STATUS_TONE[ticket.status]}>{agentStatus(t, ticket.status)}</Pill>
+        </div>
+        <h1 className="text-2xl leading-tight font-extrabold tracking-title wrap-break-word">{ticket.subject}</h1>
+      </header>
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_var(--ticket-aside-w)] lg:items-start">
+        <section aria-label={t('ticket.message.conversation')} className="flex min-w-0 flex-col gap-4">
+          <MessageThread ticket={ticket} messages={messages} audience="agent" meId={me.id} />
+          <AgentComposer ticket={ticket} />
+        </section>
+        <aside className="flex min-w-0 flex-col gap-4">
+          <TicketProperties ticket={ticket} />
+          <ServiceLevelCard ticket={ticket} audience="agent" workingDayMinutes={hours.workingDayMinutes} />
+          <ActivityLog ticketKey={ticket.key} type={ticket.type} />
+        </aside>
+      </div>
+    </>
+  )
+}

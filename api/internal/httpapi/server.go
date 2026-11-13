@@ -21,11 +21,13 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/catalog"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
 // Deps are the server's dependencies.
@@ -35,6 +37,8 @@ type Deps struct {
 	Auth    *auth.Service
 	Clients *clients.Service
 	SLA     *sla.Service
+	Catalog *catalog.Service
+	Tickets *tickets.Service
 	Logger  *slog.Logger
 	WebUI   fs.FS // built SPA; may be empty in development
 }
@@ -45,6 +49,8 @@ type server struct {
 	auth       *auth.Service
 	clients    *clients.Service
 	sla        *sla.Service
+	catalog    *catalog.Service
+	tickets    *tickets.Service
 	log        *slog.Logger
 	cookieName string
 }
@@ -58,9 +64,10 @@ func New(d Deps) (http.Handler, error) {
 		return nil, err
 	}
 	s := &server{
-		cfg: d.Config, store: d.Store, auth: d.Auth, clients: d.Clients, sla: d.SLA, log: d.Logger,
-		cookieName: cookieName(d.Config.CookieSecure),
+		cfg: d.Config, store: d.Store, auth: d.Auth, clients: d.Clients, sla: d.SLA, catalog: d.Catalog,
+		tickets: d.Tickets, log: d.Logger, cookieName: cookieName(d.Config.CookieSecure),
 	}
+	streamed := streamedRoutes(spec)
 
 	r := chi.NewRouter()
 	r.Use(withRequestID)
@@ -92,10 +99,16 @@ func New(d Deps) (http.Handler, error) {
 		}
 		api.Route(apiVersionPath, func(v1 chi.Router) {
 			v1.Use(s.session)
-			v1.Use(s.validator())
-			strict := gen.NewStrictHandlerWithOptions(s, []gen.StrictMiddlewareFunc{requireAuth(publicOperations(spec))},
+			v1.Use(bodyLimits(streamed))
+			v1.Use(s.validator(streamed))
+			middlewares := []gen.StrictMiddlewareFunc{downloadDeadline(binaryResponseOps(spec)), requireAuth(publicOperations(spec))}
+			strict := gen.NewStrictHandlerWithOptions(s, middlewares,
 				gen.StrictHTTPServerOptions{
 					RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+						if tooLargeError(err) {
+							writeAppError(w, r, errRequestTooLarge())
+							return
+						}
 						writeAppError(w, r, apperr.InvalidRequest(err.Error()))
 					},
 					ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -115,8 +128,9 @@ func New(d Deps) (http.Handler, error) {
 	return r, nil
 }
 
-// validator checks requests against the OpenAPI spec before they reach handlers.
-func (s *server) validator() func(http.Handler) http.Handler {
+// validator checks requests against the OpenAPI spec before they reach handlers. Streamed
+// (multipart) routes skip it; see streamedRoutes.
+func (s *server) validator(streamed map[string]bool) func(http.Handler) http.Handler {
 	spec, err := gen.GetSpec() // fresh copy: the middleware mutates Servers
 	if err != nil {
 		panic(err)
@@ -125,6 +139,7 @@ func (s *server) validator() func(http.Handler) http.Handler {
 		DoNotValidateServers:  true,
 		SilenceServersWarning: true,
 		Prefix:                apiPrefix,
+		Skipper:               func(r *http.Request) bool { return streamed[routeKey(r.Method, r.URL.Path)] },
 		Options: openapi3filter.Options{
 			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc, // the session middleware owns auth
 		},
@@ -144,6 +159,9 @@ func (s *server) validator() func(http.Handler) http.Handler {
 // validationError turns a spec validation failure into a 400 with per-field
 // errors, without echoing the schema back to the client.
 func validationError(err error) *apperr.Error {
+	if tooLargeError(err) {
+		return errRequestTooLarge()
+	}
 	var se *openapi3.SchemaError
 	if errors.As(err, &se) {
 		ae := apperr.InvalidRequest(se.Reason)

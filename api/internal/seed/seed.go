@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"text/tabwriter"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -39,9 +40,19 @@ const (
 	// GoldPlan is the demo premium SLA plan. Its numbers are placeholders (HANDOFF §13 Q3).
 	GoldPlan = "Gold"
 
-	emailRina = "rina@demo-vendor.test"
-	emailAdi  = "adi@demo-vendor.test"
-	emailYoga = "yoga@demo-vendor.test"
+	emailRina   = "rina@demo-vendor.test"
+	emailAdi    = "adi@demo-vendor.test"
+	emailYoga   = "yoga@demo-vendor.test"
+	emailHendra = "hendra@kominfo-jambi.test"
+	emailDian   = "dian@kominfo-jambi.test"
+	emailSri    = "sri.lestari@bpkad-batam.test"
+
+	clientBatam = "BPKAD Kota Batam"
+
+	// workingDay is one 08:00–17:00 working day in minutes (the default business hours).
+	workingDay = 540
+	// sortStep spaces list entries so admins can slot new ones in between.
+	sortStep = 10
 )
 
 // goldTargets are the Standard targets with P2 also running 24/7.
@@ -63,7 +74,7 @@ type client struct {
 
 var clients = []client{
 	{RequesterClient, "KTR/KOMINFO-JMB/006/2026", "2026-01-01", "2026-12-31", GoldPlan, "Hendra Gunawan", "hendra@kominfo-jambi.test", []string{emailRina, emailAdi}},
-	{"BPKAD Kota Batam", "KTR/BPKAD-BTM/014/2026", "2026-03-01", "2027-02-28", "", "Sri Lestari", "sri.lestari@bpkad-batam.test", []string{emailYoga}},
+	{clientBatam, "KTR/BPKAD-BTM/014/2026", "2026-03-01", "2027-02-28", "", "Sri Lestari", emailSri, []string{emailYoga}},
 	{"Bappeda Prov. Riau", "SPK/BAPPEDA-RIAU/031/2026", "2026-01-01", "2026-12-31", "", "Fajar Nugroho", "fajar@bappeda-riau.test", []string{emailYoga}},
 	{"Diskominfo Kab. Bintan", "KTR/KOMINFO-BTN/009/2026", "2026-06-01", "2027-05-31", "", "Maya Sari", "maya@kominfo-bintan.test", []string{emailYoga}},
 	{"Kementerian PANRB", "KTR/PANRB/112/2026", "2026-01-01", "2026-12-31", GoldPlan, "Arif Rahman", "arif@panrb.test", []string{emailRina, emailAdi}},
@@ -77,15 +88,42 @@ type person struct {
 	role        auth.Role
 	client      string
 	jobTitle    string
+	invited     bool // added by an agent; no password until an invite (M9)
 }
 
 var people = []person{
-	{"admin@demo-vendor.test", "Demo Admin", auth.RoleAdmin, "", ""},
-	{"dewi@demo-vendor.test", "Dewi Wulandari", auth.RoleSupervisor, "", "Team lead"},
-	{emailRina, "Rina Pratiwi", auth.RoleAgent, "", "L2"},
-	{emailAdi, "Adi Saputra", auth.RoleAgent, "", "L2"},
-	{emailYoga, "Yoga Hidayat", auth.RoleAgent, "", "L1"},
-	{"hendra@kominfo-jambi.test", "Hendra Gunawan", auth.RoleRequester, RequesterClient, "IT Officer"},
+	{"admin@demo-vendor.test", "Demo Admin", auth.RoleAdmin, "", "", false},
+	{"dewi@demo-vendor.test", "Dewi Wulandari", auth.RoleSupervisor, "", "Team lead", false},
+	{emailRina, "Rina Pratiwi", auth.RoleAgent, "", "L2", false},
+	{emailAdi, "Adi Saputra", auth.RoleAgent, "", "L2", false},
+	{emailYoga, "Yoga Hidayat", auth.RoleAgent, "", "L1", false},
+	{emailHendra, "Hendra Gunawan", auth.RoleRequester, RequesterClient, "IT Officer", false},
+	{emailSri, "Sri Lestari", auth.RoleRequester, clientBatam, "Head of Finance IT", false},
+	{emailDian, "Dian Puspita", auth.RoleRequester, RequesterClient, "Public Relations", true},
+}
+
+// entry is a "Which system?" or catalogue choice from the mock (NewTicket).
+type entry struct {
+	name, description string
+	deliveryMinutes   int // catalogue items only
+}
+
+var systems = []entry{
+	{"e-Office", "Letters, dispositions, archives", 0},
+	{"Email", "Mailboxes and accounts", 0},
+	{"Network / VPN", "Internet, Wi-Fi, remote access", 0},
+	{"Website", "Public website", 0},
+	{"SIPD / finance apps", "Budgeting and finance systems", 0},
+	{"Computer or printer", "Hardware at your desk", 0},
+	{"Other", "", 0},
+}
+
+var catalogItems = []entry{
+	{"New email account", "", 1 * workingDay},
+	{"VPN / remote access", "", 2 * workingDay},
+	{"Install licensed software", "", 2 * workingDay},
+	{"New or replacement device", "", 5 * workingDay},
+	{"Something else", "", 5 * workingDay},
 }
 
 // Run upserts the demo organisation, SLA plans, clients, users, agent assignments and
@@ -123,6 +161,9 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 				Email: p.email, Name: p.name, PasswordHash: &hash, Role: string(p.role),
 				Status: string(auth.UserStatusActive),
 			}
+			if p.invited {
+				params.PasswordHash, params.Status = nil, string(auth.UserStatusInvited)
+			}
 			if p.client != "" {
 				id := clientIDs[p.client]
 				params.ClientID = &id
@@ -146,18 +187,27 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 				return fmt.Errorf("agents of %s: %w", c.name, err)
 			}
 		}
-		return seedHolidays(ctx, tx.Q)
+		if err := seedHolidays(ctx, tx.Q); err != nil {
+			return err
+		}
+		lists, err := seedCatalog(ctx, tx.Q)
+		if err != nil {
+			return err
+		}
+		return seedTickets(ctx, tx.Q, time.Now(), refs{clients: clientIDs, users: userIDs, lists: lists})
 	})
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(out, "Seeded organisation %q with %d clients, %d users and holidays for %v.\n\n",
-		OrgName, len(clients), len(people), holidaypreset.Years())
+	fmt.Fprintf(out, "Seeded organisation %q with %d clients, %d users, %d tickets and holidays for %v.\n\n",
+		OrgName, len(clients), len(people), len(demoTickets), holidaypreset.Years())
 	tw := tabwriter.NewWriter(out, tableMinWidth, tableTabWidth, tablePadding, tablePadChar, 0)
 	fmt.Fprintln(tw, "EMAIL\tNAME\tROLE")
 	for _, p := range people {
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", p.email, p.name, p.role)
+		if !p.invited {
+			fmt.Fprintf(tw, "%s\t%s\t%s\n", p.email, p.name, p.role)
+		}
 	}
 	_ = tw.Flush()
 	fmt.Fprintf(out, "\nPassword for every user: %s\n", DevPassword)

@@ -38,6 +38,31 @@ const (
 	CodeInvalidSlaTargets     = "invalid_sla_targets"
 	CodeInvalidBusinessHours  = "invalid_business_hours"
 	CodeHolidayDateTaken      = "holiday_date_taken"
+
+	CodeRequestTooLarge           = "request_too_large"
+	CodeAttachmentTooLarge        = "attachment_too_large"
+	CodeAttachmentTypeNotAllowed  = "attachment_type_not_allowed"
+	CodeAttachmentEmpty           = "attachment_empty"
+	CodeTooManyAttachments        = "too_many_attachments"
+	CodeTooManyPendingAttachments = "too_many_pending_attachments"
+	CodeInvalidAttachment         = "invalid_attachment"
+	CodeInvalidSubject            = "invalid_subject"
+	CodeInvalidDescription        = "invalid_description"
+	CodeInvalidMessage            = "invalid_message"
+	CodeInvalidSystem             = "invalid_system"
+	CodeInvalidCatalogItem        = "invalid_catalog_item"
+	CodeInvalidRequester          = "invalid_requester"
+	CodeInvalidChannel            = "invalid_channel"
+	CodeInvalidAssignee           = "invalid_assignee"
+	CodeReasonRequired            = "reason_required"
+	CodeInvalidStatusChange       = "invalid_status_change"
+	CodeTicketClosed              = "ticket_closed"
+	CodeEmailTaken                = "email_taken"
+	CodeSystemNameTaken           = "system_name_taken"
+	CodeSystemInUse               = "system_in_use"
+	CodeCatalogItemNameTaken      = "catalog_item_name_taken"
+	CodeCatalogItemInUse          = "catalog_item_in_use"
+	CodeInvalidDeliveryTime       = "invalid_delivery_time"
 )
 
 // Error is a domain error with a stable machine-readable code.
@@ -114,6 +139,11 @@ func Invalid(code, title, detail string) *Error {
 // Conflict is a 409: the request clashes with the current state, e.g. a taken name.
 func Conflict(code, title, detail string) *Error {
 	return &Error{Status: http.StatusConflict, Code: code, Title: title, Detail: detail}
+}
+
+// TooLarge is a 413: the request or file is over a size limit.
+func TooLarge(code, title, detail string) *Error {
+	return &Error{Status: http.StatusRequestEntityTooLarge, Code: code, Title: title, Detail: detail}
 }
 
 // InvalidRequest means the request doesn't match the API contract.

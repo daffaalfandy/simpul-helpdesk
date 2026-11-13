@@ -254,6 +254,20 @@ func getPlan(ctx context.Context, q *db.Queries, id uuid.UUID) (Plan, error) {
 	return p, nil
 }
 
+// Targets returns a plan's targets ordered P1–P4. It runs on q so callers can read inside
+// their own transaction.
+func Targets(ctx context.Context, q *db.Queries, planID uuid.UUID) ([]Target, error) {
+	rows, err := q.ListSlaTargets(ctx, &planID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Target, 0, len(rows))
+	for _, t := range rows {
+		out = append(out, targetFromRow(t))
+	}
+	return out, nil
+}
+
 func targetFromRow(r db.ListSlaTargetsRow) Target {
 	return Target{
 		Priority:             Priority(r.Priority),

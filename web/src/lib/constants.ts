@@ -17,7 +17,11 @@ export const paths = {
   settingsSla: '/settings/sla',
   settingsClients: '/settings/clients',
   settingsIntegrations: '/settings/integrations',
+  settingsCatalog: '/settings/catalog',
+  ticket: '/tickets/$key',
   portal: '/portal',
+  portalNew: '/portal/new',
+  portalTicket: '/portal/tickets/$key',
 } as const
 
 /** Must match the API's password policy (api/internal/auth). */
@@ -45,3 +49,9 @@ export const MINUTES_PER_DAY = MINUTES_PER_HOUR * HOURS_PER_DAY
 
 /** Holiday years offered around the current year, besides years with a bundled preset. */
 export const HOLIDAY_YEARS_AROUND = 1
+
+/** A timestamp this recent reads "Just now". */
+export const JUST_NOW_MS = 60_000
+
+/** Tickets fetched per page in lists. */
+export const TICKET_PAGE_SIZE = 50

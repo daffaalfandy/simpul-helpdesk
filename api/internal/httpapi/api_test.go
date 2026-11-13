@@ -21,14 +21,17 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/catalog"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/storage"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
 func TestMain(m *testing.M) { os.Exit(testdb.Main(m)) }
@@ -49,6 +52,7 @@ type env struct {
 	auth    *auth.Service
 	mailer  *mail.Recorder
 	worker  *auth.ResetEmailWorker
+	files   *storage.FS
 	users   map[auth.Role]string // role -> email
 }
 
@@ -68,8 +72,15 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	svc := auth.NewService(st, auth.NewHasher(cheapParams, auth.DefaultMaxConcurrentHashes), jobs, auth.DefaultOptions(), log)
+	files, err := storage.NewFS(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = files.Close() })
+	slaSvc := sla.NewService(st)
 	h, err := httpapi.New(httpapi.Deps{
-		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st), SLA: sla.NewService(st), Logger: log,
+		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st), SLA: slaSvc,
+		Catalog: catalog.NewService(st), Tickets: tickets.NewService(st, files, slaSvc), Logger: log,
 		WebUI: fstest.MapFS{"index.html": {Data: []byte(spaMarker)}, "assets/app.js": {Data: []byte("//js")}},
 	})
 	if err != nil {
@@ -78,7 +89,7 @@ func newEnv(t *testing.T) *env {
 	if _, err := st.Q().UpsertClient(ctx, "Dinas Kominfo Jambi"); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, users: map[auth.Role]string{}}
+	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, files: files, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r}
 		if r == auth.RoleRequester {
