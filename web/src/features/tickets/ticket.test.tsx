@@ -28,10 +28,9 @@ describe('agent ticket detail', () => {
 
   it('shows the header, the whole conversation and the targets', async () => {
     await open()
-    const meta = screen.getByText('HD-24871 · Incident').parentElement as HTMLElement
-    expect(within(meta).getByText(/^Opened 12 Nov( 2026)?, 08:14 via client portal$/)).toBeInTheDocument()
+    const meta = screen.getByText(/^HD-24871 · Incident · Opened 12 Nov( 2026)?, 08:14 via client portal$/).parentElement as HTMLElement
     expect(within(meta).getByText('P1 · Critical')).toBeInTheDocument()
-    expect(within(meta).getByText('In progress')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Status/ })).toHaveTextContent('In progress')
     const headers = screen.getAllByText('Rina Pratiwi', { selector: 'strong' }).map((el) => el.parentElement?.textContent)
     expect(headers).toContain('Internal note · Rina Pratiwi (not visible to client)')
     expect(screen.getByText("Matches last night's SSO patch.")).toBeInTheDocument()

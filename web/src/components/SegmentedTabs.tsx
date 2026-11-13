@@ -12,10 +12,20 @@ type SegmentedTabsProps<K extends string> = {
   onSelectionChange: (key: K) => void
   /** Panel content for a tab. */
   children: (key: K) => ReactNode
+  /** "flush" sits at the top edge of a bordered panel: unselected tabs are tinted, panels padded. */
+  variant?: 'default' | 'flush'
 }
 
 /** Two equal tabs over a panel (HANDOFF §14.3): selected tab is bold with a primary underline. */
-export function SegmentedTabs<K extends string>({ label, tabs, selectedKey, onSelectionChange, children }: SegmentedTabsProps<K>) {
+export function SegmentedTabs<K extends string>({
+  label,
+  tabs,
+  selectedKey,
+  onSelectionChange,
+  children,
+  variant = 'default',
+}: SegmentedTabsProps<K>) {
+  const flush = variant === 'flush'
   return (
     <Tabs selectedKey={selectedKey} onSelectionChange={(key) => onSelectionChange(String(key) as K)}>
       <TabList aria-label={label} className="flex border-b border-border">
@@ -27,8 +37,8 @@ export function SegmentedTabs<K extends string>({ label, tabs, selectedKey, onSe
               cx(
                 'relative flex min-h-(--control-h-md) flex-1 cursor-pointer items-center justify-center px-4 text-base outline-none',
                 isSelected
-                  ? 'font-extrabold text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-(--tab-bar-h) after:bg-primary'
-                  : 'font-semibold text-muted hover:text-ink',
+                  ? 'bg-surface font-extrabold text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-(--tab-bar-h) after:bg-primary'
+                  : cx('font-semibold text-muted hover:text-ink', flush && 'bg-surface-subtle'),
                 isFocusVisible && 'shadow-(--focus-ring)',
               )
             }
@@ -38,7 +48,7 @@ export function SegmentedTabs<K extends string>({ label, tabs, selectedKey, onSe
         ))}
       </TabList>
       {tabs.map((tab) => (
-        <TabPanel key={tab.id} id={tab.id} className="pt-3 outline-none">
+        <TabPanel key={tab.id} id={tab.id} className={cx('outline-none', flush ? 'px-4 pt-3.5' : 'pt-3')}>
           {children(tab.id)}
         </TabPanel>
       ))}

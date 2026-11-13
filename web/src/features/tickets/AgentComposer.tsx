@@ -6,7 +6,6 @@ import type { MessageVisibility, Ticket } from '../../api/client'
 import { attachmentPolicyQueryOptions } from '../../api/queries'
 import { AttachmentPicker } from '../../components/AttachmentPicker'
 import { Button } from '../../components/Button'
-import { Card } from '../../components/Card'
 import { ErrorAlert } from '../../components/ErrorAlert'
 import { SegmentedTabs } from '../../components/SegmentedTabs'
 import { TextArea } from '../../components/TextArea'
@@ -43,9 +42,10 @@ export function AgentComposer({ ticket }: { ticket: Ticket }) {
   }
 
   return (
-    <Card>
-      <form onSubmit={submit} className="flex flex-col gap-3">
+    <section aria-label={t('ticket.composer.tabs')} className="overflow-hidden rounded-xl border border-border-strong bg-surface">
+      <form onSubmit={submit} className="flex flex-col gap-3 pb-4">
         <SegmentedTabs
+          variant="flush"
           label={t('ticket.composer.tabs')}
           tabs={[
             { id: 'public', label: t('ticket.composer.reply') },
@@ -71,24 +71,26 @@ export function AgentComposer({ ticket }: { ticket: Ticket }) {
             />
           )}
         </SegmentedTabs>
-        <AttachmentPicker
-          items={uploads.items}
-          onSelect={uploads.add}
-          onRemove={uploads.remove}
-          onRetry={uploads.retry}
-          accept={policy.extensions}
-          buttonLabel={t('attach.button')}
-          hint={t('attach.hint', { max: megabytesOf(policy.maxBytes) })}
-          isDisabled={locked}
-        />
-        {submitted && uploads.isBlocking && <p className="text-xs font-semibold text-danger">{t('attach.waitForUploads')}</p>}
-        <ErrorAlert error={send.error} />
-        <div className="flex justify-end">
-          <Button type="submit" variant={mode === 'internal' ? 'dark' : 'primary'} isPending={send.isPending} isDisabled={locked}>
-            {mode === 'internal' ? t('ticket.composer.saveNote') : t('ticket.composer.sendReply')}
-          </Button>
+        <div className="flex flex-col gap-3 px-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <AttachmentPicker
+              items={uploads.items}
+              onSelect={uploads.add}
+              onRemove={uploads.remove}
+              onRetry={uploads.retry}
+              accept={policy.extensions}
+              buttonLabel={t('attach.button')}
+              hint={t('attach.hint', { max: megabytesOf(policy.maxBytes) })}
+              isDisabled={locked}
+            />
+            <Button type="submit" variant="dark" isPending={send.isPending} isDisabled={locked}>
+              {mode === 'internal' ? t('ticket.composer.saveNote') : t('ticket.composer.sendReply')}
+            </Button>
+          </div>
+          {submitted && uploads.isBlocking && <p className="text-xs font-semibold text-danger">{t('attach.waitForUploads')}</p>}
+          <ErrorAlert error={send.error} />
         </div>
       </form>
-    </Card>
+    </section>
   )
 }

@@ -3,16 +3,15 @@ import { useTranslation } from 'react-i18next'
 
 import { usePriorityNames } from '../../api/queries'
 import { BackLink } from '../../components/BackLink'
-import { Pill, PriorityBadge } from '../../components/Badges'
+import { PriorityBadge } from '../../components/Badges'
 import { paths } from '../../lib/constants'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { ActivityLog } from './ActivityLog'
 import { AgentComposer } from './AgentComposer'
-import { agentStatus, priorityLong } from './labels'
+import { priorityLong } from './labels'
 import { MessageThread } from './MessageThread'
 import { ticketMessagesQueryOptions, ticketQueryOptions } from './queries'
 import { ServiceLevelCard } from './ServiceLevelCard'
-import { STATUS_TONE } from './status'
 import { TicketProperties } from './TicketProperties'
 import { useTimestamp } from './time'
 
@@ -29,16 +28,17 @@ export function AgentTicketPage({ ticketKey }: { ticketKey: string }) {
     <>
       <BackLink to={paths.board}>{t('agent.ticket.back')}</BackLink>
       <header className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted">
-          <span className="font-bold text-ink">
-            {t('ticket.keyType', { key: ticket.key, type: t(`ticket.type.${ticket.type}`) })}
-          </span>
+        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-muted">
           <span>
-            {t('ticket.openedVia', { when: stamp(ticket.createdAt), channel: t(`ticket.channel.${ticket.channel}`) })}
+            {[
+              t('ticket.keyType', { key: ticket.key, type: t(`ticket.type.${ticket.type}`) }),
+              t('ticket.openedVia', { when: stamp(ticket.createdAt), channel: t(`ticket.channel.${ticket.channel}`) }),
+              ticket.loggedByStaff && t('ticket.loggedBy', { name: ticket.createdBy.name }),
+            ]
+              .filter(Boolean)
+              .join(t('common.separator'))}
           </span>
-          {ticket.loggedByStaff && <span>{t('ticket.loggedBy', { name: ticket.createdBy.name })}</span>}
           <PriorityBadge priority={ticket.priority}>{priorityLong(t, names, ticket.priority, ticket.type)}</PriorityBadge>
-          <Pill tone={STATUS_TONE[ticket.status]}>{agentStatus(t, ticket.status)}</Pill>
         </div>
         <h1 className="text-2xl leading-tight font-extrabold tracking-title wrap-break-word">{ticket.subject}</h1>
       </header>
@@ -48,8 +48,8 @@ export function AgentTicketPage({ ticketKey }: { ticketKey: string }) {
           <AgentComposer ticket={ticket} />
         </section>
         <aside className="flex min-w-0 flex-col gap-4">
-          <TicketProperties ticket={ticket} />
           <ServiceLevelCard ticket={ticket} audience="agent" />
+          <TicketProperties ticket={ticket} />
           <ActivityLog ticketKey={ticket.key} type={ticket.type} />
         </aside>
       </div>
