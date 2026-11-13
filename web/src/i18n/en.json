@@ -87,6 +87,8 @@
     },
     "board": {
       "logTicket": "Log a ticket",
+      "subtitle_one": "{{date}} · {{count}} client under contract",
+      "subtitle_other": "{{date}} · {{count}} clients under contract",
       "caption": "Tickets",
       "cols": {
         "key": "Ticket",
@@ -99,7 +101,7 @@
       },
       "view": {
         "label": "Show tickets",
-        "all": "All",
+        "all": "All tickets",
         "mine": "My queue",
         "unassigned": "Unassigned"
       },

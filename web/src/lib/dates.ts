@@ -49,7 +49,12 @@ export function currentYear(now = new Date()): number {
 // Timestamps from the API are instants; show them in the organisation's time zone so
 // agents and requesters see the same clock (HANDOFF §6: WIB by default).
 
-type ZoneFormats = { clock: Intl.DateTimeFormat; dayMonth: Intl.DateTimeFormat; dayMonthYear: Intl.DateTimeFormat }
+type ZoneFormats = {
+  clock: Intl.DateTimeFormat
+  dayMonth: Intl.DateTimeFormat
+  dayMonthYear: Intl.DateTimeFormat
+  today: Intl.DateTimeFormat
+}
 
 const zoneFormats = new Map<string, ZoneFormats>()
 
@@ -60,6 +65,7 @@ function formatsFor(timeZone: string): ZoneFormats {
       clock: new Intl.DateTimeFormat(DATE_LOCALE, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }),
       dayMonth: new Intl.DateTimeFormat(DATE_LOCALE, { day: 'numeric', month: 'short', timeZone }),
       dayMonthYear: new Intl.DateTimeFormat(DATE_LOCALE, { day: 'numeric', month: 'short', year: 'numeric', timeZone }),
+      today: new Intl.DateTimeFormat(DATE_LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone }),
     }
     zoneFormats.set(timeZone, f)
   }
@@ -79,6 +85,11 @@ export function formatDayMonth(iso: string, timeZone: string): string {
 /** "12 Nov 2026" */
 export function formatDayMonthYear(iso: string, timeZone: string): string {
   return formatsFor(timeZone).dayMonthYear.format(new Date(iso))
+}
+
+/** "Thursday, 12 November 2026" in the organisation's time zone. */
+export function formatToday(timeZone: string, now = new Date()): string {
+  return formatsFor(timeZone).today.format(now)
 }
 
 /** How a timestamp should be written: "Just now", a time today, a date this year, or a full date. */

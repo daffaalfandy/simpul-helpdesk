@@ -5,13 +5,14 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Ticket } from '../../api/client'
-import { clientsQueryOptions } from '../../api/queries'
+import { clientsQueryOptions, useOrgTimeZone } from '../../api/queries'
 import { Alert } from '../../components/Alert'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { Dropdown } from '../../components/Dropdown'
 import { FilterPills } from '../../components/FilterPills'
 import { paths } from '../../lib/constants'
+import { formatToday } from '../../lib/dates'
 import { dayPart, firstName } from '../../lib/text'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { agentStatus } from '../tickets/labels'
@@ -29,6 +30,7 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
   const { t } = useTranslation()
   const me = useSignedInUser()
   const { data: clients } = useSuspenseQuery(clientsQueryOptions)
+  const timeZone = useOrgTimeZone()
   const list = useSuspenseInfiniteQuery(boardListOptions(search))
   const tickets = list.data.pages.flat()
   const filtered = Boolean(search.view || search.status || search.client)
@@ -44,11 +46,15 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-3xl leading-tight font-extrabold tracking-title">
-          {t(`agent.greeting.${dayPart(new Date())}`, { name: firstName(me.name) })}
-        </h1>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl leading-tight font-extrabold tracking-title">
+            {t(`agent.greeting.${dayPart(new Date())}`, { name: firstName(me.name) })}
+          </h1>
+          <p className="text-base text-muted">
+            {t('agent.board.subtitle', { date: formatToday(timeZone), count: clients.length })}
+          </p>
+        </div>
         <Button
-          size="lg"
           icon={<Plus aria-hidden="true" className="size-(--icon-md)" />}
           onPress={() => {
             setCreated(null)
