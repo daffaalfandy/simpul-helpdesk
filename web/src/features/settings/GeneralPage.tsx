@@ -76,36 +76,34 @@ function BusinessHoursCard({ onFlash }: CardProps) {
       as="h3"
       title={t('settings.hours.title')}
       description={t('settings.hours.helper')}
-      actions={
-        <Button
-          variant="outline"
-          size="sm"
-          onPress={() => {
-            onFlash(null)
-            setEditing(true)
-          }}
-        >
-          {t('settings.hours.edit')}
-        </Button>
-      }
     >
-      <dl className="grid grid-cols-[auto_1fr] gap-x-8 gap-y-2 text-base">
+      <dl className="grid grid-cols-2 gap-2.5 text-base">
         {weekdayRuns(hours.weekdays).map((run) => (
           <div key={run.first} className="contents">
-            <dt className="font-bold">{dayLabel(run)}</dt>
-            <dd className="tabular-nums">{t('common.range', { from: hours.opens, to: hours.closes })}</dd>
+            <dt className="font-semibold text-muted">{dayLabel(run)}</dt>
+            <dd className="font-bold tabular-nums">{t('common.range', { from: hours.opens, to: hours.closes })}</dd>
           </div>
         ))}
         {weekdayRuns(closedDays(hours.weekdays)).map((run) => (
           <div key={run.first} className="contents">
-            <dt className="font-bold">{dayLabel(run)}</dt>
-            <dd className="text-muted">{t('settings.hours.closed')}</dd>
+            <dt className="font-semibold text-muted">{dayLabel(run)}</dt>
+            <dd className="font-bold">{t('settings.hours.closed')}</dd>
           </div>
         ))}
-        <dt className="font-bold">{t('settings.hours.holidays')}</dt>
-        <dd>{t('settings.hours.holidayCount', { count: holidays?.length ?? 0, year })}</dd>
+        <dt className="font-semibold text-muted">{t('settings.hours.holidays')}</dt>
+        <dd className="font-bold">{t('settings.hours.holidayCount', { count: holidays?.length ?? 0, year })}</dd>
       </dl>
       <p className="text-xs text-muted">{t('settings.hours.timezone', { timezone: hours.timezone })}</p>
+      <Button
+        variant="outline"
+        className="self-start"
+        onPress={() => {
+          onFlash(null)
+          setEditing(true)
+        }}
+      >
+        {t('settings.hours.edit')}
+      </Button>
       {editing && (
         <HoursDialog
           hours={hours}

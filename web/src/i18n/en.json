@@ -301,7 +301,7 @@
       },
       "members": {
         "title": "Members & roles",
-        "description": "Who is in your organisation and what each role can do."
+        "description": "Who can sign in and what each role can do."
       },
       "priorities": {
         "title": "Priorities",
@@ -322,7 +322,7 @@
     },
     "hours": {
       "title": "Business hours",
-      "helper": "SLA timers only run in these hours, except targets set to 24/7.",
+      "helper": "SLA timers only run in these hours, unless the project's clock runs 24/7.",
       "timezone": "Times are in {{timezone}}.",
       "closed": "Closed",
       "holidays": "Holidays",

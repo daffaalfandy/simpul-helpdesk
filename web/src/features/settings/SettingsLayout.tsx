@@ -7,7 +7,7 @@ export function SettingsLayout() {
   return (
     <div className="flex flex-col gap-7 lg:flex-row lg:items-start">
       <SettingsNav />
-      <div className="flex min-w-0 flex-1 flex-col gap-5">
+      <div className="flex min-w-0 flex-1 flex-col gap-4.5">
         <Outlet />
       </div>
     </div>
