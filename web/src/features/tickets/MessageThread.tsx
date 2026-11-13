@@ -1,5 +1,4 @@
-import type { TFunction } from 'i18next'
-import { useTranslation } from 'react-i18next'
+import { Trans } from 'react-i18next'
 
 import type { Ticket, TicketMessage } from '../../api/client'
 import { AttachmentList } from '../../components/AttachmentList'
@@ -10,18 +9,38 @@ export type Audience = 'agent' | 'requester'
 
 type Author = { id: string; name: string; jobTitle: string | null | undefined; fromSupport: boolean }
 
-function header(t: TFunction, audience: Audience, a: Author, client: string, meId: string): string {
+type HeaderKey =
+  | 'ticket.message.fromClient'
+  | 'ticket.message.fromClientTitled'
+  | 'ticket.message.replied'
+  | 'ticket.message.you'
+  | 'ticket.message.support'
+  | 'ticket.message.colleague'
+  | 'ticket.message.nameOnly'
+  | 'ticket.message.internal'
+
+type Header = { key: HeaderKey; values: Record<string, string> }
+
+function header(audience: Audience, a: Author, client: string, meId: string): Header {
+  const name = a.name
   if (audience === 'agent') {
     if (!a.fromSupport) {
       return a.jobTitle
-        ? t('ticket.message.fromClientTitled', { name: a.name, title: a.jobTitle, client })
-        : t('ticket.message.fromClient', { name: a.name, client })
+        ? { key: 'ticket.message.fromClientTitled', values: { name, title: a.jobTitle, client } }
+        : { key: 'ticket.message.fromClient', values: { name, client } }
     }
-    return t('ticket.message.replied', { name: a.name })
+    return { key: 'ticket.message.replied', values: { name } }
   }
-  if (a.id === meId) return t('ticket.message.you', { name: a.name })
-  if (a.fromSupport) return t('ticket.message.support', { name: a.name })
-  return a.jobTitle ? t('ticket.message.colleague', { name: a.name, title: a.jobTitle }) : a.name
+  if (a.id === meId) return { key: 'ticket.message.you', values: { name } }
+  if (a.fromSupport) return { key: 'ticket.message.support', values: { name } }
+  return a.jobTitle
+    ? { key: 'ticket.message.colleague', values: { name, title: a.jobTitle } }
+    : { key: 'ticket.message.nameOnly', values: { name } }
+}
+
+/** The author line with the name in bold (`<b>` in the translation). */
+function HeaderText({ header: h }: { header: Header }) {
+  return <Trans i18nKey={h.key} values={h.values} components={{ b: <strong /> }} />
 }
 
 function variantFor(m: Pick<TicketMessage, 'fromSupport' | 'visibility'>): MessageVariant {
@@ -36,7 +55,6 @@ type MessageThreadProps = { ticket: Ticket; messages: ReadonlyArray<TicketMessag
  * report. Requesters only ever receive public messages from the API.
  */
 export function MessageThread({ ticket, messages, audience, meId }: MessageThreadProps) {
-  const { t } = useTranslation()
   const client = ticket.client.name
   const requester: Author = {
     id: ticket.requester.id,
@@ -49,7 +67,7 @@ export function MessageThread({ ticket, messages, audience, meId }: MessageThrea
       <li>
         <Message
           variant="public"
-          header={header(t, audience, requester, client, meId)}
+          header={<HeaderText header={header(audience, requester, client, meId)} />}
           time={<Timestamp iso={ticket.createdAt} />}
           footer={<AttachmentList items={ticket.attachments} />}
         >
@@ -63,9 +81,13 @@ export function MessageThread({ ticket, messages, audience, meId }: MessageThrea
             <Message
               variant={variantFor(m)}
               header={
-                m.visibility === 'internal'
-                  ? t('ticket.message.internal', { name: m.author.name })
-                  : header(t, audience, author, client, meId)
+                <HeaderText
+                  header={
+                    m.visibility === 'internal'
+                      ? { key: 'ticket.message.internal', values: { name: m.author.name } }
+                      : header(audience, author, client, meId)
+                  }
+                />
               }
               time={<Timestamp iso={m.createdAt} />}
               footer={<AttachmentList items={m.attachments} />}

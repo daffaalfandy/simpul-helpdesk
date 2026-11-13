@@ -125,6 +125,37 @@
   --ease-standard: var(--easing);
 }
 
+/*
+ * Motion (HANDOFF §14.2: 120–150ms, nothing loops). Each animation marks a change the user caused:
+ * enter = a toast, unsaved-changes bar or popover appears; fade-in = content swaps in place
+ * (a card switching to edit mode, a settings group opening); dialog-in = a dialog opens.
+ */
+@theme {
+  --animate-enter: enter var(--duration-base) var(--easing) both;
+  --animate-fade-in: fade-in var(--duration-base) var(--easing) both;
+  --animate-dialog-in: dialog-in var(--duration-base) var(--easing) both;
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(var(--motion-rise));
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: scale(var(--motion-scale));
+    }
+  }
+}
+
 /* Grows a compact control's touch area to the 44px minimum without changing how it looks. */
 @utility hit-area {
   position: relative;

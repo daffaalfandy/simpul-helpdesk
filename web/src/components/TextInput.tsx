@@ -10,6 +10,7 @@ import {
 } from 'react-aria-components'
 
 import { cx } from '../lib/text'
+import { fieldLabel } from './fieldStyles'
 
 type TextInputProps = Omit<TextFieldProps, 'children' | 'className'> & {
   label: ReactNode
@@ -36,7 +37,7 @@ export function TextInput({
   return (
     <TextField {...props} className={cx('flex flex-col gap-1.5', className)}>
       <div className="flex items-baseline justify-between gap-3">
-        <Label className="text-sm font-bold text-ink">{label}</Label>
+        <Label className={fieldLabel(size)}>{label}</Label>
         {labelAction}
       </div>
       <Input

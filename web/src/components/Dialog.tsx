@@ -9,8 +9,10 @@ import { TextArea } from './TextArea'
 
 const overlay =
   'fixed inset-0 z-50 flex justify-center overflow-y-auto bg-overlay px-5 py-10 ' +
-  'data-entering:animate-none motion-safe:transition-opacity'
-const panel = 'w-full rounded-dialog bg-surface p-6 shadow-dialog outline-none'
+  'data-entering:animate-fade-in data-exiting:animate-fade-in data-exiting:[animation-direction:reverse]'
+const panel =
+  'w-full rounded-dialog bg-surface p-6 shadow-dialog outline-none ' +
+  'data-entering:animate-dialog-in data-exiting:animate-dialog-in data-exiting:[animation-direction:reverse]'
 
 type FormDialogProps = {
   isOpen: boolean

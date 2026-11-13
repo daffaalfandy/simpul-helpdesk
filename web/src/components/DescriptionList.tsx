@@ -8,8 +8,8 @@ export function DescriptionList({ items }: { items: ReadonlyArray<DescriptionIte
     <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
       {items.map((item) => (
         <div key={item.term} className="flex min-w-0 flex-col gap-0.5">
-          <dt className="text-xs font-bold text-muted">{item.term}</dt>
-          <dd className="text-sm font-semibold wrap-break-word text-ink">{item.value}</dd>
+          <dt className="text-xs font-semibold text-muted">{item.term}</dt>
+          <dd className="text-sm font-bold wrap-break-word text-ink">{item.value}</dd>
         </div>
       ))}
     </dl>

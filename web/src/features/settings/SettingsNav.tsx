@@ -118,7 +118,7 @@ export function SettingsNav() {
                 </span>
               </span>
             </Button>
-            <ul id={listId} hidden={!isOpen} className="flex flex-col gap-0.5">
+            <ul id={listId} hidden={!isOpen} className="flex animate-fade-in flex-col gap-0.5">
               {g.sections.map((s) => (
                 <li key={s.id}>
                   <Link to={s.path} onClick={() => setOpen(new Set([g.id]))} className={itemLink}>

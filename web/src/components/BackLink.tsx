@@ -7,7 +7,7 @@ export function BackLink({ children, ...props }: LinkProps & { children: ReactNo
   return (
     <Link
       {...props}
-      className="inline-flex min-h-(--control-h-md) items-center gap-1 self-start font-bold text-primary hover:text-primary-hover"
+      className="inline-flex min-h-(--control-h-md) items-center gap-1.5 self-start font-bold text-primary hover:text-primary-hover"
     >
       <ChevronLeft aria-hidden="true" className="size-(--icon-md)" />
       {children}

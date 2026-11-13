@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { Button as AriaButton, type ButtonProps as AriaButtonProps } from 'react-aria-components'
 
 import { cx } from '../lib/text'
 import { Spinner } from './Spinner'
 
-export type ButtonVariant = 'primary' | 'outline' | 'success' | 'danger' | 'dark' | 'ghost'
+export type ButtonVariant = 'primary' | 'outline' | 'outlineOnDark' | 'success' | 'danger' | 'dark' | 'ghost'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 const base =
@@ -17,6 +17,8 @@ const variants: Record<ButtonVariant, string> = {
     'bg-primary text-on-primary hover:bg-primary-hover data-hovered:bg-primary-hover data-pressed:bg-primary-hover',
   outline:
     'bg-surface text-ink border border-border-strong hover:bg-surface-subtle data-hovered:bg-surface-subtle',
+  /** Secondary action on a navy bar (e.g. Discard on the unsaved-changes bar). */
+  outlineOnDark: 'bg-transparent text-on-primary border border-avatar-none hover:bg-ink-2 data-hovered:bg-ink-2',
   success: 'bg-success text-on-primary hover:bg-success-ink data-hovered:bg-success-ink',
   danger: 'bg-danger text-on-primary',
   dark: 'bg-ink text-on-primary hover:bg-ink-2 data-hovered:bg-ink-2',
@@ -42,6 +44,7 @@ type ButtonProps = Omit<AriaButtonProps, 'children' | 'className'> & {
   icon?: ReactNode
   className?: string
   children: ReactNode
+  ref?: Ref<HTMLButtonElement>
 }
 
 /** Button per HANDOFF §14.3. While isPending, a spinner replaces the icon and presses are ignored. */

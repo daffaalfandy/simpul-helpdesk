@@ -31,7 +31,8 @@ describe('agent ticket detail', () => {
     expect(within(meta).getByText(/^Opened 12 Nov( 2026)?, 08:14 via client portal$/)).toBeInTheDocument()
     expect(within(meta).getByText('P1 · Critical')).toBeInTheDocument()
     expect(within(meta).getByText('In progress')).toBeInTheDocument()
-    expect(screen.getByText('Internal note · Rina Pratiwi (not visible to client)')).toBeInTheDocument()
+    const headers = screen.getAllByText('Rina Pratiwi', { selector: 'strong' }).map((el) => el.parentElement?.textContent)
+    expect(headers).toContain('Internal note · Rina Pratiwi (not visible to client)')
     expect(screen.getByText("Matches last night's SSO patch.")).toBeInTheDocument()
     const sla = screen.getByRole('heading', { name: 'Service level · P1' }).closest('section') as HTMLElement
     expect(within(sla).getByText('15 min')).toBeInTheDocument()

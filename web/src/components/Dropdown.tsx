@@ -3,6 +3,7 @@ import type { Key, ReactNode } from 'react'
 import { Button, FieldError, Label, ListBox, ListBoxItem, Popover, Select, SelectValue, Text } from 'react-aria-components'
 
 import { cx } from '../lib/text'
+import { fieldLabel } from './fieldStyles'
 
 export type DropdownOption<K extends string> = { id: K; label: string; description?: string }
 
@@ -53,7 +54,7 @@ export function Dropdown<K extends string>({
       isInvalid={isInvalid}
       className={cx('group/select flex flex-col gap-1.5', className)}
     >
-      <Label className={hideLabel ? 'sr-only' : 'text-sm font-bold text-ink'}>{label}</Label>
+      <Label className={hideLabel ? 'sr-only' : fieldLabel(size)}>{label}</Label>
       <Button
         className={cx(
           'flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-border-strong',
@@ -78,7 +79,7 @@ export function Dropdown<K extends string>({
         </Text>
       )}
       <FieldError className="text-xs font-semibold text-danger">{errorMessage}</FieldError>
-      <Popover className="max-h-80 min-w-(--trigger-width) overflow-auto rounded-xl border border-border-strong bg-surface p-1.5 shadow-popover outline-none">
+      <Popover className="max-h-80 min-w-(--trigger-width) overflow-auto rounded-xl border border-border-strong bg-surface p-1.5 shadow-popover outline-none data-entering:animate-enter">
         <ListBox className="flex flex-col gap-0.5 outline-none">
           {options.map((o) => (
             <ListBoxItem

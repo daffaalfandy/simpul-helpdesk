@@ -11,20 +11,37 @@ type CardProps = {
   children?: ReactNode
   className?: string
   labelledBy?: string
+  /** "compact" is the side-column card in the mock: radius 16, tighter padding, 14px title. */
+  variant?: 'default' | 'compact'
+}
+
+const variants = {
+  default: { box: 'gap-4 rounded-3xl p-5', title: 'text-lg tracking-title' },
+  compact: { box: 'gap-3 rounded-2xl px-4.5 py-4', title: 'text-base' },
 }
 
 /** Card per HANDOFF §14.3: surface, border, radius 18, padding 18–22. */
-export function Card({ title, as: Title = 'h2', description, actions, children, className, labelledBy }: CardProps) {
+export function Card({
+  title,
+  as: Title = 'h2',
+  description,
+  actions,
+  children,
+  className,
+  labelledBy,
+  variant = 'default',
+}: CardProps) {
+  const v = variants[variant]
   return (
     <section
       aria-labelledby={labelledBy}
-      className={cx('flex flex-col gap-4 rounded-3xl border border-border bg-surface p-5 shadow-card', className)}
+      className={cx('flex flex-col border border-border bg-surface shadow-card', v.box, className)}
     >
       {(title || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             {title && (
-              <Title id={labelledBy} className="text-lg font-extrabold tracking-title">
+              <Title id={labelledBy} className={cx('font-extrabold', v.title)}>
                 {title}
               </Title>
             )}

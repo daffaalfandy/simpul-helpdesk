@@ -18,9 +18,10 @@ import {
 } from 'react-aria-components'
 
 import { cx } from '../lib/text'
+import { fieldLabel } from './fieldStyles'
 
 const field = 'flex flex-col gap-1.5'
-const labelClass = 'text-sm font-bold text-ink'
+const labelClass = fieldLabel('md')
 const box =
   'flex min-h-(--control-h-md) w-full items-center rounded-lg border border-border-strong bg-surface px-3.5 ' +
   'font-sans text-base text-ink data-invalid:border-danger data-focus-within:border-primary'

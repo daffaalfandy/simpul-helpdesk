@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { FieldError, Label, Text, TextArea as AriaTextArea, TextField, type TextFieldProps } from 'react-aria-components'
 
 import { cx } from '../lib/text'
+import { fieldLabel } from './fieldStyles'
 
 type TextAreaProps = Omit<TextFieldProps, 'children' | 'className'> & {
   label: ReactNode
@@ -33,7 +34,7 @@ export function TextArea({
 }: TextAreaProps) {
   return (
     <TextField {...props} className={cx('flex flex-col gap-1.5', className)}>
-      <Label className={hideLabel ? 'sr-only' : 'text-sm font-bold text-ink'}>{label}</Label>
+      <Label className={hideLabel ? 'sr-only' : fieldLabel(size)}>{label}</Label>
       <AriaTextArea
         rows={rows}
         placeholder={placeholder}

@@ -136,10 +136,14 @@
   --tracker-bar-h: 6px;        /* progress tracker bar (HANDOFF §14.3) */
   --tracker-dot: 22px;         /* progress tracker numbered dot */
   --tab-bar-h: 3px;            /* selected tab underline */
+  --nav-indicator-w: 3px;      /* current settings item bar */
+  --number-input-w: 76px;      /* number beside a unit picker (project SLA targets) */
 
   /* ---------- Focus & motion ---------- */
   --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);
   --duration-fast: 120ms;
   --duration-base: 150ms;
   --easing: cubic-bezier(0.2, 0, 0, 1);
+  --motion-rise: 4px;   /* how far an entering toast, bar or popover travels */
+  --motion-scale: 0.98; /* dialogs grow from this size as they open */
 }
