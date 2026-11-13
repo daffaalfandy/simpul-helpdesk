@@ -237,7 +237,7 @@
       },
       "success": {
         "title": "Ticket {{key}} received",
-        "body": "Priority is {{priority}}, so you'll hear from us within {{response}}. You can follow progress on your portal home.",
+        "body": "Priority is <b>{{priority}}</b>, so you'll hear from an agent within <b>{{response}}</b>. You can follow progress on your <home>portal home</home>.",
         "another": "Report another issue",
         "view": "View ticket"
       },

@@ -38,7 +38,7 @@ export function PortalHomePage({ filter, onFilterChange }: PortalHomePageProps) 
           <h1 className="text-3xl leading-tight font-extrabold tracking-title">
             {t('portal.hello', { name: firstName(me.name) })}
           </h1>
-          <p className="text-md text-muted">{t('portal.home.intro')}</p>
+          <p className="text-base text-muted">{t('portal.home.intro')}</p>
         </div>
         <Link to={paths.portalNew} className={buttonClasses('primary', 'lg')}>
           <Plus aria-hidden="true" className="size-(--icon-md)" />
@@ -63,7 +63,7 @@ export function PortalHomePage({ filter, onFilterChange }: PortalHomePageProps) 
             {t(`portal.home.empty.${filter}`)}
           </p>
         ) : (
-          <ul className="flex flex-col divide-y divide-border">
+          <ul className="flex flex-col">
             {tickets.map((ticket) => (
               <TicketRow key={ticket.id} ticket={ticket} meId={me.id} />
             ))}
@@ -84,15 +84,15 @@ function TicketRow({ ticket, meId }: { ticket: TicketSummary; meId: string }) {
   const { stamp } = useTimestamp()
   const type = t(`ticket.type.${ticket.type}`)
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 py-3">
+    <li className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle py-3.5">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-xs font-bold text-muted">
+        <span className="text-xs font-semibold text-muted">
           {ticket.type === 'incident'
             ? t('ticket.keyTypePriority', { key: ticket.key, type, priority: ticket.priority })
             : t('ticket.keyType', { key: ticket.key, type })}
         </span>
-        <span className="font-bold wrap-break-word text-ink">{ticket.subject}</span>
-        <span className="flex flex-wrap gap-x-3 text-xs text-muted">
+        <span className="text-md font-bold wrap-break-word text-ink">{ticket.subject}</span>
+        <span className="flex flex-wrap gap-x-3 text-sm text-muted">
           {ticket.requester.id !== meId && <span>{t('portal.home.reportedBy', { name: ticket.requester.name })}</span>}
           <span>
             {ticket.resolvedAt
@@ -107,10 +107,10 @@ function TicketRow({ ticket, meId }: { ticket: TicketSummary; meId: string }) {
           to={paths.portalTicket}
           params={{ key: ticket.key }}
           aria-label={t('portal.home.viewDetailsLabel', { key: ticket.key })}
-          className={buttonClasses('outline', 'sm')}
+          className="inline-flex min-h-(--control-h-md) items-center gap-1 rounded-md px-3.5 text-sm font-bold text-primary no-underline hover:bg-primary-tint hover:text-primary-hover"
         >
           {t('portal.home.viewDetails')}
-          <ChevronRight aria-hidden="true" className="size-(--icon-md)" />
+          <ChevronRight aria-hidden="true" className="size-(--icon-sm)" />
         </Link>
       </div>
     </li>

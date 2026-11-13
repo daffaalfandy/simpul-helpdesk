@@ -105,6 +105,9 @@ export function PortalTicketPage({ ticketKey }: { ticketKey: string }) {
   )
 }
 
+/** The mock's reply box is three lines tall. */
+const REPLY_ROWS = 3
+
 function ReplyBox({ ticket }: { ticket: Ticket }) {
   const { t } = useTranslation()
   const { data: policy } = useSuspenseQuery(attachmentPolicyQueryOptions)
@@ -131,34 +134,35 @@ function ReplyBox({ ticket }: { ticket: Ticket }) {
   }
 
   return (
-    <Card>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-3">
+    <section aria-label={t('portal.ticket.replyLabel')} className="rounded-xl border border-border-strong bg-surface px-4 py-3.5">
+      <form onSubmit={submit} noValidate className="flex flex-col gap-2.5">
         <TextArea
           label={t('portal.ticket.replyLabel')}
+          rows={REPLY_ROWS}
           placeholder={t('portal.ticket.replyPlaceholder')}
           value={body}
           onChange={setBody}
           isInvalid={submitted && empty}
           errorMessage={t('ticket.composer.bodyRequired')}
         />
-        <AttachmentPicker
-          items={uploads.items}
-          onSelect={uploads.add}
-          onRemove={uploads.remove}
-          onRetry={uploads.retry}
-          accept={policy.extensions}
-          buttonLabel={t('attach.button')}
-          hint={t('attach.hint', { max: megabytesOf(policy.maxBytes) })}
-          variant="dashed"
-        />
-        {submitted && uploads.isBlocking && <p className="text-xs font-semibold text-danger">{t('attach.waitForUploads')}</p>}
-        <ErrorAlert error={send.error} />
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <AttachmentPicker
+            items={uploads.items}
+            onSelect={uploads.add}
+            onRemove={uploads.remove}
+            onRetry={uploads.retry}
+            accept={policy.extensions}
+            buttonLabel={t('attach.button')}
+            hint={t('attach.hint', { max: megabytesOf(policy.maxBytes) })}
+            variant="dashed"
+          />
           <Button type="submit" isPending={send.isPending}>
             {t('portal.ticket.send')}
           </Button>
         </div>
+        {submitted && uploads.isBlocking && <p className="text-xs font-semibold text-danger">{t('attach.waitForUploads')}</p>}
+        <ErrorAlert error={send.error} />
       </form>
-    </Card>
+    </section>
   )
 }

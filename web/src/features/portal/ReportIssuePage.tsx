@@ -1,8 +1,8 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { CircleCheck, FolderX } from 'lucide-react'
+import { Check, FolderX } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 
 import type { Intake, Priority, ProjectTarget, Ticket, TicketType } from '../../api/client'
 import { attachmentPolicyQueryOptions, usePriorityNames } from '../../api/queries'
@@ -269,24 +269,33 @@ function ReportSuccess({ ticket, onAnother }: { ticket: Ticket; onAnother: () =>
   useEffect(() => heading.current?.focus(), [])
   const response = formatTarget(t, ticket.sla.firstResponse)
   return (
-    <Card>
-      <div className="flex flex-col items-center gap-4 py-6 text-center">
-        <CircleCheck aria-hidden="true" className="size-12 text-success" />
-        <h1 ref={heading} tabIndex={-1} className="text-2xl font-extrabold tracking-title outline-none">
-          {t('portal.new.success.title', { key: ticket.key })}
-        </h1>
-        <p className="max-w-xl text-md text-muted">
-          {t('portal.new.success.body', { priority: priorityLong(t, names, ticket.priority, ticket.type), response })}
-        </p>
-        <div className="flex flex-wrap justify-center gap-3">
-          <Button variant="outline" onPress={onAnother}>
-            {t('portal.new.success.another')}
-          </Button>
-          <Link to={paths.portalTicket} params={{ key: ticket.key }} className={buttonClasses('primary')}>
-            {t('portal.new.success.view')}
-          </Link>
+    <>
+      <BackLink to={paths.portal}>{t('portal.new.back')}</BackLink>
+      <Card>
+        <div className="flex animate-enter flex-col items-start gap-4 py-6">
+          <span className="inline-flex size-13 items-center justify-center rounded-full bg-chip-success-bg text-chip-success-fg">
+            <Check aria-hidden="true" className="size-6.5" strokeWidth={3} />
+          </span>
+          <h1 ref={heading} tabIndex={-1} className="text-2xl font-extrabold outline-none">
+            {t('portal.new.success.title', { key: ticket.key })}
+          </h1>
+          <p className="max-w-xl text-md leading-relaxed text-ink-2">
+            <Trans
+              i18nKey="portal.new.success.body"
+              values={{ priority: priorityLong(t, names, ticket.priority, ticket.type), response }}
+              components={{ b: <strong className="text-ink" />, home: <Link to={paths.portal} className="font-bold" /> }}
+            />
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" onPress={onAnother}>
+              {t('portal.new.success.another')}
+            </Button>
+            <Link to={paths.portalTicket} params={{ key: ticket.key }} className={buttonClasses('primary')}>
+              {t('portal.new.success.view')}
+            </Link>
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </>
   )
 }
