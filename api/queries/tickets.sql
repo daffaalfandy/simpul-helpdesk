@@ -13,7 +13,7 @@ RETURNING id, created_at;
 
 -- name: ListTickets :many
 -- Newest first. before pages by id (uuidv7, so creation order). search_key matches a key
--- exactly; search_pattern is an escaped ILIKE pattern over the subject.
+-- exactly; search_pattern is an escaped ILIKE pattern over the subject and the client name.
 SELECT t.id, t.key, t.type, t.status, t.priority, t.subject, t.created_at, t.updated_at, t.resolved_at,
        t.client_id, c.name AS client_name, t.requester_id, r.name AS requester_name,
        t.assignee_id, a.name AS assignee_name
@@ -31,7 +31,8 @@ WHERE (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope
   AND (NOT @unassigned::boolean OR t.assignee_id IS NULL)
   AND (sqlc.narg(search_pattern)::text IS NULL
        OR t.key = sqlc.narg(search_key)::text
-       OR t.subject ILIKE sqlc.narg(search_pattern)::text)
+       OR t.subject ILIKE sqlc.narg(search_pattern)::text
+       OR c.name ILIKE sqlc.narg(search_pattern)::text)
   AND (sqlc.narg(before)::uuid IS NULL OR t.id < sqlc.narg(before)::uuid)
 ORDER BY t.id DESC
 LIMIT @row_limit;
@@ -110,10 +111,10 @@ ORDER BY m.created_at, m.id;
 -- Seed only: explicit number, status and times. Returns no row if the key exists.
 INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
                      created_by, project_id, catalog_item_id, subject, description, sla_snapshot,
-                     first_response_at, resolved_at, created_at, updated_at)
+                     first_response_at, resolved_at, status_changed_at, created_at, updated_at)
 VALUES (@number, @key, @type, @status, @priority, @channel, @client_id, @requester_id, sqlc.narg(assignee_id),
         @created_by, @project_id, sqlc.narg(catalog_item_id), @subject, @description, @sla_snapshot,
-        sqlc.narg(first_response_at), sqlc.narg(resolved_at), @created_at, @updated_at)
+        sqlc.narg(first_response_at), sqlc.narg(resolved_at), @status_changed_at, @created_at, @updated_at)
 ON CONFLICT (key) DO NOTHING
 RETURNING id;
 

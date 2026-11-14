@@ -21,6 +21,11 @@ func errTicketClosed() error {
 	return apperr.Conflict(apperr.CodeTicketClosed, "This ticket is closed", "Closed tickets can't be changed.")
 }
 
+// errStatusChanged: the caller moved a card from a status the ticket no longer has.
+func errStatusChanged() error {
+	return apperr.Conflict(apperr.CodeStatusChanged, "Someone else changed this ticket's status", "")
+}
+
 // moveError maps a lifecycle rule to an API error.
 func moveError(err error) error {
 	if errors.Is(err, ticket.ErrTicketClosed) {

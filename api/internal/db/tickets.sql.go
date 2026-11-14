@@ -272,10 +272,10 @@ func (q *Queries) InsertSeedMessage(ctx context.Context, arg InsertSeedMessagePa
 const insertSeedTicket = `-- name: InsertSeedTicket :one
 INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
                      created_by, project_id, catalog_item_id, subject, description, sla_snapshot,
-                     first_response_at, resolved_at, created_at, updated_at)
+                     first_response_at, resolved_at, status_changed_at, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
         $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19)
+        $16, $17, $18, $19, $20)
 ON CONFLICT (key) DO NOTHING
 RETURNING id
 `
@@ -298,6 +298,7 @@ type InsertSeedTicketParams struct {
 	SlaSnapshot     []byte
 	FirstResponseAt *time.Time
 	ResolvedAt      *time.Time
+	StatusChangedAt time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
@@ -322,6 +323,7 @@ func (q *Queries) InsertSeedTicket(ctx context.Context, arg InsertSeedTicketPara
 		arg.SlaSnapshot,
 		arg.FirstResponseAt,
 		arg.ResolvedAt,
+		arg.StatusChangedAt,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -404,7 +406,8 @@ WHERE ($1::uuid IS NULL OR t.client_id = $1::uuid)
   AND (NOT $6::boolean OR t.assignee_id IS NULL)
   AND ($7::text IS NULL
        OR t.key = $8::text
-       OR t.subject ILIKE $7::text)
+       OR t.subject ILIKE $7::text
+       OR c.name ILIKE $7::text)
   AND ($9::uuid IS NULL OR t.id < $9::uuid)
 ORDER BY t.id DESC
 LIMIT $10
@@ -442,7 +445,7 @@ type ListTicketsRow struct {
 }
 
 // Newest first. before pages by id (uuidv7, so creation order). search_key matches a key
-// exactly; search_pattern is an escaped ILIKE pattern over the subject.
+// exactly; search_pattern is an escaped ILIKE pattern over the subject and the client name.
 func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]ListTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listTickets,
 		arg.ScopeClientID,

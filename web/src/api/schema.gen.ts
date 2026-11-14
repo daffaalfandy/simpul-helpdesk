@@ -636,7 +636,7 @@ export interface paths {
         get?: never;
         /**
          * Move the ticket (staff)
-         * @description Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409).
+         * @description Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409). With `from`, a ticket whose status is no longer `from` is left alone and the call fails with `status_changed` (409).
          */
         put: operations["setTicketStatus"];
         post?: never;
@@ -1254,6 +1254,7 @@ export interface components {
         };
         TicketStatusInput: {
             status: components["schemas"]["TicketStatus"];
+            from?: components["schemas"]["TicketStatus"];
         };
         TicketAssigneeInput: {
             /**
@@ -2297,7 +2298,7 @@ export interface operations {
                 status?: components["schemas"]["TicketStatus"][];
                 clientId?: string;
                 assignee?: components["schemas"]["TicketAssigneeFilter"];
-                /** @description A ticket key, or words in the subject. */
+                /** @description A ticket key, or words in the subject or client name. */
                 q?: string;
                 before?: string;
                 limit?: number;

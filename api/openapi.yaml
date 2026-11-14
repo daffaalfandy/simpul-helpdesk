@@ -791,7 +791,7 @@ paths:
         - name: q
           in: query
           required: false
-          description: A ticket key, or words in the subject.
+          description: A ticket key, or words in the subject or client name.
           schema: { type: string, maxLength: 100 }
         - name: before
           in: query
@@ -912,7 +912,7 @@ paths:
     put:
       operationId: setTicketStatus
       summary: Move the ticket (staff)
-      description: Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409).
+      description: Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409). With `from`, a ticket whose status is no longer `from` is left alone and the call fails with `status_changed` (409).
       tags: [tickets]
       requestBody:
         required: true
@@ -1755,6 +1755,7 @@ components:
       required: [status]
       properties:
         status: { $ref: "#/components/schemas/TicketStatus" }
+        from: { $ref: "#/components/schemas/TicketStatus" }
 
     TicketAssigneeInput:
       type: object

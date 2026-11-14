@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -539,6 +540,45 @@ func TestTicketActions(t *testing.T) {
 	expectProblem(t, te.requester.message(tk.Key, gen.MessageVisibilityPublic, "hello?"), http.StatusConflict, "ticket_closed")
 }
 
+// A board card moved from a status the ticket no longer has is refused, so a stale card can't
+// undo someone else's move.
+func TestStaleMoveIsRefused(t *testing.T) {
+	ctx := context.Background()
+	te := newTicketEnv(t)
+	tk := te.requester.report(t, incident(te.projectA, "Stale card"))
+	move := func(to, from gen.TicketStatus) *httptest.ResponseRecorder {
+		return te.agent.do(http.MethodPut, "/tickets/"+tk.Key+"/status", gen.TicketStatusInput{Status: to, From: &from})
+	}
+	changedAt := func() time.Time {
+		t.Helper()
+		var at time.Time
+		if err := te.st.Pool().QueryRow(ctx, `SELECT status_changed_at FROM tickets WHERE id = $1`, tk.Id).Scan(&at); err != nil {
+			t.Fatal(err)
+		}
+		return at
+	}
+	created := changedAt()
+
+	decode[gen.Ticket](t, move(gen.TicketStatusInProgress, gen.TicketStatusNew), http.StatusOK)
+	moved := changedAt()
+	if !moved.After(created) {
+		t.Fatalf("status_changed_at stayed at %s", moved)
+	}
+	expectProblem(t, move(gen.TicketStatusWaitingOnClient, gen.TicketStatusNew), http.StatusConflict, "status_changed")
+	if got := te.agent.ticket(t, tk.Key).Status; got != gen.TicketStatusInProgress {
+		t.Fatalf("status after stale move = %s", got)
+	}
+	// Moving to the status it already has changes nothing, not even the time.
+	decode[gen.Ticket](t, move(gen.TicketStatusInProgress, gen.TicketStatusInProgress), http.StatusOK)
+	if again := changedAt(); !again.Equal(moved) {
+		t.Fatalf("no-op move changed status_changed_at to %s", again)
+	}
+	want := []string{"ticket.created", "ticket.status_changed"}
+	if got := te.auditActions(t, tk.Id); !slices.Equal(got, want) {
+		t.Fatalf("audit = %v, want %v", got, want)
+	}
+}
+
 func TestMessagesAndFirstResponse(t *testing.T) {
 	te := newTicketEnv(t)
 	tk := te.requester.report(t, incident(te.projectA, "Slow VPN"))
@@ -596,6 +636,7 @@ func TestListTickets(t *testing.T) {
 		"client":              {te.admin, "?clientId=" + te.clientB.String(), []string{c.Key}},
 		"key search":          {te.admin, "?q=" + strings.ToLower(a.Key), []string{a.Key}},
 		"subject search":      {te.admin, "?q=printer", []string{a.Key}},
+		"client search":       {te.admin, "?q=batam", []string{c.Key}},
 		"literal percent":     {te.admin, "?q=50%25", []string{b.Key}},
 		"first page":          {te.admin, "?limit=2", []string{c.Key, b.Key}},
 		"next page":           {te.admin, "?limit=2&before=" + b.Id.String(), []string{a.Key}},

@@ -62,6 +62,7 @@ type seedEntry struct {
 // writes nothing when a ticket with the key already exists, so seeding can be repeated.
 func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) {
 	status, assignee := ticket.StatusNew, (*Ref)(nil)
+	statusChangedAt := t.CreatedAt
 	var resolvedAt *time.Time
 	entries := []seedEntry{}
 	for _, st := range t.Steps {
@@ -72,12 +73,12 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 			assignee = st.Assignee
 			if next := ticket.StatusAfterAssignment(status, true); next != status {
 				entries = append(entries, statusEntry(st.At, st.Actor, status, next, ticket.CauseAssignment))
-				status = next
+				status, statusChangedAt = next, st.At
 			}
 		}
 		if st.Status != "" && st.Status != status {
 			entries = append(entries, statusEntry(st.At, st.Actor, status, st.Status, ""))
-			status = st.Status
+			status, statusChangedAt = st.Status, st.At
 			if ticket.MarksResolved(status) {
 				at := st.At
 				resolvedAt = &at
@@ -108,7 +109,7 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 		Priority: string(t.Priority), Channel: string(t.Channel), ClientID: t.ClientID, RequesterID: t.Requester.ID,
 		CreatedBy: t.CreatedBy.ID, ProjectID: t.ProjectID, CatalogItemID: t.CatalogItemID, Subject: t.Subject,
 		Description: t.Description, SlaSnapshot: snapJSON, FirstResponseAt: firstResponse, ResolvedAt: resolvedAt,
-		CreatedAt: t.CreatedAt, UpdatedAt: updatedAt,
+		StatusChangedAt: statusChangedAt, CreatedAt: t.CreatedAt, UpdatedAt: updatedAt,
 	}
 	if assignee != nil {
 		params.AssigneeID = &assignee.ID

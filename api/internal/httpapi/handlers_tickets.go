@@ -151,7 +151,7 @@ func (s *server) SetTicketStatus(ctx context.Context, req gen.SetTicketStatusReq
 	if err != nil {
 		return nil, err
 	}
-	t, err := s.tickets.SetStatus(ctx, p, req.TicketKey, ticket.Status(req.Body.Status))
+	t, err := s.tickets.SetStatus(ctx, p, req.TicketKey, ticket.Status(req.Body.Status), (*ticket.Status)(req.Body.From))
 	if err != nil {
 		return nil, err
 	}

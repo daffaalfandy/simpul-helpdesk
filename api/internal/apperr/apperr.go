@@ -58,6 +58,7 @@ const (
 	CodeReasonRequired            = "reason_required"
 	CodeInvalidStatusChange       = "invalid_status_change"
 	CodeTicketClosed              = "ticket_closed"
+	CodeStatusChanged             = "status_changed"
 	CodeEmailTaken                = "email_taken"
 	CodeCatalogItemNameTaken      = "catalog_item_name_taken"
 	CodeCatalogItemInUse          = "catalog_item_in_use"

@@ -17,10 +17,15 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
-// SetStatus moves a ticket by hand. Moving to the current status changes nothing.
-func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, key string, to ticket.Status) (Ticket, error) {
+// SetStatus moves a ticket by hand. Moving to the current status changes nothing. With
+// expected set, the move only happens while the ticket still has that status, so a stale board
+// card can't undo someone else's move.
+func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, key string, to ticket.Status, expected *ticket.Status) (Ticket, error) {
 	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow) error {
 		from := ticket.Status(row.Status)
+		if expected != nil && *expected != from {
+			return errStatusChanged()
+		}
 		if from == to {
 			return nil
 		}

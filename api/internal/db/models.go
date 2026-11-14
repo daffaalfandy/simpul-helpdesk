@@ -182,6 +182,7 @@ type Ticket struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	ProjectID       uuid.UUID
+	StatusChangedAt time.Time
 }
 
 type TicketMessage struct {

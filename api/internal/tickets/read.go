@@ -23,7 +23,7 @@ const (
 	AssigneeUnassigned AssigneeFilter = "unassigned"
 )
 
-// ILIKE pattern pieces for subject search.
+// ILIKE pattern pieces for searching subjects and client names.
 const (
 	likeAny    = "%"
 	likeOne    = "_"
@@ -40,7 +40,7 @@ type ListFilter struct {
 	Statuses []ticket.Status // empty means every status
 	ClientID *uuid.UUID
 	Assignee AssigneeFilter
-	Query    string     // a ticket key, or words in the subject
+	Query    string     // a ticket key, or words in the subject or client name
 	Before   *uuid.UUID // the last ID of the previous page
 	Limit    int
 }
