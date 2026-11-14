@@ -44,9 +44,9 @@ export function ServiceLevelCard({ ticket, audience }: ServiceLevelCardProps) {
             </dt>
           </div>
         </dl>
-        <p className="text-xs text-muted">
-          {sla.calendar === 'always' ? t('ticket.sla.always') : t('ticket.sla.business')}
-          {pausedNote && <> {pausedNote}</>}
+        <p className="flex flex-col gap-0.5 text-xs text-muted">
+          <span>{sla.calendar === 'always' ? t('ticket.sla.always') : t('ticket.sla.business')}</span>
+          {pausedNote && <span>{pausedNote}</span>}
         </p>
       </Card>
     )
@@ -72,9 +72,9 @@ export function ServiceLevelCard({ ticket, audience }: ServiceLevelCardProps) {
           </div>
         ))}
       </dl>
-      <p className="text-xs text-on-dark-muted">
-        {sla.calendar === 'always' ? t('ticket.sla.always') : t('ticket.sla.business')}
-        {pausedNote && <> {pausedNote}</>}
+      <p className="flex flex-col gap-0.5 text-xs text-on-dark-muted">
+        <span>{sla.calendar === 'always' ? t('ticket.sla.always') : t('ticket.sla.business')}</span>
+        {pausedNote && <span>{pausedNote}</span>}
       </p>
     </section>
   )

@@ -38,7 +38,8 @@ describe('agent ticket detail', () => {
     expect(within(sla).getByText('First response · 15m')).toBeInTheDocument()
     expect(within(sla).getByText(/^Sent /)).toBeInTheDocument()
     expect(within(sla).getByText('Resolution · 4h')).toBeInTheDocument()
-    expect(sla).toHaveTextContent("Runs 24/7 Time waiting for the client's reply or test doesn't count.")
+    expect(within(sla).getByText('Runs 24/7')).toBeInTheDocument()
+    expect(within(sla).getByText("Time waiting for the client's reply or test doesn't count.")).toBeInTheDocument()
     const properties = screen.getByRole('heading', { name: 'Properties' }).closest('section') as HTMLElement
     expect(within(properties).getByRole('link', { name: 'e-Office' })).toHaveAttribute('href', `/projects/${PROJECT_IDS.eOffice}`)
     const log = screen.getByRole('heading', { name: 'Activity log' }).closest('section') as HTMLElement

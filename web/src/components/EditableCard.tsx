@@ -69,15 +69,15 @@ export function EditableCard({
       aria-labelledby={titleId}
       className="flex flex-col gap-3.5 rounded-3xl border border-border bg-surface px-5.5 py-5 shadow-card"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex max-w-3xl min-w-0 flex-col gap-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex max-w-3xl min-w-0 flex-1 flex-col gap-1">
           <h2 id={titleId} className="text-lg font-extrabold">
             {title}
           </h2>
           {description && <p className="text-sm text-muted">{description}</p>}
         </div>
         {canEdit && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
             {isEditing ? (
               <>
                 <Button variant="outline" onPress={onCancel} isDisabled={isPending}>

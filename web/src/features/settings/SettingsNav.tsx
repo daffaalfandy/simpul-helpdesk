@@ -82,11 +82,11 @@ export function SettingsNav() {
       className="flex w-full shrink-0 flex-col gap-5 rounded-3xl border border-border bg-surface px-3 py-4.5 shadow-card lg:w-(--sidebar-w)"
     >
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-extrabold tracking-title">{t('settings.title')}</h1>
+        <h1 className="text-lg font-extrabold">{t('settings.title')}</h1>
         <div className="flex items-center gap-1.5">
           <Button
             onPress={() => setOpen(anyOpen ? new Set() : new Set(GROUPS.map((g) => g.id)))}
-            className={cx(outlineSmall, 'px-2.5 text-xs font-bold')}
+            className={cx(outlineSmall, 'px-2.5 text-xs font-bold whitespace-nowrap')}
           >
             {anyOpen ? t('settings.nav.collapseAll') : t('settings.nav.expandAll')}
           </Button>

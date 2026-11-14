@@ -238,7 +238,7 @@ function PriorityTargets({ target, name, error, onChange }: PriorityTargetsProps
         <PriorityBadge priority={target.priority} />
         <span className="text-md font-extrabold">{name}</span>
       </p>
-      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         {TARGET_FIELDS.map((field) => (
           <DurationField
             key={field}
