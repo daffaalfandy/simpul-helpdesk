@@ -2,7 +2,7 @@ import i18n from 'i18next'
 import { describe, expect, it } from 'vitest'
 
 import type { ProjectTarget } from '../api/client'
-import { formatTarget, formatTargetShort } from './formatDuration'
+import { formatTarget } from './formatDuration'
 import { durationMinutes, orderError, validValue } from './projectSla'
 
 const WORKING_DAY = 540
@@ -39,11 +39,9 @@ describe('project SLA rules', () => {
     expect(validValue({ value: 1.5, unit: 'h' })).toBe(false)
   })
 
-  it('writes targets out in words and for chips', () => {
+  it('writes targets out in words', () => {
     expect(formatTarget(t, { value: 1, unit: 'wd' })).toBe('1 working day')
     expect(formatTarget(t, { value: 2, unit: 'h' })).toBe('2 hours')
     expect(formatTarget(t, { value: 15, unit: 'min' })).toBe('15 min')
-    expect(formatTargetShort(t, { value: 2, unit: 'h' })).toBe('2 h')
-    expect(formatTargetShort(t, { value: 3, unit: 'wd' })).toBe('3 wd')
   })
 })

@@ -13,8 +13,3 @@ export function formatTarget(t: TFunction, d: Duration): string {
 export function formatTargetCompact(t: TFunction, d: Duration): string {
   return t(`durationCompact.${d.unit}`, { count: d.value })
 }
-
-/** A project target for chips: "15 min", "2 h", "1 wd", "2 d". */
-export function formatTargetShort(t: TFunction, d: Duration): string {
-  return t(`durationShort.${d.unit}`, { count: d.value })
-}

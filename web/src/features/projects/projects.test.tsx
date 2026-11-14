@@ -30,14 +30,15 @@ describe('projects', () => {
     state.me = ADMIN
   })
 
-  it('opens the first project and lists every project with its P1 fix time', async () => {
+  it('opens the first project and lists every project with its client', async () => {
     const { router } = await openProjects()
     expect(router.state.location.pathname).toBe(`/projects/${PROJECT_IDS.eOffice}`)
     const list = screen.getByRole('navigation', { name: 'Projects' })
     const eOffice = within(list).getByRole('link', { name: /e-Office/ })
     expect(eOffice).toHaveAttribute('aria-current', 'page')
-    expect(eOffice).toHaveTextContent('P1 fix 2 h')
+    expect(eOffice).toHaveTextContent('Dinas Kominfo Jambi')
     expect(eOffice).toHaveTextContent('Default')
+    expect(within(list).getByRole('link', { name: /Email/ })).not.toHaveTextContent('Default')
     expect(within(list).getAllByRole('link')).toHaveLength(3)
 
     const card = slaCard()

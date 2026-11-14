@@ -724,12 +724,6 @@
     "openTickets_other": "{{count}} open tickets",
     "assigneeOption": "{{title}} · {{open}}"
   },
-  "durationShort": {
-    "min": "{{count}} min",
-    "h": "{{count}} h",
-    "wd": "{{count}} wd",
-    "d": "{{count}} d"
-  },
   "projects": {
     "title": "Projects",
     "subtitle": "Each project belongs to a client and sets the service level its tickets follow.",
@@ -742,7 +736,6 @@
       "bodyReadOnly": "A supervisor adds projects for your clients."
     },
     "chips": {
-      "sla": "P1 fix {{duration}}",
       "default": "Default",
       "hidden": "Hidden"
     },

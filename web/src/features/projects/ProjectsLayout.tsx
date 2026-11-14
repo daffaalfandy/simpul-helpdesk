@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next'
 import type { Project } from '../../api/client'
 import { Pill } from '../../components/Badges'
 import { Button } from '../../components/Button'
-import { formatTargetShort } from '../../lib/formatDuration'
 import { can } from '../../lib/roles'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { ProjectDialog } from './ProjectDialog'
@@ -64,7 +63,7 @@ export function ProjectsLayout() {
 
 function ProjectLink({ project }: { project: Project }) {
   const { t } = useTranslation()
-  const p1 = project.sla.targets.find((target) => target.priority === 'P1')
+  const hasChips = project.isDefault || !project.active
   return (
     <Link
       to="/projects/$projectId"
@@ -77,11 +76,12 @@ function ProjectLink({ project }: { project: Project }) {
     >
       <span className="text-md font-extrabold">{project.name}</span>
       <span className="text-xs text-muted">{project.client.name}</span>
-      <span className="mt-1.5 flex flex-wrap gap-1.5">
-        {p1 && <Pill tone="danger">{t('projects.chips.sla', { duration: formatTargetShort(t, p1.resolve) })}</Pill>}
-        {project.isDefault && <Pill tone="info">{t('projects.chips.default')}</Pill>}
-        {!project.active && <Pill tone="neutral">{t('projects.chips.hidden')}</Pill>}
-      </span>
+      {hasChips && (
+        <span className="mt-1.5 flex flex-wrap gap-1.5">
+          {project.isDefault && <Pill tone="info">{t('projects.chips.default')}</Pill>}
+          {!project.active && <Pill tone="neutral">{t('projects.chips.hidden')}</Pill>}
+        </span>
+      )}
     </Link>
   )
 }
