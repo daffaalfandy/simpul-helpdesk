@@ -156,6 +156,25 @@
   }
 }
 
+/*
+ * A board card moving to another column glides there (a view transition the board starts on
+ * drop), on the same timing as the rest of the app's motion.
+ */
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--easing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 /* Grows a compact control's touch area to the 44px minimum without changing how it looks. */
 @utility hit-area {
   position: relative;

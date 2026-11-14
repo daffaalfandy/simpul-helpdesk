@@ -69,3 +69,6 @@ export const MAX_SEARCH_LENGTH = 100
 
 /** How long typing pauses before a search box updates the URL and asks the API. */
 export const SEARCH_DEBOUNCE_MS = 300
+
+/** How often the board asks for moves others made (until M5a decides on live updates). */
+export const BOARD_REFRESH_MS = 30_000

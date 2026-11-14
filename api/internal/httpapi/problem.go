@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -14,9 +15,17 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 )
 
+// statusClientClosedRequest is nginx's code for a request the client gave up on, for
+// example the board cancelling a refresh while a card moves. Nobody reads the answer.
+const statusClientClosedRequest = 499
+
 // writeProblem renders err as RFC 9457 problem details. Unknown errors become a 500
-// and are logged with the request ID.
+// and are logged with the request ID; a request the client cancelled is not an error.
 func writeProblem(w http.ResponseWriter, r *http.Request, log *slog.Logger, err error) {
+	if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
+		w.WriteHeader(statusClientClosedRequest)
+		return
+	}
 	var ae *apperr.Error
 	if !errors.As(err, &ae) {
 		log.ErrorContext(r.Context(), "unhandled error",

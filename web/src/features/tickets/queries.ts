@@ -98,9 +98,10 @@ function useTicketAction<T>(key: string, call: (input: T) => Promise<Ticket>) {
   })
 }
 
+/** Sends the status the page showed, so a move someone else made first isn't undone. */
 export function useSetStatus(key: string) {
-  return useTicketAction(key, (status: TicketStatus) =>
-    unwrap(api.PUT('/tickets/{ticketKey}/status', { params: { path: { ticketKey: key } }, body: { status } })),
+  return useTicketAction(key, (move: { status: TicketStatus; from: TicketStatus }) =>
+    unwrap(api.PUT('/tickets/{ticketKey}/status', { params: { path: { ticketKey: key } }, body: move })),
   )
 }
 

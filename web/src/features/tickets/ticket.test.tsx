@@ -74,7 +74,7 @@ describe('agent ticket detail', () => {
     expect(option).toHaveTextContent('Pauses the SLA clock')
     expect(screen.queryByRole('option', { name: /Closed/ })).not.toBeInTheDocument()
     await user.click(option)
-    await waitFor(() => expect(lastRequest('PUT', '/tickets/HD-24871/status')?.body).toEqual({ status: 'waiting_on_client' }))
+    await waitFor(() => expect(lastRequest('PUT', '/tickets/HD-24871/status')?.body).toEqual({ status: 'waiting_on_client', from: 'in_progress' }))
     expect(
       await screen.findByText('Status changed from In progress to Waiting on client by Rina Pratiwi'),
     ).toBeInTheDocument()

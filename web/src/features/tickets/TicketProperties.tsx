@@ -72,7 +72,7 @@ export function TicketProperties({ ticket }: { ticket: Ticket }) {
         label={t('ticket.fields.status')}
         options={statusOptions}
         value={ticket.status}
-        onChange={(s) => s !== ticket.status && setStatus.mutate(s)}
+        onChange={(s) => s !== ticket.status && setStatus.mutate({ status: s, from: ticket.status })}
         isDisabled={locked || setStatus.isPending}
       />
       <ErrorAlert error={setStatus.error} />

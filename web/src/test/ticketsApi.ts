@@ -364,11 +364,16 @@ export const ticketsHandlers = [
     return HttpResponse.json(m, { status: 201 })
   }),
   http.put(`${API}/tickets/:key/status`, async ({ request, params }) => {
-    const { status } = (await record(request)) as { status: TicketStatus }
+    const body = (await record(request)) as { status: TicketStatus; from?: TicketStatus }
     const t = find(params.key)
     if (!t) return problem(404, 'not_found')
+    if (body.from !== undefined && body.from !== t.status) return problem(409, 'status_changed')
+    if (body.status !== t.status && !allowedMoves(t).includes(body.status)) return problem(409, 'invalid_status_change')
+    const { status } = body
     const from = t.status
     t.status = status
+    t.resolvedAt = status === 'resolved' || status === 'closed' ? (t.resolvedAt ?? new Date().toISOString()) : null
+    t.allowedStatuses = allowedMoves(t)
     tickets.activity[t.key] = [
       ...(tickets.activity[t.key] ?? []),
       { id: newId('e'), at: new Date().toISOString(), actorName: state.me?.name ?? null, action: 'status_changed', from, to: status, reason: null, cause: null, channel: null },

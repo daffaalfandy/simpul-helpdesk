@@ -170,6 +170,17 @@
     "stats": {
       "openTickets": "Open tickets",
       "resolvedThisWeek": "Resolved this week"
+    },
+    "hint": "Drag a card to another column to change its status. Every move is saved to the ticket's activity log.",
+    "moveCard": "Move {{key}}",
+    "cannotDrop": "Can't move here",
+    "moved": "{{key}} moved to {{column}}.",
+    "moveTarget": {
+      "new": "New",
+      "in_progress": "In progress",
+      "waiting_on_client": "Waiting on client",
+      "in_uat": "In UAT",
+      "resolved": "Resolved"
     }
   },
   "portal": {
@@ -560,6 +571,7 @@
     "reason_required": "Say why the priority changes.",
     "invalid_status_change": "This status change isn't allowed.",
     "ticket_closed": "This ticket is closed and can't be changed.",
+    "status_changed": "Someone else changed this ticket's status just now. Showing the latest.",
     "email_taken": "Someone already uses this email address.",
     "catalog_item_name_taken": "A catalogue item with this name already exists.",
     "catalog_item_in_use": "Tickets use this item. Hide it instead.",
