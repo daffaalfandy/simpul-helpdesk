@@ -23,6 +23,8 @@ export const queryKeys = {
   intakeFor: (clientId: string | null) => ['intake', clientId ?? 'own'] as const,
   tickets: ['tickets'],
   ticketList: (filters: object) => ['tickets', 'list', filters] as const,
+  board: (filters: object) => ['tickets', 'board', filters] as const,
+  boards: ['tickets', 'board'],
   ticket: (key: string) => ['tickets', 'detail', key] as const,
   ticketMessages: (key: string) => ['tickets', 'messages', key] as const,
   ticketActivity: (key: string) => ['tickets', 'activity', key] as const,

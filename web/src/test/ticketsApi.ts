@@ -4,6 +4,8 @@ import type {
   Assignee,
   Attachment,
   AttachmentPolicy,
+  Board,
+  BoardCard,
   CatalogItem,
   Intake,
   Requester,
@@ -13,12 +15,18 @@ import type {
   TicketStatus,
   TicketSummary,
 } from '../api/client'
+import { BOARD_COLUMNS } from '../features/board/columns'
+import { allowedMoves, columnOf } from './lifecycle'
 import { state } from './server'
 import { defaultTargets, PROJECT_IDS, projectsApi } from './projectsApi'
 import { IDS, settings } from './settingsApi'
 
 const API = '*/api/v1'
 const MAX_BYTES = 10 * 1024 * 1024
+/** The API's BoardColumnLimit. */
+export const BOARD_COLUMN_LIMIT = 100
+const PRIORITY_ORDER = ['P1', 'P2', 'P3', 'P4']
+const DAYS_PER_WEEK = 7
 
 export const TICKET_IDS = {
   hendra: '01a1cedf-0000-7000-8000-000000000003',
@@ -32,6 +40,7 @@ export const policy: AttachmentPolicy = { maxBytes: MAX_BYTES, maxPerMessage: 2,
 
 const ref = (id: string, name: string) => ({ id, name })
 const rina = ref(IDS.rina, 'Rina Pratiwi')
+const adi = ref(IDS.adi, 'Adi Saputra')
 const hendra = ref(TICKET_IDS.hendra, 'Hendra Gunawan')
 const jambi = ref(IDS.jambi, 'Dinas Kominfo Jambi')
 const batam = ref(IDS.batam, 'BPKAD Kota Batam')
@@ -114,6 +123,10 @@ function fixtures() {
     ticket({ id: 't-24859', key: 'HD-24859', subject: 'VPN access for the new officer', type: 'request', status: 'waiting_on_client', assignee: rina }),
     ticket({ id: 't-24790', key: 'HD-24790', subject: 'Install a PDF reader', type: 'request', status: 'closed', resolvedAt: '2026-11-09T03:00:00Z', closedAt: '2026-11-11T03:00:00Z', allowedStatuses: [] }),
     ticket({ id: 't-24900', key: 'HD-24900', subject: 'SIPD export times out', client: batam, requester: ref(TICKET_IDS.sri, 'Sri Lestari'), createdBy: ref(TICKET_IDS.sri, 'Sri Lestari') }),
+    // Board fixtures at another client, so the portal's lists stay as they are.
+    ticket({ id: 't-24910', key: 'HD-24910', subject: 'Router config backup', priority: 'P2', status: 'assigned', assignee: adi, client: batam }),
+    ticket({ id: 't-24915', key: 'HD-24915', subject: 'Finance report totals are off', priority: 'P2', status: 'in_uat', assignee: adi, client: batam }),
+    ticket({ id: 't-24920', key: 'HD-24920', subject: 'Shared drive permissions reset', status: 'resolved', assignee: adi, client: batam, resolvedAt: new Date().toISOString() }),
   ]
   const messages: Record<string, TicketMessage[]> = {
     'HD-24871': [
@@ -218,7 +231,51 @@ function projectOf(body: Record<string, unknown>) {
   return ref(p?.id ?? '', p?.name ?? '')
 }
 
+function boardCard(t: Ticket): BoardCard {
+  const { id, key, type, status, priority, subject, client, assignee } = t
+  return { id, key, type, status, priority, subject, client, assignee, allowedStatuses: allowedMoves(t) }
+}
+
+function startOfToday() {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+/** The board like GET /board: columns in order, P1 first, done tickets from midnight only. */
+function board(assignee: string | null, q: string): Board {
+  const midnight = startOfToday()
+  const weekStart = new Date(midnight)
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + DAYS_PER_WEEK - 1) % DAYS_PER_WEEK))
+  const since = (t: Ticket, from: Date) => t.resolvedAt !== null && new Date(t.resolvedAt) >= from
+  const search = q.toLowerCase()
+  const cards = tickets.tickets
+    .filter((t) => columnOf(t.status) !== null && (t.resolvedAt === null || since(t, midnight)))
+    .filter((t) => assignee !== 'me' || t.assignee?.id === state.me?.id)
+    .filter((t) => assignee !== 'unassigned' || t.assignee === null)
+    .filter((t) => !search || [t.key, t.subject, t.client.name].some((s) => s.toLowerCase().includes(search)))
+  return {
+    columns: BOARD_COLUMNS.map((id) => {
+      const inColumn = cards
+        .filter((t) => columnOf(t.status) === id)
+        .sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority))
+      return { id, total: inColumn.length, cards: inColumn.slice(0, BOARD_COLUMN_LIMIT).map(boardCard) }
+    }),
+    resolvedSince: midnight.toISOString(),
+    stats: {
+      openTickets: tickets.tickets.filter((t) => t.resolvedAt === null && t.status !== 'closed').length,
+      resolvedThisWeek: tickets.tickets.filter((t) => since(t, weekStart)).length,
+    },
+  }
+}
+
 export const ticketsHandlers = [
+  http.get(`${API}/board`, async ({ request }) => {
+    await record(request)
+    if (isRequester()) return problem(403, 'forbidden')
+    const params = new URL(request.url).searchParams
+    return HttpResponse.json(board(params.get('assignee'), params.get('q') ?? ''))
+  }),
   http.get(`${API}/attachment-policy`, () => HttpResponse.json(policy)),
   http.get(`${API}/intake`, async ({ request }) => {
     await record(request)

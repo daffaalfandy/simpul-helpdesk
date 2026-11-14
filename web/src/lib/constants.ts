@@ -63,3 +63,9 @@ export const JUST_NOW_MS = 60_000
 
 /** Tickets fetched per page in lists. */
 export const TICKET_PAGE_SIZE = 50
+
+/** Longest search the API takes (the `q` parameter's maxLength). */
+export const MAX_SEARCH_LENGTH = 100
+
+/** How long typing pauses before a search box updates the URL and asks the API. */
+export const SEARCH_DEBOUNCE_MS = 300

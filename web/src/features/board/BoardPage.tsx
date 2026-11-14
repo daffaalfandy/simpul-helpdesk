@@ -1,47 +1,35 @@
-import { useSuspenseInfiniteQuery, useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Ticket } from '../../api/client'
 import { clientsQueryOptions, useOrgTimeZone } from '../../api/queries'
 import { Alert } from '../../components/Alert'
 import { Button } from '../../components/Button'
-import { Card } from '../../components/Card'
-import { Dropdown } from '../../components/Dropdown'
 import { FilterPills } from '../../components/FilterPills'
-import { paths } from '../../lib/constants'
+import { SearchField } from '../../components/SearchField'
+import { paths, SEARCH_DEBOUNCE_MS } from '../../lib/constants'
 import { formatToday } from '../../lib/dates'
 import { dayPart, firstName } from '../../lib/text'
 import { useSignedInUser } from '../shell/useSignedInUser'
-import { agentStatus } from '../tickets/labels'
-import { TICKET_STATUSES } from '../tickets/status'
-import { BOARD_VIEWS, boardListOptions, DEFAULT_STATUS, DEFAULT_VIEW, type BoardSearch, type BoardStatus } from './boardSearch'
+import { BOARD_VIEWS, boardQueryOptions, cleanQuery, DEFAULT_VIEW, isFiltered, type BoardSearch } from './boardSearch'
+import { KanbanBoard } from './KanbanBoard'
 import { LogTicketDialog } from './LogTicketDialog'
-import { TicketTable } from './TicketTable'
-
-const ALL_CLIENTS = 'all'
+import { StatTiles } from './StatTiles'
 
 type BoardPageProps = { search: BoardSearch; onSearchChange: (next: BoardSearch) => void }
 
-/** Agent home. M3 shows a ticket table; the kanban board replaces it in M4. */
+/** Agent home (Main mock): stats, filters, search and the kanban board. */
 export function BoardPage({ search, onSearchChange }: BoardPageProps) {
   const { t } = useTranslation()
   const me = useSignedInUser()
   const { data: clients } = useSuspenseQuery(clientsQueryOptions)
+  const { data: board } = useSuspenseQuery(boardQueryOptions(search))
   const timeZone = useOrgTimeZone()
-  const list = useSuspenseInfiniteQuery(boardListOptions(search))
-  const tickets = list.data.pages.flat()
-  const filtered = Boolean(search.view || search.status || search.client)
   const [logging, setLogging] = useState(false)
   const [created, setCreated] = useState<Ticket | null>(null)
-
-  const statusOptions = [
-    { id: 'open' as BoardStatus, label: t('agent.board.statusFilter.open') },
-    { id: 'all' as BoardStatus, label: t('agent.board.statusFilter.all') },
-    ...TICKET_STATUSES.map((s) => ({ id: s as BoardStatus, label: agentStatus(t, s) })),
-  ]
 
   return (
     <>
@@ -76,50 +64,17 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
           </span>
         </Alert>
       )}
-      <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <FilterPills
-            label={t('agent.board.view.label')}
-            options={BOARD_VIEWS.map((id) => ({ id, label: t(`agent.board.view.${id}`) }))}
-            value={search.view ?? DEFAULT_VIEW}
-            onChange={(view) => onSearchChange({ ...search, view: view === DEFAULT_VIEW ? undefined : view })}
-          />
-          <Dropdown
-            label={t('agent.board.statusFilter.label')}
-            options={statusOptions}
-            value={search.status ?? DEFAULT_STATUS}
-            onChange={(status) => onSearchChange({ ...search, status: status === DEFAULT_STATUS ? undefined : status })}
-            className="min-w-48"
-          />
-          <Dropdown
-            label={t('agent.board.clientFilter.label')}
-            options={[
-              { id: ALL_CLIENTS, label: t('agent.board.clientFilter.all') },
-              ...clients.map((c) => ({ id: c.id, label: c.name })),
-            ]}
-            value={search.client ?? ALL_CLIENTS}
-            onChange={(client) => onSearchChange({ ...search, client: client === ALL_CLIENTS ? undefined : client })}
-            className="min-w-56"
-          />
-        </div>
-        {tickets.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-muted">
-            <p>{filtered ? t('agent.board.emptyFiltered') : t('agent.board.emptyNone')}</p>
-            {filtered && (
-              <Button variant="outline" onPress={() => onSearchChange({})}>
-                {t('agent.board.clearFilters')}
-              </Button>
-            )}
-          </div>
-        ) : (
-          <TicketTable tickets={tickets} />
-        )}
-        {list.hasNextPage && (
-          <Button variant="outline" className="self-center" onPress={() => list.fetchNextPage()} isPending={list.isFetchingNextPage}>
-            {t('common.showMore')}
-          </Button>
-        )}
-      </Card>
+      <StatTiles stats={board.stats} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <FilterPills
+          label={t('agent.board.view.label')}
+          options={BOARD_VIEWS.map((id) => ({ id, label: t(`agent.board.view.${id}`) }))}
+          value={search.view ?? DEFAULT_VIEW}
+          onChange={(view) => onSearchChange({ ...search, view: view === DEFAULT_VIEW ? undefined : view })}
+        />
+        <BoardSearchBox value={search.q ?? ''} onCommit={(q) => onSearchChange({ ...search, q: q || undefined })} />
+      </div>
+      <KanbanBoard board={board} filtered={isFiltered(search)} />
       {logging && (
         <LogTicketDialog
           onClose={() => setLogging(false)}
@@ -130,5 +85,26 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
         />
       )}
     </>
+  )
+}
+
+/** The search box asks the API once typing pauses, not on every key. */
+function BoardSearchBox({ value, onCommit }: { value: string; onCommit: (q: string) => void }) {
+  const { t } = useTranslation()
+  const [text, setText] = useState(value)
+  useEffect(() => {
+    const q = cleanQuery(text)
+    if (q === value) return
+    const timer = setTimeout(() => onCommit(q), SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [text, value, onCommit])
+  return (
+    <SearchField
+      label={t('board.search.label')}
+      placeholder={t('board.search.placeholder')}
+      value={text}
+      onChange={setText}
+      className="w-full sm:w-(--board-search-w)"
+    />
   )
 }

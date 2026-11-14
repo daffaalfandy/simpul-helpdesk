@@ -138,6 +138,10 @@
   --tab-bar-h: 3px;            /* selected tab underline */
   --nav-indicator-w: 3px;      /* current settings item bar */
   --number-input-w: 76px;      /* number beside a unit picker (project SLA targets) */
+  --board-column-w: 272px;     /* board column where the columns scroll sideways (below xl) */
+  --board-column-min-h: 160px; /* an empty board column still reads as a drop target */
+  --stat-tile-min-w: 180px;    /* board stat tiles */
+  --board-search-w: 340px;     /* board search box beside the filter pills */
 
   /* ---------- Focus & motion ---------- */
   --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);

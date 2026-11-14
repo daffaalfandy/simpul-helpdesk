@@ -20,7 +20,8 @@
     "completed": "Completed",
     "retry": "Try again",
     "errorTitle": "Something went wrong",
-    "separator": " · "
+    "separator": " · ",
+    "clearSearch": "Clear search"
   },
   "roles": {
     "admin": "Administrator",
@@ -89,37 +90,15 @@
       "logTicket": "Log a ticket",
       "subtitle_one": "{{date}} · {{count}} client under contract",
       "subtitle_other": "{{date}} · {{count}} clients under contract",
-      "caption": "Tickets",
-      "cols": {
-        "key": "Ticket",
-        "subject": "Subject",
-        "client": "Client",
-        "priority": "Priority",
-        "status": "Status",
-        "assignee": "Assignee",
-        "updated": "Updated"
-      },
       "view": {
         "label": "Show tickets",
         "all": "All tickets",
         "mine": "My queue",
         "unassigned": "Unassigned"
       },
-      "statusFilter": {
-        "label": "Status",
-        "open": "Open",
-        "all": "All statuses"
-      },
-      "clientFilter": {
-        "label": "Client",
-        "all": "All clients"
-      },
       "created": "{{key}} created.",
       "createdAssigned": "{{key}} created and assigned to you.",
-      "openTicket": "Open {{key}}",
-      "emptyNone": "No open tickets. Reports from your clients and tickets you log show up here.",
-      "emptyFiltered": "No tickets match these filters.",
-      "clearFilters": "Clear filters"
+      "openTicket": "Open {{key}}"
     },
     "logTicket": {
       "title": "Log a ticket for a client",
@@ -166,6 +145,31 @@
     },
     "ticket": {
       "back": "Back to board"
+    }
+  },
+  "board": {
+    "label": "Ticket board",
+    "columns": {
+      "new": "New",
+      "in_progress": "In progress",
+      "waiting_on_client": "Waiting on client",
+      "in_uat": "In UAT",
+      "resolved": "Resolved today"
+    },
+    "columnCount_one": "{{count}} ticket",
+    "columnCount_other": "{{count}} tickets",
+    "columnLabel_one": "{{column}}, {{count}} ticket",
+    "columnLabel_other": "{{column}}, {{count}} tickets",
+    "empty": "No tickets",
+    "emptyFiltered": "Nothing here for this filter.",
+    "capped": "Showing {{shown}} of {{total}}. Search or filter to narrow it down.",
+    "search": {
+      "label": "Search tickets",
+      "placeholder": "Search ticket ID, client, subject"
+    },
+    "stats": {
+      "openTickets": "Open tickets",
+      "resolvedThisWeek": "Resolved this week"
     }
   },
   "portal": {
