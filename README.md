@@ -8,7 +8,7 @@
 - Notifications in the app and by email, chosen per event by each user
 - Monthly SLA reports per client
 
-> **Status:** early development. Done: sign-in, users and roles; clients and the business-hours calendar; tickets with replies, internal notes and attachments; projects with their own SLA targets and global priority names. Next: the kanban board.
+> **Status:** early development. Done: sign-in, users and roles; clients and the business-hours calendar; tickets with replies, internal notes and attachments; projects with their own SLA targets and global priority names; the kanban board with filters, search and drag-and-drop status changes. Next: notifications in the app and by email.
 
 ## Stack
 
