@@ -64,14 +64,7 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f ListFilter) ([]
 		me := p.UserID
 		params.AssigneeID = &me
 	}
-	if q := strings.TrimSpace(f.Query); q != "" {
-		if len([]rune(q)) > MaxSearchLen {
-			q = string([]rune(q)[:MaxSearchLen])
-		}
-		key := ticket.NormalizeKey(q)
-		pattern := likeAny + likeEscaper.Replace(q) + likeAny
-		params.SearchKey, params.SearchPattern = &key, &pattern
-	}
+	params.SearchKey, params.SearchPattern = searchParams(f.Query)
 	rows, err := s.store.Q().ListTickets(ctx, params)
 	if err != nil {
 		return nil, err
@@ -87,6 +80,21 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f ListFilter) ([]
 		})
 	}
 	return out, nil
+}
+
+// searchParams turns a search box into an exact key and an escaped ILIKE pattern, or two
+// nils when the box is empty.
+func searchParams(query string) (key, pattern *string) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return nil, nil
+	}
+	if len([]rune(q)) > MaxSearchLen {
+		q = string([]rune(q)[:MaxSearchLen])
+	}
+	k := ticket.NormalizeKey(q)
+	p := likeAny + likeEscaper.Replace(q) + likeAny
+	return &k, &p
 }
 
 func pageSize(n int) int {

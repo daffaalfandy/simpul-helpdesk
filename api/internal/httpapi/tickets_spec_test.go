@@ -46,6 +46,7 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 			ticket.StateSkipped),
 		"TicketStatusCause":    strs(ticket.CauseAssignment, ticket.CauseRequesterReply),
 		"TicketAssigneeFilter": strs(tickets.AssigneeMe, tickets.AssigneeUnassigned),
+		"BoardColumnId":        strs(ticket.Columns...),
 		"TicketActivityAction": strs(tickets.ActivityCreated, tickets.ActivityStatusChanged,
 			tickets.ActivityAssigneeChanged, tickets.ActivityPriorityChanged, tickets.ActivityReplyAdded,
 			tickets.ActivityNoteAdded, tickets.ActivityFirstResponded),
@@ -84,6 +85,8 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		{"ProjectSla", "targets", 0, len(sla.Priorities)},
 		{"PriorityLevel", "name", priorities.MaxNameLen, 0},
 		{"PriorityLevel", "description", priorities.MaxDescriptionLen, 0},
+		{"BoardColumn", "cards", 0, tickets.BoardColumnLimit},
+		{"Board", "columns", 0, len(ticket.Columns)},
 	}
 	for _, l := range limits {
 		prop := schemas[l.schema].Value.Properties[l.field].Value

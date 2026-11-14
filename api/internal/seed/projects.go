@@ -22,6 +22,7 @@ const (
 	projectFinanceApps = "Finance apps"
 	projectSIPD        = "SIPD connector"
 	projectBintanWeb   = "Public website"
+	projectGeneral     = "General support"
 )
 
 // project is a demo project. The first one listed for a client is its default.
@@ -54,6 +55,7 @@ var demoProjects = []project{
 	{clientBatam, projectFinanceApps, "Budgeting and finance systems", sla.DefaultProjectSLA()},
 	{clientRiau, projectSIPD, "Regional budgeting and finance (SIPD)", sla.DefaultProjectSLA()},
 	{clientBintan, projectBintanWeb, "Public website", sla.DefaultProjectSLA()},
+	{clientPANRB, projectGeneral, "Day-to-day IT support", sla.DefaultProjectSLA()},
 }
 
 // seedProjects upserts the demo projects and their SLAs and returns IDs by client and name.

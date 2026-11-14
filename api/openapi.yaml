@@ -763,6 +763,39 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /board:
+    get:
+      operationId: getBoard
+      summary: The agent board (staff)
+      description: |
+        Five columns, left to right: new (new and assigned), in progress, waiting on client,
+        in UAT, and resolved since local midnight in the organisation's time zone. Closed
+        tickets are off the board. Each column holds at most 100 cards, P1 first, then the
+        longest in the column, and reports its full size in `total`. Agents see the tickets
+        of their assigned clients; supervisors and admins every ticket. The stats ignore
+        `assignee` and `q`.
+      tags: [tickets]
+      parameters:
+        - name: assignee
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/TicketAssigneeFilter" }
+        - name: q
+          in: query
+          required: false
+          description: A ticket key, or words in the subject or client name.
+          schema: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: The board
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /tickets:
     get:
       operationId: listTickets
@@ -1635,6 +1668,66 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         resolvedAt: { type: string, format: date-time, nullable: true }
+
+    BoardColumnId:
+      type: string
+      enum: [new, in_progress, waiting_on_client, in_uat, resolved]
+
+    BoardCard:
+      type: object
+      required: [id, key, type, status, priority, subject, client, assignee, allowedStatuses]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string, example: HD-24871 }
+        type: { $ref: "#/components/schemas/TicketType" }
+        status: { $ref: "#/components/schemas/TicketStatus" }
+        priority: { $ref: "#/components/schemas/Priority" }
+        subject: { type: string }
+        client: { $ref: "#/components/schemas/Ref" }
+        assignee:
+          allOf: [{ $ref: "#/components/schemas/Ref" }]
+          nullable: true
+        allowedStatuses:
+          type: array
+          description: The statuses the viewer may move this ticket to.
+          items: { $ref: "#/components/schemas/TicketStatus" }
+
+    BoardColumn:
+      type: object
+      required: [id, total, cards]
+      properties:
+        id: { $ref: "#/components/schemas/BoardColumnId" }
+        total:
+          type: integer
+          description: Every ticket in the column, including those past the card limit.
+        cards:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/BoardCard" }
+
+    BoardStats:
+      type: object
+      required: [openTickets, resolvedThisWeek]
+      properties:
+        openTickets: { type: integer }
+        resolvedThisWeek:
+          type: integer
+          description: Resolved or closed since Monday 00:00 in the organisation's time zone.
+
+    Board:
+      type: object
+      required: [columns, resolvedSince, stats]
+      properties:
+        columns:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items: { $ref: "#/components/schemas/BoardColumn" }
+        resolvedSince:
+          type: string
+          format: date-time
+          description: Local midnight; the resolved column starts here.
+        stats: { $ref: "#/components/schemas/BoardStats" }
 
     Ticket:
       type: object

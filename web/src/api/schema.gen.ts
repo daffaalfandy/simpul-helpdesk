@@ -540,6 +540,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The agent board (staff)
+         * @description Five columns, left to right: new (new and assigned), in progress, waiting on client,
+         *     in UAT, and resolved since local midnight in the organisation's time zone. Closed
+         *     tickets are off the board. Each column holds at most 100 cards, P1 first, then the
+         *     longest in the column, and reports its full size in `total`. Agents see the tickets
+         *     of their assigned clients; supervisors and admins every ticket. The stats ignore
+         *     `assignee` and `q`.
+         */
+        get: operations["getBoard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tickets": {
         parameters: {
             query?: never;
@@ -1162,6 +1187,42 @@ export interface components {
             updatedAt: string;
             /** Format: date-time */
             resolvedAt: string | null;
+        };
+        /** @enum {string} */
+        BoardColumnId: "new" | "in_progress" | "waiting_on_client" | "in_uat" | "resolved";
+        BoardCard: {
+            /** Format: uuid */
+            id: string;
+            /** @example HD-24871 */
+            key: string;
+            type: components["schemas"]["TicketType"];
+            status: components["schemas"]["TicketStatus"];
+            priority: components["schemas"]["Priority"];
+            subject: string;
+            client: components["schemas"]["Ref"];
+            assignee: components["schemas"]["Ref"] | null;
+            /** @description The statuses the viewer may move this ticket to. */
+            allowedStatuses: components["schemas"]["TicketStatus"][];
+        };
+        BoardColumn: {
+            id: components["schemas"]["BoardColumnId"];
+            /** @description Every ticket in the column, including those past the card limit. */
+            total: number;
+            cards: components["schemas"]["BoardCard"][];
+        };
+        BoardStats: {
+            openTickets: number;
+            /** @description Resolved or closed since Monday 00:00 in the organisation's time zone. */
+            resolvedThisWeek: number;
+        };
+        Board: {
+            columns: components["schemas"]["BoardColumn"][];
+            /**
+             * Format: date-time
+             * @description Local midnight; the resolved column starts here.
+             */
+            resolvedSince: string;
+            stats: components["schemas"]["BoardStats"];
         };
         Ticket: {
             /** Format: uuid */
@@ -2288,6 +2349,34 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getBoard: {
+        parameters: {
+            query?: {
+                assignee?: components["schemas"]["TicketAssigneeFilter"];
+                /** @description A ticket key, or words in the subject or client name. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The board */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Board"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

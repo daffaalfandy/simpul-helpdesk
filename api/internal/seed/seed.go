@@ -41,10 +41,14 @@ const (
 	emailHendra = "hendra@kominfo-jambi.test"
 	emailDian   = "dian@kominfo-jambi.test"
 	emailSri    = "sri.lestari@bpkad-batam.test"
+	emailFajar  = "fajar@bappeda-riau.test"
+	emailMaya   = "maya@kominfo-bintan.test"
+	emailArif   = "arif@panrb.test"
 
 	clientBatam  = "BPKAD Kota Batam"
 	clientRiau   = "Bappeda Prov. Riau"
 	clientBintan = "Diskominfo Kab. Bintan"
+	clientPANRB  = "Kementerian PANRB"
 
 	// sortStep spaces list entries so admins can slot new ones in between.
 	sortStep = 10
@@ -61,9 +65,9 @@ type client struct {
 var clients = []client{
 	{RequesterClient, "KTR/KOMINFO-JMB/006/2026", "2026-01-01", "2026-12-31", "Hendra Gunawan", "hendra@kominfo-jambi.test", []string{emailRina, emailAdi}},
 	{clientBatam, "KTR/BPKAD-BTM/014/2026", "2026-03-01", "2027-02-28", "Sri Lestari", emailSri, []string{emailYoga}},
-	{clientRiau, "SPK/BAPPEDA-RIAU/031/2026", "2026-01-01", "2026-12-31", "Fajar Nugroho", "fajar@bappeda-riau.test", []string{emailYoga}},
-	{clientBintan, "KTR/KOMINFO-BTN/009/2026", "2026-06-01", "2027-05-31", "Maya Sari", "maya@kominfo-bintan.test", []string{emailYoga}},
-	{"Kementerian PANRB", "KTR/PANRB/112/2026", "2026-01-01", "2026-12-31", "Arif Rahman", "arif@panrb.test", []string{emailRina, emailAdi}},
+	{clientRiau, "SPK/BAPPEDA-RIAU/031/2026", "2026-01-01", "2026-12-31", "Fajar Nugroho", emailFajar, []string{emailYoga}},
+	{clientBintan, "KTR/KOMINFO-BTN/009/2026", "2026-06-01", "2027-05-31", "Maya Sari", emailMaya, []string{emailYoga}},
+	{clientPANRB, "KTR/PANRB/112/2026", "2026-01-01", "2026-12-31", "Arif Rahman", emailArif, []string{emailRina, emailAdi}},
 	{name: "Setda Kab. Muaro Jambi"},
 	{name: "Sekretariat DPRD Kota Batam"},
 	{name: "Disdukcapil Kab. Muaro Jambi"},
@@ -86,6 +90,10 @@ var people = []person{
 	{emailHendra, "Hendra Gunawan", auth.RoleRequester, RequesterClient, "IT Officer", false},
 	{emailSri, "Sri Lestari", auth.RoleRequester, clientBatam, "Head of Finance IT", false},
 	{emailDian, "Dian Puspita", auth.RoleRequester, RequesterClient, "Public Relations", true},
+	// The PICs of the other demo clients, so the board has tickets from them (agent-logged).
+	{emailFajar, "Fajar Nugroho", auth.RoleRequester, clientRiau, "Head of Planning IT", true},
+	{emailMaya, "Maya Sari", auth.RoleRequester, clientBintan, "Web Administrator", true},
+	{emailArif, "Arif Rahman", auth.RoleRequester, clientPANRB, "IT Coordinator", true},
 }
 
 // catalogItem is a "What do you need?" choice from the mock (NewTicket). Delivery times come

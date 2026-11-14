@@ -57,12 +57,17 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"internal notes":      count(`SELECT count(*) FROM ticket_messages WHERE visibility = 'internal'`),
 		"ticket history":      count(`SELECT count(DISTINCT target_id) FROM audit_log WHERE action = 'ticket.created'`),
 		"next number":         count(`SELECT nextval('ticket_number_seq')::int`),
+		// The board's resolved column starts at local midnight.
+		"resolved today": count(`SELECT count(*) FROM tickets, organization o
+			WHERE status = 'resolved' AND resolved_at >= date_trunc('day', now() AT TIME ZONE o.timezone) AT TIME ZONE o.timezone`),
+		"assigned, not started": count(`SELECT count(*) FROM tickets WHERE status = 'assigned'`),
 	}
 	want := map[string]int{
-		"users": 8, "clients": 8, "agent links": 7,
-		"holidays": presetDays, "invited": 1, "catalog items": 5,
-		"projects": 7, "tickets on projects": 6, "requests on default": 1, "project targets": 28, "default projects": 4, "e-Office P1 fix": 2,
-		"tickets": 6, "messages": 7, "internal notes": 1, "ticket history": 6, "next number": 24872,
+		"users": 11, "clients": 8, "agent links": 7,
+		"holidays": presetDays, "invited": 4, "catalog items": 5,
+		"projects": 8, "tickets on projects": 12, "requests on default": 4, "project targets": 32, "default projects": 5, "e-Office P1 fix": 2,
+		"tickets": 12, "messages": 10, "internal notes": 1, "ticket history": 12, "next number": 24891,
+		"resolved today": 1, "assigned, not started": 1,
 	}
 	for k, w := range want {
 		if got[k] != w {

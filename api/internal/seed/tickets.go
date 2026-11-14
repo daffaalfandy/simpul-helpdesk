@@ -63,7 +63,8 @@ type demoTicket struct {
 	client, requester, creator string
 	what                       string // project (incident) or catalogue item (request)
 	subject, description       string
-	age                        int // minutes before the seed ran
+	age                        int  // minutes before the seed ran
+	endsToday                  bool // the last step lands earlier today (local time), ignoring age
 	steps                      []demoStep
 	messages                   []demoMessage
 }
@@ -74,8 +75,8 @@ const (
 	minutesPerDay  = 24 * minutesPerHour
 )
 
-// demoTickets are the mock's example tickets (HANDOFF §16), oldest first. Code activity
-// arrives with M7.
+// demoTickets are the mock's example tickets (HANDOFF §16 and the board mock), by number.
+// Code activity arrives with M7.
 var demoTickets = []demoTicket{
 	{
 		number: 24826, typ: ticket.TypeIncident, priority: sla.P2, channel: ticket.ChannelPortal,
@@ -118,6 +119,42 @@ var demoTickets = []demoTicket{
 		},
 	},
 	{
+		number: 24842, typ: ticket.TypeIncident, priority: sla.P3, channel: ticket.ChannelPortal,
+		client: clientBatam, requester: emailSri, creator: emailSri, what: projectNetwork,
+		subject:     "Shared drive permissions reset",
+		description: "Since this morning the finance team can't open the Finance folder on the shared drive. Other folders still work.",
+		endsToday:   true,
+		steps: []demoStep{
+			{10, emailYoga, emailYoga, ""}, {25, emailYoga, "", ticket.StatusInProgress},
+			{120, emailYoga, "", ticket.StatusResolved},
+		},
+		messages: []demoMessage{
+			{110, emailYoga, false, "Permissions are back as they were before the weekend. Please check you can open the Finance folder."},
+		},
+	},
+	{
+		number: 24851, typ: ticket.TypeRequest, priority: sla.P4, channel: ticket.ChannelPhone,
+		client: clientPANRB, requester: emailArif, creator: emailRina, what: "Install licensed software",
+		subject:     "Printer driver for new laptops",
+		description: "Pak Arif called: the 12 new laptops in the planning division can't print to the shared printer and need its driver.",
+		age:         2 * minutesPerDay,
+		steps:       []demoStep{{5, emailRina, emailRina, ""}},
+	},
+	{
+		number: 24855, typ: ticket.TypeRequest, priority: sla.P2, channel: ticket.ChannelEmail,
+		client: clientBintan, requester: emailMaya, creator: emailYoga, what: "Something else",
+		subject:     "Renew website SSL certificate",
+		description: "Bu Maya emailed: the browser warns that the website's SSL certificate expires in 5 days.",
+		age:         minutesPerDay,
+		steps: []demoStep{
+			{20, emailYoga, emailYoga, ""}, {40, emailYoga, "", ticket.StatusInProgress},
+			{65, emailYoga, "", ticket.StatusWaitingOnClient},
+		},
+		messages: []demoMessage{
+			{60, emailYoga, false, "Hi Bu Maya, the certificate renews through your domain registrar. Could you add us as the technical contact there?"},
+		},
+	},
+	{
 		number: 24859, typ: ticket.TypeRequest, priority: sla.P3, channel: ticket.ChannelPortal,
 		client: RequesterClient, requester: emailHendra, creator: emailHendra, what: "VPN / remote access",
 		subject:     "VPN access for the new finance officer",
@@ -129,6 +166,17 @@ var demoTickets = []demoTicket{
 		},
 		messages: []demoMessage{
 			{85, emailAdi, false, "Could you send the officer's name, work email and the date access should start?"},
+		},
+	},
+	{
+		number: 24860, typ: ticket.TypeIncident, priority: sla.P3, channel: ticket.ChannelWhatsApp,
+		client: RequesterClient, requester: emailDian, creator: emailRina, what: projectEmail,
+		subject:     "Mailbox full for Head of Office",
+		description: "Bu Dian sent a WhatsApp message: the Head of Office's mailbox is full and new mail bounces.",
+		age:         5 * minutesPerHour,
+		steps:       []demoStep{{5, emailRina, emailRina, ""}, {15, emailRina, "", ticket.StatusInProgress}},
+		messages: []demoMessage{
+			{14, emailRina, false, "Hi Bu Dian, the mailbox is at its size limit. We're archiving last year's mail to free space."},
 		},
 	},
 	{
@@ -149,6 +197,20 @@ var demoTickets = []demoTicket{
 			{8, emailRina, false, "Thanks Pak Hendra, we're on it. The problem started with this morning's single sign-on update. Next update within 30 minutes."},
 			{17, emailRina, true, "Matches last night's SSO patch: the token lifetime dropped to 5 minutes. Adi is preparing a revert."},
 		},
+	},
+	{
+		number: 24888, typ: ticket.TypeIncident, priority: sla.P2, channel: ticket.ChannelEmail,
+		client: clientBintan, requester: emailMaya, creator: emailYoga, what: projectBintanWeb,
+		subject:     "Website shows 502 error on and off",
+		description: "Bu Maya emailed: visitors get a 502 Bad Gateway error every few minutes, mostly on the news pages.",
+		age:         40,
+	},
+	{
+		number: 24890, typ: ticket.TypeRequest, priority: sla.P3, channel: ticket.ChannelEmail,
+		client: clientRiau, requester: emailFajar, creator: emailYoga, what: "VPN / remote access",
+		subject:     "VPN access for 3 new contractors",
+		description: "Pak Fajar emailed: three contractors join the SIPD team on Monday and need VPN access until the end of the year.",
+		age:         25,
 	},
 }
 
@@ -173,8 +235,20 @@ func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs) erro
 	if err != nil {
 		return err
 	}
+	loc, err := time.LoadLocation(org.Timezone)
+	if err != nil {
+		return fmt.Errorf("organisation time zone: %w", err)
+	}
+	local := now.In(loc)
+	midnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+	// earlierToday is halfway between local midnight and now, so "today" holds wherever the
+	// seed runs.
+	earlierToday := midnight.Add(now.Sub(midnight) / 2)
 	for _, d := range demoTickets {
 		created := now.Add(-time.Duration(d.age) * time.Minute)
+		if d.endsToday && len(d.steps) > 0 {
+			created = earlierToday.Add(-time.Duration(d.steps[len(d.steps)-1].after) * time.Minute)
+		}
 		at := func(after int) time.Time { return created.Add(time.Duration(after) * time.Minute) }
 		t := tickets.SeedTicket{
 			Number: d.number, Prefix: org.TicketPrefix, Type: d.typ, Priority: d.priority, Channel: d.channel,
