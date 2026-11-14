@@ -4,10 +4,11 @@
 
 - Client portal for reporting issues and approving fixes (UAT)
 - Agent board with SLA timers (business hours, pauses while waiting on the client)
-- Definition of Done per project, driven by GitHub / GitLab events
+- Definition of Done and SLA targets per project, with Done driven by GitHub / GitLab events
+- Notifications in the app and by email, chosen per event by each user
 - Monthly SLA reports per client
 
-> **Status:** early development. Milestone 1 (foundation: sign-in, users and roles) is in progress.
+> **Status:** early development. Done: sign-in, users and roles; clients and the business-hours calendar; tickets with replies, internal notes and attachments; projects with their own SLA targets and global priority names. Next: the kanban board.
 
 ## Stack
 
