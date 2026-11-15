@@ -222,7 +222,11 @@ func (s *Service) Schedules(ctx context.Context) (Schedules, error) {
 	if err != nil {
 		return Schedules{}, fmt.Errorf("business hours: %w", err)
 	}
-	return Schedules{Business: business, Always: calendar.Always{}}, nil
+	workingDay := hours.WorkingDay()
+	if workingDay <= 0 {
+		workingDay = DefaultWorkingDay
+	}
+	return Schedules{Business: business, Always: calendar.Always{}, WorkingDay: workingDay}, nil
 }
 
 func yearBounds(year int) (calendar.Date, calendar.Date) {

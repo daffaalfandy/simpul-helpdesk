@@ -109,10 +109,12 @@ type PresetLoad struct {
 	Skipped int // dates that already had a holiday
 }
 
-// Schedules are the two clocks SLA targets run on.
+// Schedules are the two clocks SLA targets run on, plus the length of a working day (one
+// business-hours window) for working-day targets.
 type Schedules struct {
-	Business calendar.Schedule
-	Always   calendar.Schedule
+	Business   calendar.Schedule
+	Always     calendar.Schedule
+	WorkingDay time.Duration
 }
 
 func (s Schedules) For(k CalendarKind) calendar.Schedule {
