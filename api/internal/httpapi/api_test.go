@@ -87,7 +87,7 @@ func newEnv(t *testing.T) *env {
 	h, err := httpapi.New(httpapi.Deps{
 		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st), SLA: slaSvc,
 		Catalog: catalog.NewService(st), Projects: projects.NewService(st, slaSvc), Priorities: priorities.NewService(st),
-		Tickets: tickets.NewService(st, files, slaSvc, jobs), Logger: log,
+		Tickets: tickets.NewService(st, files, slaSvc, jobs), Notifications: notifications.NewService(st), Logger: log,
 		WebUI: fstest.MapFS{"index.html": {Data: []byte(spaMarker)}, "assets/app.js": {Data: []byte("//js")}},
 	})
 	if err != nil {

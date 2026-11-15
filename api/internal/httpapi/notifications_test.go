@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
 
@@ -252,4 +253,140 @@ func countOf(list []string, s string) int {
 		}
 	}
 	return n
+}
+
+func (s session) inbox(t *testing.T, query string) gen.NotificationPage {
+	t.Helper()
+	return decode[gen.NotificationPage](t, s.do(http.MethodGet, "/notifications"+query, nil), http.StatusOK)
+}
+
+func (s session) unread(t *testing.T) int {
+	t.Helper()
+	return decode[gen.UnreadCount](t, s.do(http.MethodGet, "/notifications/unread-count", nil), http.StatusOK).Count
+}
+
+func TestInbox(t *testing.T) {
+	te := newTicketEnv(t)
+	tk := te.requester.report(t, incident(te.projectA, "Login fails"))
+	path := "/tickets/" + tk.Key
+	decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, path+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	decode[gen.TicketMessage](t, te.requester.message(tk.Key, gen.MessageVisibilityPublic, "Two of three staff can sign in now."), http.StatusCreated)
+	decode[gen.TicketMessage](t, te.supervisor.message(tk.Key, gen.MessageVisibilityInternal, "Timeout is on their side."), http.StatusCreated)
+	decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityPublic, "Which accounts still fail?"), http.StatusCreated)
+	decode[gen.Ticket](t, te.agent.do(http.MethodPut, path+"/status", gen.TicketStatusInput{Status: gen.TicketStatusWaitingOnClient}), http.StatusOK)
+	te.fanout(t)
+
+	page := te.agent.inbox(t, "")
+	var events []gen.NotificationEvent
+	for _, it := range page.Items {
+		events = append(events, it.Event)
+	}
+	if want := []gen.NotificationEvent{gen.NotificationEventInternalNote, gen.NotificationEventComment, gen.NotificationEventAssignment}; !slices.Equal(events, want) {
+		t.Fatalf("agent inbox = %v, want %v (newest first)", events, want)
+	}
+	note, reply := page.Items[0], page.Items[1]
+	if note.Quote == nil || *note.Quote != "Timeout is on their side." || note.ActorName == nil || *note.ActorName != "User supervisor" {
+		t.Errorf("note item = %+v", note)
+	}
+	if reply.Quote == nil || *reply.Quote != "Two of three staff can sign in now." || reply.Ticket.Key != tk.Key || reply.Ticket.Subject != "Login fails" {
+		t.Errorf("reply item = %+v", reply)
+	}
+	if page.UnreadCount != 3 || te.agent.unread(t) != 3 || page.NextBefore != nil {
+		t.Errorf("unread = %d / %d, next = %v", page.UnreadCount, te.agent.unread(t), page.NextBefore)
+	}
+	if got := te.agent.inbox(t, "?filter=comments").Items; len(got) != 2 {
+		t.Errorf("comments filter = %d items", len(got))
+	}
+	if got := te.agent.inbox(t, "?filter=assigned").Items; len(got) != 1 || *got[0].Kind != gen.NotificationKindAssigned {
+		t.Errorf("assigned filter = %+v", got)
+	}
+
+	// The requester's question quotes the team's reply, never the note.
+	portal := te.requester.inbox(t, "?filter=replies")
+	if len(portal.Items) != 2 || portal.Items[0].Event != gen.NotificationEventQuestion ||
+		portal.Items[0].Quote == nil || *portal.Items[0].Quote != "Which accounts still fail?" {
+		t.Fatalf("requester replies = %+v", portal.Items)
+	}
+
+	// Paging.
+	first := te.agent.inbox(t, "?limit=2")
+	if len(first.Items) != 2 || first.NextBefore == nil {
+		t.Fatalf("first page = %+v", first)
+	}
+	if rest := te.agent.inbox(t, "?limit=2&before="+first.NextBefore.String()); len(rest.Items) != 1 || rest.NextBefore != nil {
+		t.Fatalf("second page = %+v", rest)
+	}
+
+	// Read state.
+	readPath := "/notifications/" + note.Id.String() + "/read"
+	if rec := te.agent.do(http.MethodPut, readPath, gen.NotificationReadInput{Read: true}); rec.Code != http.StatusNoContent {
+		t.Fatalf("read: %d %s", rec.Code, rec.Body)
+	}
+	if te.agent.unread(t) != 2 || len(te.agent.inbox(t, "?filter=unread").Items) != 2 {
+		t.Error("read item still unread")
+	}
+	expectProblem(t, te.requester.do(http.MethodPut, readPath, gen.NotificationReadInput{Read: false}), http.StatusNotFound, apperr.CodeNotFound)
+	if rec := te.agent.do(http.MethodPut, readPath, gen.NotificationReadInput{Read: false}); rec.Code != http.StatusNoContent || te.agent.unread(t) != 3 {
+		t.Fatalf("unread again: %d, count %d", rec.Code, te.agent.unread(t))
+	}
+	if rec := te.agent.do(http.MethodPost, "/notifications/read-all", nil); rec.Code != http.StatusNoContent || te.agent.unread(t) != 0 {
+		t.Fatalf("read all: %d, count %d", rec.Code, te.agent.unread(t))
+	}
+	if te.requester.unread(t) == 0 {
+		t.Error("read-all touched another user's inbox")
+	}
+
+	// An agent unlinked from the client stops seeing items about its tickets.
+	decode[gen.Client](t, te.admin.do(http.MethodPut, "/clients/"+te.clientA.String()+"/agents",
+		gen.ClientAgentsInput{UserIds: []uuid.UUID{}}), http.StatusOK)
+	if got := te.agent.inbox(t, ""); len(got.Items) != 0 || got.UnreadCount != 0 {
+		t.Fatalf("unlinked agent inbox = %+v", got)
+	}
+}
+
+func TestNotificationSettings(t *testing.T) {
+	te := newTicketEnv(t)
+	settings := decode[gen.NotificationSettings](t, te.agent.do(http.MethodGet, "/notification-settings", nil), http.StatusOK)
+	if settings.Audience != gen.AudienceTeam || settings.EmailFrequency != gen.EmailFrequencyInstant || len(settings.Events) != 6 {
+		t.Fatalf("agent settings = %+v", settings)
+	}
+	for _, e := range settings.Events {
+		locked := e.Event == gen.NotificationEventAssignment || e.Event == gen.NotificationEventSla
+		if e.Locked != locked {
+			t.Errorf("%s locked = %v", e.Event, e.Locked)
+		}
+	}
+	set := func(s session, event string, web, email bool) *httptest.ResponseRecorder {
+		return s.do(http.MethodPut, "/notification-settings/events/"+event, gen.NotificationPreferenceInput{Web: web, Email: email})
+	}
+	expectProblem(t, set(te.agent, "sla", true, false), http.StatusBadRequest, apperr.CodeNotificationLocked)
+	expectProblem(t, set(te.agent, "reply", false, false), http.StatusBadRequest, apperr.CodeNotificationEventUnknown)
+	expectProblem(t, set(te.requester, "ticket_logged", false, false), http.StatusBadRequest, apperr.CodeNotificationEventUnknown)
+	updated := decode[gen.NotificationSettings](t, set(te.agent, "comment", false, false), http.StatusOK)
+	if updated.Events[0].Event != gen.NotificationEventComment || updated.Events[0].Web || updated.Events[0].Email {
+		t.Fatalf("comment switched off = %+v", updated.Events[0])
+	}
+	freq := decode[gen.NotificationSettings](t, te.agent.do(http.MethodPut, "/notification-settings/email-frequency",
+		gen.EmailFrequencyInput{EmailFrequency: gen.EmailFrequencyHourly}), http.StatusOK)
+	if freq.EmailFrequency != gen.EmailFrequencyHourly {
+		t.Fatalf("frequency = %s", freq.EmailFrequency)
+	}
+	portal := decode[gen.NotificationSettings](t, te.requester.do(http.MethodGet, "/notification-settings", nil), http.StatusOK)
+	if portal.Audience != gen.AudiencePortal || len(portal.Events) != 5 {
+		t.Fatalf("portal settings = %+v", portal)
+	}
+	if got := countOf(te.auditActionsLike(t, "notification_settings.%"), "notification_settings.updated"); got != 2 {
+		t.Errorf("settings audit entries = %d, want 2", got)
+	}
+
+	// A switched-off event notifies nobody.
+	tk := te.requester.report(t, incident(te.projectA, "Quiet"))
+	decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	decode[gen.TicketMessage](t, te.requester.message(tk.Key, gen.MessageVisibilityPublic, "Hello?"), http.StatusCreated)
+	te.fanout(t)
+	for _, n := range te.notices(t, tk.Id) {
+		if n.user == te.agentID && n.event == notification.EventComment {
+			t.Fatal("comment notified an agent who switched it off")
+		}
+	}
 }

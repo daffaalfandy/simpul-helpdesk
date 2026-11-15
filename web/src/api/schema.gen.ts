@@ -810,6 +810,140 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The user's inbox, newest first
+         * @description Only notifications about tickets the user can still see. Page with `before` (the last
+         *     id of the previous page); `nextBefore` is null on the last page.
+         */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many inbox items are unread (the bell's count) */
+        get: operations["getUnreadNotificationCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark every inbox item read */
+        post: operations["markAllNotificationsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{notificationId}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notificationId: components["parameters"]["NotificationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark one inbox item read or unread
+         * @description Another user's notification gives 404.
+         */
+        put: operations["setNotificationRead"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The user's notification switches and email timing */
+        get: operations["getNotificationSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-settings/events/{event}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["schemas"]["NotificationEvent"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Switch one event's web and email notifications
+         * @description An event the user's settings don't list gives `notification_event_unknown`; switching off
+         *     an always-on event gives `notification_locked`.
+         */
+        put: operations["setNotificationPreference"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-settings/email-frequency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose when notification emails go out */
+        put: operations["setEmailFrequency"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attachments": {
         parameters: {
             query?: never;
@@ -1108,6 +1242,114 @@ export interface components {
             addedCount: number;
             /** @description Dates that already had a holiday. */
             skippedCount: number;
+        };
+        /**
+         * @description Team events: comment, internal_note, status, assignment, priority, sla. Portal events:
+         *     reply, status, question, resolved, colleague, ticket_logged (always on, not listed).
+         * @enum {string}
+         */
+        NotificationEvent: "comment" | "internal_note" | "status" | "assignment" | "priority" | "sla" | "reply" | "question" | "resolved" | "colleague" | "ticket_logged";
+        /**
+         * @description Tells apart notifications of one event (assigned or unassigned; what a colleague did; SLA at risk or breached).
+         * @enum {string}
+         */
+        NotificationKind: "assigned" | "unassigned" | "reply" | "status" | "added" | "at_risk" | "breached";
+        /**
+         * @description `comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed.
+         * @enum {string}
+         */
+        NotificationFilter: "all" | "unread" | "comments" | "status" | "assigned" | "sla" | "replies";
+        /** @enum {string} */
+        NotificationChange: "created" | "message" | "status" | "assignee" | "priority" | "watcher_added" | "watcher_removed" | "sla_at_risk" | "sla_breached";
+        /** @enum {string} */
+        Audience: "team" | "portal";
+        /**
+         * @description Which SLA clock a notification is about.
+         * @enum {string}
+         */
+        SlaClockName: "first_response" | "resolution";
+        /**
+         * @description `instant` sends one email per change (grouped over about 2 minutes); summaries still send urgent items (P1, SLA) right away.
+         * @enum {string}
+         */
+        EmailFrequency: "instant" | "hourly" | "daily";
+        NotificationTicket: {
+            /** @example HD-24871 */
+            key: string;
+            subject: string;
+        };
+        NotificationAlso: {
+            change: components["schemas"]["NotificationChange"];
+            statusFrom: components["schemas"]["TicketStatus"] | null;
+            statusTo: components["schemas"]["TicketStatus"] | null;
+            priorityFrom: components["schemas"]["Priority"] | null;
+            priorityTo: components["schemas"]["Priority"] | null;
+            assigneeName: string | null;
+        };
+        NotificationChannels: {
+            web: boolean;
+            email: boolean;
+        };
+        /**
+         * @description One inbox item. `quote` is an excerpt of the message it is about (public messages only
+         *     for client staff). `reason` is the priority change's reason.
+         */
+        Notification: {
+            /** Format: uuid */
+            id: string;
+            event: components["schemas"]["NotificationEvent"];
+            kind: components["schemas"]["NotificationKind"] | null;
+            ticket: components["schemas"]["NotificationTicket"];
+            /** @description Null when the system made the change. */
+            actorName: string | null;
+            statusFrom: components["schemas"]["TicketStatus"] | null;
+            statusTo: components["schemas"]["TicketStatus"] | null;
+            priorityFrom: components["schemas"]["Priority"] | null;
+            priorityTo: components["schemas"]["Priority"] | null;
+            reason: string | null;
+            assigneeName: string | null;
+            slaClock: components["schemas"]["SlaClockName"] | null;
+            /** Format: date-time */
+            slaDueAt: string | null;
+            slaMinutesLeft: number | null;
+            quote: string | null;
+            also: components["schemas"]["NotificationAlso"][];
+            channels: components["schemas"]["NotificationChannels"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            readAt: string | null;
+        };
+        NotificationPage: {
+            items: components["schemas"]["Notification"][];
+            unreadCount: number;
+            /** Format: uuid */
+            nextBefore: string | null;
+        };
+        UnreadCount: {
+            count: number;
+        };
+        NotificationReadInput: {
+            read: boolean;
+        };
+        NotificationEventSetting: {
+            event: components["schemas"]["NotificationEvent"];
+            web: boolean;
+            email: boolean;
+            /** @description Always on; can't be switched off. */
+            locked: boolean;
+        };
+        NotificationSettings: {
+            audience: components["schemas"]["Audience"];
+            emailFrequency: components["schemas"]["EmailFrequency"];
+            events: components["schemas"]["NotificationEventSetting"][];
+        };
+        NotificationPreferenceInput: {
+            web: boolean;
+            email: boolean;
+        };
+        EmailFrequencyInput: {
+            emailFrequency: components["schemas"]["EmailFrequency"];
         };
         Colleague: {
             /** Format: uuid */
@@ -1463,6 +1705,7 @@ export interface components {
         ProjectId: string;
         CatalogItemId: string;
         UserId: string;
+        NotificationId: string;
     };
     requestBodies: never;
     headers: never;
@@ -2853,6 +3096,181 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                filter?: components["schemas"]["NotificationFilter"];
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inbox page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getUnreadNotificationCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCount"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    markAllNotificationsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setNotificationRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notificationId: components["parameters"]["NotificationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationReadInput"];
+            };
+        };
+        responses: {
+            /** @description Done */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getNotificationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSettings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setNotificationPreference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["schemas"]["NotificationEvent"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreferenceInput"];
+            };
+        };
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setEmailFrequency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailFrequencyInput"];
+            };
+        };
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

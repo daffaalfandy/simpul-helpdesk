@@ -6,9 +6,11 @@ package notifications
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
@@ -62,6 +64,9 @@ func (w *FanoutWorker) Work(ctx context.Context, job *river.Job[notification.Fan
 		if dropped > 0 {
 			w.log.ErrorContext(ctx, "notification rule reached client staff with an internal note; dropped",
 				"ticket_id", args.TicketID, "dropped", dropped)
+		}
+		if err := quoteQuestions(ctx, tx.Q, args.TicketID, deliveries); err != nil {
+			return err
 		}
 		source := rows[0].ID
 		for _, d := range deliveries {
@@ -126,6 +131,32 @@ func loadRecipients(ctx context.Context, q *db.Queries, in *notification.Input) 
 			in.Prefs[p.UserID] = map[notification.Event]notification.Pref{}
 		}
 		in.Prefs[p.UserID][notification.Event(p.EventType)] = notification.Pref{Web: p.Web, Email: p.Email}
+	}
+	return nil
+}
+
+// quoteQuestions points "question for you" notifications at the team's latest public reply,
+// the question they are asked to answer.
+func quoteQuestions(ctx context.Context, q *db.Queries, ticketID uuid.UUID, ds []notification.Delivery) error {
+	var latest *uuid.UUID
+	looked := false
+	for i := range ds {
+		if ds[i].Event != notification.EventQuestion || ds[i].Change.MessageID != nil {
+			continue
+		}
+		if !looked {
+			id, err := q.GetLatestPublicStaffMessageID(ctx, db.GetLatestPublicStaffMessageIDParams{
+				TicketID: ticketID, Visibility: publicVisibility, RequesterRole: string(auth.RoleRequester),
+			})
+			switch {
+			case err == nil:
+				latest = &id
+			case !errors.Is(err, pgx.ErrNoRows):
+				return err
+			}
+			looked = true
+		}
+		ds[i].Change.MessageID = latest
 	}
 	return nil
 }

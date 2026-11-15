@@ -7,9 +7,57 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const countUnreadNotifications = `-- name: CountUnreadNotifications :one
+SELECT count(*)::int
+FROM notifications n
+JOIN tickets t ON t.id = n.ticket_id
+WHERE n.user_id = $1 AND n.web AND n.read_at IS NULL
+  AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
+  AND ($3::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM client_agents ca
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid))
+`
+
+type CountUnreadNotificationsParams struct {
+	UserID        uuid.UUID
+	ScopeClientID *uuid.UUID
+	ScopeAgentID  *uuid.UUID
+}
+
+func (q *Queries) CountUnreadNotifications(ctx context.Context, arg CountUnreadNotificationsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countUnreadNotifications, arg.UserID, arg.ScopeClientID, arg.ScopeAgentID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const getLatestPublicStaffMessageID = `-- name: GetLatestPublicStaffMessageID :one
+SELECT m.id
+FROM ticket_messages m
+JOIN users u ON u.id = m.author_id
+WHERE m.ticket_id = $1 AND m.visibility = $2 AND u.role <> $3
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT 1
+`
+
+type GetLatestPublicStaffMessageIDParams struct {
+	TicketID      uuid.UUID
+	Visibility    string
+	RequesterRole string
+}
+
+// The team's latest public reply: what a "question for you" quotes.
+func (q *Queries) GetLatestPublicStaffMessageID(ctx context.Context, arg GetLatestPublicStaffMessageIDParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getLatestPublicStaffMessageID, arg.TicketID, arg.Visibility, arg.RequesterRole)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
 
 const getTicketForFanout = `-- name: GetTicketForFanout :one
 SELECT t.id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot
@@ -36,6 +84,17 @@ func (q *Queries) GetTicketForFanout(ctx context.Context, id uuid.UUID) (GetTick
 		&i.SlaSnapshot,
 	)
 	return i, err
+}
+
+const getUserEmailFrequency = `-- name: GetUserEmailFrequency :one
+SELECT email_frequency FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserEmailFrequency(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getUserEmailFrequency, id)
+	var email_frequency string
+	err := row.Scan(&email_frequency)
+	return email_frequency, err
 }
 
 const insertNotification = `-- name: InsertNotification :exec
@@ -143,6 +202,102 @@ func (q *Queries) ListNotificationPreferences(ctx context.Context, userIds []uui
 	return items, nil
 }
 
+const listNotifications = `-- name: ListNotifications :many
+
+SELECT n.id, n.event_type, n.data, n.created_at, n.read_at, n.web, n.email,
+       t.key AS ticket_key, t.subject AS ticket_subject, a.name AS actor_name,
+       m.visibility AS quote_visibility, coalesce(left(m.body, $1::int), '')::text AS quote
+FROM notifications n
+JOIN tickets t ON t.id = n.ticket_id
+LEFT JOIN users a ON a.id = n.actor_user_id
+LEFT JOIN ticket_messages m ON m.id = n.message_id
+WHERE n.user_id = $2 AND n.web
+  AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
+  AND ($4::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM client_agents ca
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid))
+  AND (cardinality($5::text[]) = 0 OR n.event_type = ANY($5::text[]))
+  AND (NOT $6::boolean OR n.read_at IS NULL)
+  AND ($7::uuid IS NULL
+       OR (n.created_at, n.id) < (SELECT b.created_at, b.id FROM notifications b
+                                  WHERE b.id = $7::uuid AND b.user_id = $2))
+ORDER BY n.created_at DESC, n.id DESC
+LIMIT $8
+`
+
+type ListNotificationsParams struct {
+	QuoteRunes    int32
+	UserID        uuid.UUID
+	ScopeClientID *uuid.UUID
+	ScopeAgentID  *uuid.UUID
+	Events        []string
+	UnreadOnly    bool
+	Before        *uuid.UUID
+	RowLimit      int32
+}
+
+type ListNotificationsRow struct {
+	ID              uuid.UUID
+	EventType       string
+	Data            []byte
+	CreatedAt       time.Time
+	ReadAt          *time.Time
+	Web             bool
+	Email           bool
+	TicketKey       string
+	TicketSubject   string
+	ActorName       *string
+	QuoteVisibility *string
+	Quote           string
+}
+
+// Inbox queries are scoped like tickets.sql: scope_client_id and scope_agent_id come from
+// internal/tickets access rules (tickets.ScopeFor), so a user stops seeing items about tickets
+// they lose access to.
+// Newest first; before pages on (created_at, id). The quote is cut to quote_runes characters;
+// the service shows it only for public messages unless the user is staff.
+func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error) {
+	rows, err := q.db.Query(ctx, listNotifications,
+		arg.QuoteRunes,
+		arg.UserID,
+		arg.ScopeClientID,
+		arg.ScopeAgentID,
+		arg.Events,
+		arg.UnreadOnly,
+		arg.Before,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNotificationsRow{}
+	for rows.Next() {
+		var i ListNotificationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventType,
+			&i.Data,
+			&i.CreatedAt,
+			&i.ReadAt,
+			&i.Web,
+			&i.Email,
+			&i.TicketKey,
+			&i.TicketSubject,
+			&i.ActorName,
+			&i.QuoteVisibility,
+			&i.Quote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNotifyRecipients = `-- name: ListNotifyRecipients :many
 SELECT id, role, status FROM users WHERE id = ANY($1::uuid[])
 `
@@ -172,4 +327,97 @@ func (q *Queries) ListNotifyRecipients(ctx context.Context, ids []uuid.UUID) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const markAllNotificationsRead = `-- name: MarkAllNotificationsRead :exec
+UPDATE notifications n
+SET read_at = now()
+FROM tickets t
+WHERE n.user_id = $1 AND n.web AND n.read_at IS NULL AND t.id = n.ticket_id
+  AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
+  AND ($3::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM client_agents ca
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid))
+`
+
+type MarkAllNotificationsReadParams struct {
+	UserID        uuid.UUID
+	ScopeClientID *uuid.UUID
+	ScopeAgentID  *uuid.UUID
+}
+
+func (q *Queries) MarkAllNotificationsRead(ctx context.Context, arg MarkAllNotificationsReadParams) error {
+	_, err := q.db.Exec(ctx, markAllNotificationsRead, arg.UserID, arg.ScopeClientID, arg.ScopeAgentID)
+	return err
+}
+
+const setNotificationRead = `-- name: SetNotificationRead :execrows
+UPDATE notifications n
+SET read_at = CASE WHEN $1::boolean THEN coalesce(n.read_at, now()) END
+FROM tickets t
+WHERE n.id = $2 AND n.user_id = $3 AND n.web AND t.id = n.ticket_id
+  AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
+  AND ($5::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM client_agents ca
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid))
+`
+
+type SetNotificationReadParams struct {
+	Read          bool
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	ScopeClientID *uuid.UUID
+	ScopeAgentID  *uuid.UUID
+}
+
+func (q *Queries) SetNotificationRead(ctx context.Context, arg SetNotificationReadParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setNotificationRead,
+		arg.Read,
+		arg.ID,
+		arg.UserID,
+		arg.ScopeClientID,
+		arg.ScopeAgentID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setUserEmailFrequency = `-- name: SetUserEmailFrequency :exec
+UPDATE users SET email_frequency = $1 WHERE id = $2
+`
+
+type SetUserEmailFrequencyParams struct {
+	EmailFrequency string
+	ID             uuid.UUID
+}
+
+func (q *Queries) SetUserEmailFrequency(ctx context.Context, arg SetUserEmailFrequencyParams) error {
+	_, err := q.db.Exec(ctx, setUserEmailFrequency, arg.EmailFrequency, arg.ID)
+	return err
+}
+
+const upsertNotificationPreference = `-- name: UpsertNotificationPreference :exec
+INSERT INTO notification_preferences (user_id, event_type, web, email)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id, event_type) DO UPDATE
+SET web = EXCLUDED.web, email = EXCLUDED.email, updated_at = now()
+`
+
+type UpsertNotificationPreferenceParams struct {
+	UserID    uuid.UUID
+	EventType string
+	Web       bool
+	Email     bool
+}
+
+func (q *Queries) UpsertNotificationPreference(ctx context.Context, arg UpsertNotificationPreferenceParams) error {
+	_, err := q.db.Exec(ctx, upsertNotificationPreference,
+		arg.UserID,
+		arg.EventType,
+		arg.Web,
+		arg.Email,
+	)
+	return err
 }

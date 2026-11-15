@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
@@ -50,9 +51,15 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		"TicketActivityAction": strs(tickets.ActivityCreated, tickets.ActivityStatusChanged,
 			tickets.ActivityAssigneeChanged, tickets.ActivityPriorityChanged, tickets.ActivityReplyAdded,
 			tickets.ActivityNoteAdded, tickets.ActivityFirstResponded),
-		"Priority":     strs(sla.Priorities...),
-		"SlaCalendar":  strs(sla.CalendarBusinessHours, sla.CalendarAlways),
-		"DurationUnit": strs(sla.Units...),
+		"NotificationEvent":  strs(notification.Events...),
+		"NotificationKind":   strs(notification.Kinds...),
+		"NotificationFilter": strs(notification.Filters...),
+		"NotificationChange": strs(notification.ChangeKinds...),
+		"Audience":           strs(notification.AudienceTeam, notification.AudiencePortal),
+		"EmailFrequency":     strs(notification.Frequencies...),
+		"Priority":           strs(sla.Priorities...),
+		"SlaCalendar":        strs(sla.CalendarBusinessHours, sla.CalendarAlways),
+		"DurationUnit":       strs(sla.Units...),
 		"AtRiskPercent": func() []string {
 			out := make([]string, len(sla.AtRiskPercents))
 			for i, p := range sla.AtRiskPercents {

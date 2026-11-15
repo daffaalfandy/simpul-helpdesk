@@ -25,6 +25,12 @@ const (
 	ChangeSLABreached    ChangeKind = "sla_breached"
 )
 
+// ChangeKinds lists every change kind.
+var ChangeKinds = []ChangeKind{
+	ChangeCreated, ChangeMessage, ChangeStatus, ChangeAssignee, ChangePriority,
+	ChangeWatcherAdded, ChangeWatcherRemoved, ChangeSLAAtRisk, ChangeSLABreached,
+}
+
 // Kind tells apart notifications of one event, e.g. assigned and unassigned.
 type Kind string
 
@@ -38,6 +44,9 @@ const (
 	KindAtRisk     Kind = "at_risk"
 	KindBreached   Kind = "breached"
 )
+
+// Kinds lists every kind a notification can carry (KindNone is stored as no kind).
+var Kinds = []Kind{KindAssigned, KindUnassigned, KindReply, KindStatus, KindAdded, KindAtRisk, KindBreached}
 
 // Person is a user named in a change.
 type Person struct {

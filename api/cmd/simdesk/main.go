@@ -134,19 +134,20 @@ func errorMessage(err error) string {
 
 // app holds the shared wiring for every command.
 type app struct {
-	cfg        config.Config
-	log        *slog.Logger
-	store      *store.Store
-	hasher     *auth.Hasher
-	jobs       *river.Client[pgx.Tx]
-	auth       *auth.Service
-	clients    *clients.Service
-	sla        *sla.Service
-	catalog    *catalog.Service
-	projects   *projects.Service
-	priorities *priorities.Service
-	tickets    *tickets.Service
-	files      storage.Store
+	cfg           config.Config
+	log           *slog.Logger
+	store         *store.Store
+	hasher        *auth.Hasher
+	jobs          *river.Client[pgx.Tx]
+	auth          *auth.Service
+	clients       *clients.Service
+	sla           *sla.Service
+	catalog       *catalog.Service
+	projects      *projects.Service
+	priorities    *priorities.Service
+	tickets       *tickets.Service
+	notifications *notifications.Service
+	files         storage.Store
 }
 
 func (a *app) close() {
@@ -197,13 +198,14 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	slaSvc := sla.NewService(st)
 	return &app{
 		cfg: cfg, log: log, store: st, hasher: hasher, jobs: jobs, files: files,
-		auth:       auth.NewService(st, hasher, jobs, opts, log),
-		clients:    clients.NewService(st),
-		sla:        slaSvc,
-		catalog:    catalog.NewService(st),
-		projects:   projects.NewService(st, slaSvc),
-		priorities: priorities.NewService(st),
-		tickets:    tickets.NewService(st, files, slaSvc, jobs),
+		auth:          auth.NewService(st, hasher, jobs, opts, log),
+		clients:       clients.NewService(st),
+		sla:           slaSvc,
+		catalog:       catalog.NewService(st),
+		projects:      projects.NewService(st, slaSvc),
+		priorities:    priorities.NewService(st),
+		tickets:       tickets.NewService(st, files, slaSvc, jobs),
+		notifications: notifications.NewService(st),
 	}, nil
 }
 
@@ -228,7 +230,8 @@ func runServe(ctx context.Context, args []string) error {
 
 	handler, err := httpapi.New(httpapi.Deps{
 		Config: a.cfg, Store: a.store, Auth: a.auth, Clients: a.clients, SLA: a.sla, Catalog: a.catalog,
-		Projects: a.projects, Priorities: a.priorities, Tickets: a.tickets, Logger: a.log, WebUI: webui.FS(),
+		Projects: a.projects, Priorities: a.priorities, Tickets: a.tickets, Notifications: a.notifications,
+		Logger: a.log, WebUI: webui.FS(),
 	})
 	if err != nil {
 		return err

@@ -28,6 +28,7 @@ tags:
   - name: attachments
   - name: catalog
   - name: projects
+  - name: notifications
 
 paths:
   /organization:
@@ -1126,6 +1127,140 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /notifications:
+    get:
+      operationId: listNotifications
+      summary: The user's inbox, newest first
+      description: |
+        Only notifications about tickets the user can still see. Page with `before` (the last
+        id of the previous page); `nextBefore` is null on the last page.
+      tags: [notifications]
+      parameters:
+        - name: filter
+          in: query
+          schema: { $ref: "#/components/schemas/NotificationFilter" }
+        - name: before
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: Inbox page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /notifications/unread-count:
+    get:
+      operationId: getUnreadNotificationCount
+      summary: How many inbox items are unread (the bell's count)
+      tags: [notifications]
+      responses:
+        "200":
+          description: Count
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnreadCount" }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      summary: Mark every inbox item read
+      tags: [notifications]
+      responses:
+        "204": { description: Done }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /notifications/{notificationId}/read:
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    put:
+      operationId: setNotificationRead
+      summary: Mark one inbox item read or unread
+      description: Another user's notification gives 404.
+      tags: [notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationReadInput" }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /notification-settings:
+    get:
+      operationId: getNotificationSettings
+      summary: The user's notification switches and email timing
+      tags: [notifications]
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSettings" }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /notification-settings/events/{event}:
+    parameters:
+      - name: event
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/NotificationEvent" }
+    put:
+      operationId: setNotificationPreference
+      summary: Switch one event's web and email notifications
+      description: |
+        An event the user's settings don't list gives `notification_event_unknown`; switching off
+        an always-on event gives `notification_locked`.
+      tags: [notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationPreferenceInput" }
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /notification-settings/email-frequency:
+    put:
+      operationId: setEmailFrequency
+      summary: Choose when notification emails go out
+      tags: [notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailFrequencyInput" }
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /attachments:
     post:
       operationId: uploadAttachment
@@ -1219,6 +1354,11 @@ components:
       schema: { type: string, format: uuid }
     UserId:
       name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    NotificationId:
+      name: notificationId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -1575,6 +1715,150 @@ components:
         skippedCount:
           type: integer
           description: Dates that already had a holiday.
+
+    NotificationEvent:
+      type: string
+      description: |
+        Team events: comment, internal_note, status, assignment, priority, sla. Portal events:
+        reply, status, question, resolved, colleague, ticket_logged (always on, not listed).
+      enum: [comment, internal_note, status, assignment, priority, sla, reply, question, resolved, colleague, ticket_logged]
+
+    NotificationKind:
+      type: string
+      description: Tells apart notifications of one event (assigned or unassigned; what a colleague did; SLA at risk or breached).
+      enum: [assigned, unassigned, reply, status, added, at_risk, breached]
+
+    NotificationFilter:
+      type: string
+      description: "`comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed."
+      enum: [all, unread, comments, status, assigned, sla, replies]
+
+    NotificationChange:
+      type: string
+      enum: [created, message, status, assignee, priority, watcher_added, watcher_removed, sla_at_risk, sla_breached]
+
+    Audience:
+      type: string
+      enum: [team, portal]
+
+    SlaClockName:
+      type: string
+      description: Which SLA clock a notification is about.
+      enum: [first_response, resolution]
+
+    EmailFrequency:
+      type: string
+      description: "`instant` sends one email per change (grouped over about 2 minutes); summaries still send urgent items (P1, SLA) right away."
+      enum: [instant, hourly, daily]
+
+    NotificationTicket:
+      type: object
+      required: [key, subject]
+      properties:
+        key: { type: string, example: HD-24871 }
+        subject: { type: string }
+
+    NotificationAlso:
+      type: object
+      required: [change, statusFrom, statusTo, priorityFrom, priorityTo, assigneeName]
+      properties:
+        change: { $ref: "#/components/schemas/NotificationChange" }
+        statusFrom: { allOf: [{ $ref: "#/components/schemas/TicketStatus" }], nullable: true }
+        statusTo: { allOf: [{ $ref: "#/components/schemas/TicketStatus" }], nullable: true }
+        priorityFrom: { allOf: [{ $ref: "#/components/schemas/Priority" }], nullable: true }
+        priorityTo: { allOf: [{ $ref: "#/components/schemas/Priority" }], nullable: true }
+        assigneeName: { type: string, nullable: true }
+
+    NotificationChannels:
+      type: object
+      required: [web, email]
+      properties:
+        web: { type: boolean }
+        email: { type: boolean }
+
+    Notification:
+      type: object
+      required: [id, event, kind, ticket, actorName, statusFrom, statusTo, priorityFrom, priorityTo, reason,
+                 assigneeName, slaClock, slaDueAt, slaMinutesLeft, quote, also, channels, createdAt, readAt]
+      description: |
+        One inbox item. `quote` is an excerpt of the message it is about (public messages only
+        for client staff). `reason` is the priority change's reason.
+      properties:
+        id: { type: string, format: uuid }
+        event: { $ref: "#/components/schemas/NotificationEvent" }
+        kind: { allOf: [{ $ref: "#/components/schemas/NotificationKind" }], nullable: true }
+        ticket: { $ref: "#/components/schemas/NotificationTicket" }
+        actorName: { type: string, nullable: true, description: Null when the system made the change. }
+        statusFrom: { allOf: [{ $ref: "#/components/schemas/TicketStatus" }], nullable: true }
+        statusTo: { allOf: [{ $ref: "#/components/schemas/TicketStatus" }], nullable: true }
+        priorityFrom: { allOf: [{ $ref: "#/components/schemas/Priority" }], nullable: true }
+        priorityTo: { allOf: [{ $ref: "#/components/schemas/Priority" }], nullable: true }
+        reason: { type: string, nullable: true }
+        assigneeName: { type: string, nullable: true }
+        slaClock: { allOf: [{ $ref: "#/components/schemas/SlaClockName" }], nullable: true }
+        slaDueAt: { type: string, format: date-time, nullable: true }
+        slaMinutesLeft: { type: integer, nullable: true }
+        quote: { type: string, nullable: true }
+        also:
+          type: array
+          items: { $ref: "#/components/schemas/NotificationAlso" }
+        channels: { $ref: "#/components/schemas/NotificationChannels" }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: string, format: date-time, nullable: true }
+
+    NotificationPage:
+      type: object
+      required: [items, unreadCount, nextBefore]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+        unreadCount: { type: integer }
+        nextBefore: { type: string, format: uuid, nullable: true }
+
+    UnreadCount:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer }
+
+    NotificationReadInput:
+      type: object
+      required: [read]
+      properties:
+        read: { type: boolean }
+
+    NotificationEventSetting:
+      type: object
+      required: [event, web, email, locked]
+      properties:
+        event: { $ref: "#/components/schemas/NotificationEvent" }
+        web: { type: boolean }
+        email: { type: boolean }
+        locked: { type: boolean, description: Always on; can't be switched off. }
+
+    NotificationSettings:
+      type: object
+      required: [audience, emailFrequency, events]
+      properties:
+        audience: { $ref: "#/components/schemas/Audience" }
+        emailFrequency: { $ref: "#/components/schemas/EmailFrequency" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/NotificationEventSetting" }
+
+    NotificationPreferenceInput:
+      type: object
+      required: [web, email]
+      properties:
+        web: { type: boolean }
+        email: { type: boolean }
+
+    EmailFrequencyInput:
+      type: object
+      required: [emailFrequency]
+      properties:
+        emailFrequency: { $ref: "#/components/schemas/EmailFrequency" }
 
     Colleague:
       type: object

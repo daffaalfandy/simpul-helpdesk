@@ -25,6 +25,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notifications"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
@@ -33,31 +34,33 @@ import (
 )
 
 type Deps struct {
-	Config     config.Config
-	Store      *store.Store
-	Auth       *auth.Service
-	Clients    *clients.Service
-	SLA        *sla.Service
-	Catalog    *catalog.Service
-	Projects   *projects.Service
-	Priorities *priorities.Service
-	Tickets    *tickets.Service
-	Logger     *slog.Logger
-	WebUI      fs.FS // built SPA; may be empty in development
+	Config        config.Config
+	Store         *store.Store
+	Auth          *auth.Service
+	Clients       *clients.Service
+	SLA           *sla.Service
+	Catalog       *catalog.Service
+	Projects      *projects.Service
+	Priorities    *priorities.Service
+	Tickets       *tickets.Service
+	Notifications *notifications.Service
+	Logger        *slog.Logger
+	WebUI         fs.FS // built SPA; may be empty in development
 }
 
 type server struct {
-	cfg        config.Config
-	store      *store.Store
-	auth       *auth.Service
-	clients    *clients.Service
-	sla        *sla.Service
-	catalog    *catalog.Service
-	projects   *projects.Service
-	priorities *priorities.Service
-	tickets    *tickets.Service
-	log        *slog.Logger
-	cookieName string
+	cfg           config.Config
+	store         *store.Store
+	auth          *auth.Service
+	clients       *clients.Service
+	sla           *sla.Service
+	catalog       *catalog.Service
+	projects      *projects.Service
+	priorities    *priorities.Service
+	tickets       *tickets.Service
+	notifications *notifications.Service
+	log           *slog.Logger
+	cookieName    string
 }
 
 var _ gen.StrictServerInterface = (*server)(nil)
@@ -69,7 +72,7 @@ func New(d Deps) (http.Handler, error) {
 	}
 	s := &server{
 		cfg: d.Config, store: d.Store, auth: d.Auth, clients: d.Clients, sla: d.SLA, catalog: d.Catalog,
-		projects: d.Projects, priorities: d.Priorities, tickets: d.Tickets, log: d.Logger,
+		projects: d.Projects, priorities: d.Priorities, tickets: d.Tickets, notifications: d.Notifications, log: d.Logger,
 		cookieName: cookieName(d.Config.CookieSecure),
 	}
 	streamed := streamedRoutes(spec)
