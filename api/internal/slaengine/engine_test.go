@@ -270,3 +270,38 @@ func TestViewAt(t *testing.T) {
 		}
 	}
 }
+
+func TestMergeFlags(t *testing.T) {
+	now := at(16, 12, 0)
+	before, earlier, later := ptr(at(16, 11, 0)), ptr(at(16, 10, 0)), ptr(at(16, 13, 0))
+	since := ptr(at(16, 8, 0))
+	running := func(due, atRisk *time.Time) ClockState {
+		return ClockState{RunningSince: since, DueAt: due, AtRiskAt: atRisk}
+	}
+	stopped := func(due, met *time.Time) ClockState { return ClockState{DueAt: due, MetAt: met} }
+	tests := []struct {
+		name     string
+		c        ClockState
+		prev     Flags
+		backfill bool
+		want     Flags
+	}{
+		{"flags carry over", running(later, before), Flags{AtRiskAt: before}, false, Flags{AtRiskAt: before}},
+		{"a later threshold clears at risk", running(later, later), Flags{AtRiskAt: before}, false, Flags{}},
+		{"breach never clears", running(later, later), Flags{BreachedAt: earlier}, false, Flags{BreachedAt: earlier}},
+		{"running past due waits for the scan", running(before, earlier), Flags{}, false, Flags{}},
+		{"stopped past due is breached silently", stopped(earlier, before), Flags{}, false, Flags{BreachedAt: earlier}},
+		{"met on time stays clean", stopped(later, before), Flags{}, false, Flags{}},
+		{"met exactly at due is met", stopped(before, before), Flags{}, false, Flags{}},
+		{"paused after crossing is breached silently", stopped(earlier, nil), Flags{}, false, Flags{BreachedAt: earlier}},
+		{"backfill flags what is past", running(before, earlier), Flags{}, true, Flags{AtRiskAt: earlier, BreachedAt: before}},
+		{"backfill leaves the future alone", running(later, later), Flags{}, true, Flags{}},
+	}
+	for _, tt := range tests {
+		got := MergeFlags(tt.c, tt.prev, tt.backfill, now)
+		if show(got.AtRiskAt) != show(tt.want.AtRiskAt) || show(got.BreachedAt) != show(tt.want.BreachedAt) {
+			t.Errorf("%s: got at risk %s breached %s, want %s %s", tt.name,
+				show(got.AtRiskAt), show(got.BreachedAt), show(tt.want.AtRiskAt), show(tt.want.BreachedAt))
+		}
+	}
+}

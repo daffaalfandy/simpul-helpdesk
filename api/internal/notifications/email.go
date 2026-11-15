@@ -501,26 +501,25 @@ type PurgeWorker struct {
 
 func NewPurgeWorker(st *store.Store) *PurgeWorker { return &PurgeWorker{store: st, now: time.Now} }
 
+// Work deletes in batches; each batch and its audit entry commit together.
 func (w *PurgeWorker) Work(ctx context.Context, _ *river.Job[notification.PurgeArgs]) error {
 	cutoff := w.now().Add(-notification.Retention)
-	var total int64
 	for range purgeMaxBatches {
-		n, err := w.store.Q().DeleteOldNotifications(ctx, db.DeleteOldNotificationsParams{
-			CreatedBefore: cutoff, Batch: purgeBatch,
+		var n int64
+		err := w.store.Tx(ctx, func(tx store.Tx) error {
+			var err error
+			n, err = tx.Q.DeleteOldNotifications(ctx, db.DeleteOldNotificationsParams{CreatedBefore: cutoff, Batch: purgeBatch})
+			if err != nil || n == 0 {
+				return err
+			}
+			return audit.Write(ctx, tx.Q, audit.SystemActor(ActorNamePurge).Entry(
+				ActionPurged, TargetNotification, nil, map[string]any{dataCount: n}))
 		})
-		if err != nil {
+		if err != nil || n < purgeBatch {
 			return err
 		}
-		total += n
-		if n < purgeBatch {
-			break
-		}
 	}
-	if total == 0 {
-		return nil
-	}
-	return audit.Write(ctx, w.store.Q(), audit.SystemActor(ActorNamePurge).Entry(
-		ActionPurged, TargetNotification, nil, map[string]any{dataCount: total}))
+	return nil
 }
 
 // LateInserter is a job inserter whose River client is set after the workers are registered:

@@ -27,9 +27,7 @@ var clockActions = append([]string{ActionPriorityChanged}, slaActions...)
 const causeLoggedByStaff = "logged_by_staff"
 
 // replaySLA recomputes the ticket's clocks from its history and stores them, in the caller's
-// transaction. The scan's flags carry over, except an at-risk flag a change has moved back into
-// the future. Flags it sets itself are silent (no alert): a clock that stopped past its
-// deadline before the scan saw it, and a ticket replayed for the first time (backfill).
+// transaction, with the flags slaengine.MergeFlags decides.
 func (s *Service) replaySLA(ctx context.Context, q *db.Queries, ticketID uuid.UUID, now time.Time) error {
 	schedules, err := sla.LoadSchedules(ctx, q)
 	if err != nil {
@@ -89,27 +87,14 @@ type storedClock struct {
 }
 
 func clockColumns(c slaengine.ClockState, atRiskFlagged, breached *time.Time, backfill bool, now time.Time) storedClock {
+	flags := slaengine.MergeFlags(c, slaengine.Flags{AtRiskAt: atRiskFlagged, BreachedAt: breached}, backfill, now)
 	col := storedClock{
 		budgetMs: c.Target.Budget.Milliseconds(), elapsedMs: c.Elapsed.Milliseconds(),
 		calendar: string(c.Target.Calendar), runningSince: c.RunningSince, metAt: c.MetAt,
-		atRiskFlagged: atRiskFlagged, breached: breached,
+		atRiskFlagged: flags.AtRiskAt, breached: flags.BreachedAt,
 	}
 	if c.Running() {
 		col.dueAt, col.atRiskAt = c.DueAt, c.AtRiskAt
-		if col.atRiskFlagged != nil && c.AtRiskAt != nil && c.AtRiskAt.After(now) {
-			col.atRiskFlagged = nil
-		}
-	}
-	end := now
-	if c.MetAt != nil {
-		end = *c.MetAt
-	}
-	// Breach is strictly after the due time (calendar: a due time on closing time stays there).
-	if col.breached == nil && c.DueAt != nil && (backfill || !c.Running()) && c.DueAt.Before(end) {
-		col.breached = c.DueAt
-	}
-	if backfill && col.atRiskFlagged == nil && c.Running() && c.AtRiskAt != nil && !c.AtRiskAt.After(now) {
-		col.atRiskFlagged = c.AtRiskAt
 	}
 	return col
 }

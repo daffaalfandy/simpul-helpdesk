@@ -280,3 +280,32 @@ func runs(st ticket.Status, snap ticket.SLASnapshot) bool {
 	}
 	return !done(st)
 }
+
+// Flags are the scan's marks on a clock: when it was flagged at risk, and when it breached.
+type Flags struct {
+	AtRiskAt   *time.Time
+	BreachedAt *time.Time
+}
+
+// MergeFlags decides a clock's flags after a replay, from the ones it had. The scan's flags carry
+// over, except an at-risk flag a change has moved back into the future (a priority change). Two
+// cases are flagged here, silently (no alert): a clock that stopped past its deadline before the
+// scan saw it, and, on a ticket's first replay (backfill), anything already past. A breach is
+// strictly after the due time: due on closing time is still met.
+func MergeFlags(c ClockState, prev Flags, backfill bool, now time.Time) Flags {
+	f := prev
+	if c.Running() && f.AtRiskAt != nil && c.AtRiskAt != nil && c.AtRiskAt.After(now) {
+		f.AtRiskAt = nil
+	}
+	end := now
+	if c.MetAt != nil {
+		end = *c.MetAt
+	}
+	if f.BreachedAt == nil && c.DueAt != nil && (backfill || !c.Running()) && c.DueAt.Before(end) {
+		f.BreachedAt = c.DueAt
+	}
+	if backfill && f.AtRiskAt == nil && c.Running() && c.AtRiskAt != nil && !c.AtRiskAt.After(now) {
+		f.AtRiskAt = c.AtRiskAt
+	}
+	return f
+}

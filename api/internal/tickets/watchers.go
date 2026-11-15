@@ -2,7 +2,6 @@ package tickets
 
 import (
 	"context"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -53,14 +52,7 @@ func (s *Service) WatcherCandidates(ctx context.Context, p *auth.Principal, key,
 	if err != nil {
 		return nil, err
 	}
-	var pattern *string
-	if query = strings.TrimSpace(query); query != "" {
-		if len([]rune(query)) > MaxSearchLen {
-			query = string([]rune(query)[:MaxSearchLen])
-		}
-		p := likeAny + likeEscaper.Replace(query) + likeAny
-		pattern = &p
-	}
+	_, pattern := searchParams(query)
 	rows, err := q.ListWatcherCandidates(ctx, db.ListWatcherCandidatesParams{
 		ClientID: &t.ClientID, Role: string(auth.RoleRequester), Statuses: watcherStatuses,
 		RequesterID: t.RequesterID, TicketID: t.ID, Pattern: pattern, RowLimit: MaxWatcherCandidates,

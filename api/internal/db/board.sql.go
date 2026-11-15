@@ -32,9 +32,10 @@ SELECT count(*) FILTER (WHERE t.status = ANY($1::text[]))::bigint AS open_ticket
          AND s.first_response_breached_at IS NULL AND s.resolution_breached_at IS NULL)::bigint AS resolved_within_sla
 FROM tickets t
 LEFT JOIN ticket_sla s ON s.ticket_id = t.id
-WHERE $5::uuid IS NULL
-   OR EXISTS (SELECT 1 FROM client_agents ca
-              WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
+WHERE (t.status = ANY($1::text[]) OR t.resolved_at >= least($2::timestamptz, $3::timestamptz))
+  AND ($5::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM client_agents ca
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid))
 `
 
 type CountBoardStatsParams struct {
@@ -60,6 +61,8 @@ type CountBoardStatsRow struct {
 // tickets with an unmet clock breached, or else at risk; the mean first-response time of
 // portal reports answered since @month_start (agent-logged ones are answered at 0 by rule);
 // tickets resolved since @month_start, and how many of those never breached.
+// Only rows a number can count: open tickets, and tickets resolved since the earlier start
+// (a first response this month belongs to one of those). Closed history stays unread.
 func (q *Queries) CountBoardStats(ctx context.Context, arg CountBoardStatsParams) (CountBoardStatsRow, error) {
 	row := q.db.QueryRow(ctx, countBoardStats,
 		arg.OpenStatuses,

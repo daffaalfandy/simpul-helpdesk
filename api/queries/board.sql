@@ -80,9 +80,12 @@ SELECT count(*) FILTER (WHERE t.status = ANY(@open_statuses::text[]))::bigint AS
          AND s.first_response_breached_at IS NULL AND s.resolution_breached_at IS NULL)::bigint AS resolved_within_sla
 FROM tickets t
 LEFT JOIN ticket_sla s ON s.ticket_id = t.id
-WHERE sqlc.narg(scope_agent_id)::uuid IS NULL
-   OR EXISTS (SELECT 1 FROM client_agents ca
-              WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid);
+-- Only rows a number can count: open tickets, and tickets resolved since the earlier start
+-- (a first response this month belongs to one of those). Closed history stays unread.
+WHERE (t.status = ANY(@open_statuses::text[]) OR t.resolved_at >= least(@week_start::timestamptz, @month_start::timestamptz))
+  AND (sqlc.narg(scope_agent_id)::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM client_agents ca
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid));
 
 -- name: GetOldestSLAProblem :one
 -- The open ticket in scope whose flagged, unmet clock fell due (or turns due) first: the
