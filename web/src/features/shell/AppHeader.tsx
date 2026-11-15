@@ -5,6 +5,7 @@ import type { Me, Organization } from '../../api/client'
 import { BrandMark } from '../../components/Logo'
 import { BRAND_NAME, paths } from '../../lib/constants'
 import { can } from '../../lib/roles'
+import { NotificationBell } from '../notifications/NotificationBell'
 import { UserMenu } from './UserMenu'
 
 const navLink =
@@ -38,7 +39,10 @@ export function AppHeader({ me, org }: { me: Me; org?: Organization }) {
             </Link>
           ))}
         </nav>
-        <UserMenu me={me} />
+        <div className="flex items-center gap-2">
+          <NotificationBell audience="team" />
+          <UserMenu me={me} />
+        </div>
       </div>
     </header>
   )

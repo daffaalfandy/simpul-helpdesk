@@ -30,7 +30,12 @@ export const paths = {
   portal: '/portal',
   portalNew: '/portal/new',
   portalTicket: '/portal/tickets/$key',
+  notifications: '/notifications',
+  portalNotifications: '/portal/notifications',
 } as const
+
+/** Fragment that opens the notifications page at its settings card. */
+export const NOTIFICATION_SETTINGS_HASH = 'settings'
 
 /** Must match the API's password policy (api/internal/auth). */
 export const MIN_PASSWORD_LENGTH = 10
@@ -40,6 +45,7 @@ export const MAX_PASSWORD_LENGTH = 128
 export const RESET_TOKEN_HASH_KEY = 'token'
 
 export const SECONDS_PER_MINUTE = 60
+export const MS_PER_MINUTE = 60_000
 
 /** Greeting changes at these local hours. */
 export const AFTERNOON_STARTS_AT_HOUR = 12
@@ -70,5 +76,12 @@ export const MAX_SEARCH_LENGTH = 100
 /** How long typing pauses before a search box updates the URL and asks the API. */
 export const SEARCH_DEBOUNCE_MS = 300
 
-/** How often the board asks for moves others made (until M5a decides on live updates). */
+/** How often the board asks for moves others made (polling, like the bell). */
 export const BOARD_REFRESH_MS = 30_000
+
+/** How often the bell asks for its unread count (ARCHITECTURE: polling, not SSE). */
+export const NOTIFICATION_POLL_MS = 30_000
+
+/** Inbox items per page; the bell shows the first page's newest few. */
+export const NOTIFICATION_PAGE_SIZE = 30
+export const BELL_ITEM_COUNT = 8

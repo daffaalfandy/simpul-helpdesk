@@ -1,7 +1,7 @@
 import { fromDate, isSameDay, isSameYear } from '@internationalized/date'
 
 import { DATE_LOCALE } from '../i18n/locale'
-import { JUST_NOW_MS } from './constants'
+import { JUST_NOW_MS, MINUTES_PER_HOUR, MS_PER_MINUTE } from './constants'
 
 // Dates from the API are civil dates ("2026-03-01"); format them in UTC so the
 // browser's time zone can't shift the day.
@@ -122,4 +122,32 @@ export function zoneAbbreviation(timeZone: string): string {
     .formatToParts(new Date())
     .find((p) => p.type === 'timeZoneName')
   return part?.value ?? timeZone
+}
+
+/** How long ago something happened, for the bell: just now, minutes, hours, yesterday, or a date. */
+export type AgoKind = { kind: 'justNow' } | { kind: 'minutes' | 'hours'; count: number } | { kind: 'yesterday' } | { kind: 'date' }
+
+export function agoKind(iso: string, timeZone: string, now = new Date()): AgoKind {
+  const at = new Date(iso)
+  const ageMs = now.getTime() - at.getTime()
+  if (ageMs < JUST_NOW_MS) return { kind: 'justNow' }
+  const a = fromDate(at, timeZone)
+  const b = fromDate(now, timeZone)
+  if (isSameDay(a, b)) {
+    const minutes = Math.floor(ageMs / MS_PER_MINUTE)
+    return minutes < MINUTES_PER_HOUR
+      ? { kind: 'minutes', count: minutes }
+      : { kind: 'hours', count: Math.floor(minutes / MINUTES_PER_HOUR) }
+  }
+  if (isSameDay(a, b.subtract({ days: 1 }))) return { kind: 'yesterday' }
+  return { kind: 'date' }
+}
+
+/** Whether iso falls on today or yesterday in the zone, else neither. */
+export function dayKind(iso: string, timeZone: string, now = new Date()): 'today' | 'yesterday' | 'other' {
+  const a = fromDate(new Date(iso), timeZone)
+  const b = fromDate(now, timeZone)
+  if (isSameDay(a, b)) return 'today'
+  if (isSameDay(a, b.subtract({ days: 1 }))) return 'yesterday'
+  return 'other'
 }

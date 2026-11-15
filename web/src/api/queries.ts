@@ -30,6 +30,12 @@ export const queryKeys = {
   ticketActivity: (key: string) => ['tickets', 'activity', key] as const,
   clientRequesters: (clientId: string) => ['clients', clientId, 'requesters'] as const,
   clientAssignees: (clientId: string) => ['clients', clientId, 'assignees'] as const,
+  ticketWatchers: (key: string) => ['tickets', 'watchers', key] as const,
+  watcherCandidates: (key: string, q: string) => ['tickets', 'watcher-candidates', key, q] as const,
+  notifications: ['notifications'],
+  notificationList: (filter: string) => ['notifications', 'list', filter] as const,
+  unreadCount: ['notifications', 'unread'],
+  notificationSettings: ['notification-settings'],
 } as const
 
 /** Invalidates queries by key prefix. */

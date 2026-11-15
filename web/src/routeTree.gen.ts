@@ -16,6 +16,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AgentBoardRouteImport } from './routes/_agent/board'
+import { Route as AgentNotificationsRouteImport } from './routes/_agent/notifications'
 import { Route as AgentProjectsRouteImport } from './routes/_agent/projects'
 import { Route as AgentReportsRouteImport } from './routes/_agent/reports'
 import { Route as AgentSettingsRouteImport } from './routes/_agent/settings'
@@ -31,6 +32,7 @@ import { Route as AgentSettingsPrioritiesRouteImport } from './routes/_agent/set
 import { Route as AgentTicketsKeyRouteImport } from './routes/_agent/tickets/$key'
 import { Route as PortalPortalIndexRouteImport } from './routes/_portal/portal/index'
 import { Route as PortalPortalNewRouteImport } from './routes/_portal/portal/new'
+import { Route as PortalPortalNotificationsRouteImport } from './routes/_portal/portal/notifications'
 import { Route as PortalPortalTicketsKeyRouteImport } from './routes/_portal/portal/tickets/$key'
 
 const IndexRoute = IndexRouteImport.update({
@@ -64,6 +66,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const AgentBoardRoute = AgentBoardRouteImport.update({
   id: '/board',
   path: '/board',
+  getParentRoute: () => AgentRoute,
+} as any)
+const AgentNotificationsRoute = AgentNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => AgentRoute,
 } as any)
 const AgentProjectsRoute = AgentProjectsRouteImport.update({
@@ -142,6 +149,12 @@ const PortalPortalNewRoute = PortalPortalNewRouteImport.update({
   path: '/portal/new',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalPortalNotificationsRoute =
+  PortalPortalNotificationsRouteImport.update({
+    id: '/portal/notifications',
+    path: '/portal/notifications',
+    getParentRoute: () => PortalRoute,
+  } as any)
 const PortalPortalTicketsKeyRoute = PortalPortalTicketsKeyRouteImport.update({
   id: '/portal/tickets/$key',
   path: '/portal/tickets/$key',
@@ -154,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/board': typeof AgentBoardRoute
+  '/notifications': typeof AgentNotificationsRoute
   '/projects': typeof AgentProjectsRouteWithChildren
   '/reports': typeof AgentReportsRoute
   '/settings': typeof AgentSettingsRouteWithChildren
@@ -166,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/settings/priorities': typeof AgentSettingsPrioritiesRoute
   '/tickets/$key': typeof AgentTicketsKeyRoute
   '/portal/new': typeof PortalPortalNewRoute
+  '/portal/notifications': typeof PortalPortalNotificationsRoute
   '/projects/': typeof AgentProjectsIndexRoute
   '/settings/': typeof AgentSettingsIndexRoute
   '/portal/': typeof PortalPortalIndexRoute
@@ -177,6 +192,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/board': typeof AgentBoardRoute
+  '/notifications': typeof AgentNotificationsRoute
   '/reports': typeof AgentReportsRoute
   '/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/settings/catalog': typeof AgentSettingsCatalogRoute
@@ -187,6 +203,7 @@ export interface FileRoutesByTo {
   '/settings/priorities': typeof AgentSettingsPrioritiesRoute
   '/tickets/$key': typeof AgentTicketsKeyRoute
   '/portal/new': typeof PortalPortalNewRoute
+  '/portal/notifications': typeof PortalPortalNotificationsRoute
   '/projects': typeof AgentProjectsIndexRoute
   '/settings': typeof AgentSettingsIndexRoute
   '/portal': typeof PortalPortalIndexRoute
@@ -201,6 +218,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_agent/board': typeof AgentBoardRoute
+  '/_agent/notifications': typeof AgentNotificationsRoute
   '/_agent/projects': typeof AgentProjectsRouteWithChildren
   '/_agent/reports': typeof AgentReportsRoute
   '/_agent/settings': typeof AgentSettingsRouteWithChildren
@@ -213,6 +231,7 @@ export interface FileRoutesById {
   '/_agent/settings/priorities': typeof AgentSettingsPrioritiesRoute
   '/_agent/tickets/$key': typeof AgentTicketsKeyRoute
   '/_portal/portal/new': typeof PortalPortalNewRoute
+  '/_portal/portal/notifications': typeof PortalPortalNotificationsRoute
   '/_agent/projects/': typeof AgentProjectsIndexRoute
   '/_agent/settings/': typeof AgentSettingsIndexRoute
   '/_portal/portal/': typeof PortalPortalIndexRoute
@@ -226,6 +245,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/board'
+    | '/notifications'
     | '/projects'
     | '/reports'
     | '/settings'
@@ -238,6 +258,7 @@ export interface FileRouteTypes {
     | '/settings/priorities'
     | '/tickets/$key'
     | '/portal/new'
+    | '/portal/notifications'
     | '/projects/'
     | '/settings/'
     | '/portal/'
@@ -249,6 +270,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/board'
+    | '/notifications'
     | '/reports'
     | '/projects/$projectId'
     | '/settings/catalog'
@@ -259,6 +281,7 @@ export interface FileRouteTypes {
     | '/settings/priorities'
     | '/tickets/$key'
     | '/portal/new'
+    | '/portal/notifications'
     | '/projects'
     | '/settings'
     | '/portal'
@@ -272,6 +295,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/_agent/board'
+    | '/_agent/notifications'
     | '/_agent/projects'
     | '/_agent/reports'
     | '/_agent/settings'
@@ -284,6 +308,7 @@ export interface FileRouteTypes {
     | '/_agent/settings/priorities'
     | '/_agent/tickets/$key'
     | '/_portal/portal/new'
+    | '/_portal/portal/notifications'
     | '/_agent/projects/'
     | '/_agent/settings/'
     | '/_portal/portal/'
@@ -348,6 +373,13 @@ declare module '@tanstack/react-router' {
       path: '/board'
       fullPath: '/board'
       preLoaderRoute: typeof AgentBoardRouteImport
+      parentRoute: typeof AgentRoute
+    }
+    '/_agent/notifications': {
+      id: '/_agent/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AgentNotificationsRouteImport
       parentRoute: typeof AgentRoute
     }
     '/_agent/projects': {
@@ -455,6 +487,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalPortalNewRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/portal/notifications': {
+      id: '/_portal/portal/notifications'
+      path: '/portal/notifications'
+      fullPath: '/portal/notifications'
+      preLoaderRoute: typeof PortalPortalNotificationsRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/portal/tickets/$key': {
       id: '/_portal/portal/tickets/$key'
       path: '/portal/tickets/$key'
@@ -505,6 +544,7 @@ const AgentSettingsRouteWithChildren = AgentSettingsRoute._addFileChildren(
 
 interface AgentRouteChildren {
   AgentBoardRoute: typeof AgentBoardRoute
+  AgentNotificationsRoute: typeof AgentNotificationsRoute
   AgentProjectsRoute: typeof AgentProjectsRouteWithChildren
   AgentReportsRoute: typeof AgentReportsRoute
   AgentSettingsRoute: typeof AgentSettingsRouteWithChildren
@@ -513,6 +553,7 @@ interface AgentRouteChildren {
 
 const AgentRouteChildren: AgentRouteChildren = {
   AgentBoardRoute: AgentBoardRoute,
+  AgentNotificationsRoute: AgentNotificationsRoute,
   AgentProjectsRoute: AgentProjectsRouteWithChildren,
   AgentReportsRoute: AgentReportsRoute,
   AgentSettingsRoute: AgentSettingsRouteWithChildren,
@@ -523,12 +564,14 @@ const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)
 
 interface PortalRouteChildren {
   PortalPortalNewRoute: typeof PortalPortalNewRoute
+  PortalPortalNotificationsRoute: typeof PortalPortalNotificationsRoute
   PortalPortalIndexRoute: typeof PortalPortalIndexRoute
   PortalPortalTicketsKeyRoute: typeof PortalPortalTicketsKeyRoute
 }
 
 const PortalRouteChildren: PortalRouteChildren = {
   PortalPortalNewRoute: PortalPortalNewRoute,
+  PortalPortalNotificationsRoute: PortalPortalNotificationsRoute,
   PortalPortalIndexRoute: PortalPortalIndexRoute,
   PortalPortalTicketsKeyRoute: PortalPortalTicketsKeyRoute,
 }

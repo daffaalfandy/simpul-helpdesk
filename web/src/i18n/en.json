@@ -77,7 +77,8 @@
     "reports": "Reports",
     "settings": "Settings",
     "account": "Account menu for {{name}}",
-    "home": "{{org}} home"
+    "home": "{{org}} home",
+    "notifications": "Notifications"
   },
   "agent": {
     "organization": "{{org}}",
@@ -580,11 +581,19 @@
     "invalid_priority_levels": "Give every priority a name and a description.",
     "invalid_project": "Choose one of the client's systems.",
     "client_has_no_project": "This client has no project yet, so it can't take tickets.",
-    "project_in_use": "Tickets belong to this project, so it can't be deleted. Hide it from the report form instead."
+    "project_in_use": "Tickets belong to this project, so it can't be deleted. Hide it from the report form instead.",
+    "notification_locked": "This notification is always on.",
+    "notification_event_unknown": "This notification isn't in your settings.",
+    "invalid_email_frequency": "Choose when emails go out.",
+    "invalid_watcher": "Choose a colleague from your organisation."
   },
   "time": {
     "justNow": "Just now",
-    "dayTime": "{{date}}, {{time}}"
+    "dayTime": "{{date}}, {{time}}",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}} h ago",
+    "yesterday": "Yesterday",
+    "today": "Today, {{time}}"
   },
   "attach": {
     "button": "Attach file",
@@ -853,5 +862,155 @@
     "h": "{{count}}h",
     "wd": "{{count}} wd",
     "d": "{{count}}d"
+  },
+  "notifications": {
+    "bell": {
+      "label": "Notifications",
+      "labelUnread": "Notifications, {{count}} unread",
+      "markAllRead": "Mark all as read",
+      "show": "Show",
+      "all": "All",
+      "unread": "Unread ({{count}})",
+      "empty": "You're all caught up.",
+      "seeAll": "See all",
+      "settings": "Notification settings",
+      "loading": "Loading notifications",
+      "error": "Notifications didn't load. Close and open the panel to try again."
+    },
+    "page": {
+      "title": "Notifications",
+      "intro": {
+        "team": "Updates on tickets you're assigned to, plus anything you need to act on.",
+        "portal": "Updates on tickets you reported or were added to."
+      },
+      "inbox": "Inbox",
+      "filterLabel": "Filter notifications",
+      "filters": {
+        "all": "All",
+        "unread": "Unread ({{count}})",
+        "comments": "Comments",
+        "status": "Status",
+        "assigned": "Assigned",
+        "sla": "SLA",
+        "replies": "Replies"
+      },
+      "empty": "Nothing here.",
+      "emptyFiltered": "Nothing here for this filter.",
+      "showOlder": "Show older",
+      "markRead": "Mark as read",
+      "markUnread": "Mark as unread",
+      "unread": "Unread",
+      "itemLabel": "{{ticket}}: {{text}}",
+      "itemLabelUnread": "Unread: {{ticket}}: {{text}}",
+      "ticketLine": "{{key}} · {{subject}}",
+      "meta": "{{time}} · {{channels}}",
+      "channels": {
+        "web": "Web",
+        "webEmail": "Web + email"
+      },
+      "loading": "Loading your inbox",
+      "loadError": "Your inbox didn't load. Refresh the page to try again."
+    },
+    "settings": {
+      "title": "Settings",
+      "who": {
+        "team": "You get notifications for tickets assigned to you. The requester is notified too. Changes you make yourself never notify you.",
+        "portal": "You get notifications for tickets you reported and tickets a colleague added you to. Changes you make yourself never notify you."
+      },
+      "saved": "Saved.",
+      "caption": "Where each notification goes",
+      "when": "When",
+      "web": "Web",
+      "email": "Email",
+      "webFor": "Web notifications for {{event}}",
+      "emailFor": "Email for {{event}}",
+      "lockedNote": "Assignments and SLA alerts are always on, so nothing slips past its deadline.",
+      "sendEmails": "Send emails",
+      "frequency": {
+        "instant": "Right away",
+        "hourly": "Hourly summary",
+        "daily": "Daily summary at 08:00"
+      },
+      "frequencyHint": {
+        "instant": "One email per change",
+        "hourly": "Urgent items (P1, SLA) still sent right away",
+        "daily": "Urgent items still sent right away"
+      },
+      "ownChanges": "Never notify me about my own changes",
+      "alwaysOn": "Always on.",
+      "loadError": "Your settings didn't load. Refresh the page to try again.",
+      "events": {
+        "team": {
+          "comment": {
+            "label": "Comments and replies",
+            "hint": "Client replies and teammates' public replies"
+          },
+          "internal_note": {
+            "label": "Internal notes",
+            "hint": "Notes from teammates on your tickets"
+          },
+          "status": {
+            "label": "Status changes",
+            "hint": "Including moves on the board"
+          },
+          "assignment": {
+            "label": "Assigned to me or unassigned",
+            "hint": "Always on"
+          },
+          "priority": {
+            "label": "Priority changes",
+            "hint": "Who changed it and why"
+          },
+          "sla": {
+            "label": "SLA at risk and breached",
+            "hint": "Always on"
+          }
+        },
+        "portal": {
+          "reply": {
+            "label": "Replies from the support team",
+            "hint": "New public messages on your tickets"
+          },
+          "status": {
+            "label": "Status changes",
+            "hint": "e.g. In progress, Waiting on you, Resolved"
+          },
+          "question": {
+            "label": "Questions for you",
+            "hint": "The team needs information before they can continue"
+          },
+          "resolved": {
+            "label": "Resolved and closed",
+            "hint": ""
+          },
+          "colleague": {
+            "label": "Changes by colleagues",
+            "hint": "On tickets you were added to"
+          }
+        }
+      }
+    },
+    "text": {
+      "comment": "{{actor}} replied",
+      "internal_note": "{{actor}} added an internal note",
+      "reply": "{{actor}} replied",
+      "question": "{{actor}} asked you a question",
+      "status": "Status changed: {{from}} → {{to}}",
+      "assigned": "{{actor}} assigned this ticket to you",
+      "unassigned": "{{actor}} unassigned you from this ticket",
+      "priority": "{{actor}} changed priority: {{from}} → {{to}}",
+      "colleagueReply": "{{actor}} replied",
+      "colleagueStatus": "{{actor}} changed the status: {{from}} → {{to}}",
+      "colleagueAdded": "{{actor}} added you to this ticket",
+      "ticketLogged": "{{actor}} logged this request for you",
+      "slaAtRisk": "SLA at risk: {{clock}} due in {{minutes}} min",
+      "slaBreached": "SLA breached: {{clock}} was due at {{time}}",
+      "slaClock": {
+        "first_response": "first response",
+        "resolution": "resolve"
+      },
+      "system": "The helpdesk",
+      "quote": "“{{text}}”"
+    }
   }
 }

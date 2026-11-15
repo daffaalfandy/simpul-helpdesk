@@ -57,6 +57,18 @@ export type ProjectTarget = components['schemas']['ProjectTarget']
 export type Duration = components['schemas']['Duration']
 export type DurationUnit = components['schemas']['DurationUnit']
 export type AtRiskPercent = components['schemas']['AtRiskPercent']
+export type Notification = components['schemas']['Notification']
+export type NotificationPage = components['schemas']['NotificationPage']
+export type NotificationEvent = components['schemas']['NotificationEvent']
+export type NotificationKind = components['schemas']['NotificationKind']
+export type NotificationFilter = components['schemas']['NotificationFilter']
+export type NotificationChange = components['schemas']['NotificationChange']
+export type NotificationAlso = components['schemas']['NotificationAlso']
+export type NotificationSettings = components['schemas']['NotificationSettings']
+export type NotificationEventSetting = components['schemas']['NotificationEventSetting']
+export type EmailFrequency = components['schemas']['EmailFrequency']
+export type Audience = components['schemas']['Audience']
+export type Colleague = components['schemas']['Colleague']
 
 /** Stable error codes returned by the API (api/internal/apperr). */
 export const ErrorCode = {

@@ -142,6 +142,18 @@
   --board-column-min-h: 160px; /* an empty board column still reads as a drop target */
   --stat-tile-min-w: 180px;    /* board stat tiles */
   --board-search-w: 340px;     /* board search box beside the filter pills */
+  --switch-w: 44px;            /* on/off switch track (Notifications settings) */
+  --switch-h: 26px;
+  --switch-knob: 20px;
+  --switch-inset: 3px;         /* gap between the knob and the track edge */
+  --bell-panel-w: 400px;       /* notification bell panel */
+  --bell-list-max-h: 380px;    /* bell list scrolls past this height */
+  --notice-icon: 36px;         /* inbox item type icon */
+  --notice-icon-sm: 32px;      /* bell item type icon */
+  --unread-dot: 9px;           /* unread marker on inbox items */
+  --count-badge: 18px;         /* red unread count on the bell */
+  --notif-inbox-basis: 520px;  /* inbox card grows from this width beside settings */
+  --notif-settings-basis: 420px;
 
   /* ---------- Focus & motion ---------- */
   --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);

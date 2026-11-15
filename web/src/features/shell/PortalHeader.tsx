@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { Me, Organization } from '../../api/client'
 import { OrgLogo } from '../../components/Logo'
 import { paths } from '../../lib/constants'
+import { NotificationBell } from '../notifications/NotificationBell'
 import { UserMenu } from './UserMenu'
 
 /** Client portal header: branded for the organisation, no nav pills (HANDOFF §14.3). */
@@ -19,7 +20,10 @@ export function PortalHeader({ me, org }: { me: Me; org?: Organization }) {
             {me.client && <span className="text-xs text-muted">{me.client.name}</span>}
           </span>
         </Link>
-        <UserMenu me={me} />
+        <div className="flex items-center gap-2">
+          <NotificationBell audience="portal" />
+          <UserMenu me={me} />
+        </div>
       </div>
     </header>
   )
