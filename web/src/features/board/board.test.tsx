@@ -231,3 +231,42 @@ describe('board', () => {
     expect(within(dialog).getByRole('combobox', { name: 'Requester' })).toHaveValue('')
   })
 })
+
+describe('board SLA', () => {
+  beforeEach(() => {
+    state.me = AGENT
+  })
+
+  it('shows each card’s clock, the stats and the alert', async () => {
+    const user = userEvent.setup()
+    const { router } = renderApp('/board')
+    await screen.findByRole('grid', { name: /^New/ })
+    expect(within(column('New')).getByText('Respond in 22m')).toBeInTheDocument()
+    expect(within(column('In UAT')).getByText('Breached 12m')).toBeInTheDocument()
+    expect(within(column('Resolved today')).getByText('Met SLA')).toBeInTheDocument()
+
+    const stats = screen.getByText('Avg first response').closest('dl') as HTMLElement
+    expect(within(stats).getByText('18m')).toBeInTheDocument()
+    expect(within(stats).getByText('94.6%')).toBeInTheDocument()
+
+    const banner = screen.getByRole('region', { name: 'SLA alert' })
+    expect(banner).toHaveTextContent('2')
+    expect(banner).toHaveTextContent('tickets are past or close to their SLA')
+    expect(banner).toHaveTextContent('1 breached · 1 at risk. Oldest is HD-24915, BPKAD Kota Batam.')
+
+    await user.click(within(banner).getByRole('button', { name: 'Show me' }))
+    await waitFor(() => expect(router.state.location.search).toEqual({ view: 'risk' }))
+    expect(lastRequest('GET', '/board')?.search).toContain('sla=at_risk')
+    await waitFor(() => expect(keysIn('New')).toEqual(['HD-24910']))
+    expect(keysIn('Resolved today')).toEqual([])
+    expect(screen.getByRole('button', { name: 'SLA at risk' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(screen.getByRole('region', { name: 'SLA alert' })).queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('has no alert when nothing is at risk', async () => {
+    tickets.cardSla = {}
+    renderApp('/board')
+    await screen.findByRole('grid', { name: /^New/ })
+    expect(screen.queryByRole('region', { name: 'SLA alert' })).not.toBeInTheDocument()
+  })
+})

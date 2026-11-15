@@ -15,10 +15,19 @@ import { BOARD_REFRESH_MS, paths, SEARCH_DEBOUNCE_MS } from '../../lib/constants
 import { formatToday } from '../../lib/dates'
 import { dayPart, firstName } from '../../lib/text'
 import { useSignedInUser } from '../shell/useSignedInUser'
-import { BOARD_VIEWS, boardQueryOptions, cleanQuery, DEFAULT_VIEW, isFiltered, type BoardSearch } from './boardSearch'
+import {
+  BOARD_VIEWS,
+  boardQueryOptions,
+  cleanQuery,
+  DEFAULT_VIEW,
+  isFiltered,
+  RISK_VIEW,
+  type BoardSearch,
+} from './boardSearch'
 import { dropStatus } from './columns'
 import { KanbanBoard } from './KanbanBoard'
 import { LogTicketDialog } from './LogTicketDialog'
+import { SlaBanner } from './SlaBanner'
 import { StatTiles } from './StatTiles'
 import { useMoveTicket } from './useMoveTicket'
 
@@ -27,7 +36,7 @@ type BoardPageProps = { search: BoardSearch; onSearchChange: (next: BoardSearch)
 /** What the last action did, shown above the board until the next one (the mock's toast). */
 type Notice =
   | { kind: 'created'; ticket: Ticket }
-  | { kind: 'moved'; key: string; column: BoardColumnId }
+  | { kind: 'moved'; key: string; column: BoardColumnId; paused: boolean }
   | { kind: 'error'; error: unknown }
 
 /** Agent home (Main mock): stats, filters, search and the kanban board. */
@@ -52,7 +61,13 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
     move.mutate(
       { card, column, status: dropStatus(column, card) },
       {
-        onSuccess: () => setNotice({ kind: 'moved', key: card.key, column }),
+        onSuccess: (ticket) =>
+          setNotice({
+            kind: 'moved',
+            key: card.key,
+            column,
+            paused: ticket.sla.resolutionClock?.phase === 'paused',
+          }),
         onError: (error) => setNotice({ kind: 'error', error }),
       },
     )
@@ -92,10 +107,19 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
         </Alert>
       )}
       {notice?.kind === 'moved' && (
-        <Alert tone="success">{t('board.moved', { key: notice.key, column: t(`board.moveTarget.${notice.column}`) })}</Alert>
+        <Alert tone="success">
+          {t(notice.paused ? 'board.movedPaused' : 'board.moved', {
+            key: notice.key,
+            column: t(`board.moveTarget.${notice.column}`),
+          })}
+        </Alert>
       )}
       {notice?.kind === 'error' && <ErrorAlert error={notice.error} />}
       <StatTiles stats={board.stats} />
+      <SlaBanner
+        stats={board.stats}
+        onShow={search.view === RISK_VIEW ? undefined : () => onSearchChange({ ...search, view: RISK_VIEW })}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <FilterPills
           label={t('agent.board.view.label')}

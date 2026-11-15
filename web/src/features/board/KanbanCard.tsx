@@ -7,6 +7,7 @@ import type { BoardCard } from '../../api/client'
 import { Avatar } from '../../components/Avatar'
 import { PriorityBadge } from '../../components/Badges'
 import { paths } from '../../lib/constants'
+import { SlaChip } from './SlaChip'
 
 /**
  * Kanban card per HANDOFF §14.3: the whole card opens the ticket and drags with a pointer; the
@@ -46,12 +47,15 @@ export function KanbanCard({ card }: { card: BoardCard }) {
         >
           <GripVertical aria-hidden="true" className="size-(--icon-md)" />
         </Button>
-        <Avatar
-          name={card.assignee?.name}
-          seed={card.assignee?.id}
-          size="sm"
-          label={t('ticket.assigneeLabel', { name: assignee })}
-        />
+        <span className="flex items-center gap-2">
+          {card.sla && <SlaChip sla={card.sla} />}
+          <Avatar
+            name={card.assignee?.name}
+            seed={card.assignee?.id}
+            size="sm"
+            label={t('ticket.assigneeLabel', { name: assignee })}
+          />
+        </span>
       </div>
     </GridListItem>
   )

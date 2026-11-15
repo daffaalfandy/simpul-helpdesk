@@ -95,6 +95,7 @@
         "label": "Show tickets",
         "all": "All tickets",
         "mine": "My queue",
+        "risk": "SLA at risk",
         "unassigned": "Unassigned"
       },
       "created": "{{key}} created. The requester gets an email copy.",
@@ -170,7 +171,12 @@
     },
     "stats": {
       "openTickets": "Open tickets",
-      "resolvedThisWeek": "Resolved this week"
+      "resolvedThisWeek": "Resolved this week",
+      "avgFirstResponse": "Avg first response",
+      "withinSla": "Within SLA (this month)",
+      "noFirstReplies": "No first replies yet",
+      "noResolved": "No resolved tickets yet",
+      "percent": "{{value}}%"
     },
     "hint": "Drag a card to another column to change its status. Every move is saved to the ticket's activity log.",
     "moveCard": "Move {{key}}",
@@ -182,7 +188,8 @@
       "waiting_on_client": "Waiting on client",
       "in_uat": "In UAT",
       "resolved": "Resolved"
-    }
+    },
+    "movedPaused": "{{key}} moved to {{column}} · SLA clock paused."
   },
   "portal": {
     "support": "{{org}} Support",
@@ -1027,6 +1034,22 @@
       },
       "system": "The helpdesk",
       "quote": "“{{text}}”"
+    }
+  },
+  "sla": {
+    "respondIn": "Respond in {{span}}",
+    "left": "{{span}} left",
+    "breached": "Breached {{span}}",
+    "paused": "Paused · {{span}} left",
+    "met": "Met SLA",
+    "missed": "Missed SLA",
+    "banner": {
+      "label": "SLA alert",
+      "title_one": "ticket is past or close to its SLA",
+      "title_other": "tickets are past or close to their SLA",
+      "detail": "{{breached}} breached · {{atRisk}} at risk.",
+      "oldest": "Oldest is {{key}}, {{client}}.",
+      "show": "Show me"
     }
   }
 }

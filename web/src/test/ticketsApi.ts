@@ -2,6 +2,7 @@ import { delay, http, HttpResponse } from 'msw'
 
 import type {
   Assignee,
+  BoardCardSla,
   Colleague,
   Attachment,
   AttachmentPolicy,
@@ -28,6 +29,10 @@ const MAX_BYTES = 10 * 1024 * 1024
 export const BOARD_COLUMN_LIMIT = 100
 const PRIORITY_ORDER = ['P1', 'P2', 'P3', 'P4']
 const DAYS_PER_WEEK = 7
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+const WORKING_DAY_MS = 9 * HOUR_MS
+const FLAGGED: readonly string[] = ['at_risk', 'breached']
 
 export const TICKET_IDS = {
   hendra: '01a1cedf-0000-7000-8000-000000000003',
@@ -175,7 +180,13 @@ function fixtures() {
   ]
   /** Colleagues following each ticket ("People notified"). */
   const watchers: Record<string, Colleague[]> = {}
-  return { tickets, messages, activity, catalogItems, requesters, assignees, watchers }
+  /** The SLA clock each board card shows. */
+  const cardSla: Record<string, BoardCardSla> = {
+    'HD-24910': { clock: 'first_response', phase: 'at_risk', remainingMs: 22 * MINUTE_MS, dayMs: WORKING_DAY_MS },
+    'HD-24915': { clock: 'resolution', phase: 'breached', remainingMs: -12 * MINUTE_MS, dayMs: WORKING_DAY_MS },
+    'HD-24920': { clock: 'resolution', phase: 'met', remainingMs: 2 * HOUR_MS, dayMs: WORKING_DAY_MS },
+  }
+  return { tickets, messages, activity, catalogItems, requesters, assignees, watchers, cardSla }
 }
 
 type Recorded = { method: string; path: string; search: string; body: unknown }
@@ -236,7 +247,18 @@ function projectOf(body: Record<string, unknown>) {
 
 function boardCard(t: Ticket): BoardCard {
   const { id, key, type, status, priority, subject, client, assignee } = t
-  return { id, key, type, status, priority, subject, client, assignee, allowedStatuses: allowedMoves(t), sla: null }
+  return {
+    id,
+    key,
+    type,
+    status,
+    priority,
+    subject,
+    client,
+    assignee,
+    allowedStatuses: allowedMoves(t),
+    sla: tickets.cardSla[key] ?? null,
+  }
 }
 
 function startOfToday() {
@@ -246,7 +268,7 @@ function startOfToday() {
 }
 
 /** The board like GET /board: columns in order, P1 first, done tickets from midnight only. */
-function board(assignee: string | null, q: string): Board {
+function board(assignee: string | null, q: string, slaFilter: string | null): Board {
   const midnight = startOfToday()
   const weekStart = new Date(midnight)
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + DAYS_PER_WEEK - 1) % DAYS_PER_WEEK))
@@ -257,6 +279,8 @@ function board(assignee: string | null, q: string): Board {
     .filter((t) => assignee !== 'me' || t.assignee?.id === state.me?.id)
     .filter((t) => assignee !== 'unassigned' || t.assignee === null)
     .filter((t) => !search || [t.key, t.subject, t.client.name].some((s) => s.toLowerCase().includes(search)))
+    .filter((t) => slaFilter !== 'at_risk' || FLAGGED.includes(tickets.cardSla[t.key]?.phase ?? ''))
+  const flagged = (phase: string) => Object.values(tickets.cardSla).filter((c) => c.phase === phase).length
   return {
     columns: BOARD_COLUMNS.map((id) => {
       const inColumn = cards
@@ -268,11 +292,11 @@ function board(assignee: string | null, q: string): Board {
     stats: {
       openTickets: tickets.tickets.filter((t) => t.resolvedAt === null && t.status !== 'closed').length,
       resolvedThisWeek: tickets.tickets.filter((t) => since(t, weekStart)).length,
-      slaBreached: 0,
-      slaAtRisk: 0,
-      slaOldest: null,
-      avgFirstResponseMs: null,
-      withinSlaPercent: null,
+      slaBreached: flagged('breached'),
+      slaAtRisk: flagged('at_risk'),
+      slaOldest: flagged('breached') ? { key: 'HD-24915', clientName: 'BPKAD Kota Batam' } : null,
+      avgFirstResponseMs: 18 * MINUTE_MS,
+      withinSlaPercent: 94.6,
     },
   }
 }
@@ -315,7 +339,7 @@ export const ticketsHandlers = [
     await record(request)
     if (isRequester()) return problem(403, 'forbidden')
     const params = new URL(request.url).searchParams
-    return HttpResponse.json(board(params.get('assignee'), params.get('q') ?? ''))
+    return HttpResponse.json(board(params.get('assignee'), params.get('q') ?? '', params.get('sla')))
   }),
   http.get(`${API}/attachment-policy`, () => HttpResponse.json(policy)),
   http.get(`${API}/intake`, async ({ request }) => {

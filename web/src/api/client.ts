@@ -69,6 +69,11 @@ export type NotificationEventSetting = components['schemas']['NotificationEventS
 export type EmailFrequency = components['schemas']['EmailFrequency']
 export type Audience = components['schemas']['Audience']
 export type Colleague = components['schemas']['Colleague']
+export type SlaClock = components['schemas']['SlaClock']
+export type SlaClockName = components['schemas']['SlaClockName']
+export type SlaPhase = components['schemas']['SlaPhase']
+export type BoardCardSla = components['schemas']['BoardCardSla']
+export type BoardSlaFilter = components['schemas']['BoardSlaFilter']
 
 /** Stable error codes returned by the API (api/internal/apperr). */
 export const ErrorCode = {
