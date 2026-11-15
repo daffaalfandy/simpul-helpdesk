@@ -45,11 +45,14 @@ func (c *changeSet) write(ctx context.Context, q *db.Queries, e audit.Entry) err
 	return nil
 }
 
-// commit queues the notification fan-out for everything the transaction changed. Nothing is
-// queued for a transaction that changed nothing.
+// commit replays the ticket's SLA clocks and queues the notification fan-out for everything
+// the transaction changed. A transaction that changed nothing does neither.
 func (s *Service) commit(ctx context.Context, tx store.Tx, c *changeSet) error {
 	if len(c.auditIDs) == 0 {
 		return nil
+	}
+	if err := s.replaySLA(ctx, tx.Q, c.ticketID, s.now()); err != nil {
+		return err
 	}
 	_, err := s.jobs.InsertTx(ctx, tx.PG, notification.FanoutArgs{TicketID: c.ticketID, AuditIDs: c.auditIDs},
 		&river.InsertOpts{MaxAttempts: fanoutMaxAttempts})

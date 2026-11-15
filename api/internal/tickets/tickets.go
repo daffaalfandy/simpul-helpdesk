@@ -110,6 +110,7 @@ type Ticket struct {
 	LoggedByStaff     bool // an agent logged it on the requester's behalf
 	Attachments       []Attachment
 	SLA               ticket.EffectiveSLA
+	SLAClocks         *SLAClocks // nil until the SLA engine has run for the ticket
 	SLATargets        []sla.ProjectTarget
 	FirstResponseAt   *time.Time
 	ClosedAt          *time.Time

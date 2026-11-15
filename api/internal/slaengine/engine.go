@@ -280,12 +280,3 @@ func runs(st ticket.Status, snap ticket.SLASnapshot) bool {
 	}
 	return !done(st)
 }
-
-// RecomputeArgs re-runs every open ticket's clocks (business hours or holidays changed).
-// River job args; they live here so the calendar service can queue the job.
-type RecomputeArgs struct{}
-
-// JobKindRecompute is RecomputeArgs' job kind.
-const JobKindRecompute = "sla_recompute"
-
-func (RecomputeArgs) Kind() string { return JobKindRecompute }

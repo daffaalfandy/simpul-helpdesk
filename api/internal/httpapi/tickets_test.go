@@ -346,8 +346,11 @@ func TestCreateTickets(t *testing.T) {
 		Resolution: gen.Duration{Value: 4, Unit: gen.DurationUnitH}, Calendar: gen.SlaCalendarBusinessHours,
 		PauseOnWaitingClient: true, PauseOnUat: true,
 	}
-	if tk.Project.Id != te.projectA || len(tk.SlaTargets) != 4 || tk.Sla != wantSla {
+	if tk.Project.Id != te.projectA || len(tk.SlaTargets) != 4 || targetsOnly(tk.Sla) != wantSla {
 		t.Fatalf("project %+v, sla %+v", tk.Project, tk.Sla)
+	}
+	if c := tk.Sla.ResolutionClock; c == nil || c.Phase != gen.SlaPhaseRunning || c.BudgetMs != (4*time.Hour).Milliseconds() {
+		t.Fatalf("resolution clock = %+v", c)
 	}
 	if len(tk.AllowedStatuses) != 0 || tk.Progress[0].State != gen.TicketProgressStateCurrent {
 		t.Fatalf("requester view: allowed %v progress %+v", tk.AllowedStatuses, tk.Progress)
@@ -377,7 +380,7 @@ func TestCreateTickets(t *testing.T) {
 	project.Sla.Targets[2].Resolve = gen.Duration{Value: 2, Unit: gen.DurationUnitWd}
 	project.Sla.PauseOnUat = false
 	decode[gen.Project](t, te.supervisor.do(http.MethodPut, "/projects/"+te.projectA.String()+"/sla", project.Sla), http.StatusOK)
-	if got := te.agent.ticket(t, tk.Key).Sla; got != tk.Sla {
+	if got := te.agent.ticket(t, tk.Key).Sla; targetsOnly(got) != targetsOnly(tk.Sla) {
 		t.Fatalf("SLA after project edit = %+v, want %+v", got, tk.Sla)
 	}
 	if got := te.requester.report(t, incident(te.projectA, "After the edit")).Sla; got.Resolution.Unit != gen.DurationUnitWd || got.PauseOnUat {
@@ -392,6 +395,10 @@ func TestCreateTickets(t *testing.T) {
 	if lt.Status != gen.TicketStatusAssigned || lt.Assignee == nil || lt.Assignee.Id != te.agentID ||
 		lt.Channel != gen.TicketChannelPhone || !lt.LoggedByStaff || lt.CreatedBy.Id != te.agentID {
 		t.Fatalf("logged ticket = %+v", lt)
+	}
+	// The agent already spoke with the requester: first response met when logged (owner, 15 Nov).
+	if lt.FirstResponseAt == nil || lt.Sla.FirstResponseClock == nil || lt.Sla.FirstResponseClock.Phase != gen.SlaPhaseMet {
+		t.Fatalf("logged ticket first response = %v, clock %+v", lt.FirstResponseAt, lt.Sla.FirstResponseClock)
 	}
 
 	cases := map[string]struct {
@@ -812,4 +819,10 @@ func TestDownloadStreamsWholeFile(t *testing.T) {
 	if rec.Code != http.StatusOK || !bytes.Equal(body, content) {
 		t.Fatalf("download: %d, %d bytes", rec.Code, len(body))
 	}
+}
+
+// targetsOnly drops the live clocks, which change with time, from a ticket's SLA.
+func targetsOnly(s gen.TicketSla) gen.TicketSla {
+	s.FirstResponseClock, s.ResolutionClock = nil, nil
+	return s
 }

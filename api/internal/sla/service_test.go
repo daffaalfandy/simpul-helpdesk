@@ -7,6 +7,10 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
+
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
@@ -17,9 +21,42 @@ func TestMain(m *testing.M) { os.Exit(testdb.Main(m)) }
 
 var actor = audit.SystemActor(audit.ActorNameCLI)
 
+// queued records the jobs an edit queues.
+type queued struct{ kinds []string }
+
+func (q *queued) InsertTx(_ context.Context, _ pgx.Tx, args river.JobArgs, _ *river.InsertOpts) (*rivertype.JobInsertResult, error) {
+	q.kinds = append(q.kinds, args.Kind())
+	return &rivertype.JobInsertResult{}, nil
+}
+
+func newService(t *testing.T) *sla.Service { return sla.NewService(testdb.New(t), &queued{}) }
+
+// Every calendar edit queues a recompute of open tickets' clocks.
+func TestCalendarEditsQueueRecompute(t *testing.T) {
+	ctx := context.Background()
+	jobs := &queued{}
+	svc := sla.NewService(testdb.New(t), jobs)
+	day, _ := calendar.ParseDate("2026-12-01")
+	h, err := svc.CreateHoliday(ctx, actor, day, "Office closed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DeleteHoliday(ctx, actor, h.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.UpdateBusinessHours(ctx, actor, sla.HoursInput{
+		Weekdays: []time.Weekday{time.Monday}, Opens: 8 * time.Hour, Closes: 16 * time.Hour,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs.kinds) != 3 || jobs.kinds[0] != sla.JobKindRecompute {
+		t.Fatalf("queued = %v, want three recomputes", jobs.kinds)
+	}
+}
+
 func TestSchedulesUseStoredHoursAndHolidays(t *testing.T) {
 	ctx := context.Background()
-	svc := sla.NewService(testdb.New(t))
+	svc := newService(t)
 	wed, _ := calendar.ParseDate("2026-11-18")
 	if _, err := svc.CreateHoliday(ctx, actor, wed, "Test holiday"); err != nil {
 		t.Fatal(err)
@@ -47,7 +84,7 @@ func TestSchedulesUseStoredHoursAndHolidays(t *testing.T) {
 
 func TestPresetLoadIsIdempotentAndKeepsEdits(t *testing.T) {
 	ctx := context.Background()
-	svc := sla.NewService(testdb.New(t))
+	svc := newService(t)
 	idulFitri, _ := calendar.ParseDate("2027-03-10")
 	if _, err := svc.CreateHoliday(ctx, actor, idulFitri, "Lebaran (kantor)"); err != nil {
 		t.Fatal(err)

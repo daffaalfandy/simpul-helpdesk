@@ -85,7 +85,14 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 			}
 		}
 	}
+	// Like Create: an agent-logged ticket is answered when it is logged; a portal report by the
+	// first public staff reply.
+	loggedByStaff := t.Channel.AgentLoggable()
 	var firstResponse *time.Time
+	if loggedByStaff {
+		at := t.CreatedAt
+		firstResponse = &at
+	}
 	for _, m := range t.Messages {
 		if m.FromSupport && m.Visibility == ticket.VisibilityPublic && firstResponse == nil {
 			at := m.At
@@ -128,7 +135,11 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 		dataAttachmentIDs: []uuid.UUID{},
 	}}
 	entries = append([]seedEntry{created}, entries...)
-	responded := false
+	responded := loggedByStaff
+	if loggedByStaff {
+		entries = append(entries, seedEntry{at: t.CreatedAt, actor: t.CreatedBy, action: ActionFirstResponded,
+			data: map[string]any{dataCause: causeLoggedByStaff}})
+	}
 	for _, m := range t.Messages {
 		msgID := uuid.Must(uuid.NewV7())
 		if err := q.InsertSeedMessage(ctx, db.InsertSeedMessageParams{

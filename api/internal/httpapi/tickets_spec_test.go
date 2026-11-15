@@ -10,6 +10,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/slaengine"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
@@ -57,6 +58,8 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		"NotificationChange": strs(notification.ChangeKinds...),
 		"Audience":           strs(notification.AudienceTeam, notification.AudiencePortal),
 		"EmailFrequency":     strs(notification.Frequencies...),
+		"SlaPhase":           strs(slaengine.Phases...),
+		"SlaClockName":       strs(slaengine.Clocks...),
 		"Priority":           strs(sla.Priorities...),
 		"SlaCalendar":        strs(sla.CalendarBusinessHours, sla.CalendarAlways),
 		"DurationUnit":       strs(sla.Units...),

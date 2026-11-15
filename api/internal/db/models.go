@@ -221,6 +221,29 @@ type TicketMessage struct {
 	CreatedAt  time.Time
 }
 
+type TicketSla struct {
+	TicketID                     uuid.UUID
+	ComputedAt                   time.Time
+	FirstResponseBudgetMs        int64
+	FirstResponseCalendar        string
+	FirstResponseElapsedMs       int64
+	FirstResponseRunningSince    *time.Time
+	FirstResponseDueAt           *time.Time
+	FirstResponseAtRiskAt        *time.Time
+	FirstResponseAtRiskFlaggedAt *time.Time
+	FirstResponseBreachedAt      *time.Time
+	FirstResponseMetAt           *time.Time
+	ResolutionBudgetMs           int64
+	ResolutionCalendar           string
+	ResolutionElapsedMs          int64
+	ResolutionRunningSince       *time.Time
+	ResolutionDueAt              *time.Time
+	ResolutionAtRiskAt           *time.Time
+	ResolutionAtRiskFlaggedAt    *time.Time
+	ResolutionBreachedAt         *time.Time
+	ResolutionMetAt              *time.Time
+}
+
 type TicketWatcher struct {
 	TicketID  uuid.UUID
 	UserID    uuid.UUID

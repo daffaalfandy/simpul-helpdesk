@@ -1479,7 +1479,10 @@ export interface components {
          * @enum {string}
          */
         TicketStatusCause: "assignment" | "requester_reply";
-        /** @description The targets for the current priority, from the project's SLA when the ticket was opened. */
+        /**
+         * @description The targets for the current priority, from the project's SLA when the ticket was opened,
+         *     and the live clocks (null until the SLA engine has run for the ticket, within a minute).
+         */
         TicketSla: {
             priority: components["schemas"]["Priority"];
             firstResponse: components["schemas"]["Duration"];
@@ -1488,6 +1491,39 @@ export interface components {
             calendar: components["schemas"]["SlaCalendar"];
             pauseOnWaitingClient: boolean;
             pauseOnUat: boolean;
+            firstResponseClock: components["schemas"]["SlaClock"] | null;
+            resolutionClock: components["schemas"]["SlaClock"] | null;
+        };
+        /**
+         * @description `at_risk` and `breached` come from the minute-by-minute scan, so they match the alerts;
+         *     `missed` means met after the deadline; `stopped` means the ticket was resolved first.
+         * @enum {string}
+         */
+        SlaPhase: "running" | "at_risk" | "breached" | "paused" | "met" | "missed" | "stopped";
+        /** @description One SLA clock now. Times count on the clock's own calendar (working time or 24/7). */
+        SlaClock: {
+            phase: components["schemas"]["SlaPhase"];
+            /** Format: int64 */
+            usedMs: number;
+            /** Format: int64 */
+            budgetMs: number;
+            /**
+             * Format: int64
+             * @description Negative once over the target.
+             */
+            remainingMs: number;
+            /**
+             * Format: int64
+             * @description One day on this clock's calendar: a working day, or 24 hours.
+             */
+            dayMs: number;
+            /**
+             * Format: date-time
+             * @description Null while paused or stopped.
+             */
+            dueAt: string | null;
+            /** Format: date-time */
+            metAt: string | null;
         };
         TicketProgress: {
             step: components["schemas"]["TicketProgressStep"];

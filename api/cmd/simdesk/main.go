@@ -182,12 +182,16 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	river.AddWorker(workers, auth.NewResetEmailWorker(st, mailer, cfg.AppURL, opts.ResetTokenTTL))
 	river.AddWorker(workers, tickets.NewAttachmentSweeper(st, files))
 	river.AddWorker(workers, notifications.NewFanoutWorker(st, log))
+	// The River client needs its workers first, so workers and services that queue jobs get an
+	// inserter whose client is set once it exists.
 	late := &notifications.LateInserter{}
+	slaSvc := sla.NewService(st, late)
 	notifyMailer := notifications.NewMailer(st, mailer, cfg.AppURL, log)
 	river.AddWorker(workers, notifications.NewDispatchWorker(st, late))
 	river.AddWorker(workers, notifications.NewTicketEmailWorker(notifyMailer))
 	river.AddWorker(workers, notifications.NewDigestWorker(notifyMailer))
 	river.AddWorker(workers, notifications.NewPurgeWorker(st))
+	river.AddWorker(workers, tickets.NewSLARecomputer(st, slaSvc))
 	riverCfg := &river.Config{Workers: workers, Logger: log.With("component", "jobs")}
 	if runJobs {
 		// Periodic jobs only on clients that run jobs: River refuses them on insert-only clients.
@@ -204,7 +208,6 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	}
 	late.JobInserter = jobs
 	hasher := auth.NewHasher(auth.DefaultParams, auth.DefaultMaxConcurrentHashes)
-	slaSvc := sla.NewService(st)
 	return &app{
 		cfg: cfg, log: log, store: st, hasher: hasher, jobs: jobs, files: files,
 		auth:          auth.NewService(st, hasher, jobs, opts, log),

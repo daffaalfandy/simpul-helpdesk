@@ -2022,8 +2022,11 @@ components:
 
     TicketSla:
       type: object
-      required: [priority, firstResponse, resolution, calendar, pauseOnWaitingClient, pauseOnUat]
-      description: The targets for the current priority, from the project's SLA when the ticket was opened.
+      required: [priority, firstResponse, resolution, calendar, pauseOnWaitingClient, pauseOnUat,
+                 firstResponseClock, resolutionClock]
+      description: |
+        The targets for the current priority, from the project's SLA when the ticket was opened,
+        and the live clocks (null until the SLA engine has run for the ticket, within a minute).
       properties:
         priority: { $ref: "#/components/schemas/Priority" }
         firstResponse: { $ref: "#/components/schemas/Duration" }
@@ -2033,6 +2036,28 @@ components:
         calendar: { $ref: "#/components/schemas/SlaCalendar" }
         pauseOnWaitingClient: { type: boolean }
         pauseOnUat: { type: boolean }
+        firstResponseClock: { allOf: [{ $ref: "#/components/schemas/SlaClock" }], nullable: true }
+        resolutionClock: { allOf: [{ $ref: "#/components/schemas/SlaClock" }], nullable: true }
+
+    SlaPhase:
+      type: string
+      description: |
+        `at_risk` and `breached` come from the minute-by-minute scan, so they match the alerts;
+        `missed` means met after the deadline; `stopped` means the ticket was resolved first.
+      enum: [running, at_risk, breached, paused, met, missed, stopped]
+
+    SlaClock:
+      type: object
+      required: [phase, usedMs, budgetMs, remainingMs, dayMs, dueAt, metAt]
+      description: One SLA clock now. Times count on the clock's own calendar (working time or 24/7).
+      properties:
+        phase: { $ref: "#/components/schemas/SlaPhase" }
+        usedMs: { type: integer, format: int64 }
+        budgetMs: { type: integer, format: int64 }
+        remainingMs: { type: integer, format: int64, description: Negative once over the target. }
+        dayMs: { type: integer, format: int64, description: "One day on this clock's calendar: a working day, or 24 hours." }
+        dueAt: { type: string, format: date-time, nullable: true, description: Null while paused or stopped. }
+        metAt: { type: string, format: date-time, nullable: true }
 
     TicketProgress:
       type: object

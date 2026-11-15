@@ -46,9 +46,12 @@ func (s *Service) UpdateBusinessHours(ctx context.Context, actor audit.Actor, in
 			}
 		}
 		updated = Hours{Timezone: old.Timezone, Weekdays: days, Opens: in.Opens, Closes: in.Closes}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionHoursUpdated, TargetBusinessHours, nil, map[string]any{
+		if err := audit.Write(ctx, tx.Q, actor.Entry(ActionHoursUpdated, TargetBusinessHours, nil, map[string]any{
 			dataFrom: describeHours(old), dataTo: describeHours(updated),
-		}))
+		})); err != nil {
+			return err
+		}
+		return s.recompute(ctx, tx)
 	})
 	if err != nil {
 		return Hours{}, err
@@ -114,9 +117,12 @@ func (s *Service) CreateHoliday(ctx context.Context, actor audit.Actor, date cal
 		if id, err = tx.Q.CreateHoliday(ctx, db.CreateHolidayParams{Date: date, Name: name}); err != nil {
 			return err
 		}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionHolidayCreated, TargetHoliday, &id, map[string]any{
+		if err := audit.Write(ctx, tx.Q, actor.Entry(ActionHolidayCreated, TargetHoliday, &id, map[string]any{
 			dataDate: date, dataName: name,
-		}))
+		})); err != nil {
+			return err
+		}
+		return s.recompute(ctx, tx)
 	})
 	if store.IsViolation(err, store.SQLStateUniqueViolation, constraintHolidayDate) {
 		return Holiday{}, apperr.Conflict(apperr.CodeHolidayDateTaken, "That date is already a holiday", date.String())
@@ -133,9 +139,12 @@ func (s *Service) DeleteHoliday(ctx context.Context, actor audit.Actor, id uuid.
 		if err != nil {
 			return notFound(err)
 		}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionHolidayDeleted, TargetHoliday, &id, map[string]any{
+		if err := audit.Write(ctx, tx.Q, actor.Entry(ActionHolidayDeleted, TargetHoliday, &id, map[string]any{
 			dataDate: row.Date, dataName: row.Name,
-		}))
+		})); err != nil {
+			return err
+		}
+		return s.recompute(ctx, tx)
 	})
 }
 
@@ -184,9 +193,12 @@ func (s *Service) LoadHolidayPreset(ctx context.Context, actor audit.Actor, year
 				result.Skipped++
 			}
 		}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionPresetLoaded, TargetHoliday, nil, map[string]any{
+		if err := audit.Write(ctx, tx.Q, actor.Entry(ActionPresetLoaded, TargetHoliday, nil, map[string]any{
 			dataYear: year, dataAdded: result.Added, dataSkipped: result.Skipped,
-		}))
+		})); err != nil {
+			return err
+		}
+		return s.recompute(ctx, tx)
 	})
 	if err != nil {
 		return PresetLoad{}, err

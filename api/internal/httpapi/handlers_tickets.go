@@ -7,6 +7,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/slaengine"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
@@ -247,6 +248,10 @@ func apiTicket(t tickets.Ticket) gen.Ticket {
 		Progress:        make([]gen.TicketProgress, len(t.Progress)),
 		AllowedStatuses: make([]gen.TicketStatus, len(t.AllowedStatuses)),
 	}
+	if c := t.SLAClocks; c != nil {
+		fr, res := apiClock(c.FirstResponse), apiClock(c.Resolution)
+		out.Sla.FirstResponseClock, out.Sla.ResolutionClock = &fr, &res
+	}
 	for i, st := range t.Progress {
 		out.Progress[i] = gen.TicketProgress{
 			Step: gen.TicketProgressStep(st.Step), State: gen.TicketProgressState(st.State), At: st.At,
@@ -277,5 +282,12 @@ func apiAttachments(list []tickets.Attachment) []gen.Attachment {
 func apiAttachment(a tickets.Attachment) gen.Attachment {
 	return gen.Attachment{
 		Id: a.ID, Filename: a.Filename, ContentType: a.ContentType, SizeBytes: a.SizeBytes, CreatedAt: a.CreatedAt,
+	}
+}
+
+func apiClock(v slaengine.View) gen.SlaClock {
+	return gen.SlaClock{
+		Phase: gen.SlaPhase(v.Phase), UsedMs: v.Used.Milliseconds(), BudgetMs: v.Budget.Milliseconds(),
+		RemainingMs: v.Remaining.Milliseconds(), DayMs: v.Day.Milliseconds(), DueAt: v.DueAt, MetAt: v.MetAt,
 	}
 }

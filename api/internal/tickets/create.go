@@ -135,8 +135,20 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 			data[dataCatalogItem] = *in.CatalogItemID
 		}
 		cs := newChangeSet(created.ID)
-		if err := cs.write(ctx, tx.Q, p.AuditActor().Entry(ActionCreated, TargetTicket, &created.ID, data)); err != nil {
+		actor := p.AuditActor()
+		if err := cs.write(ctx, tx.Q, actor.Entry(ActionCreated, TargetTicket, &created.ID, data)); err != nil {
 			return err
+		}
+		// An agent logging a call has already answered it: first response at creation.
+		if a.staff {
+			if _, err := tx.Q.MarkTicketFirstResponse(ctx, created.ID); err != nil {
+				return err
+			}
+			if err := cs.write(ctx, tx.Q, actor.Entry(ActionFirstResponded, TargetTicket, &created.ID, map[string]any{
+				dataCause: causeLoggedByStaff,
+			})); err != nil {
+				return err
+			}
 		}
 		return s.commit(ctx, tx, cs)
 	})

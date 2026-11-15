@@ -75,7 +75,7 @@ function ticket(over: Partial<Ticket> & Pick<Ticket, 'id' | 'key' | 'subject'>):
       resolution: { value: 2, unit: 'wd' },
       calendar: 'business_hours',
       pauseOnWaitingClient: true,
-      pauseOnUat: true,
+      pauseOnUat: true, firstResponseClock: null, resolutionClock: null,
     },
     slaTargets: defaultTargets,
     firstResponseAt: null,
@@ -110,7 +110,7 @@ function fixtures() {
         resolution: { value: 4, unit: 'h' },
         calendar: 'always',
         pauseOnWaitingClient: true,
-        pauseOnUat: true,
+        pauseOnUat: true, firstResponseClock: null, resolutionClock: null,
       },
       allowedStatuses: ['assigned', 'waiting_on_client', 'in_uat', 'resolved'],
       progress: [
@@ -365,7 +365,7 @@ export const ticketsHandlers = [
         resolution: { value: 8, unit: 'h' },
         calendar: 'business_hours',
         pauseOnWaitingClient: true,
-        pauseOnUat: true,
+        pauseOnUat: true, firstResponseClock: null, resolutionClock: null,
       },
     })
     tickets.tickets.unshift(t)
