@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 import { Button as AriaButton, Dialog, DialogTrigger, Heading, Popover } from 'react-aria-components'
 
 import type { Audience, Notification, NotificationFilter } from '../../api/client'
-import { Button } from '../../components/Button'
 import { FilterPills } from '../../components/FilterPills'
 import { Spinner } from '../../components/Spinner'
 import { NOTIFICATION_SETTINGS_HASH, paths } from '../../lib/constants'
@@ -18,6 +17,11 @@ import { bellQueryOptions, unreadCountQueryOptions, useMarkAllRead, useMarkRead 
 const POPOVER_OFFSET = 8
 
 const footerLink = 'inline-flex min-h-(--control-h-md) items-center text-sm font-bold text-primary no-underline'
+
+/** "Mark all as read" as a text action; greyed out, not hidden, when nothing is unread. */
+const markAllText =
+  'hit-area inline-flex min-h-(--control-h-sm) cursor-pointer items-center rounded-md px-2 text-sm font-bold text-primary ' +
+  'hover:text-primary-hover data-disabled:cursor-not-allowed data-disabled:text-disabled'
 
 /**
  * The bell in every header (HANDOFF §14.3 NotifBell): a red unread count, and a panel with the
@@ -76,16 +80,13 @@ export function NotificationBell({ audience }: { audience: Audience }) {
             <Heading slot="title" className="text-md font-extrabold">
               {t('notifications.bell.label')}
             </Heading>
-            <Button
-              variant="ghost"
-              size="sm"
-              isDisabled={unread === 0}
-              isPending={markAll.isPending}
+            <AriaButton
+              isDisabled={unread === 0 || markAll.isPending}
               onPress={() => markAll.mutate()}
-              className="data-disabled:bg-transparent data-disabled:text-disabled"
+              className={markAllText}
             >
               {t('notifications.bell.markAllRead')}
-            </Button>
+            </AriaButton>
           </div>
           <FilterPills
             label={t('notifications.bell.show')}

@@ -31,6 +31,7 @@ export const queryKeys = {
   clientRequesters: (clientId: string) => ['clients', clientId, 'requesters'] as const,
   clientAssignees: (clientId: string) => ['clients', clientId, 'assignees'] as const,
   ticketWatchers: (key: string) => ['tickets', 'watchers', key] as const,
+  watcherCandidatesFor: (key: string) => ['tickets', 'watcher-candidates', key] as const,
   watcherCandidates: (key: string, q: string) => ['tickets', 'watcher-candidates', key, q] as const,
   notifications: ['notifications'],
   notificationList: (filter: string) => ['notifications', 'list', filter] as const,

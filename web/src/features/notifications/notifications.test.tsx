@@ -158,6 +158,7 @@ describe('notifications page', () => {
     expect(screen.getByText('Status changed: In progress → Ready for your test')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /HD-24812/ })).toHaveAttribute('href', '/portal/tickets/HD-24812')
     expect(screen.queryByText(/always on, so nothing slips/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/notifications\.settings/)).not.toBeInTheDocument()
     expect(screen.getAllByRole('switch')).toHaveLength(10)
   })
 })

@@ -32,6 +32,8 @@ type SearchSelectProps<K extends string> = {
   errorMessage?: string
   /** A last row that acts on the typed text, e.g. 'Add "Siti" as a new requester'. */
   action?: { label: (query: string) => string; onAction: (query: string) => void }
+  /** Called as the user types, for lists the server narrows. */
+  onQueryChange?: (query: string) => void
 }
 
 const ACTION_KEY = '__search-select-action__'
@@ -55,6 +57,7 @@ export function SearchSelect<K extends string>({
   isInvalid,
   errorMessage,
   action,
+  onQueryChange,
 }: SearchSelectProps<K>) {
   const selected = options.find((o) => o.id === value)
   const [query, setQuery] = useState(selected?.label ?? '')
@@ -76,7 +79,10 @@ export function SearchSelect<K extends string>({
     <ComboBox
       items={rows}
       inputValue={query}
-      onInputChange={setQuery}
+      onInputChange={(q) => {
+        setQuery(q)
+        onQueryChange?.(q)
+      }}
       selectedKey={value}
       onSelectionChange={select}
       menuTrigger="focus"

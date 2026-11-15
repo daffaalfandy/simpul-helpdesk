@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery, useSuspenseQuery } from '@tanstack/react-qu
 import { useLocation } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button as AriaButton } from 'react-aria-components'
 
 import type { Audience, EmailFrequency, Notification, NotificationEventSetting, NotificationFilter } from '../../api/client'
 import { errorMessage } from '../../api/errors'
@@ -27,6 +28,12 @@ import {
 } from './queries'
 
 const FREQUENCIES: readonly EmailFrequency[] = ['instant', 'hourly', 'daily']
+
+/** The inbox's "Mark all as read": an outline button that greys out when nothing is unread. */
+const markAllOutline =
+  'hit-area inline-flex min-h-(--control-h-sm) cursor-pointer items-center rounded-md border border-border-strong bg-surface px-3 ' +
+  'text-sm font-bold text-primary hover:bg-surface-subtle data-disabled:cursor-not-allowed data-disabled:border-border ' +
+  'data-disabled:bg-surface-subtle data-disabled:text-disabled'
 
 /** Notifications (agent app and portal, HANDOFF §4): the inbox beside the settings. */
 export function NotificationsPage() {
@@ -65,16 +72,9 @@ function Inbox({ audience }: { audience: Audience }) {
     <Card
       title={t('notifications.page.inbox')}
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          isDisabled={unread === 0}
-          isPending={markAll.isPending}
-          onPress={() => markAll.mutate()}
-          className="text-primary data-disabled:border-border data-disabled:bg-surface-subtle data-disabled:text-disabled"
-        >
+        <AriaButton isDisabled={unread === 0 || markAll.isPending} onPress={() => markAll.mutate()} className={markAllOutline}>
           {t('notifications.bell.markAllRead')}
-        </Button>
+        </AriaButton>
       }
       className="min-w-0 flex-[999_1_var(--notif-inbox-basis)]"
     >
@@ -158,7 +158,9 @@ function Settings({ audience }: { audience: Audience }) {
     setFrequency.mutate(f, feedback)
   }
   const label = (e: NotificationEventSetting) => t(`notifications.settings.events.${audience}.${e.event}.label` as never)
-  const hint = (e: NotificationEventSetting) => t(`notifications.settings.events.${audience}.${e.event}.hint` as never)
+  // Not every event has a hint ("Resolved and closed" gets one when reopening exists, M6).
+  const hint = (e: NotificationEventSetting) =>
+    t(`notifications.settings.events.${audience}.${e.event}.hint` as never, { defaultValue: '' })
 
   return (
     <div
@@ -171,7 +173,7 @@ function Settings({ audience }: { audience: Audience }) {
         <p className="text-sm text-muted">{t(`notifications.settings.who.${audience}`)}</p>
         {saved && <Alert tone="success">{t('notifications.settings.saved')}</Alert>}
         {error != null && <Alert tone="error">{errorMessage(t, error)}</Alert>}
-        <table className="w-full border-collapse text-base">
+        <table className="w-full table-fixed border-collapse text-base">
           <caption className="sr-only">{t('notifications.settings.caption')}</caption>
           <thead>
             <tr className="text-left text-xs font-bold text-muted">

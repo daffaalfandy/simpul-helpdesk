@@ -207,3 +207,33 @@ describe('requester ticket detail', () => {
     expect(screen.getByRole('link', { name: 'Back to my tickets' })).toBeInTheDocument()
   })
 })
+
+describe('people notified', () => {
+  beforeEach(() => {
+    state.me = REQUESTER
+  })
+
+  it('adds and removes a colleague', async () => {
+    const user = userEvent.setup()
+    renderApp('/portal/tickets/HD-24871')
+    const heading = await screen.findByRole('heading', { name: 'People notified' })
+    const card = heading.closest('section') as HTMLElement
+    expect(within(card).getByText('Hendra Gunawan (you)')).toBeInTheDocument()
+
+    await user.click(within(card).getByRole('button', { name: 'Add a colleague' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add a colleague' })
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+    expect(await within(dialog).findByText('Choose a colleague.')).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('combobox', { name: /Colleague/ }))
+    await user.click(await screen.findByRole('option', { name: /Dian Puspita/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await within(card).findByText('Dian Puspita')).toBeInTheDocument()
+    expect(lastRequest('POST', '/tickets/HD-24871/watchers')?.body).toEqual({ userId: tickets.requesters[IDS.jambi]?.[1]?.id })
+
+    await user.click(within(card).getByRole('button', { name: 'Remove Dian Puspita' }))
+    await waitFor(() => expect(within(card).queryByText('Dian Puspita')).not.toBeInTheDocument())
+    expect(lastRequest('DELETE', '/watchers/' + tickets.requesters[IDS.jambi]?.[1]?.id)).toBeDefined()
+  })
+})

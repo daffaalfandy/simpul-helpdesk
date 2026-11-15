@@ -23,6 +23,7 @@ import { ServiceLevelCard } from '../tickets/ServiceLevelCard'
 import { STATUS_TONE } from '../tickets/status'
 import { useTimestamp } from '../tickets/time'
 import { useAttachmentUploads } from '../tickets/useAttachmentUploads'
+import { PeopleNotifiedCard } from './PeopleNotifiedCard'
 
 /** Requester ticket view (HANDOFF §4, PortalTicket.dc.html), M3 parts. */
 export function PortalTicketPage({ ticketKey }: { ticketKey: string }) {
@@ -99,6 +100,7 @@ export function PortalTicketPage({ ticketKey }: { ticketKey: string }) {
             />
           </Card>
           <ServiceLevelCard ticket={ticket} audience="requester" />
+          <PeopleNotifiedCard ticket={ticket} meId={me.id} />
         </aside>
       </div>
     </>

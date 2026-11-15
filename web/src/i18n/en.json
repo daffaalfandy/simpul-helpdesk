@@ -97,13 +97,13 @@
         "mine": "My queue",
         "unassigned": "Unassigned"
       },
-      "created": "{{key}} created.",
-      "createdAssigned": "{{key}} created and assigned to you.",
+      "created": "{{key}} created. The requester gets an email copy.",
+      "createdAssigned": "{{key}} created and assigned to you. The requester gets an email copy.",
       "openTicket": "Open {{key}}"
     },
     "logTicket": {
       "title": "Log a ticket for a client",
-      "subtitle": "For requests that came by phone, email, WhatsApp or in person.",
+      "subtitle": "For requests that came by phone, email, WhatsApp or in person. The requester gets an email copy.",
       "client": "Client",
       "noClients": "You aren't assigned to any client yet.",
       "requester": "Requester",
@@ -275,7 +275,18 @@
       "replyPlaceholder": "Write to the support team…",
       "send": "Send reply",
       "details": "Details",
-      "notAssigned": "Not assigned yet"
+      "notAssigned": "Not assigned yet",
+      "peopleNotified": "People notified",
+      "you": "{{name}} (you)",
+      "addColleague": "Add a colleague",
+      "addColleagueSubtitle": "They get the same notifications about this ticket as you do.",
+      "colleague": "Colleague",
+      "colleaguePlaceholder": "Search by name",
+      "noColleagues": "No colleague matches, or everyone is already here.",
+      "add": "Add",
+      "chooseColleague": "Choose a colleague.",
+      "removeColleague": "Remove {{name}}",
+      "watchersError": "People notified didn't load. Refresh the page to try again."
     }
   },
   "footer": {
@@ -980,8 +991,7 @@
             "hint": "The team needs information before they can continue"
           },
           "resolved": {
-            "label": "Resolved and closed",
-            "hint": ""
+            "label": "Resolved and closed"
           },
           "colleague": {
             "label": "Changes by colleagues",

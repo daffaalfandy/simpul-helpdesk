@@ -180,7 +180,7 @@ describe('board', () => {
     await user.type(within(dialog).getByRole('textbox', { name: 'Details' }), 'Login fails.')
     await user.click(within(dialog).getByRole('button', { name: 'Create ticket' }))
 
-    expect(await screen.findByText('HD-24892 created and assigned to you.')).toBeInTheDocument()
+    expect(await screen.findByText('HD-24892 created and assigned to you. The requester gets an email copy.')).toBeInTheDocument()
     expect(lastRequest('POST', '/tickets')?.body).toEqual({
       clientId: IDS.jambi,
       requesterId: TICKET_IDS.hendra,

@@ -2,6 +2,7 @@ import { delay, http, HttpResponse } from 'msw'
 
 import type {
   Assignee,
+  Colleague,
   Attachment,
   AttachmentPolicy,
   Board,
@@ -172,7 +173,9 @@ function fixtures() {
     { id: IDS.rina, name: 'Rina Pratiwi', role: 'agent', jobTitle: 'L2', openTicketCount: 6 },
     { id: IDS.adi, name: 'Adi Saputra', role: 'agent', jobTitle: 'L2', openTicketCount: 4 },
   ]
-  return { tickets, messages, activity, catalogItems, requesters, assignees }
+  /** Colleagues following each ticket ("People notified"). */
+  const watchers: Record<string, Colleague[]> = {}
+  return { tickets, messages, activity, catalogItems, requesters, assignees, watchers }
 }
 
 type Recorded = { method: string; path: string; search: string; body: unknown }
@@ -269,7 +272,40 @@ function board(assignee: string | null, q: string): Board {
   }
 }
 
+/** The ticket's client's other requesters, as colleagues who could follow it. */
+function colleaguesFor(t: Ticket): Colleague[] {
+  const following = tickets.watchers[t.key] ?? []
+  return (tickets.requesters[t.client.id] ?? [])
+    .filter((r) => r.id !== t.requester.id && !following.some((w) => w.id === r.id))
+    .map((r) => ({ id: r.id, name: r.name, jobTitle: r.jobTitle }))
+}
+
 export const ticketsHandlers = [
+  http.get(`${API}/tickets/:key/watchers`, ({ params }) => HttpResponse.json(tickets.watchers[String(params.key)] ?? [])),
+  http.get(`${API}/tickets/:key/watcher-candidates`, async ({ request, params }) => {
+    await record(request)
+    const t = tickets.tickets.find((x) => x.key === params.key)
+    if (!t || !visible(t)) return problem(404, 'not_found')
+    const q = (new URL(request.url).searchParams.get('q') ?? '').toLowerCase()
+    return HttpResponse.json(colleaguesFor(t).filter((c) => c.name.toLowerCase().includes(q)))
+  }),
+  http.post(`${API}/tickets/:key/watchers`, async ({ request, params }) => {
+    const body = (await record(request)) as { userId: string }
+    const t = tickets.tickets.find((x) => x.key === params.key)
+    if (!t || !visible(t)) return problem(404, 'not_found')
+    const c = colleaguesFor(t).find((x) => x.id === body.userId)
+    if (!c) return problem(400, 'invalid_watcher')
+    const list = [...(tickets.watchers[t.key] ?? []), c]
+    tickets.watchers[t.key] = list
+    return HttpResponse.json(list)
+  }),
+  http.delete(`${API}/tickets/:key/watchers/:userId`, async ({ request, params }) => {
+    await record(request)
+    const list = tickets.watchers[String(params.key)] ?? []
+    if (!list.some((w) => w.id === params.userId)) return problem(404, 'not_found')
+    tickets.watchers[String(params.key)] = list.filter((w) => w.id !== params.userId)
+    return new HttpResponse(null, { status: 204 })
+  }),
   http.get(`${API}/board`, async ({ request }) => {
     await record(request)
     if (isRequester()) return problem(403, 'forbidden')

@@ -125,3 +125,39 @@ export function useCreateRequester(clientId: string) {
     onSuccess: () => invalidate(queryKeys.clientRequesters(clientId)),
   })
 }
+
+/** Colleagues following a ticket ("People notified", besides the requester). */
+export const watchersQueryOptions = (key: string) =>
+  queryOptions({
+    queryKey: queryKeys.ticketWatchers(key),
+    queryFn: () => unwrap(api.GET('/tickets/{ticketKey}/watchers', { params: { path: { ticketKey: key } } })),
+  })
+
+/** The client's other requesters who could follow the ticket, narrowed by name. */
+export const watcherCandidatesQueryOptions = (key: string, q: string) =>
+  queryOptions({
+    queryKey: queryKeys.watcherCandidates(key, q),
+    queryFn: () =>
+      unwrap(api.GET('/tickets/{ticketKey}/watcher-candidates', { params: { path: { ticketKey: key }, query: { q } } })),
+  })
+
+export function useAddWatcher(key: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) =>
+      unwrap(api.POST('/tickets/{ticketKey}/watchers', { params: { path: { ticketKey: key } }, body: { userId } })),
+    onSuccess: (watchers) => {
+      queryClient.setQueryData(queryKeys.ticketWatchers(key), watchers)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.watcherCandidatesFor(key) })
+    },
+  })
+}
+
+export function useRemoveWatcher(key: string) {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (userId: string) =>
+      unwrap(api.DELETE('/tickets/{ticketKey}/watchers/{userId}', { params: { path: { ticketKey: key, userId } } })),
+    onSettled: () => invalidate(queryKeys.ticketWatchers(key), queryKeys.watcherCandidatesFor(key)),
+  })
+}
