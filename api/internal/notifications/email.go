@@ -296,7 +296,7 @@ func (m *Mailer) render(ctx context.Context, q *db.Queries, user *recipient, row
 				i = len(data.Tickets)
 				index[r.TicketID] = i
 				data.Tickets = append(data.Tickets, mail.DigestTicket{
-					TicketKey: t.Key, Title: t.Subject, PriorityName: t.PriorityName, ProjectName: t.ProjectName,
+					TicketKey: t.Key, Title: t.Subject, Priority: t.Priority, PriorityName: t.PriorityName, ProjectName: t.ProjectName,
 					TicketURL: m.ticketURL(portal, t.Key),
 				})
 			}
@@ -310,7 +310,7 @@ func (m *Mailer) render(ctx context.Context, q *db.Queries, user *recipient, row
 	t := byTicket[rows[0].TicketID]
 	main := mainRow(rows)
 	data := mail.TicketUpdateData{
-		OrgName: org.Name, Portal: portal, TicketKey: t.Key, Title: t.Subject, PriorityName: t.PriorityName,
+		OrgName: org.Name, Portal: portal, TicketKey: t.Key, Title: t.Subject, Priority: t.Priority, PriorityName: t.PriorityName,
 		ProjectName: t.ProjectName, Main: f.notice(main), TicketURL: m.ticketURL(portal, t.Key), SettingsURL: settingsURL,
 		Relation: relation(user, t, main),
 	}

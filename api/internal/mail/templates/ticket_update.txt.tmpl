@@ -1,5 +1,5 @@
 {{define "ticket_update.subject"}}[{{.TicketKey}}] {{template "notice.headline" .Main}}: {{.Title}}{{end -}}
-{{.TicketKey}} · {{.PriorityName}} · {{.ProjectName}}
+{{.TicketKey}} · {{.Priority}} {{.PriorityName}} · {{.ProjectName}}
 {{.Title}}
 
 {{template "notice.summary" .Main}}

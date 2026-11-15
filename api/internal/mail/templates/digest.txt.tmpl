@@ -2,7 +2,7 @@
 {{template "digest.title" .}}
 {{template "digest.count" .}}
 {{range .Tickets}}
-{{.TicketKey}} · {{.PriorityName}} · {{.ProjectName}}
+{{.TicketKey}} · {{.Priority}} {{.PriorityName}} · {{.ProjectName}}
 {{.Title}}
 {{- range .Notices}}
 - {{template "notice.summary" .}} ({{.Time}})

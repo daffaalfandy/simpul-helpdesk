@@ -61,6 +61,7 @@ type TicketUpdateData struct {
 	Relation     Relation
 	TicketKey    string
 	Title        string
+	Priority     string // P1 to P4
 	PriorityName string
 	ProjectName  string
 	Main         NoticeData
@@ -76,6 +77,7 @@ type TicketUpdateData struct {
 type DigestTicket struct {
 	TicketKey    string
 	Title        string
+	Priority     string // P1 to P4
 	PriorityName string
 	ProjectName  string
 	TicketURL    string

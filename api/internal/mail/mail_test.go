@@ -11,7 +11,7 @@ func TestTicketUpdateRenders(t *testing.T) {
 	left := 41
 	data := TicketUpdateData{
 		OrgName: "Demo Vendor", Portal: true, Relation: RelationReported, TicketKey: "HD-24871",
-		Title: "e-Office login fails", PriorityName: "Critical", ProjectName: "e-Office",
+		Title: "e-Office login fails", Priority: "P1", PriorityName: "Critical", ProjectName: "e-Office",
 		Main:    NoticeData{Event: "status", Portal: true, StatusFrom: "in_progress", StatusTo: "in_uat", Time: "12:45"},
 		Changes: []ChangeData{{Change: "assignee", Assignee: "Rina Pratiwi"}},
 		Others: []NoticeData{{Event: "reply", Portal: true, ActorName: "Rina Pratiwi", Time: "12:40"},
@@ -33,6 +33,7 @@ func TestTicketUpdateRenders(t *testing.T) {
 		"- Rina Pratiwi replied (12:40)",
 		"- SLA at risk: resolve due in 41 min (12:41)",
 		"You're getting this because you reported HD-24871. Reply in the portal; replies to this email aren't read.",
+		"HD-24871 · P1 Critical · e-Office",
 		"Powered by SimDesk",
 	} {
 		if !strings.Contains(msg.Text, want) {
