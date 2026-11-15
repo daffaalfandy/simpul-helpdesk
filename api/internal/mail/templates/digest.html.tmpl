@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:24px;background:{{color "tint"}};font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;color:{{color "ink"}}">
+  <div style="max-width:600px;margin:0 auto;background:{{color "surface"}};border:1px solid {{color "border"}};border-radius:16px;overflow:hidden">
+    <div style="padding:20px 28px;border-bottom:1px solid {{color "border-subtle"}};font-size:15px;font-weight:800">{{.OrgName}} Support</div>
+    <div style="padding:26px 28px">
+      <h1 style="margin:0 0 6px;font-size:22px;line-height:1.25;font-weight:800">{{text "digest.title" .}}</h1>
+      <p style="margin:0 0 18px;font-size:13.5px;color:{{color "muted"}}">{{text "digest.count" .}}</p>
+      {{- range .Tickets}}
+      <div style="border-top:1px solid {{color "border-subtle"}};padding:16px 0">
+        <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:{{color "muted"}}">{{.TicketKey}} · {{.PriorityName}} · {{.ProjectName}}</p>
+        <p style="margin:0 0 8px;font-size:16px;font-weight:800">{{.Title}}</p>
+        <ul style="margin:0 0 12px;padding-left:18px;font-size:13.5px;line-height:1.7;color:{{color "ink-2"}}">
+          {{- range .Notices}}<li>{{text "notice.summary" .}} ({{.Time}})</li>{{end}}
+        </ul>
+        <a href="{{.TicketURL}}" style="color:{{color "primary"}};font-size:14px;font-weight:700">View the ticket</a>
+      </div>
+      {{- end}}
+    </div>
+    <div style="padding:18px 28px;background:{{color "bg"}};font-size:12px;line-height:1.6;color:{{color "muted"}}">
+      {{text "footer.reply" .Portal}}<br>
+      <a href="{{.SettingsURL}}" style="color:{{color "primary"}}">Manage notifications</a> · Powered by SimDesk
+    </div>
+  </div>
+</body>
+</html>

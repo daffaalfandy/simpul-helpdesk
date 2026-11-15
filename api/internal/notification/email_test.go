@@ -1,8 +1,11 @@
 package notification
 
 import (
+	"slices"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestUsesTicketEmail(t *testing.T) {
@@ -77,5 +80,52 @@ func TestDailyCutoffAcrossDST(t *testing.T) {
 	cutoff, _, _ := DigestCutoff(FrequencyDaily, now, berlin)
 	if h, m, _ := cutoff.In(berlin).Clock(); h != 8 || m != 0 {
 		t.Errorf("cutoff %v, want 08:00 local", cutoff.In(berlin))
+	}
+}
+
+func TestPlanEmails(t *testing.T) {
+	jakarta, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 16, 10, 30, 0, 0, jakarta)
+	ago := func(d time.Duration) time.Time { return now.Add(-d) }
+	user, hourly, daily := uuid.New(), uuid.New(), uuid.New()
+	ticketA, ticketB := uuid.New(), uuid.New()
+	ids := make([]uuid.UUID, 8)
+	for i := range ids {
+		ids[i] = uuid.New()
+	}
+	rows := []Pending{
+		{ids[0], user, ticketA, false, ago(5 * time.Minute), FrequencyInstant},   // due, oldest of A
+		{ids[1], user, ticketA, false, ago(time.Minute), FrequencyInstant},       // joins A's email
+		{ids[2], user, ticketB, false, ago(time.Minute), FrequencyInstant},       // B still gathering
+		{ids[3], hourly, ticketA, false, ago(40 * time.Minute), FrequencyHourly}, // before 10:00: summary
+		{ids[4], hourly, ticketB, false, ago(10 * time.Minute), FrequencyHourly}, // after 10:00: waits
+		{ids[5], hourly, ticketB, true, ago(3 * time.Minute), FrequencyHourly},   // urgent: own email now
+		{ids[6], daily, ticketA, false, ago(time.Hour), FrequencyDaily},          // 09:30, after 08:00: waits
+		{ids[7], daily, ticketB, false, ago(3 * time.Hour), FrequencyDaily},      // 07:30: today's summary
+	}
+	ticketEmails, digests := PlanEmails(rows, now.UTC(), jakarta)
+	wantTicket := []TicketEmailArgs{
+		{UserID: user, TicketID: ticketA, FirstID: ids[0]},
+		{UserID: hourly, TicketID: ticketB, FirstID: ids[5]},
+	}
+	if !slices.Equal(ticketEmails, wantTicket) {
+		t.Errorf("ticket emails\n got %v\nwant %v", ticketEmails, wantTicket)
+	}
+	at := func(h int) time.Time { return time.Date(2026, 11, 16, h, 0, 0, 0, jakarta) }
+	wantDigests := []DigestArgs{
+		{UserID: hourly, Period: "2026-11-16T10", Before: at(10)},
+		{UserID: daily, Period: "2026-11-16", Before: at(8)},
+	}
+	if len(digests) != len(wantDigests) {
+		t.Fatalf("digests = %v", digests)
+	}
+	for i, d := range digests {
+		w := wantDigests[i]
+		if d.UserID != w.UserID || d.Period != w.Period || !d.Before.Equal(w.Before) {
+			t.Errorf("digest %d = %v, want %v", i, d, w)
+		}
 	}
 }

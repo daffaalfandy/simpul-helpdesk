@@ -262,3 +262,7 @@ func portalStatusEvent(to ticket.Status) Event {
 	}
 	return EventStatus
 }
+
+// Rank orders events by importance, most important first, so an email headlines the change
+// that matters most.
+func Rank(e Event) int { return slices.Index(precedence, e) }

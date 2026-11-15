@@ -1,0 +1,58 @@
+{{- /* Shared copy for notification emails. HTML templates reach these through the text func. */ -}}
+
+{{define "label.status"}}{{if eq .Status "new"}}New{{else if eq .Status "assigned"}}Assigned{{else if eq .Status "in_progress"}}In progress{{else if eq .Status "waiting_on_client"}}{{if .Portal}}Waiting on you{{else}}Waiting on client{{end}}{{else if eq .Status "in_uat"}}{{if .Portal}}Ready for your test{{else}}In UAT{{end}}{{else if eq .Status "resolved"}}Resolved{{else if eq .Status "closed"}}Closed{{else}}{{.Status}}{{end}}{{end}}
+
+{{define "label.sla_clock"}}{{if eq . "first_response"}}first response{{else}}resolve{{end}}{{end}}
+
+{{define "notice.headline"}}
+{{- if or (eq .Event "reply") (eq .Event "comment")}}New reply
+{{- else if eq .Event "internal_note"}}Internal note
+{{- else if eq .Event "question"}}A question for you
+{{- else if eq .Event "resolved"}}{{if eq .StatusTo "closed"}}Closed{{else}}Resolved{{end}}
+{{- else if eq .Event "status"}}{{if and .Portal (eq .StatusTo "in_uat")}}Ready for your test{{else}}Status changed{{end}}
+{{- else if eq .Event "assignment"}}{{if eq .Kind "unassigned"}}Unassigned{{else}}Assigned to you{{end}}
+{{- else if eq .Event "priority"}}Priority changed
+{{- else if eq .Event "colleague"}}{{if eq .Kind "added"}}You were added{{else}}Update from a colleague{{end}}
+{{- else if eq .Event "ticket_logged"}}We logged your request
+{{- else if eq .Event "sla"}}{{if eq .Kind "breached"}}SLA breached{{else}}SLA at risk{{end}}
+{{- else}}Ticket updated{{end}}
+{{- end}}
+
+{{define "notice.actor"}}{{if .ActorName}}{{.ActorName}}{{else}}The helpdesk{{end}}{{end}}
+
+{{define "notice.summary"}}
+{{- if or (eq .Event "reply") (eq .Event "comment")}}{{template "notice.actor" .}} replied
+{{- else if eq .Event "internal_note"}}{{template "notice.actor" .}} added an internal note
+{{- else if eq .Event "question"}}{{template "notice.actor" .}} asked you a question
+{{- else if or (eq .Event "status") (eq .Event "resolved")}}Status changed: {{status .StatusFrom .Portal}} → {{status .StatusTo .Portal}}
+{{- else if eq .Event "assignment"}}{{if eq .Kind "unassigned"}}{{template "notice.actor" .}} unassigned you from this ticket{{else}}{{template "notice.actor" .}} assigned this ticket to you{{end}}
+{{- else if eq .Event "priority"}}{{template "notice.actor" .}} changed priority: {{.PriorityFrom}} → {{.PriorityTo}}{{if .Reason}} ({{.Reason}}){{end}}
+{{- else if eq .Event "colleague"}}{{if eq .Kind "added"}}{{template "notice.actor" .}} added you to this ticket{{else if eq .Kind "status"}}{{template "notice.actor" .}} changed the status: {{status .StatusFrom .Portal}} → {{status .StatusTo .Portal}}{{else}}{{template "notice.actor" .}} replied{{end}}
+{{- else if eq .Event "ticket_logged"}}{{template "notice.actor" .}} logged this request for you
+{{- else if eq .Event "sla"}}{{if eq .Kind "breached"}}SLA breached: {{template "label.sla_clock" .SLAClock}} was due at {{.SLADue}}{{else}}SLA at risk: {{template "label.sla_clock" .SLAClock}} due in {{with .SLAMinutesLeft}}{{.}}{{end}} min{{end}}
+{{- end}}
+{{- end}}
+
+{{define "change.summary"}}
+{{- if eq .Change "status"}}Status changed: {{status .StatusFrom .Portal}} → {{status .StatusTo .Portal}}
+{{- else if eq .Change "priority"}}Priority changed: {{.PriorityFrom}} → {{.PriorityTo}}
+{{- else if eq .Change "assignee"}}{{if .Assignee}}Assigned to {{.Assignee}}{{else}}Unassigned{{end}}
+{{- else if eq .Change "message"}}New message
+{{- else if eq .Change "watcher_added"}}A colleague was added
+{{- else}}Ticket updated{{end}}
+{{- end}}
+
+{{define "relation.reason"}}
+{{- if eq .Relation "reported"}}You're getting this because you reported {{.TicketKey}}.
+{{- else if eq .Relation "logged"}}You're getting this because {{.TicketKey}} was logged for you.
+{{- else if eq .Relation "watching"}}You're getting this because a colleague added you to {{.TicketKey}}.
+{{- else if eq .Relation "assigned"}}You're getting this because you're assigned to {{.TicketKey}}.
+{{- else if eq .Relation "supervisor"}}You're getting this because you supervise SLA alerts.
+{{- else}}You're getting this because you worked on {{.TicketKey}}.{{end}}
+{{- end}}
+
+{{define "footer.reply"}}{{if .}}Reply in the portal; replies to this email aren't read.{{else}}Reply in SimDesk; replies to this email aren't read.{{end}}{{end}}
+
+{{define "digest.title"}}{{if .Daily}}Your daily summary{{else}}Your hourly summary{{end}}{{end}}
+
+{{define "digest.count"}}{{.Count}} {{if eq .Count 1}}update{{else}}updates{{end}} on {{len .Tickets}} {{if eq (len .Tickets) 1}}ticket{{else}}tickets{{end}}{{end}}

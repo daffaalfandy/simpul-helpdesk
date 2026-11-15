@@ -12,6 +12,128 @@ import (
 	"github.com/google/uuid"
 )
 
+const claimDigest = `-- name: ClaimDigest :many
+UPDATE notifications SET email_claimed_at = now()
+WHERE id IN (
+  SELECT n.id FROM notifications n
+  WHERE n.user_id = $1 AND n.email AND n.emailed_at IS NULL AND NOT n.urgent
+    AND n.created_at < $2
+    AND (n.email_claimed_at IS NULL OR n.email_claimed_at < $3::timestamptz)
+  FOR UPDATE SKIP LOCKED)
+RETURNING id, ticket_id, event_type, actor_user_id, message_id, data, urgent, created_at
+`
+
+type ClaimDigestParams struct {
+	UserID        uuid.UUID
+	CreatedBefore time.Time
+	StaleBefore   time.Time
+}
+
+type ClaimDigestRow struct {
+	ID          uuid.UUID
+	TicketID    uuid.UUID
+	EventType   string
+	ActorUserID *uuid.UUID
+	MessageID   *uuid.UUID
+	Data        []byte
+	Urgent      bool
+	CreatedAt   time.Time
+}
+
+// One user's routine pending rows created before the summary boundary.
+func (q *Queries) ClaimDigest(ctx context.Context, arg ClaimDigestParams) ([]ClaimDigestRow, error) {
+	rows, err := q.db.Query(ctx, claimDigest, arg.UserID, arg.CreatedBefore, arg.StaleBefore)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimDigestRow{}
+	for rows.Next() {
+		var i ClaimDigestRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.EventType,
+			&i.ActorUserID,
+			&i.MessageID,
+			&i.Data,
+			&i.Urgent,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const claimTicketEmail = `-- name: ClaimTicketEmail :many
+UPDATE notifications SET email_claimed_at = now()
+WHERE id IN (
+  SELECT n.id FROM notifications n
+  WHERE n.user_id = $1 AND n.ticket_id = $2 AND n.email AND n.emailed_at IS NULL
+    AND (n.email_claimed_at IS NULL OR n.email_claimed_at < $3::timestamptz)
+    AND (n.urgent OR $4::boolean)
+  FOR UPDATE SKIP LOCKED)
+RETURNING id, ticket_id, event_type, actor_user_id, message_id, data, urgent, created_at
+`
+
+type ClaimTicketEmailParams struct {
+	UserID         uuid.UUID
+	TicketID       uuid.UUID
+	StaleBefore    time.Time
+	IncludeRoutine bool
+}
+
+type ClaimTicketEmailRow struct {
+	ID          uuid.UUID
+	TicketID    uuid.UUID
+	EventType   string
+	ActorUserID *uuid.UUID
+	MessageID   *uuid.UUID
+	Data        []byte
+	Urgent      bool
+	CreatedAt   time.Time
+}
+
+// One user's pending rows about one ticket: all of them, or only urgent ones for summary users.
+func (q *Queries) ClaimTicketEmail(ctx context.Context, arg ClaimTicketEmailParams) ([]ClaimTicketEmailRow, error) {
+	rows, err := q.db.Query(ctx, claimTicketEmail,
+		arg.UserID,
+		arg.TicketID,
+		arg.StaleBefore,
+		arg.IncludeRoutine,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimTicketEmailRow{}
+	for rows.Next() {
+		var i ClaimTicketEmailRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.EventType,
+			&i.ActorUserID,
+			&i.MessageID,
+			&i.Data,
+			&i.Urgent,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countUnreadNotifications = `-- name: CountUnreadNotifications :one
 SELECT count(*)::int
 FROM notifications n
@@ -34,6 +156,82 @@ func (q *Queries) CountUnreadNotifications(ctx context.Context, arg CountUnreadN
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const deleteOldNotifications = `-- name: DeleteOldNotifications :execrows
+DELETE FROM notifications
+WHERE id IN (SELECT o.id FROM notifications o WHERE o.created_at < $1
+             ORDER BY o.created_at LIMIT $2)
+`
+
+type DeleteOldNotificationsParams struct {
+	CreatedBefore time.Time
+	Batch         int32
+}
+
+func (q *Queries) DeleteOldNotifications(ctx context.Context, arg DeleteOldNotificationsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOldNotifications, arg.CreatedBefore, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getEmailQuote = `-- name: GetEmailQuote :one
+SELECT m.body, m.visibility, m.created_at, u.name AS author_name, u.role AS author_role
+FROM ticket_messages m
+JOIN users u ON u.id = m.author_id
+WHERE m.id = $1
+`
+
+type GetEmailQuoteRow struct {
+	Body       string
+	Visibility string
+	CreatedAt  time.Time
+	AuthorName string
+	AuthorRole string
+}
+
+func (q *Queries) GetEmailQuote(ctx context.Context, id uuid.UUID) (GetEmailQuoteRow, error) {
+	row := q.db.QueryRow(ctx, getEmailQuote, id)
+	var i GetEmailQuoteRow
+	err := row.Scan(
+		&i.Body,
+		&i.Visibility,
+		&i.CreatedAt,
+		&i.AuthorName,
+		&i.AuthorRole,
+	)
+	return i, err
+}
+
+const getEmailRecipient = `-- name: GetEmailRecipient :one
+SELECT id, email, name, role, status, client_id, email_frequency FROM users WHERE id = $1
+`
+
+type GetEmailRecipientRow struct {
+	ID             uuid.UUID
+	Email          string
+	Name           string
+	Role           string
+	Status         string
+	ClientID       *uuid.UUID
+	EmailFrequency string
+}
+
+func (q *Queries) GetEmailRecipient(ctx context.Context, id uuid.UUID) (GetEmailRecipientRow, error) {
+	row := q.db.QueryRow(ctx, getEmailRecipient, id)
+	var i GetEmailRecipientRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.Status,
+		&i.ClientID,
+		&i.EmailFrequency,
+	)
+	return i, err
 }
 
 const getLatestPublicStaffMessageID = `-- name: GetLatestPublicStaffMessageID :one
@@ -157,6 +355,84 @@ func (q *Queries) ListActiveUserIDsByRole(ctx context.Context, arg ListActiveUse
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEmailTickets = `-- name: ListEmailTickets :many
+SELECT t.id, t.key, t.subject, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
+       pl.name AS priority_name, p.name AS project_name,
+       (u.role = ANY($1::text[])
+        OR (u.role = $2 AND EXISTS (SELECT 1 FROM client_agents ca
+                                            WHERE ca.client_id = t.client_id AND ca.user_id = u.id))
+        OR (u.role = $3 AND u.client_id = t.client_id))::boolean AS visible,
+       EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = u.id) AS watching
+FROM tickets t
+JOIN projects p ON p.id = t.project_id
+JOIN priorities pl ON pl.code = t.priority
+JOIN users u ON u.id = $4
+WHERE t.id = ANY($5::uuid[])
+`
+
+type ListEmailTicketsParams struct {
+	AllClientRoles []string
+	AgentRole      string
+	RequesterRole  string
+	UserID         uuid.UUID
+	TicketIds      []uuid.UUID
+}
+
+type ListEmailTicketsRow struct {
+	ID           uuid.UUID
+	Key          string
+	Subject      string
+	Priority     string
+	RequesterID  uuid.UUID
+	AssigneeID   *uuid.UUID
+	SlaSnapshot  []byte
+	PriorityName string
+	ProjectName  string
+	Visible      bool
+	Watching     bool
+}
+
+// What an email shows about each ticket, and whether the recipient may still see it (the same
+// rule as internal/tickets access: all for admins and supervisors, linked clients for agents,
+// their own client for requesters).
+func (q *Queries) ListEmailTickets(ctx context.Context, arg ListEmailTicketsParams) ([]ListEmailTicketsRow, error) {
+	rows, err := q.db.Query(ctx, listEmailTickets,
+		arg.AllClientRoles,
+		arg.AgentRole,
+		arg.RequesterRole,
+		arg.UserID,
+		arg.TicketIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEmailTicketsRow{}
+	for rows.Next() {
+		var i ListEmailTicketsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Key,
+			&i.Subject,
+			&i.Priority,
+			&i.RequesterID,
+			&i.AssigneeID,
+			&i.SlaSnapshot,
+			&i.PriorityName,
+			&i.ProjectName,
+			&i.Visible,
+			&i.Watching,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -329,6 +605,89 @@ func (q *Queries) ListNotifyRecipients(ctx context.Context, ids []uuid.UUID) ([]
 	return items, nil
 }
 
+const listPendingEmails = `-- name: ListPendingEmails :many
+
+SELECT n.id, n.user_id, n.ticket_id, n.urgent, n.created_at, u.email_frequency
+FROM notifications n
+JOIN users u ON u.id = n.user_id
+WHERE n.email AND n.emailed_at IS NULL
+  AND (n.email_claimed_at IS NULL OR n.email_claimed_at < $1::timestamptz)
+ORDER BY n.created_at, n.id
+LIMIT $2
+`
+
+type ListPendingEmailsParams struct {
+	StaleBefore time.Time
+	RowLimit    int32
+}
+
+type ListPendingEmailsRow struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	TicketID       uuid.UUID
+	Urgent         bool
+	CreatedAt      time.Time
+	EmailFrequency string
+}
+
+// Email delivery. A send job claims rows (email_claimed_at), sends, then marks them emailed. A
+// claim older than stale_before is abandoned (a crashed job) and the rows are pending again.
+func (q *Queries) ListPendingEmails(ctx context.Context, arg ListPendingEmailsParams) ([]ListPendingEmailsRow, error) {
+	rows, err := q.db.Query(ctx, listPendingEmails, arg.StaleBefore, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingEmailsRow{}
+	for rows.Next() {
+		var i ListPendingEmailsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TicketID,
+			&i.Urgent,
+			&i.CreatedAt,
+			&i.EmailFrequency,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserNames = `-- name: ListUserNames :many
+SELECT id, name FROM users WHERE id = ANY($1::uuid[])
+`
+
+type ListUserNamesRow struct {
+	ID   uuid.UUID
+	Name string
+}
+
+func (q *Queries) ListUserNames(ctx context.Context, ids []uuid.UUID) ([]ListUserNamesRow, error) {
+	rows, err := q.db.Query(ctx, listUserNames, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserNamesRow{}
+	for rows.Next() {
+		var i ListUserNamesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markAllNotificationsRead = `-- name: MarkAllNotificationsRead :exec
 UPDATE notifications n
 SET read_at = now()
@@ -348,6 +707,30 @@ type MarkAllNotificationsReadParams struct {
 
 func (q *Queries) MarkAllNotificationsRead(ctx context.Context, arg MarkAllNotificationsReadParams) error {
 	_, err := q.db.Exec(ctx, markAllNotificationsRead, arg.UserID, arg.ScopeClientID, arg.ScopeAgentID)
+	return err
+}
+
+const markNotificationsEmailed = `-- name: MarkNotificationsEmailed :exec
+UPDATE notifications SET emailed_at = now(), email_skipped = $1 WHERE id = ANY($2::uuid[])
+`
+
+type MarkNotificationsEmailedParams struct {
+	Skipped bool
+	Ids     []uuid.UUID
+}
+
+func (q *Queries) MarkNotificationsEmailed(ctx context.Context, arg MarkNotificationsEmailedParams) error {
+	_, err := q.db.Exec(ctx, markNotificationsEmailed, arg.Skipped, arg.Ids)
+	return err
+}
+
+const releaseNotificationClaims = `-- name: ReleaseNotificationClaims :exec
+UPDATE notifications SET email_claimed_at = NULL WHERE id = ANY($1::uuid[]) AND emailed_at IS NULL
+`
+
+// A failed send gives its rows back for the retry.
+func (q *Queries) ReleaseNotificationClaims(ctx context.Context, ids []uuid.UUID) error {
+	_, err := q.db.Exec(ctx, releaseNotificationClaims, ids)
 	return err
 }
 

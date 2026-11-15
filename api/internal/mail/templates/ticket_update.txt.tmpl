@@ -1,0 +1,32 @@
+{{define "ticket_update.subject"}}[{{.TicketKey}}] {{template "notice.headline" .Main}}: {{.Title}}{{end -}}
+{{.TicketKey}} · {{.PriorityName}} · {{.ProjectName}}
+{{.Title}}
+
+{{template "notice.summary" .Main}}
+{{- if .Main.StatusTo}}
+Status: {{status .Main.StatusFrom .Portal}} → {{status .Main.StatusTo .Portal}}
+{{- end}}
+{{with .Quote}}
+{{.Author}}{{if .FromSupport}} · Support team{{end}} · {{.Time}}
+{{.Body}}
+{{end}}
+View the ticket: {{.TicketURL}}
+{{- if or .Changes .Others}}
+
+Also changed:
+{{- range .Changes}}
+- {{template "change.summary" .}}
+{{- end}}
+{{- range .Others}}
+- {{template "notice.summary" .}} ({{.Time}})
+{{- end}}
+{{- end}}
+{{- if .SLALine}}
+
+{{.SLALine}}
+{{- end}}
+
+--
+{{template "relation.reason" .}} {{template "footer.reply" .Portal}}
+Manage notifications: {{.SettingsURL}}
+Powered by SimDesk

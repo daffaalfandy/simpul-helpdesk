@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
@@ -14,6 +16,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 )
 
@@ -389,4 +392,144 @@ func TestNotificationSettings(t *testing.T) {
 			t.Fatal("comment notified an agent who switched it off")
 		}
 	}
+}
+
+// age backdates every notification, as if the clock had moved on.
+func (e *env) age(t *testing.T, d time.Duration) {
+	t.Helper()
+	if _, err := e.st.Pool().Exec(context.Background(),
+		`UPDATE notifications SET created_at = created_at - make_interval(secs => $1)`, d.Seconds()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// sendEmails runs the dispatcher (a periodic job, so never queued here) and the emails it queued.
+func (e *env) sendEmails(t *testing.T) {
+	t.Helper()
+	if err := e.dispatch.Work(context.Background(), &river.Job[notification.DispatchArgs]{}); err != nil {
+		t.Fatal(err)
+	}
+	runJobs(t, e, e.ticketEmail)
+	runJobs(t, e, e.digest)
+}
+
+func (e *env) setFrequency(t *testing.T, s session, f gen.EmailFrequency) {
+	t.Helper()
+	decode[gen.NotificationSettings](t, s.do(http.MethodPut, "/notification-settings/email-frequency",
+		gen.EmailFrequencyInput{EmailFrequency: f}), http.StatusOK)
+}
+
+func mailsTo(msgs []mail.Message, to string) []mail.Message {
+	var out []mail.Message
+	for _, m := range msgs {
+		if m.To == to {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func TestTicketEmailsAreGrouped(t *testing.T) {
+	te := newTicketEnv(t)
+	agentEmail, requesterEmail := te.users[auth.RoleAgent], te.users[auth.RoleRequester]
+	tk := te.requester.report(t, incident(te.projectA, "Login fails"))
+	path := "/tickets/" + tk.Key
+	decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, path+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityInternal, "Secret: their cert expired"), http.StatusCreated)
+	decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityPublic, "Which accounts fail?"), http.StatusCreated)
+	decode[gen.Ticket](t, te.agent.do(http.MethodPut, path+"/status", gen.TicketStatusInput{Status: gen.TicketStatusWaitingOnClient}), http.StatusOK)
+	te.fanout(t)
+
+	te.sendEmails(t)
+	if got := te.mailer.Messages(); len(got) != 0 {
+		t.Fatalf("emails sent inside the group window: %d", len(got))
+	}
+	te.age(t, notification.GroupWindow)
+	te.sendEmails(t)
+	msgs := te.mailer.Messages()
+	toRequester := mailsTo(msgs, requesterEmail)
+	if len(toRequester) != 1 {
+		t.Fatalf("requester got %d emails, want one grouped email", len(toRequester))
+	}
+	m := toRequester[0]
+	if want := "[" + tk.Key + "] A question for you: Login fails"; m.Subject != want {
+		t.Errorf("subject = %q, want %q", m.Subject, want)
+	}
+	for _, want := range []string{"Which accounts fail?", "Also changed:", "Status changed: New → Assigned", "you reported " + tk.Key,
+		appURL + "/portal/tickets/" + tk.Key, appURL + "/portal/notifications#settings"} {
+		if !strings.Contains(m.Text, want) {
+			t.Errorf("requester email lacks %q:\n%s", want, m.Text)
+		}
+	}
+	if strings.Contains(m.Text+m.HTML, "Secret") {
+		t.Fatal("an internal note reached the requester's email")
+	}
+	if m.Headers[mail.HeaderAutoSubmitted] != mail.AutoSubmittedGenerated {
+		t.Errorf("headers = %v", m.Headers)
+	}
+	if got := mailsTo(msgs, agentEmail); len(got) != 1 || !strings.Contains(got[0].Subject, "Assigned to you") {
+		t.Fatalf("agent emails = %+v", got)
+	}
+	// Everything sent is marked, so nothing goes twice.
+	te.age(t, notification.GroupWindow)
+	te.sendEmails(t)
+	if n := len(te.mailer.Messages()); n != len(msgs) {
+		t.Fatalf("emails after a second run = %d, want %d", n, len(msgs))
+	}
+}
+
+func TestSummaryUsersWaitButUrgentGoesNow(t *testing.T) {
+	te := newTicketEnv(t)
+	agentEmail := te.users[auth.RoleAgent]
+	te.setFrequency(t, te.agent, gen.EmailFrequencyHourly)
+	routine := te.requester.report(t, incident(te.projectA, "Printer"))
+	urgentIn := incident(te.projectA, "Whole office down")
+	urgentIn.Priority = gen.PriorityP1
+	urgent := te.requester.report(t, urgentIn)
+	for _, tk := range []gen.Ticket{routine, urgent} {
+		decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+		decode[gen.TicketMessage](t, te.requester.message(tk.Key, gen.MessageVisibilityPublic, "Any news?"), http.StatusCreated)
+	}
+	te.fanout(t)
+	te.age(t, notification.GroupWindow)
+	te.sendEmails(t)
+	got := mailsTo(te.mailer.Messages(), agentEmail)
+	if len(got) != 1 || !strings.Contains(got[0].Subject, urgent.Key) {
+		t.Fatalf("hourly agent got %v, want only the P1 ticket's email", subjects(got))
+	}
+
+	// Once the hour has turned, the routine items go out as one summary.
+	te.age(t, time.Hour)
+	te.sendEmails(t)
+	got = mailsTo(te.mailer.Messages(), agentEmail)
+	if len(got) != 2 || !strings.Contains(got[1].Subject, "Your hourly summary") || !strings.Contains(got[1].Text, routine.Key) {
+		t.Fatalf("after the hour: %v", subjects(got))
+	}
+	if strings.Contains(got[1].Text, urgent.Key) {
+		t.Error("the summary repeats the urgent ticket")
+	}
+}
+
+func TestDailySummary(t *testing.T) {
+	te := newTicketEnv(t)
+	te.setFrequency(t, te.requester, gen.EmailFrequencyDaily)
+	tk := te.requester.report(t, incident(te.projectA, "Email quota"))
+	decode[gen.Ticket](t, te.agent.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityPublic, "Quota raised."), http.StatusCreated)
+	te.fanout(t)
+	te.age(t, 2*24*time.Hour) // older than the latest 08:00, whatever time the test runs
+	te.sendEmails(t)
+	got := mailsTo(te.mailer.Messages(), te.users[auth.RoleRequester])
+	if len(got) != 1 || !strings.Contains(got[0].Subject, "Your daily summary") ||
+		!strings.Contains(got[0].Text, "2 updates on 1 ticket") {
+		t.Fatalf("daily summary = %v", subjects(got))
+	}
+}
+
+func subjects(msgs []mail.Message) []string {
+	out := make([]string, len(msgs))
+	for i, m := range msgs {
+		out[i] = m.Subject
+	}
+	return out
 }

@@ -31,7 +31,38 @@ const (
 // Template names (files in templates/).
 const (
 	TemplatePasswordReset = "password_reset"
+	TemplateTicketUpdate  = "ticket_update"
+	TemplateDigest        = "digest"
 )
+
+// Headers for automatic email: auto-responders stay quiet (RFC 3834, and Exchange's own
+// header), and mail clients can offer a link to the notification settings (RFC 2369).
+const (
+	HeaderAutoSubmitted        = "Auto-Submitted"
+	HeaderAutoResponseSuppress = "X-Auto-Response-Suppress"
+	HeaderListUnsubscribe      = "List-Unsubscribe"
+	AutoSubmittedGenerated     = "auto-generated"
+	AutoResponseSuppressAll    = "All"
+	listUnsubscribeFormat      = "<%s>"
+)
+
+// Template helpers shared by the text and HTML sets.
+const (
+	textFuncName        = "text"
+	statusFuncName      = "status"
+	colorFuncName       = "color"
+	statusLabelTemplate = "label.status"
+)
+
+// AutomaticHeaders are the headers of a notification email, with the settings page for
+// List-Unsubscribe.
+func AutomaticHeaders(settingsURL string) map[string]string {
+	return map[string]string{
+		HeaderAutoSubmitted:        AutoSubmittedGenerated,
+		HeaderAutoResponseSuppress: AutoResponseSuppressAll,
+		HeaderListUnsubscribe:      fmt.Sprintf(listUnsubscribeFormat, settingsURL),
+	}
+}
 
 // PasswordResetData fills the password_reset template.
 type PasswordResetData struct {
@@ -47,6 +78,7 @@ type Message struct {
 	Subject string
 	Text    string
 	HTML    string
+	Headers map[string]string
 }
 
 type Sender interface {
@@ -91,6 +123,9 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 	msg.Subject(m.Subject)
 	msg.SetMessageID()
 	msg.SetDate()
+	for name, value := range m.Headers {
+		msg.SetGenHeader(gomail.Header(name), value)
+	}
 	msg.SetBodyString(gomail.TypeTextPlain, m.Text)
 	if m.HTML != "" {
 		msg.AddAlternativeString(gomail.TypeTextHTML, m.HTML)
@@ -142,9 +177,34 @@ func (r *Recorder) Messages() []Message {
 var templateFS embed.FS
 
 var (
-	textTemplates = texttemplate.Must(texttemplate.ParseFS(templateFS, textTemplateGlob))
-	htmlTemplates = htmltemplate.Must(htmltemplate.ParseFS(templateFS, htmlTemplateGlob))
+	textTemplates *texttemplate.Template
+	htmlTemplates *htmltemplate.Template
 )
+
+// Both template sets share three helpers: text runs a text template block (so copy such as
+// headlines and status labels lives in one place), status labels a ticket status for the
+// recipient's audience, and color names a palette colour.
+func init() {
+	funcs := map[string]any{textFuncName: runText, statusFuncName: statusLabel, colorFuncName: color}
+	textTemplates = texttemplate.Must(texttemplate.New("").Funcs(funcs).ParseFS(templateFS, textTemplateGlob))
+	htmlTemplates = htmltemplate.Must(htmltemplate.New("").Funcs(funcs).ParseFS(templateFS, htmlTemplateGlob))
+}
+
+func runText(name string, data any) (string, error) {
+	var b bytes.Buffer
+	err := textTemplates.ExecuteTemplate(&b, name, data)
+	return b.String(), err
+}
+
+// statusArgs feeds the label.status block.
+type statusArgs struct {
+	Status string
+	Portal bool
+}
+
+func statusLabel(status string, portal bool) (string, error) {
+	return runText(statusLabelTemplate, statusArgs{Status: status, Portal: portal})
+}
 
 // Render builds a message from templates/<name>.txt.tmpl and <name>.html.tmpl.
 func Render(name, to, toName string, data any) (Message, error) {

@@ -182,11 +182,19 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	river.AddWorker(workers, auth.NewResetEmailWorker(st, mailer, cfg.AppURL, opts.ResetTokenTTL))
 	river.AddWorker(workers, tickets.NewAttachmentSweeper(st, files))
 	river.AddWorker(workers, notifications.NewFanoutWorker(st, log))
+	late := &notifications.LateInserter{}
+	notifyMailer := notifications.NewMailer(st, mailer, cfg.AppURL, log)
+	river.AddWorker(workers, notifications.NewDispatchWorker(st, late))
+	river.AddWorker(workers, notifications.NewTicketEmailWorker(notifyMailer))
+	river.AddWorker(workers, notifications.NewDigestWorker(notifyMailer))
+	river.AddWorker(workers, notifications.NewPurgeWorker(st))
 	riverCfg := &river.Config{Workers: workers, Logger: log.With("component", "jobs")}
 	if runJobs {
 		// Periodic jobs only on clients that run jobs: River refuses them on insert-only clients.
 		riverCfg.Queues = map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: jobMaxWorkers}}
-		riverCfg.PeriodicJobs = []*river.PeriodicJob{tickets.AttachmentSweepJob()}
+		riverCfg.PeriodicJobs = []*river.PeriodicJob{
+			tickets.AttachmentSweepJob(), notifications.DispatchJob(), notifications.PurgeJob(),
+		}
 	}
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), riverCfg)
 	if err != nil {
@@ -194,6 +202,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 		st.Close()
 		return nil, fmt.Errorf("job client: %w", err)
 	}
+	late.JobInserter = jobs
 	hasher := auth.NewHasher(auth.DefaultParams, auth.DefaultMaxConcurrentHashes)
 	slaSvc := sla.NewService(st)
 	return &app{

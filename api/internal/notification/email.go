@@ -3,6 +3,8 @@ package notification
 import (
 	"slices"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Frequency is how often a user's notification emails go out. Values match the
@@ -71,4 +73,56 @@ func DigestCutoff(f Frequency, now time.Time, loc *time.Location) (cutoff time.T
 		return cutoff, cutoff.Format(dailyPeriodLayout), true
 	}
 	return time.Time{}, "", false
+}
+
+// Pending is one notification still waiting for its email.
+type Pending struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	TicketID  uuid.UUID
+	Urgent    bool
+	CreatedAt time.Time
+	Frequency Frequency // the user's, now
+}
+
+// PlanEmails decides which emails are due now: a ticket email per user and ticket whose oldest
+// row for it has waited GroupWindow, and a summary per hourly or daily user with routine rows
+// from before their latest boundary. Rows not yet due wait for a later run.
+func PlanEmails(rows []Pending, now time.Time, loc *time.Location) ([]TicketEmailArgs, []DigestArgs) {
+	type pair struct{ user, ticket uuid.UUID }
+	oldest := map[pair]Pending{}
+	var pairs []pair
+	digests := map[uuid.UUID]DigestArgs{}
+	var digestUsers []uuid.UUID
+	for _, r := range rows {
+		if UsesTicketEmail(r.Frequency, r.Urgent) {
+			k := pair{r.UserID, r.TicketID}
+			if o, ok := oldest[k]; !ok || r.CreatedAt.Before(o.CreatedAt) {
+				if !ok {
+					pairs = append(pairs, k)
+				}
+				oldest[k] = r
+			}
+			continue
+		}
+		cutoff, period, ok := DigestCutoff(r.Frequency, now, loc)
+		if !ok || !r.CreatedAt.Before(cutoff) {
+			continue
+		}
+		if _, seen := digests[r.UserID]; !seen {
+			digestUsers = append(digestUsers, r.UserID)
+			digests[r.UserID] = DigestArgs{UserID: r.UserID, Period: period, Before: cutoff}
+		}
+	}
+	var ticketEmails []TicketEmailArgs
+	for _, k := range pairs {
+		if o := oldest[k]; TicketEmailDue(o.CreatedAt, now) {
+			ticketEmails = append(ticketEmails, TicketEmailArgs{UserID: k.user, TicketID: k.ticket, FirstID: o.ID})
+		}
+	}
+	out := make([]DigestArgs, 0, len(digestUsers))
+	for _, u := range digestUsers {
+		out = append(out, digests[u])
+	}
+	return ticketEmails, out
 }

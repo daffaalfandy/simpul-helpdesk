@@ -56,6 +56,9 @@ type env struct {
 	mailer       *mail.Recorder
 	worker       *auth.ResetEmailWorker
 	fanoutWorker *notifications.FanoutWorker
+	dispatch     *notifications.DispatchWorker
+	ticketEmail  *notifications.TicketEmailWorker
+	digest       *notifications.DigestWorker
 	files        *storage.FS
 	users        map[auth.Role]string // role -> email
 }
@@ -70,13 +73,22 @@ func newEnv(t *testing.T) *env {
 	mailer := &mail.Recorder{}
 	worker := auth.NewResetEmailWorker(st, mailer, u, auth.DefaultResetTokenTTL)
 	fanout := notifications.NewFanoutWorker(st, log)
+	late := &notifications.LateInserter{}
+	notifyMailer := notifications.NewMailer(st, mailer, u, log)
+	dispatch := notifications.NewDispatchWorker(st, late)
+	ticketEmail, digest := notifications.NewTicketEmailWorker(notifyMailer), notifications.NewDigestWorker(notifyMailer)
 	workers := river.NewWorkers()
 	river.AddWorker(workers, worker)
 	river.AddWorker(workers, fanout)
+	river.AddWorker(workers, dispatch)
+	river.AddWorker(workers, ticketEmail)
+	river.AddWorker(workers, digest)
+	river.AddWorker(workers, notifications.NewPurgeWorker(st))
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), &river.Config{Workers: workers})
 	if err != nil {
 		t.Fatal(err)
 	}
+	late.JobInserter = jobs
 	svc := auth.NewService(st, auth.NewHasher(cheapParams, auth.DefaultMaxConcurrentHashes), jobs, auth.DefaultOptions(), log)
 	files, err := storage.NewFS(t.TempDir())
 	if err != nil {
@@ -96,7 +108,7 @@ func newEnv(t *testing.T) *env {
 	if _, err := st.Q().UpsertClient(ctx, "Dinas Kominfo Jambi"); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, files: files, users: map[auth.Role]string{}}
+	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, files: files, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r}
 		if r == auth.RoleRequester {

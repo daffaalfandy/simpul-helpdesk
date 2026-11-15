@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:24px;background:{{color "tint"}};font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;color:{{color "ink"}}">
+  <div style="max-width:600px;margin:0 auto;background:{{color "surface"}};border:1px solid {{color "border"}};border-radius:16px;overflow:hidden">
+    <div style="padding:20px 28px;border-bottom:1px solid {{color "border-subtle"}};font-size:15px;font-weight:800">{{.OrgName}} Support</div>
+    <div style="padding:26px 28px">
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:{{color "muted"}}">{{.TicketKey}} · {{.PriorityName}} · {{.ProjectName}}</p>
+      <h1 style="margin:0 0 14px;font-size:22px;line-height:1.25;font-weight:800">{{.Title}}</h1>
+      <p style="margin:0 0 14px;font-size:14.5px;line-height:1.5">{{text "notice.summary" .Main}}</p>
+      {{- if .Main.StatusTo}}
+      <p style="margin:0 0 18px;font-size:13.5px"><b>Status:</b>
+        <span style="padding:3px 10px;border-radius:20px;background:{{color "warning-bg"}};color:{{color "warning-fg"}};font-weight:700;text-decoration:line-through">{{status .Main.StatusFrom .Portal}}</span>
+        <span aria-hidden="true">→</span>
+        <span style="padding:3px 10px;border-radius:20px;background:{{color "info-bg"}};color:{{color "info-fg"}};font-weight:800">{{status .Main.StatusTo .Portal}}</span>
+      </p>
+      {{- end}}
+      {{- with .Quote}}
+      <div style="margin:0 0 18px;padding:14px 16px;border-left:3px solid {{color "primary"}};background:{{color "bg"}};border-radius:0 12px 12px 0">
+        <p style="margin:0 0 6px;font-size:13px;color:{{color "muted"}}"><b style="color:{{color "ink"}}">{{.Author}}</b>{{if .FromSupport}} · Support team{{end}} · {{.Time}}</p>
+        <p style="margin:0;font-size:14.5px;line-height:1.6;white-space:pre-line">{{.Body}}</p>
+      </div>
+      {{- end}}
+      <p style="margin:0 0 18px"><a href="{{.TicketURL}}" style="display:inline-block;padding:11px 18px;border:1px solid {{color "border-strong"}};border-radius:10px;color:{{color "primary"}};font-size:14px;font-weight:700;text-decoration:none">View the ticket</a></p>
+      {{- if or .Changes .Others}}
+      <div style="border-top:1px solid {{color "border-subtle"}};padding-top:14px">
+        <p style="margin:0 0 6px;font-size:12px;font-weight:800;color:{{color "muted"}}">Also changed</p>
+        <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7;color:{{color "ink-2"}}">
+          {{- range .Changes}}<li>{{text "change.summary" .}}</li>{{end}}
+          {{- range .Others}}<li>{{text "notice.summary" .}} ({{.Time}})</li>{{end}}
+        </ul>
+      </div>
+      {{- end}}
+      {{- if .SLALine}}
+      <p style="margin:14px 0 0;font-size:13px;color:{{color "muted"}}">{{.SLALine}}</p>
+      {{- end}}
+    </div>
+    <div style="padding:18px 28px;background:{{color "bg"}};font-size:12px;line-height:1.6;color:{{color "muted"}}">
+      {{text "relation.reason" .}} {{text "footer.reply" .Portal}}<br>
+      <a href="{{.SettingsURL}}" style="color:{{color "primary"}}">Manage notifications</a> · Powered by SimDesk
+    </div>
+  </div>
+</body>
+</html>

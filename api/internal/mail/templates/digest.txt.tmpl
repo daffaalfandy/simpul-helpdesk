@@ -1,0 +1,15 @@
+{{define "digest.subject"}}{{.OrgName}} Support: {{template "digest.title" .}}{{end -}}
+{{template "digest.title" .}}
+{{template "digest.count" .}}
+{{range .Tickets}}
+{{.TicketKey}} · {{.PriorityName}} · {{.ProjectName}}
+{{.Title}}
+{{- range .Notices}}
+- {{template "notice.summary" .}} ({{.Time}})
+{{- end}}
+View the ticket: {{.TicketURL}}
+{{end}}
+--
+{{template "footer.reply" .Portal}}
+Manage notifications: {{.SettingsURL}}
+Powered by SimDesk

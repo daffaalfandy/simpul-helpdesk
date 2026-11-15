@@ -1,6 +1,10 @@
 package notification
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // Job kinds. The args live in this pure package so the ticket service can insert them
 // without importing the notification service.
@@ -37,10 +41,12 @@ type TicketEmailArgs struct {
 
 func (TicketEmailArgs) Kind() string { return JobKindTicketEmail }
 
-// DigestArgs sends one user's hourly or daily summary for one period.
+// DigestArgs sends one user's hourly or daily summary of the routine items created before
+// Before. Period names the summary so it is queued once.
 type DigestArgs struct {
 	UserID uuid.UUID `json:"user_id"`
 	Period string    `json:"period"`
+	Before time.Time `json:"before"`
 }
 
 func (DigestArgs) Kind() string { return JobKindDigest }
