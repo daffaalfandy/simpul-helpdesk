@@ -30,8 +30,8 @@
         </ul>
       </div>
       {{- end}}
-      {{- if .SLALine}}
-      <p style="margin:14px 0 0;font-size:13px;color:{{color "muted"}}">{{.SLALine}}</p>
+      {{- with .SLA}}
+      <p style="margin:14px 0 0;font-size:13px;color:{{color "muted"}}">{{text "sla.line" .}}</p>
       {{- end}}
     </div>
     <div style="padding:18px 28px;background:{{color "bg"}};font-size:12px;line-height:1.6;color:{{color "muted"}}">

@@ -411,7 +411,7 @@ func (q *Queries) ListActiveUserIDsByRole(ctx context.Context, arg ListActiveUse
 }
 
 const listEmailTickets = `-- name: ListEmailTickets :many
-SELECT t.id, t.key, t.subject, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
+SELECT t.id, t.key, t.subject, t.type, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
        pl.name AS priority_name, p.name AS project_name,
        (u.role = ANY($1::text[])
         OR (u.role = $2 AND EXISTS (SELECT 1 FROM client_agents ca
@@ -437,6 +437,7 @@ type ListEmailTicketsRow struct {
 	ID           uuid.UUID
 	Key          string
 	Subject      string
+	Type         string
 	Priority     string
 	RequesterID  uuid.UUID
 	AssigneeID   *uuid.UUID
@@ -469,6 +470,7 @@ func (q *Queries) ListEmailTickets(ctx context.Context, arg ListEmailTicketsPara
 			&i.ID,
 			&i.Key,
 			&i.Subject,
+			&i.Type,
 			&i.Priority,
 			&i.RequesterID,
 			&i.AssigneeID,

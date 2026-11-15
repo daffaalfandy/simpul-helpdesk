@@ -21,9 +21,9 @@ Also changed:
 - {{template "notice.summary" .}} ({{.Time}})
 {{- end}}
 {{- end}}
-{{- if .SLALine}}
+{{- with .SLA}}
 
-{{.SLALine}}
+{{template "sla.line" .}}
 {{- end}}
 
 --

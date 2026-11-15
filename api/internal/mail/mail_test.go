@@ -17,6 +17,7 @@ func TestTicketUpdateRenders(t *testing.T) {
 		Others: []NoticeData{{Event: "reply", Portal: true, ActorName: "Rina Pratiwi", Time: "12:40"},
 			{Event: "sla", Kind: "at_risk", SLAClock: "resolution", SLAMinutesLeft: &left, Time: "12:41"}},
 		Quote:     &QuoteData{Author: "Rina Pratiwi", FromSupport: true, Time: "12:45", Body: "The fix is on the test server now."},
+		SLA:       &SLALineData{TargetValue: 4, TargetUnit: "h", PauseUAT: true},
 		TicketURL: "https://helpdesk.example/portal/tickets/HD-24871", SettingsURL: "https://helpdesk.example/portal/notifications#settings",
 	}
 	msg, err := Render(TemplateTicketUpdate, "hendra@example.test", "Hendra", data)
@@ -34,6 +35,7 @@ func TestTicketUpdateRenders(t *testing.T) {
 		"- SLA at risk: resolve due in 41 min (12:41)",
 		"You're getting this because you reported HD-24871. Reply in the portal; replies to this email aren't read.",
 		"HD-24871 · P1 Critical · e-Office",
+		"Fix target: 4 hours · time waiting for your test doesn't count",
 		"Powered by SimDesk",
 	} {
 		if !strings.Contains(msg.Text, want) {

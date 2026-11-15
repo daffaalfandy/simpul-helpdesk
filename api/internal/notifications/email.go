@@ -330,6 +330,9 @@ func (m *Mailer) render(ctx context.Context, q *db.Queries, user *recipient, row
 	if data.Quote, err = m.quote(ctx, q, portal, main, rows, f); err != nil {
 		return mail.Message{}, err
 	}
+	if portal {
+		data.SLA = slaLine(t)
+	}
 	msg, err := mail.Render(mail.TemplateTicketUpdate, user.Email, user.Name, data)
 	msg.Headers = headers
 	return msg, err
@@ -566,4 +569,20 @@ func (w *PicEmailWorker) Work(ctx context.Context, job *river.Job[notification.P
 	}
 	msg.Headers = mail.AutoReplyHeaders()
 	return w.m.sender.Send(ctx, msg)
+}
+
+// slaLine is a requester's target line, from the ticket's snapshot; nil if it can't be read.
+func slaLine(t db.ListEmailTicketsRow) *mail.SLALineData {
+	var snap ticket.SLASnapshot
+	if err := json.Unmarshal(t.SlaSnapshot, &snap); err != nil {
+		return nil
+	}
+	eff, err := snap.Effective(sla.Priority(t.Priority), ticket.Type(t.Type))
+	if err != nil {
+		return nil
+	}
+	return &mail.SLALineData{
+		Request: ticket.Type(t.Type) == ticket.TypeRequest, TargetValue: eff.Resolution.Value,
+		TargetUnit: string(eff.Resolution.Unit), PauseWaiting: eff.PauseOnWaitingClient, PauseUAT: eff.PauseOnUAT,
+	}
 }

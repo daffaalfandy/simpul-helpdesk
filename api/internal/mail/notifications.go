@@ -46,6 +46,15 @@ type ChangeData struct {
 	Assignee     string
 }
 
+// SLALineData is the target line under a requester's email ("Fix target: 4 hours · …").
+type SLALineData struct {
+	Request      bool // a service request: a delivery target
+	TargetValue  int
+	TargetUnit   string
+	PauseWaiting bool
+	PauseUAT     bool
+}
+
 // QuoteData is the message an email quotes.
 type QuoteData struct {
 	Author      string
@@ -68,7 +77,7 @@ type TicketUpdateData struct {
 	Changes      []ChangeData // folded into the main notification
 	Others       []NoticeData // other notifications in this email
 	Quote        *QuoteData
-	SLALine      string
+	SLA          *SLALineData // requesters only: the target and what doesn't count
 	TicketURL    string
 	SettingsURL  string
 }
