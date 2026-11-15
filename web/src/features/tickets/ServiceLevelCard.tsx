@@ -6,7 +6,7 @@ import { Card } from '../../components/Card'
 import { formatTarget, formatTargetCompact } from '../../lib/formatDuration'
 import { cx } from '../../lib/text'
 import type { Audience } from './MessageThread'
-import { compactSpan } from './slaFormat'
+import { compactSpan, shownPhase } from './slaFormat'
 import { useTimestamp } from './time'
 
 type ServiceLevelCardProps = { ticket: Ticket; audience: Audience }
@@ -27,7 +27,7 @@ const DARK_TONE: Record<SlaPhase, { bar: string; text: string }> = {
 /** What a clock says on the agent's SLA box: "Met in 8m", "41m left", "Breached 12m". */
 function agentClockText(t: TFunction, clock: SlaClockName, c: SlaClock): string {
   const left = compactSpan(t, c.remainingMs, c.dayMs)
-  switch (c.phase) {
+  switch (shownPhase(c)) {
     case 'met':
       return t('ticket.sla.metIn', { span: compactSpan(t, c.usedMs, c.dayMs) })
     case 'missed':
@@ -137,7 +137,7 @@ export function ServiceLevelCard({ ticket, audience }: ServiceLevelCardProps) {
       <dl className="flex flex-col gap-3 text-sm">
         {rows.map((r) => {
           const text = r.clock ? agentClockText(t, r.id, r.clock) : r.fallback
-          const tone = r.clock ? DARK_TONE[r.clock.phase] : null
+          const tone = r.clock ? DARK_TONE[shownPhase(r.clock)] : null
           const used = r.clock ? Math.min(FULL, Math.round((r.clock.usedMs / r.clock.budgetMs) * FULL)) : 0
           return (
             <div key={r.id} className="flex flex-col gap-1.5">

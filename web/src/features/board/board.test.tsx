@@ -270,3 +270,20 @@ describe('board SLA', () => {
     expect(screen.queryByRole('region', { name: 'SLA alert' })).not.toBeInTheDocument()
   })
 })
+
+describe('board search box', () => {
+  beforeEach(() => {
+    state.me = AGENT
+  })
+
+  it('follows the URL when the search is cleared from outside', async () => {
+    const { router } = renderApp('/board?q=router')
+    const box = await screen.findByRole('searchbox', { name: 'Search tickets' })
+    expect(box).toHaveValue('router')
+    await act(() => router.navigate({ to: '/board' }))
+    await waitFor(() => expect(box).toHaveValue(''))
+    // Past the debounce, the old text must not come back.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)))
+    expect(router.state.location.search).toEqual({})
+  })
+})

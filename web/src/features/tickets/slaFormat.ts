@@ -42,10 +42,18 @@ export const SLA_TONE: Record<SlaPhase, PillTone> = {
 
 type ClockNow = Pick<SlaClock, 'phase' | 'remainingMs' | 'dayMs'>
 
+/**
+ * The phase to show. The scan flags a breach within a minute; until then a running clock that is
+ * already over reads as breached, never as time left.
+ */
+export function shownPhase(c: ClockNow): SlaPhase {
+  return (c.phase === 'running' || c.phase === 'at_risk') && c.remainingMs < 0 ? 'breached' : c.phase
+}
+
 /** What a clock says in a chip: "Respond in 22m", "5h left", "Breached 12m", "Paused · 3h left". */
 export function slaChipText(t: TFunction, clock: SlaClockName, c: ClockNow): string | null {
   const span = compactSpan(t, c.remainingMs, c.dayMs)
-  switch (c.phase) {
+  switch (shownPhase(c)) {
     case 'running':
     case 'at_risk':
       return clock === 'first_response' ? t('sla.respondIn', { span }) : t('sla.left', { span })

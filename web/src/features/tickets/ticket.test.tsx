@@ -168,3 +168,30 @@ describe('live SLA on the ticket', () => {
     expect(option).not.toHaveTextContent('Pauses the SLA clock')
   })
 })
+
+describe('a refused status change', () => {
+  it('shows the status someone else set, so the next try starts from it', async () => {
+    state.me = AGENT
+    const user = await open()
+    const t = tickets.tickets.find((x) => x.key === 'HD-24871')
+    if (t) t.status = 'waiting_on_client' // a teammate moved it meanwhile
+    await user.click(screen.getByRole('button', { name: /Status$/ }))
+    await user.click(await screen.findByRole('option', { name: /In UAT/ }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: /Status$/ })).toHaveTextContent('Waiting on client'))
+  })
+
+  it('reads an overdue clock as breached before the scan flags it', async () => {
+    state.me = AGENT
+    const t = tickets.tickets.find((x) => x.key === 'HD-24871')
+    if (t) {
+      t.sla.resolutionClock = {
+        phase: 'running', usedMs: 243 * 60_000, budgetMs: 240 * 60_000, remainingMs: -3 * 60_000,
+        dayMs: 24 * 3_600_000, dueAt: null, metAt: null,
+      }
+    }
+    await open()
+    const sla = screen.getByRole('region', { name: 'SLA · P1 · e-Office project' })
+    expect(within(sla).getByText('Breached 3m')).toBeInTheDocument()
+  })
+})

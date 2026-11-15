@@ -85,7 +85,11 @@ export function useAddMessage(key: string) {
   })
 }
 
-/** Status, assignee and priority changes return the updated ticket; lists and the log refresh. */
+/**
+ * Status, assignee and priority changes return the updated ticket; lists and the log refresh. A
+ * refused change (someone else moved the ticket first) reloads the ticket, so the page shows
+ * the latest and the next try starts from it.
+ */
 function useTicketAction<T>(key: string, call: (input: T) => Promise<Ticket>) {
   const queryClient = useQueryClient()
   const invalidate = useInvalidate()
@@ -95,6 +99,7 @@ function useTicketAction<T>(key: string, call: (input: T) => Promise<Ticket>) {
       queryClient.setQueryData(queryKeys.ticket(key), ticket)
       return invalidate(queryKeys.tickets, queryKeys.clientAssignees(ticket.client.id))
     },
+    onError: () => invalidate(queryKeys.ticket(key), queryKeys.ticketActivity(key)),
   })
 }
 

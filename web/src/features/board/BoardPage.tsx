@@ -154,6 +154,13 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
 function BoardSearchBox({ value, onCommit }: { value: string; onCommit: (q: string) => void }) {
   const { t } = useTranslation()
   const [text, setText] = useState(value)
+  // The URL changed from outside (the Board link, back): show it, or the old text would be
+  // committed again after the pause.
+  const [seenValue, setSeenValue] = useState(value)
+  if (value !== seenValue) {
+    setSeenValue(value)
+    if (value !== cleanQuery(text)) setText(value)
+  }
   useEffect(() => {
     const q = cleanQuery(text)
     if (q === value) return
