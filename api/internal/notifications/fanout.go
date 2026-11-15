@@ -37,53 +37,57 @@ func NewFanoutWorker(st *store.Store, log *slog.Logger) *FanoutWorker {
 // Work routes the transaction's changes and stores one notification per recipient. A retry
 // adds nothing: the first audit entry plus the user is unique.
 func (w *FanoutWorker) Work(ctx context.Context, job *river.Job[notification.FanoutArgs]) error {
-	args := job.Args
 	return w.store.Tx(ctx, func(tx store.Tx) error {
-		rows, err := tx.Q.ListAuditByIDs(ctx, db.ListAuditByIDsParams{
-			TargetType: &targetTicket, TargetID: &args.TicketID, Ids: args.AuditIDs,
-		})
-		if err != nil || len(rows) == 0 {
-			return err
-		}
-		t, err := tx.Q.GetTicketForFanout(ctx, args.TicketID)
-		if err != nil {
-			return err
-		}
-		watchers, err := tx.Q.ListTicketWatcherIDs(ctx, args.TicketID)
-		if err != nil {
-			return err
-		}
-		in := notification.Input{
-			Actor: rows[0].ActorUserID, Assignee: t.AssigneeID, Requester: t.RequesterID,
-			Watchers: watchers, Priority: sla.Priority(t.Priority), Changes: tickets.NotificationChanges(rows),
-		}
-		if err := loadRecipients(ctx, tx.Q, &in); err != nil {
-			return err
-		}
-		deliveries, dropped := notification.Route(in)
-		if dropped > 0 {
-			w.log.ErrorContext(ctx, "notification rule reached client staff with an internal note; dropped",
-				"ticket_id", args.TicketID, "dropped", dropped)
-		}
-		if err := quoteQuestions(ctx, tx.Q, args.TicketID, deliveries); err != nil {
-			return err
-		}
-		source := rows[0].ID
-		for _, d := range deliveries {
-			data, err := json.Marshal(notification.DataFor(d))
-			if err != nil {
-				return err
-			}
-			if err := tx.Q.InsertNotification(ctx, db.InsertNotificationParams{
-				UserID: d.UserID, TicketID: args.TicketID, EventType: string(d.Event), ActorUserID: in.Actor,
-				SourceID: source, MessageID: d.Change.MessageID, Data: data,
-				Web: d.Channels.Web, Email: d.Channels.Email, Urgent: d.Urgent,
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
+		return Fanout(ctx, tx.Q, w.log, job.Args.TicketID, job.Args.AuditIDs)
 	})
+}
+
+// Fanout turns one ticket transaction's audit entries into notifications, in the caller's
+// transaction. The seed runs it over the demo history.
+func Fanout(ctx context.Context, q *db.Queries, log *slog.Logger, ticketID uuid.UUID, auditIDs []uuid.UUID) error {
+	rows, err := q.ListAuditByIDs(ctx, db.ListAuditByIDsParams{
+		TargetType: &targetTicket, TargetID: &ticketID, Ids: auditIDs,
+	})
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	t, err := q.GetTicketForFanout(ctx, ticketID)
+	if err != nil {
+		return err
+	}
+	watchers, err := q.ListTicketWatcherIDs(ctx, ticketID)
+	if err != nil {
+		return err
+	}
+	in := notification.Input{
+		Actor: rows[0].ActorUserID, Assignee: t.AssigneeID, Requester: t.RequesterID,
+		Watchers: watchers, Priority: sla.Priority(t.Priority), Changes: tickets.NotificationChanges(rows),
+	}
+	if err := loadRecipients(ctx, q, &in); err != nil {
+		return err
+	}
+	deliveries, dropped := notification.Route(in)
+	if dropped > 0 {
+		log.ErrorContext(ctx, "notification rule reached client staff with an internal note; dropped",
+			"ticket_id", ticketID, "dropped", dropped)
+	}
+	if err := quoteQuestions(ctx, q, ticketID, deliveries); err != nil {
+		return err
+	}
+	for _, d := range deliveries {
+		data, err := json.Marshal(notification.DataFor(d))
+		if err != nil {
+			return err
+		}
+		if err := q.InsertNotification(ctx, db.InsertNotificationParams{
+			UserID: d.UserID, TicketID: ticketID, EventType: string(d.Event), ActorUserID: in.Actor,
+			SourceID: rows[0].ID, MessageID: d.Change.MessageID, Data: data,
+			Web: d.Channels.Web, Email: d.Channels.Email, Urgent: d.Urgent, CreatedAt: rows[0].At,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // loadRecipients fills in who everyone named in the input is and what they chose to hear.

@@ -61,6 +61,12 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"resolved today": count(`SELECT count(*) FROM tickets, organization o
 			WHERE status = 'resolved' AND resolved_at >= date_trunc('day', now() AT TIME ZONE o.timezone) AT TIME ZONE o.timezone`),
 		"assigned, not started": count(`SELECT count(*) FROM tickets WHERE status = 'assigned'`),
+		"watchers":              count(`SELECT count(*) FROM ticket_watchers`),
+		"notifications":         count(`SELECT count(*) FROM notifications`),
+		"unread notifications":  count(`SELECT count(*) FROM notifications WHERE read_at IS NULL`),
+		"emails pending":        count(`SELECT count(*) FROM notifications WHERE email AND emailed_at IS NULL`),
+		"internal notes to client staff": count(`SELECT count(*) FROM notifications n JOIN users u ON u.id = n.user_id
+			WHERE n.event_type = 'internal_note' AND u.role = 'requester'`),
 	}
 	want := map[string]int{
 		"users": 11, "clients": 8, "agent links": 7,
@@ -68,11 +74,16 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"projects": 8, "tickets on projects": 12, "requests on default": 4, "project targets": 32, "default projects": 5, "e-Office P1 fix": 2,
 		"tickets": 12, "messages": 10, "internal notes": 1, "ticket history": 12, "next number": 24891,
 		"resolved today": 1, "assigned, not started": 1,
+		"watchers": 1, "notifications": 42, "emails pending": 0, "internal notes to client staff": 0,
 	}
 	for k, w := range want {
 		if got[k] != w {
 			t.Errorf("%s = %d, want %d", k, got[k], w)
 		}
+	}
+	// Only the latest day's demo changes are unread; how many depends on the time of day.
+	if u := got["unread notifications"]; u == 0 || u >= got["notifications"] {
+		t.Errorf("unread notifications = %d of %d", u, got["notifications"])
 	}
 	org, err := st.Q().GetOrganization(ctx)
 	if err != nil || org.Name != seed.OrgName {

@@ -17,10 +17,11 @@ WHERE user_id = ANY(@user_ids::uuid[]);
 
 -- name: InsertNotification :exec
 -- source_id + user_id is unique, so a retried fan-out adds nothing.
+-- created_at is when the change happened, not when the fan-out ran.
 INSERT INTO notifications (user_id, ticket_id, event_type, actor_user_id, source_id, message_id, data,
-                           web, email, urgent)
+                           web, email, urgent, created_at)
 VALUES (@user_id, @ticket_id, @event_type, sqlc.narg(actor_user_id), @source_id, sqlc.narg(message_id),
-        @data, @web, @email, @urgent)
+        @data, @web, @email, @urgent, @created_at)
 ON CONFLICT (source_id, user_id) DO NOTHING;
 
 -- name: GetLatestPublicStaffMessageID :one
@@ -175,3 +176,13 @@ WHERE m.id = @id;
 DELETE FROM notifications
 WHERE id IN (SELECT o.id FROM notifications o WHERE o.created_at < @created_before
              ORDER BY o.created_at LIMIT @batch);
+
+-- name: ListTicketIDsByNumber :many
+SELECT id FROM tickets WHERE number = ANY(@numbers::bigint[]) ORDER BY number;
+
+-- name: SettleSeedNotifications :exec
+-- Demo history: nothing to email, and items older than read_before already read.
+UPDATE notifications
+SET emailed_at = coalesce(emailed_at, created_at),
+    read_at = CASE WHEN created_at < @read_before THEN coalesce(read_at, created_at) ELSE read_at END
+WHERE ticket_id = ANY(@ticket_ids::uuid[]);

@@ -111,7 +111,7 @@ var catalogItems = []catalogItem{
 }
 
 // Run upserts the demo organisation, clients, projects, users, agent assignments, holidays,
-// catalogue and tickets. It is safe to run repeatedly.
+// catalogue, tickets and their notifications. It is safe to run repeatedly.
 func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, out io.Writer) error {
 	if env != config.EnvDev {
 		return ErrNotDev
@@ -178,7 +178,12 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		if err != nil {
 			return err
 		}
-		return seedTickets(ctx, tx.Q, time.Now(), refs{clients: clientIDs, users: userIDs, projects: projectIDs, items: items})
+		now := time.Now()
+		r := refs{clients: clientIDs, users: userIDs, projects: projectIDs, items: items}
+		if err := seedTickets(ctx, tx.Q, now, r); err != nil {
+			return err
+		}
+		return seedNotifications(ctx, tx.Q, now, r)
 	})
 	if err != nil {
 		return err

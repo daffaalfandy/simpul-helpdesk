@@ -297,9 +297,9 @@ func (q *Queries) GetUserEmailFrequency(ctx context.Context, id uuid.UUID) (stri
 
 const insertNotification = `-- name: InsertNotification :exec
 INSERT INTO notifications (user_id, ticket_id, event_type, actor_user_id, source_id, message_id, data,
-                           web, email, urgent)
+                           web, email, urgent, created_at)
 VALUES ($1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10)
+        $7, $8, $9, $10, $11)
 ON CONFLICT (source_id, user_id) DO NOTHING
 `
 
@@ -314,9 +314,11 @@ type InsertNotificationParams struct {
 	Web         bool
 	Email       bool
 	Urgent      bool
+	CreatedAt   time.Time
 }
 
 // source_id + user_id is unique, so a retried fan-out adds nothing.
+// created_at is when the change happened, not when the fan-out ran.
 func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotificationParams) error {
 	_, err := q.db.Exec(ctx, insertNotification,
 		arg.UserID,
@@ -329,6 +331,7 @@ func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotification
 		arg.Web,
 		arg.Email,
 		arg.Urgent,
+		arg.CreatedAt,
 	)
 	return err
 }
@@ -659,6 +662,30 @@ func (q *Queries) ListPendingEmails(ctx context.Context, arg ListPendingEmailsPa
 	return items, nil
 }
 
+const listTicketIDsByNumber = `-- name: ListTicketIDsByNumber :many
+SELECT id FROM tickets WHERE number = ANY($1::bigint[]) ORDER BY number
+`
+
+func (q *Queries) ListTicketIDsByNumber(ctx context.Context, numbers []int64) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listTicketIDsByNumber, numbers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserNames = `-- name: ListUserNames :many
 SELECT id, name FROM users WHERE id = ANY($1::uuid[])
 `
@@ -778,6 +805,24 @@ type SetUserEmailFrequencyParams struct {
 
 func (q *Queries) SetUserEmailFrequency(ctx context.Context, arg SetUserEmailFrequencyParams) error {
 	_, err := q.db.Exec(ctx, setUserEmailFrequency, arg.EmailFrequency, arg.ID)
+	return err
+}
+
+const settleSeedNotifications = `-- name: SettleSeedNotifications :exec
+UPDATE notifications
+SET emailed_at = coalesce(emailed_at, created_at),
+    read_at = CASE WHEN created_at < $1 THEN coalesce(read_at, created_at) ELSE read_at END
+WHERE ticket_id = ANY($2::uuid[])
+`
+
+type SettleSeedNotificationsParams struct {
+	ReadBefore time.Time
+	TicketIds  []uuid.UUID
+}
+
+// Demo history: nothing to email, and items older than read_before already read.
+func (q *Queries) SettleSeedNotifications(ctx context.Context, arg SettleSeedNotificationsParams) error {
+	_, err := q.db.Exec(ctx, settleSeedNotifications, arg.ReadBefore, arg.TicketIds)
 	return err
 }
 
