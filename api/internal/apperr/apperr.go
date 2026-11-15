@@ -62,6 +62,10 @@ const (
 	CodeEmailTaken                = "email_taken"
 	CodeCatalogItemNameTaken      = "catalog_item_name_taken"
 	CodeCatalogItemInUse          = "catalog_item_in_use"
+	CodeInvalidWatcher            = "invalid_watcher"
+	CodeNotificationLocked        = "notification_locked"
+	CodeNotificationEventUnknown  = "notification_event_unknown"
+	CodeInvalidEmailFrequency     = "invalid_email_frequency"
 )
 
 // Error is a domain error with a stable machine-readable code.

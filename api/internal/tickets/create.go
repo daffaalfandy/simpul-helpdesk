@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
@@ -135,7 +134,11 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 		if in.CatalogItemID != nil {
 			data[dataCatalogItem] = *in.CatalogItemID
 		}
-		return audit.Write(ctx, tx.Q, p.AuditActor().Entry(ActionCreated, TargetTicket, &created.ID, data))
+		cs := newChangeSet(created.ID)
+		if err := cs.write(ctx, tx.Q, p.AuditActor().Entry(ActionCreated, TargetTicket, &created.ID, data)); err != nil {
+			return err
+		}
+		return s.commit(ctx, tx, cs)
 	})
 	if err != nil {
 		return Ticket{}, err

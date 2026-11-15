@@ -30,6 +30,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notifications"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/seed"
@@ -179,6 +180,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, auth.NewResetEmailWorker(st, mailer, cfg.AppURL, opts.ResetTokenTTL))
 	river.AddWorker(workers, tickets.NewAttachmentSweeper(st, files))
+	river.AddWorker(workers, notifications.NewFanoutWorker(st, log))
 	riverCfg := &river.Config{Workers: workers, Logger: log.With("component", "jobs")}
 	if runJobs {
 		// Periodic jobs only on clients that run jobs: River refuses them on insert-only clients.
@@ -201,7 +203,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 		catalog:    catalog.NewService(st),
 		projects:   projects.NewService(st, slaSvc),
 		priorities: priorities.NewService(st),
-		tickets:    tickets.NewService(st, files, slaSvc),
+		tickets:    tickets.NewService(st, files, slaSvc, jobs),
 	}, nil
 }
 

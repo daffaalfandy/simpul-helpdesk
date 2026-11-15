@@ -27,6 +27,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notifications"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
@@ -48,14 +49,15 @@ const (
 var cheapParams = auth.Params{Memory: 64, Time: 1, Threads: 1, SaltLen: 16, KeyLen: 32}
 
 type env struct {
-	t       *testing.T
-	st      *store.Store
-	handler http.Handler
-	auth    *auth.Service
-	mailer  *mail.Recorder
-	worker  *auth.ResetEmailWorker
-	files   *storage.FS
-	users   map[auth.Role]string // role -> email
+	t            *testing.T
+	st           *store.Store
+	handler      http.Handler
+	auth         *auth.Service
+	mailer       *mail.Recorder
+	worker       *auth.ResetEmailWorker
+	fanoutWorker *notifications.FanoutWorker
+	files        *storage.FS
+	users        map[auth.Role]string // role -> email
 }
 
 func newEnv(t *testing.T) *env {
@@ -67,8 +69,10 @@ func newEnv(t *testing.T) *env {
 	log := slog.New(slog.DiscardHandler)
 	mailer := &mail.Recorder{}
 	worker := auth.NewResetEmailWorker(st, mailer, u, auth.DefaultResetTokenTTL)
+	fanout := notifications.NewFanoutWorker(st, log)
 	workers := river.NewWorkers()
 	river.AddWorker(workers, worker)
+	river.AddWorker(workers, fanout)
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), &river.Config{Workers: workers})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +87,7 @@ func newEnv(t *testing.T) *env {
 	h, err := httpapi.New(httpapi.Deps{
 		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st), SLA: slaSvc,
 		Catalog: catalog.NewService(st), Projects: projects.NewService(st, slaSvc), Priorities: priorities.NewService(st),
-		Tickets: tickets.NewService(st, files, slaSvc), Logger: log,
+		Tickets: tickets.NewService(st, files, slaSvc, jobs), Logger: log,
 		WebUI: fstest.MapFS{"index.html": {Data: []byte(spaMarker)}, "assets/app.js": {Data: []byte("//js")}},
 	})
 	if err != nil {
@@ -92,7 +96,7 @@ func newEnv(t *testing.T) *env {
 	if _, err := st.Q().UpsertClient(ctx, "Dinas Kominfo Jambi"); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, files: files, users: map[auth.Role]string{}}
+	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, files: files, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r}
 		if r == auth.RoleRequester {

@@ -1037,6 +1037,95 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /tickets/{ticketKey}/watchers:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    get:
+      operationId: listTicketWatchers
+      summary: Colleagues following the ticket ("People notified", besides the requester)
+      tags: [tickets]
+      responses:
+        "200":
+          description: Watchers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Colleague" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addTicketWatcher
+      summary: Add a colleague to the ticket (requesters)
+      description: |
+        The colleague must be another active or invited requester of the ticket's client;
+        otherwise `invalid_watcher`. Adding someone already following changes nothing. Staff get
+        403; a closed ticket gives `ticket_closed` (409). Returns the updated list.
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WatcherInput" }
+      responses:
+        "200":
+          description: Watchers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Colleague" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/watchers/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+      - $ref: "#/components/parameters/UserId"
+    delete:
+      operationId: removeTicketWatcher
+      summary: Take a colleague off the ticket (requesters)
+      description: Staff get 403; a closed ticket gives `ticket_closed` (409); someone not following gives 404.
+      tags: [tickets]
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/watcher-candidates:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    get:
+      operationId: listTicketWatcherCandidates
+      summary: The client's other requesters who could follow the ticket (requesters)
+      description: At most 20, by name; `q` narrows by name. Staff get 403.
+      tags: [tickets]
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: Candidates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Colleague" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /attachments:
     post:
       operationId: uploadAttachment
@@ -1125,6 +1214,11 @@ components:
       schema: { type: string, format: uuid }
     CatalogItemId:
       name: catalogItemId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -1481,6 +1575,20 @@ components:
         skippedCount:
           type: integer
           description: Dates that already had a holiday.
+
+    Colleague:
+      type: object
+      required: [id, name, jobTitle]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Dian Pratama }
+        jobTitle: { type: string, nullable: true, example: Head of IT }
+
+    WatcherInput:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: string, format: uuid }
 
     Requester:
       type: object

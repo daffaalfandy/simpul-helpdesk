@@ -40,7 +40,6 @@ func (s *Service) AddMessage(ctx context.Context, p *auth.Principal, key string,
 	if err != nil {
 		return Message{}, err
 	}
-	public := in.Visibility == ticket.VisibilityPublic
 	msg := Message{
 		Author: Ref{p.UserID, p.Name}, AuthorJobTitle: p.JobTitle, FromSupport: a.staff,
 		Visibility: in.Visibility, Body: in.Body,
@@ -64,34 +63,44 @@ func (s *Service) AddMessage(ctx context.Context, p *auth.Principal, key string,
 		if msg.Attachments, err = s.linkAttachments(ctx, tx.Q, p.UserID, row.ID, &created.ID, ids); err != nil {
 			return err
 		}
-		actor := p.AuditActor()
-		if err := audit.Write(ctx, tx.Q, actor.Entry(ActionMessageAdded, TargetTicket, &row.ID, map[string]any{
-			dataMessageID: created.ID, dataVisibility: in.Visibility, dataAttachmentIDs: nonNilIDs(ids),
-		})); err != nil {
+		cs := newChangeSet(row.ID)
+		if err := s.recordMessage(ctx, tx, cs, p.AuditActor(), a.staff, from, created.ID, in.Visibility, ids); err != nil {
 			return err
 		}
-		if !public {
-			return nil
-		}
-		if err := tx.Q.TouchTicket(ctx, row.ID); err != nil {
-			return err
-		}
-		if a.staff {
-			n, err := tx.Q.MarkTicketFirstResponse(ctx, row.ID)
-			if err != nil || n == 0 {
-				return err
-			}
-			return audit.Write(ctx, tx.Q, actor.Entry(ActionFirstResponded, TargetTicket, &row.ID, map[string]any{
-				dataMessageID: created.ID,
-			}))
-		}
-		if to, changed := ticket.StatusAfterRequesterReply(from); changed {
-			return s.writeStatus(ctx, tx, actor, row.ID, from, to, ticket.CauseRequesterReply)
-		}
-		return nil
+		return s.commit(ctx, tx, cs)
 	})
 	if err != nil {
 		return Message{}, err
 	}
 	return msg, nil
+}
+
+// recordMessage writes what a new message changed: its audit entry, and for public messages the
+// ticket's update time, the first response or the resumed status.
+func (s *Service) recordMessage(ctx context.Context, tx store.Tx, cs *changeSet, actor audit.Actor, staff bool,
+	from ticket.Status, messageID uuid.UUID, visibility ticket.Visibility, attachmentIDs []uuid.UUID) error {
+	if err := cs.write(ctx, tx.Q, actor.Entry(ActionMessageAdded, TargetTicket, &cs.ticketID, map[string]any{
+		dataMessageID: messageID, dataVisibility: visibility, dataAttachmentIDs: nonNilIDs(attachmentIDs),
+	})); err != nil {
+		return err
+	}
+	if visibility != ticket.VisibilityPublic {
+		return nil
+	}
+	if err := tx.Q.TouchTicket(ctx, cs.ticketID); err != nil {
+		return err
+	}
+	if staff {
+		n, err := tx.Q.MarkTicketFirstResponse(ctx, cs.ticketID)
+		if err != nil || n == 0 {
+			return err
+		}
+		return cs.write(ctx, tx.Q, actor.Entry(ActionFirstResponded, TargetTicket, &cs.ticketID, map[string]any{
+			dataMessageID: messageID,
+		}))
+	}
+	if to, changed := ticket.StatusAfterRequesterReply(from); changed {
+		return s.writeStatus(ctx, tx, cs, actor, from, to, ticket.CauseRequesterReply)
+	}
+	return nil
 }

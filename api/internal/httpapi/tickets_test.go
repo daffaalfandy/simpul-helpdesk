@@ -172,14 +172,18 @@ func (e *env) auditActions(t *testing.T, ticketID uuid.UUID) []string {
 // scopedOps are the operations that act on one ticket or file, with the status each outsider
 // gets. 404 hides the ticket; 403 means the role may never do this.
 var scopedOps = map[string]struct{ otherRequester, otherAgent int }{
-	"getTicket":           {http.StatusNotFound, http.StatusNotFound},
-	"listTicketMessages":  {http.StatusNotFound, http.StatusNotFound},
-	"createTicketMessage": {http.StatusNotFound, http.StatusNotFound},
-	"setTicketStatus":     {http.StatusForbidden, http.StatusNotFound},
-	"setTicketAssignee":   {http.StatusForbidden, http.StatusNotFound},
-	"setTicketPriority":   {http.StatusForbidden, http.StatusNotFound},
-	"listTicketActivity":  {http.StatusForbidden, http.StatusNotFound},
-	"downloadAttachment":  {http.StatusNotFound, http.StatusNotFound},
+	"getTicket":                   {http.StatusNotFound, http.StatusNotFound},
+	"listTicketMessages":          {http.StatusNotFound, http.StatusNotFound},
+	"createTicketMessage":         {http.StatusNotFound, http.StatusNotFound},
+	"setTicketStatus":             {http.StatusForbidden, http.StatusNotFound},
+	"setTicketAssignee":           {http.StatusForbidden, http.StatusNotFound},
+	"setTicketPriority":           {http.StatusForbidden, http.StatusNotFound},
+	"listTicketActivity":          {http.StatusForbidden, http.StatusNotFound},
+	"downloadAttachment":          {http.StatusNotFound, http.StatusNotFound},
+	"listTicketWatchers":          {http.StatusNotFound, http.StatusNotFound},
+	"addTicketWatcher":            {http.StatusNotFound, http.StatusForbidden},
+	"removeTicketWatcher":         {http.StatusNotFound, http.StatusForbidden},
+	"listTicketWatcherCandidates": {http.StatusNotFound, http.StatusForbidden},
 }
 
 func TestTicketScope(t *testing.T) {
@@ -208,6 +212,16 @@ func TestTicketScope(t *testing.T) {
 		"listTicketActivity": func(s session) *httptest.ResponseRecorder { return s.do(http.MethodGet, path+"/activity", nil) },
 		"downloadAttachment": func(s session) *httptest.ResponseRecorder {
 			return s.do(http.MethodGet, "/attachments/"+file.Id.String(), nil)
+		},
+		"listTicketWatchers": func(s session) *httptest.ResponseRecorder { return s.do(http.MethodGet, path+"/watchers", nil) },
+		"addTicketWatcher": func(s session) *httptest.ResponseRecorder {
+			return s.do(http.MethodPost, path+"/watchers", gen.WatcherInput{UserId: te.otherReqID})
+		},
+		"removeTicketWatcher": func(s session) *httptest.ResponseRecorder {
+			return s.do(http.MethodDelete, path+"/watchers/"+te.otherReqID.String(), nil)
+		},
+		"listTicketWatcherCandidates": func(s session) *httptest.ResponseRecorder {
+			return s.do(http.MethodGet, path+"/watcher-candidates", nil)
 		},
 	}
 

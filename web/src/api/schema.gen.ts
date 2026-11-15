@@ -737,6 +737,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tickets/{ticketKey}/watchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        /** Colleagues following the ticket ("People notified", besides the requester) */
+        get: operations["listTicketWatchers"];
+        put?: never;
+        /**
+         * Add a colleague to the ticket (requesters)
+         * @description The colleague must be another active or invited requester of the ticket's client;
+         *     otherwise `invalid_watcher`. Adding someone already following changes nothing. Staff get
+         *     403; a closed ticket gives `ticket_closed` (409). Returns the updated list.
+         */
+        post: operations["addTicketWatcher"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/watchers/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take a colleague off the ticket (requesters)
+         * @description Staff get 403; a closed ticket gives `ticket_closed` (409); someone not following gives 404.
+         */
+        delete: operations["removeTicketWatcher"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/watcher-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The client's other requesters who could follow the ticket (requesters)
+         * @description At most 20, by name; `q` narrows by name. Staff get 403.
+         */
+        get: operations["listTicketWatcherCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attachments": {
         parameters: {
             query?: never;
@@ -1035,6 +1108,18 @@ export interface components {
             addedCount: number;
             /** @description Dates that already had a holiday. */
             skippedCount: number;
+        };
+        Colleague: {
+            /** Format: uuid */
+            id: string;
+            /** @example Dian Pratama */
+            name: string;
+            /** @example Head of IT */
+            jobTitle: string | null;
+        };
+        WatcherInput: {
+            /** Format: uuid */
+            userId: string;
         };
         Requester: {
             /** Format: uuid */
@@ -1377,6 +1462,7 @@ export interface components {
         AttachmentId: string;
         ProjectId: string;
         CatalogItemId: string;
+        UserId: string;
     };
     requestBodies: never;
     headers: never;
@@ -2646,6 +2732,122 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TicketActivity"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTicketWatchers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Watchers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Colleague"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    addTicketWatcher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WatcherInput"];
+            };
+        };
+        responses: {
+            /** @description Watchers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Colleague"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeTicketWatcher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTicketWatcherCandidates: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Colleague"][];
                 };
             };
             401: components["responses"]["Problem"];

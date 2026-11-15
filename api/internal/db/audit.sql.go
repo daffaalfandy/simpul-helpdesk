@@ -13,12 +13,13 @@ import (
 	"github.com/google/uuid"
 )
 
-const insertAudit = `-- name: InsertAudit :exec
+const insertAudit = `-- name: InsertAudit :one
 INSERT INTO audit_log (actor_kind, actor_user_id, actor_name, action, target_type, target_id,
                        data, reason, ip, request_id)
 VALUES ($1, $2, $3, $4,
         $5, $6, $7, $8, $9,
         $10)
+RETURNING id
 `
 
 type InsertAuditParams struct {
@@ -34,8 +35,8 @@ type InsertAuditParams struct {
 	RequestID   *string
 }
 
-func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) error {
-	_, err := q.db.Exec(ctx, insertAudit,
+func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, insertAudit,
 		arg.ActorKind,
 		arg.ActorUserID,
 		arg.ActorName,
@@ -47,7 +48,9 @@ func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) error 
 		arg.Ip,
 		arg.RequestID,
 	)
-	return err
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertAuditAt = `-- name: InsertAuditAt :exec
@@ -82,6 +85,60 @@ func (q *Queries) InsertAuditAt(ctx context.Context, arg InsertAuditAtParams) er
 		arg.Reason,
 	)
 	return err
+}
+
+const listAuditByIDs = `-- name: ListAuditByIDs :many
+SELECT id, at, actor_kind, actor_user_id, actor_name, action, data, reason
+FROM audit_log
+WHERE target_type = $1 AND target_id = $2 AND id = ANY($3::uuid[])
+ORDER BY at, id
+`
+
+type ListAuditByIDsParams struct {
+	TargetType *string
+	TargetID   *uuid.UUID
+	Ids        []uuid.UUID
+}
+
+type ListAuditByIDsRow struct {
+	ID          uuid.UUID
+	At          time.Time
+	ActorKind   string
+	ActorUserID *uuid.UUID
+	ActorName   *string
+	Action      string
+	Data        []byte
+	Reason      *string
+}
+
+// One transaction's entries about one ticket, in insert order.
+func (q *Queries) ListAuditByIDs(ctx context.Context, arg ListAuditByIDsParams) ([]ListAuditByIDsRow, error) {
+	rows, err := q.db.Query(ctx, listAuditByIDs, arg.TargetType, arg.TargetID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAuditByIDsRow{}
+	for rows.Next() {
+		var i ListAuditByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.ActorKind,
+			&i.ActorUserID,
+			&i.ActorName,
+			&i.Action,
+			&i.Data,
+			&i.Reason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAuditByTarget = `-- name: ListAuditByTarget :many

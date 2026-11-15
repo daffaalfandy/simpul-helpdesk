@@ -50,3 +50,32 @@ func staffAccess(p *auth.Principal) (access, error) {
 	}
 	return a, nil
 }
+
+// clientAccess is accessFor for actions only client staff take: vendor staff get 403.
+func clientAccess(p *auth.Principal) (access, error) {
+	a, err := accessFor(p)
+	if err != nil {
+		return access{}, err
+	}
+	if a.staff {
+		return access{}, apperr.Forbidden()
+	}
+	return a, nil
+}
+
+// Scope is a user's ticket scope for queries outside this package (the notification inbox).
+// It is accessFor's rule: those queries take the same scope_client_id and scope_agent_id.
+type Scope struct {
+	ClientID *uuid.UUID
+	AgentID  *uuid.UUID
+	Staff    bool
+}
+
+// ScopeFor returns p's ticket scope.
+func ScopeFor(p *auth.Principal) (Scope, error) {
+	a, err := accessFor(p)
+	if err != nil {
+		return Scope{}, err
+	}
+	return Scope{ClientID: a.scopeClientID, AgentID: a.scopeAgentID, Staff: a.staff}, nil
+}

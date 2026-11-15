@@ -32,6 +32,12 @@ type Entry struct {
 
 // Write inserts the entry, filling IP and request ID from the context.
 func Write(ctx context.Context, q *db.Queries, e Entry) error {
+	_, err := Insert(ctx, q, e)
+	return err
+}
+
+// Insert is Write that also returns the entry's id, for jobs that read the entry back.
+func Insert(ctx context.Context, q *db.Queries, e Entry) (uuid.UUID, error) {
 	if e.ActorKind == "" {
 		e.ActorKind = ActorSystem
 		if e.ActorUserID != nil {
@@ -42,7 +48,7 @@ func Write(ctx context.Context, q *db.Queries, e Entry) error {
 	if len(e.Data) > 0 {
 		b, err := json.Marshal(e.Data)
 		if err != nil {
-			return fmt.Errorf("audit data: %w", err)
+			return uuid.Nil, fmt.Errorf("audit data: %w", err)
 		}
 		data = b
 	}
@@ -62,10 +68,11 @@ func Write(ctx context.Context, q *db.Queries, e Entry) error {
 		ip := info.IP
 		params.Ip = &ip
 	}
-	if err := q.InsertAudit(ctx, params); err != nil {
-		return fmt.Errorf("write audit %s: %w", e.Action, err)
+	id, err := q.InsertAudit(ctx, params)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("write audit %s: %w", e.Action, err)
 	}
-	return nil
+	return id, nil
 }
 
 func nonEmpty(s string) *string {

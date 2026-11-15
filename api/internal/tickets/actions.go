@@ -21,7 +21,7 @@ import (
 // expected set, the move only happens while the ticket still has that status, so a stale board
 // card can't undo someone else's move.
 func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, key string, to ticket.Status, expected *ticket.Status) (Ticket, error) {
-	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow) error {
+	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		from := ticket.Status(row.Status)
 		if expected != nil && *expected != from {
 			return errStatusChanged()
@@ -32,7 +32,7 @@ func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, key string, 
 		if err := ticket.CheckManualMove(from, to, row.AssigneeID != nil); err != nil {
 			return moveError(err)
 		}
-		return s.writeStatus(ctx, tx, p.AuditActor(), row.ID, from, to, "")
+		return s.writeStatus(ctx, tx, cs, p.AuditActor(), from, to, "")
 	})
 	if err != nil {
 		return Ticket{}, err
@@ -43,7 +43,7 @@ func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, key string, 
 // SetAssignee gives the ticket to someone, or takes it back with nil. Assigning a new ticket
 // makes it assigned; unassigning an assigned ticket makes it new again.
 func (s *Service) SetAssignee(ctx context.Context, p *auth.Principal, key string, assigneeID *uuid.UUID) (Ticket, error) {
-	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow) error {
+	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		if sameID(row.AssigneeID, assigneeID) {
 			return nil
 		}
@@ -73,7 +73,7 @@ func (s *Service) SetAssignee(ctx context.Context, p *auth.Principal, key string
 			next = refData(to.ID, to.Name)
 		}
 		actor := p.AuditActor()
-		if err := audit.Write(ctx, tx.Q, actor.Entry(ActionAssigneeChanged, TargetTicket, &row.ID, map[string]any{
+		if err := cs.write(ctx, tx.Q, actor.Entry(ActionAssigneeChanged, TargetTicket, &row.ID, map[string]any{
 			dataAssignee: audit.Change{From: old, To: next},
 		})); err != nil {
 			return err
@@ -81,7 +81,7 @@ func (s *Service) SetAssignee(ctx context.Context, p *auth.Principal, key string
 		if status == from {
 			return nil
 		}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionStatusChanged, TargetTicket, &row.ID, map[string]any{
+		return cs.write(ctx, tx.Q, actor.Entry(ActionStatusChanged, TargetTicket, &row.ID, map[string]any{
 			dataStatus: audit.Change{From: from, To: status}, dataCause: ticket.CauseAssignment,
 		}))
 	})
@@ -101,7 +101,7 @@ func (s *Service) SetPriority(ctx context.Context, p *auth.Principal, key string
 	case reason == "" || len([]rune(reason)) > MaxReasonLen:
 		return Ticket{}, apperr.Invalid(apperr.CodeReasonRequired, "Say why the priority changes", "")
 	}
-	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow) error {
+	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		from := sla.Priority(row.Priority)
 		if from == priority {
 			return nil
@@ -113,7 +113,7 @@ func (s *Service) SetPriority(ctx context.Context, p *auth.Principal, key string
 			dataPriority: audit.Change{From: from, To: priority},
 		})
 		e.Reason = reason
-		return audit.Write(ctx, tx.Q, e)
+		return cs.write(ctx, tx.Q, e)
 	})
 	if err != nil {
 		return Ticket{}, err
@@ -121,10 +121,10 @@ func (s *Service) SetPriority(ctx context.Context, p *auth.Principal, key string
 	return s.Get(ctx, p, key)
 }
 
-// agentAction locks a ticket the agent may see and runs fn in the same transaction. Closed
-// tickets take no changes.
+// agentAction locks a ticket the agent may see and runs fn in the same transaction, then
+// queues notifications for what fn changed. Closed tickets take no changes.
 func (s *Service) agentAction(ctx context.Context, p *auth.Principal, key string,
-	fn func(store.Tx, db.GetTicketForUpdateRow) error) error {
+	fn func(store.Tx, db.GetTicketForUpdateRow, *changeSet) error) error {
 	a, err := staffAccess(p)
 	if err != nil {
 		return err
@@ -137,7 +137,11 @@ func (s *Service) agentAction(ctx context.Context, p *auth.Principal, key string
 		if ticket.Status(row.Status).Locked() {
 			return errTicketClosed()
 		}
-		return fn(tx, row)
+		cs := newChangeSet(row.ID)
+		if err := fn(tx, row, cs); err != nil {
+			return err
+		}
+		return s.commit(ctx, tx, cs)
 	})
 }
 
@@ -153,9 +157,9 @@ func lockTicket(ctx context.Context, q *db.Queries, a access, key string) (db.Ge
 }
 
 // writeStatus stores a status change and its audit entry. cause is empty for manual moves.
-func (s *Service) writeStatus(ctx context.Context, tx store.Tx, actor audit.Actor, id uuid.UUID, from, to ticket.Status, cause ticket.Cause) error {
+func (s *Service) writeStatus(ctx context.Context, tx store.Tx, cs *changeSet, actor audit.Actor, from, to ticket.Status, cause ticket.Cause) error {
 	if err := tx.Q.UpdateTicketStatus(ctx, db.UpdateTicketStatusParams{
-		ID: id, Status: string(to), Resolved: ticket.MarksResolved(to),
+		ID: cs.ticketID, Status: string(to), Resolved: ticket.MarksResolved(to),
 	}); err != nil {
 		return err
 	}
@@ -163,7 +167,7 @@ func (s *Service) writeStatus(ctx context.Context, tx store.Tx, actor audit.Acto
 	if cause != "" {
 		data[dataCause] = cause
 	}
-	return audit.Write(ctx, tx.Q, actor.Entry(ActionStatusChanged, TargetTicket, &id, data))
+	return cs.write(ctx, tx.Q, actor.Entry(ActionStatusChanged, TargetTicket, &cs.ticketID, data))
 }
 
 func sameID(a, b *uuid.UUID) bool {

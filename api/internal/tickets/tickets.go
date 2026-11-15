@@ -22,6 +22,8 @@ const (
 	ActionPriorityChanged = "ticket.priority_changed"
 	ActionMessageAdded    = "ticket.message_added"
 	ActionFirstResponded  = "ticket.first_responded"
+	ActionWatcherAdded    = "ticket.watcher_added"
+	ActionWatcherRemoved  = "ticket.watcher_removed"
 
 	ActionAttachmentUploaded = "attachment.uploaded"
 	ActionAttachmentsPurged  = "attachment.purged"
@@ -52,6 +54,7 @@ const (
 	dataCount         = "count"
 	dataRefID         = "id"
 	dataRefName       = "name"
+	dataWatcher       = "watcher_id"
 )
 
 // Field limits, matching the database CHECK constraints.
@@ -131,9 +134,10 @@ type Service struct {
 	store *store.Store
 	files storage.Store
 	sla   *sla.Service
+	jobs  JobInserter
 	now   func() time.Time
 }
 
-func NewService(st *store.Store, files storage.Store, slaSvc *sla.Service) *Service {
-	return &Service{store: st, files: files, sla: slaSvc, now: time.Now}
+func NewService(st *store.Store, files storage.Store, slaSvc *sla.Service, jobs JobInserter) *Service {
+	return &Service{store: st, files: files, sla: slaSvc, jobs: jobs, now: time.Now}
 }
