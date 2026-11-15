@@ -93,6 +93,33 @@ type M3bWorkingDay struct {
 	Minutes int32
 }
 
+type Notification struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	TicketID       uuid.UUID
+	EventType      string
+	ActorUserID    *uuid.UUID
+	SourceID       uuid.UUID
+	MessageID      *uuid.UUID
+	Data           []byte
+	Web            bool
+	Email          bool
+	Urgent         bool
+	CreatedAt      time.Time
+	ReadAt         *time.Time
+	EmailClaimedAt *time.Time
+	EmailedAt      *time.Time
+	EmailSkipped   bool
+}
+
+type NotificationPreference struct {
+	UserID    uuid.UUID
+	EventType string
+	Web       bool
+	Email     bool
+	UpdatedAt time.Time
+}
+
 type Organization struct {
 	ID           bool
 	Name         string
@@ -194,6 +221,13 @@ type TicketMessage struct {
 	CreatedAt  time.Time
 }
 
+type TicketWatcher struct {
+	TicketID  uuid.UUID
+	UserID    uuid.UUID
+	AddedBy   uuid.UUID
+	CreatedAt time.Time
+}
+
 type User struct {
 	ID                uuid.UUID
 	Email             string
@@ -207,4 +241,5 @@ type User struct {
 	LastLoginAt       *time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	EmailFrequency    string
 }
