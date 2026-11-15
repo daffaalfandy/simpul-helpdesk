@@ -223,15 +223,7 @@ func deref[T any](p *T) T {
 
 // location is the organisation's time zone, which decides where "today" starts.
 func (s *Service) location(ctx context.Context) (*time.Location, error) {
-	tz, err := s.store.Q().GetOrganizationTimezone(ctx)
-	if err != nil {
-		return nil, err
-	}
-	loc, err := time.LoadLocation(tz)
-	if err != nil {
-		return nil, fmt.Errorf("organisation time zone: %w", err)
-	}
-	return loc, nil
+	return sla.Location(ctx, s.store.Q())
 }
 
 // daysSince counts the days back from day to the last start (0 when day is start).

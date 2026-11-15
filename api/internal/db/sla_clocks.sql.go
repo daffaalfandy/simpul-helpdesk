@@ -282,13 +282,20 @@ func (q *Queries) ListSLAHistory(ctx context.Context, arg ListSLAHistoryParams) 
 const listUnreplayedTicketIDs = `-- name: ListUnreplayedTicketIDs :many
 SELECT t.id FROM tickets t
 WHERE NOT EXISTS (SELECT 1 FROM ticket_sla s WHERE s.ticket_id = t.id)
+  AND ($1::uuid IS NULL OR t.id > $1::uuid)
 ORDER BY t.id
-LIMIT $1
+LIMIT $2
 `
 
+type ListUnreplayedTicketIDsParams struct {
+	After    *uuid.UUID
+	RowLimit int32
+}
+
 // Tickets the engine hasn't run for yet (seed and tickets from before it): the scan backfills them.
-func (q *Queries) ListUnreplayedTicketIDs(ctx context.Context, rowLimit int32) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listUnreplayedTicketIDs, rowLimit)
+// after pages past tickets that failed earlier in the same run.
+func (q *Queries) ListUnreplayedTicketIDs(ctx context.Context, arg ListUnreplayedTicketIDsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listUnreplayedTicketIDs, arg.After, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}

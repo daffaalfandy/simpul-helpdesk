@@ -63,8 +63,10 @@ SELECT id FROM tickets WHERE id = @id FOR UPDATE;
 
 -- name: ListUnreplayedTicketIDs :many
 -- Tickets the engine hasn't run for yet (seed and tickets from before it): the scan backfills them.
+-- after pages past tickets that failed earlier in the same run.
 SELECT t.id FROM tickets t
 WHERE NOT EXISTS (SELECT 1 FROM ticket_sla s WHERE s.ticket_id = t.id)
+  AND (sqlc.narg(after)::uuid IS NULL OR t.id > sqlc.narg(after)::uuid)
 ORDER BY t.id
 LIMIT @row_limit;
 

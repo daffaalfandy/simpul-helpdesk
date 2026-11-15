@@ -209,14 +209,19 @@ func (s *Service) LoadHolidayPreset(ctx context.Context, actor audit.Actor, year
 // Schedules builds the working-time clocks from the organisation's time zone, business
 // hours and holidays.
 func (s *Service) Schedules(ctx context.Context) (Schedules, error) {
-	q := s.store.Q()
+	return LoadSchedules(ctx, s.store.Q())
+}
+
+// LoadSchedules is Schedules on the caller's connection: inside a transaction, pass its queries
+// so the read doesn't take a second connection from the pool while the first is held.
+func LoadSchedules(ctx context.Context, q *db.Queries) (Schedules, error) {
 	hours, err := readHours(ctx, q)
 	if err != nil {
 		return Schedules{}, err
 	}
-	loc, err := time.LoadLocation(hours.Timezone)
+	loc, err := ParseLocation(hours.Timezone)
 	if err != nil {
-		return Schedules{}, fmt.Errorf("organisation time zone: %w", err)
+		return Schedules{}, err
 	}
 	rows, err := q.ListHolidays(ctx, db.ListHolidaysParams{})
 	if err != nil {
@@ -243,4 +248,23 @@ func (s *Service) Schedules(ctx context.Context) (Schedules, error) {
 
 func yearBounds(year int) (calendar.Date, calendar.Date) {
 	return calendar.NewDate(year, time.January, 1), calendar.NewDate(year, time.December, 31)
+}
+
+// Location is the organisation's time zone, which decides business hours, "today" and when
+// summaries go out.
+func Location(ctx context.Context, q *db.Queries) (*time.Location, error) {
+	tz, err := q.GetOrganizationTimezone(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLocation(tz)
+}
+
+// ParseLocation loads an organisation time zone name.
+func ParseLocation(tz string) (*time.Location, error) {
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return nil, fmt.Errorf("organisation time zone: %w", err)
+	}
+	return loc, nil
 }

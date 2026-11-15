@@ -225,3 +225,26 @@ func TestSLABackfillIsSilent(t *testing.T) {
 		t.Fatalf("backfill notified: %d → %d", before, n)
 	}
 }
+
+// A ticket the engine can't replay is skipped; the scan still handles the others.
+func TestSLAScanSkipsABrokenTicket(t *testing.T) {
+	te := newTicketEnv(t)
+	ctx := context.Background()
+	broken := te.requester.report(t, incident(te.projectA, "Broken snapshot"))
+	fine := te.requester.report(t, incident(te.projectA, "Fine"))
+	for _, sql := range []string{
+		`DELETE FROM ticket_sla`,
+		`UPDATE tickets SET sla_snapshot = '{"version": 99}' WHERE id = '` + broken.Id.String() + `'`,
+	} {
+		if _, err := te.st.Pool().Exec(ctx, sql); err != nil {
+			t.Fatal(err)
+		}
+	}
+	te.scanAt(t, time.Now())
+	if _, err := te.st.Q().GetTicketSLA(ctx, fine.Id); err != nil {
+		t.Fatalf("the healthy ticket wasn't replayed: %v", err)
+	}
+	if _, err := te.st.Q().GetTicketSLA(ctx, broken.Id); err == nil {
+		t.Fatal("the broken ticket shouldn't have clocks")
+	}
+}

@@ -191,8 +191,8 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	river.AddWorker(workers, notifications.NewTicketEmailWorker(notifyMailer))
 	river.AddWorker(workers, notifications.NewDigestWorker(notifyMailer))
 	river.AddWorker(workers, notifications.NewPurgeWorker(st))
-	river.AddWorker(workers, tickets.NewSLARecomputer(st, slaSvc))
-	river.AddWorker(workers, tickets.NewSLAScanner(st, slaSvc, late))
+	river.AddWorker(workers, tickets.NewSLARecomputer(st, slaSvc, log))
+	river.AddWorker(workers, tickets.NewSLAScanner(st, slaSvc, late, log))
 	river.AddWorker(workers, notifications.NewPicEmailWorker(notifyMailer))
 	riverCfg := &river.Config{Workers: workers, Logger: log.With("component", "jobs")}
 	if runJobs {

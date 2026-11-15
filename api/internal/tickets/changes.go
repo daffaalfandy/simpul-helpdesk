@@ -3,6 +3,7 @@ package tickets
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,8 +31,9 @@ const fanoutMaxAttempts = 10
 // changeSet collects the audit entries one ticket transaction writes, so one job can tell
 // everyone about all of them together.
 type changeSet struct {
-	ticketID uuid.UUID
-	auditIDs []uuid.UUID
+	ticketID   uuid.UUID
+	auditIDs   []uuid.UUID
+	movesClock bool // a change the SLA clocks must replay
 }
 
 func newChangeSet(ticketID uuid.UUID) *changeSet { return &changeSet{ticketID: ticketID} }
@@ -43,17 +45,20 @@ func (c *changeSet) write(ctx context.Context, q *db.Queries, e audit.Entry) err
 		return err
 	}
 	c.auditIDs = append(c.auditIDs, id)
+	c.movesClock = c.movesClock || slices.Contains(clockActions, e.Action)
 	return nil
 }
 
-// commit replays the ticket's SLA clocks and queues the notification fan-out for everything
-// the transaction changed. A transaction that changed nothing does neither.
+// commit replays the ticket's SLA clocks if the transaction moved them, and queues the
+// notification fan-out for everything it changed. A transaction that changed nothing does neither.
 func (s *Service) commit(ctx context.Context, tx store.Tx, c *changeSet) error {
 	if len(c.auditIDs) == 0 {
 		return nil
 	}
-	if err := s.replaySLA(ctx, tx.Q, c.ticketID, s.now()); err != nil {
-		return err
+	if c.movesClock {
+		if err := s.replaySLA(ctx, tx.Q, c.ticketID, s.now()); err != nil {
+			return err
+		}
 	}
 	_, err := s.jobs.InsertTx(ctx, tx.PG, notification.FanoutArgs{TicketID: c.ticketID, AuditIDs: c.auditIDs},
 		&river.InsertOpts{MaxAttempts: fanoutMaxAttempts})

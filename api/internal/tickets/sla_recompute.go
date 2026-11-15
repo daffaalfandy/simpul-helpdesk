@@ -2,6 +2,7 @@ package tickets
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,11 +23,12 @@ type SLARecomputer struct {
 	river.WorkerDefaults[sla.RecomputeArgs]
 	store *store.Store
 	sla   *sla.Service
+	log   *slog.Logger
 	now   func() time.Time
 }
 
-func NewSLARecomputer(st *store.Store, slaSvc *sla.Service) *SLARecomputer {
-	return &SLARecomputer{store: st, sla: slaSvc, now: time.Now}
+func NewSLARecomputer(st *store.Store, slaSvc *sla.Service, log *slog.Logger) *SLARecomputer {
+	return &SLARecomputer{store: st, sla: slaSvc, log: log, now: time.Now}
 }
 
 func (w *SLARecomputer) Work(ctx context.Context, _ *river.Job[sla.RecomputeArgs]) error {
@@ -43,14 +45,9 @@ func (w *SLARecomputer) Work(ctx context.Context, _ *river.Job[sla.RecomputeArgs
 			return err
 		}
 		for _, id := range ids {
-			if err := w.store.Tx(ctx, func(tx store.Tx) error {
-				// Locked like any ticket change, so a concurrent change doesn't interleave.
-				if _, err := tx.Q.LockTicketForSLA(ctx, id); err != nil {
-					return err
-				}
-				return ReplaySLA(ctx, tx.Q, schedules, id, w.now())
-			}); err != nil {
-				return err
+			// One ticket that can't be replayed must not stop the others.
+			if err := replayLocked(ctx, w.store, schedules, id, w.now()); err != nil {
+				w.log.ErrorContext(ctx, "sla recompute: ticket skipped", "ticket_id", id, "error", err)
 			}
 		}
 		if len(ids) < slaBatchSize {

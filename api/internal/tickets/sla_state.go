@@ -15,8 +15,12 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
-// slaActions are the audit actions that move a ticket's clocks.
+// slaActions are the audit actions the clocks replay.
 var slaActions = []string{ActionCreated, ActionStatusChanged, ActionFirstResponded}
+
+// clockActions are the changes after which the clocks need a replay: the replayed ones, and a
+// priority change, which swaps the targets.
+var clockActions = append([]string{ActionPriorityChanged}, slaActions...)
 
 // causeLoggedByStaff marks the first response an agent-logged ticket gets at creation: the
 // agent already spoke with the requester (owner, 15 Nov).
@@ -27,7 +31,7 @@ const causeLoggedByStaff = "logged_by_staff"
 // the future. Flags it sets itself are silent (no alert): a clock that stopped past its
 // deadline before the scan saw it, and a ticket replayed for the first time (backfill).
 func (s *Service) replaySLA(ctx context.Context, q *db.Queries, ticketID uuid.UUID, now time.Time) error {
-	schedules, err := s.sla.Schedules(ctx)
+	schedules, err := sla.LoadSchedules(ctx, q)
 	if err != nil {
 		return err
 	}

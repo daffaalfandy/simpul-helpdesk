@@ -93,7 +93,7 @@ func (w *DispatchWorker) Work(ctx context.Context, _ *river.Job[notification.Dis
 		if err != nil || len(rows) == 0 {
 			return err
 		}
-		loc, err := orgLocation(ctx, tx.Q)
+		loc, err := sla.Location(ctx, tx.Q)
 		if err != nil {
 			return err
 		}
@@ -273,7 +273,7 @@ func (m *Mailer) render(ctx context.Context, q *db.Queries, user *recipient, row
 	if err != nil {
 		return mail.Message{}, err
 	}
-	loc, err := time.LoadLocation(org.Timezone)
+	loc, err := sla.ParseLocation(org.Timezone)
 	if err != nil {
 		return mail.Message{}, err
 	}
@@ -474,14 +474,6 @@ func ids(rows []claimedRow) []uuid.UUID {
 	return out
 }
 
-func orgLocation(ctx context.Context, q *db.Queries) (*time.Location, error) {
-	tz, err := q.GetOrganizationTimezone(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return time.LoadLocation(tz)
-}
-
 // PurgeWorker deletes notifications older than notification.Retention.
 type PurgeWorker struct {
 	river.WorkerDefaults[notification.PurgeArgs]
@@ -550,7 +542,7 @@ func (w *PicEmailWorker) Work(ctx context.Context, job *river.Job[notification.P
 	if err != nil {
 		return err
 	}
-	loc, err := time.LoadLocation(org.Timezone)
+	loc, err := sla.ParseLocation(org.Timezone)
 	if err != nil {
 		return err
 	}

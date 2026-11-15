@@ -2,6 +2,7 @@ package tickets
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,11 +60,12 @@ type SLAScanner struct {
 	store *store.Store
 	sla   *sla.Service
 	jobs  JobInserter
+	log   *slog.Logger
 	now   func() time.Time
 }
 
-func NewSLAScanner(st *store.Store, slaSvc *sla.Service, jobs JobInserter) *SLAScanner {
-	return &SLAScanner{store: st, sla: slaSvc, jobs: jobs, now: time.Now}
+func NewSLAScanner(st *store.Store, slaSvc *sla.Service, jobs JobInserter, log *slog.Logger) *SLAScanner {
+	return &SLAScanner{store: st, sla: slaSvc, jobs: jobs, log: log, now: time.Now}
 }
 
 // SetClock replaces the scanner's clock (tests).
@@ -87,9 +89,7 @@ func (w *SLAScanner) Work(ctx context.Context, _ *river.Job[SLAScanArgs]) error 
 		return err
 	}
 	for _, b := range breaches {
-		if err := w.flag(ctx, schedules, b.TicketID, slaengine.Clock(b.Clock), true, now); err != nil {
-			return err
-		}
+		w.logFailure(ctx, b.TicketID, w.flag(ctx, schedules, b.TicketID, slaengine.Clock(b.Clock), true, now))
 	}
 	atRisk, err := q.ListSLAAtRisk(ctx, db.ListSLAAtRiskParams{
 		FirstResponseClock: string(slaengine.ClockFirstResponse), ResolutionClock: string(slaengine.ClockResolution),
@@ -99,34 +99,48 @@ func (w *SLAScanner) Work(ctx context.Context, _ *river.Job[SLAScanArgs]) error 
 		return err
 	}
 	for _, r := range atRisk {
-		if err := w.flag(ctx, schedules, r.TicketID, slaengine.Clock(r.Clock), false, now); err != nil {
-			return err
-		}
+		w.logFailure(ctx, r.TicketID, w.flag(ctx, schedules, r.TicketID, slaengine.Clock(r.Clock), false, now))
 	}
 	return nil
 }
 
+// logFailure records a ticket the scan couldn't handle and lets the scan go on, so one broken
+// ticket never stops every other ticket's alerts. The next run tries it again.
+func (w *SLAScanner) logFailure(ctx context.Context, ticketID uuid.UUID, err error) {
+	if err != nil {
+		w.log.ErrorContext(ctx, "sla scan: ticket skipped", "ticket_id", ticketID, "error", err)
+	}
+}
+
+// backfill replays tickets the engine hasn't seen. A ticket that fails is logged and skipped
+// for this run (it stays unreplayed), and the rest go on.
 func (w *SLAScanner) backfill(ctx context.Context, schedules sla.Schedules, now time.Time) error {
+	var after *uuid.UUID
 	for range slaScanMaxBatches {
-		ids, err := w.store.Q().ListUnreplayedTicketIDs(ctx, slaBatchSize)
+		ids, err := w.store.Q().ListUnreplayedTicketIDs(ctx, db.ListUnreplayedTicketIDsParams{After: after, RowLimit: slaBatchSize})
 		if err != nil {
 			return err
 		}
 		for _, id := range ids {
-			if err := w.store.Tx(ctx, func(tx store.Tx) error {
-				if _, err := tx.Q.LockTicketForSLA(ctx, id); err != nil {
-					return err
-				}
-				return ReplaySLA(ctx, tx.Q, schedules, id, now)
-			}); err != nil {
-				return err
-			}
+			w.logFailure(ctx, id, replayLocked(ctx, w.store, schedules, id, now))
 		}
 		if len(ids) < slaBatchSize {
 			return nil
 		}
+		last := ids[len(ids)-1]
+		after = &last
 	}
 	return nil
+}
+
+// replayLocked replays one ticket under its row lock, like any ticket change.
+func replayLocked(ctx context.Context, st *store.Store, schedules sla.Schedules, id uuid.UUID, now time.Time) error {
+	return st.Tx(ctx, func(tx store.Tx) error {
+		if _, err := tx.Q.LockTicketForSLA(ctx, id); err != nil {
+			return err
+		}
+		return ReplaySLA(ctx, tx.Q, schedules, id, now)
+	})
 }
 
 // flag marks one clock at risk or breached, if it still is under the ticket lock, and queues
