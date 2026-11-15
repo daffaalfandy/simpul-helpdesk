@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -12,9 +13,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
@@ -532,4 +535,97 @@ func subjects(msgs []mail.Message) []string {
 		out[i] = m.Subject
 	}
 	return out
+}
+
+// Summary rows that aren't due never reach the dispatcher's batch, so they can't crowd out
+// emails that are.
+func TestDispatchReadsOnlyDueRows(t *testing.T) {
+	te := newTicketEnv(t)
+	te.setFrequency(t, te.agent, gen.EmailFrequencyDaily)
+	tk := te.requester.report(t, incident(te.projectA, "Quota"))
+	decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityPublic, "On it"), http.StatusCreated)
+	te.fanout(t)
+	te.age(t, notification.GroupWindow)
+	now := time.Now()
+	rows, err := te.st.Q().ListDueEmails(context.Background(), db.ListDueEmailsParams{
+		StaleBefore: now.Add(-notification.ClaimTimeout), GroupCutoff: now.Add(-notification.GroupWindow),
+		Instant: string(notification.FrequencyInstant), Hourly: string(notification.FrequencyHourly),
+		Daily: string(notification.FrequencyDaily), HourlyCutoff: now.Add(-time.Hour), DailyCutoff: now.Add(-24 * time.Hour),
+		RowLimit: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.UserID == te.agentID {
+			t.Fatalf("a daily user's fresh rows are in the batch: %+v", r)
+		}
+	}
+	if len(rows) == 0 {
+		t.Fatal("the instant requester's due row is missing")
+	}
+}
+
+func (e *env) pendingEmails(t *testing.T, user uuid.UUID) (pending, skipped int) {
+	t.Helper()
+	if err := e.st.Pool().QueryRow(context.Background(), `SELECT
+		count(*) FILTER (WHERE email AND emailed_at IS NULL AND email_claimed_at IS NULL),
+		count(*) FILTER (WHERE email_skipped) FROM notifications WHERE user_id = $1`, user).Scan(&pending, &skipped); err != nil {
+		t.Fatal(err)
+	}
+	return pending, skipped
+}
+
+// A send that keeps failing is retried by River, then given up so it isn't queued forever.
+func TestFailingEmailIsGivenUpAfterTheLastAttempt(t *testing.T) {
+	te := newTicketEnv(t)
+	tk := te.requester.report(t, incident(te.projectA, "Bounce"))
+	decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	te.fanout(t)
+	te.age(t, notification.GroupWindow)
+	te.mailer.Fail = errors.New("mailbox unavailable")
+	ctx := context.Background()
+	args := notification.TicketEmailArgs{UserID: te.agentID, TicketID: tk.Id}
+	work := func(attempt int) error {
+		return te.ticketEmail.Work(ctx, &river.Job[notification.TicketEmailArgs]{
+			JobRow: &rivertype.JobRow{Attempt: attempt, MaxAttempts: 3}, Args: args,
+		})
+	}
+	if err := work(1); err == nil {
+		t.Fatal("a failed send must fail the job so River retries it")
+	}
+	if pending, skipped := te.pendingEmails(t, te.agentID); pending == 0 || skipped != 0 {
+		t.Fatalf("after a retryable failure: pending %d, skipped %d", pending, skipped)
+	}
+	_ = work(3)
+	if pending, skipped := te.pendingEmails(t, te.agentID); pending != 0 || skipped == 0 {
+		t.Fatalf("after the last attempt: pending %d, skipped %d", pending, skipped)
+	}
+}
+
+// A row that lands after its period's summary went out gets a catch-up summary, not a whole
+// period's wait.
+func TestLateSummaryRowsCatchUp(t *testing.T) {
+	te := newTicketEnv(t)
+	te.setFrequency(t, te.agent, gen.EmailFrequencyHourly)
+	tk := te.requester.report(t, incident(te.projectA, "Printer"))
+	decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	te.fanout(t)
+	te.age(t, time.Hour)
+	te.sendEmails(t)
+	if got := mailsTo(te.mailer.Messages(), te.users[auth.RoleAgent]); len(got) != 1 {
+		t.Fatalf("first summary: %v", subjects(got))
+	}
+	// A change dated before the same boundary, fanned out late.
+	decode[gen.TicketMessage](t, te.requester.message(tk.Key, gen.MessageVisibilityPublic, "Still jammed"), http.StatusCreated)
+	te.fanout(t)
+	if _, err := te.st.Pool().Exec(context.Background(),
+		`UPDATE notifications SET created_at = now() - interval '1 hour' WHERE emailed_at IS NULL`); err != nil {
+		t.Fatal(err)
+	}
+	te.sendEmails(t)
+	if got := mailsTo(te.mailer.Messages(), te.users[auth.RoleAgent]); len(got) != 2 {
+		t.Fatalf("catch-up summary: %v", subjects(got))
+	}
 }

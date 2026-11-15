@@ -42,11 +42,13 @@ type TicketEmailArgs struct {
 func (TicketEmailArgs) Kind() string { return JobKindTicketEmail }
 
 // DigestArgs sends one user's hourly or daily summary of the routine items created before
-// Before. Period names the summary so it is queued once.
+// Before. Period names the summary; FirstID (the oldest due row) names the group, so a row that
+// arrives after its period's summary went out still gets one instead of waiting a whole period.
 type DigestArgs struct {
-	UserID uuid.UUID `json:"user_id"`
-	Period string    `json:"period"`
-	Before time.Time `json:"before"`
+	UserID  uuid.UUID `json:"user_id"`
+	Period  string    `json:"period"`
+	Before  time.Time `json:"before"`
+	FirstID uuid.UUID `json:"first_id"`
 }
 
 func (DigestArgs) Kind() string { return JobKindDigest }

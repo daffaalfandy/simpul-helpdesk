@@ -410,6 +410,81 @@ func (q *Queries) ListActiveUserIDsByRole(ctx context.Context, arg ListActiveUse
 	return items, nil
 }
 
+const listDueEmails = `-- name: ListDueEmails :many
+
+SELECT n.id, n.user_id, n.ticket_id, n.urgent, n.created_at, u.email_frequency
+FROM notifications n
+JOIN users u ON u.id = n.user_id
+WHERE n.email AND n.emailed_at IS NULL
+  AND (n.email_claimed_at IS NULL OR n.email_claimed_at < $1::timestamptz)
+  AND (((n.urgent OR u.email_frequency = $2::text) AND n.created_at <= $3::timestamptz)
+    OR (NOT n.urgent AND u.email_frequency = $4::text AND n.created_at < $5::timestamptz)
+    OR (NOT n.urgent AND u.email_frequency = $6::text AND n.created_at < $7::timestamptz))
+ORDER BY n.created_at, n.id
+LIMIT $8
+`
+
+type ListDueEmailsParams struct {
+	StaleBefore  time.Time
+	Instant      string
+	GroupCutoff  time.Time
+	Hourly       string
+	HourlyCutoff time.Time
+	Daily        string
+	DailyCutoff  time.Time
+	RowLimit     int32
+}
+
+type ListDueEmailsRow struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	TicketID       uuid.UUID
+	Urgent         bool
+	CreatedAt      time.Time
+	EmailFrequency string
+}
+
+// Email delivery. A send job claims rows (email_claimed_at), sends, then marks them emailed. A
+// claim older than stale_before is abandoned (a crashed job) and the rows are pending again.
+// Pending rows whose email is due: ticket emails (instant users, and urgent rows for everyone)
+// once the row has gathered for the group window, summary rows from before their user's last
+// boundary. Rows not yet due stay out, so they can never crowd due ones out of the batch.
+func (q *Queries) ListDueEmails(ctx context.Context, arg ListDueEmailsParams) ([]ListDueEmailsRow, error) {
+	rows, err := q.db.Query(ctx, listDueEmails,
+		arg.StaleBefore,
+		arg.Instant,
+		arg.GroupCutoff,
+		arg.Hourly,
+		arg.HourlyCutoff,
+		arg.Daily,
+		arg.DailyCutoff,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDueEmailsRow{}
+	for rows.Next() {
+		var i ListDueEmailsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TicketID,
+			&i.Urgent,
+			&i.CreatedAt,
+			&i.EmailFrequency,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEmailTickets = `-- name: ListEmailTickets :many
 SELECT t.id, t.key, t.subject, t.type, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
        pl.name AS priority_name, p.name AS project_name,
@@ -645,60 +720,6 @@ func (q *Queries) ListNotifyRecipients(ctx context.Context, ids []uuid.UUID) ([]
 	for rows.Next() {
 		var i ListNotifyRecipientsRow
 		if err := rows.Scan(&i.ID, &i.Role, &i.Status); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPendingEmails = `-- name: ListPendingEmails :many
-
-SELECT n.id, n.user_id, n.ticket_id, n.urgent, n.created_at, u.email_frequency
-FROM notifications n
-JOIN users u ON u.id = n.user_id
-WHERE n.email AND n.emailed_at IS NULL
-  AND (n.email_claimed_at IS NULL OR n.email_claimed_at < $1::timestamptz)
-ORDER BY n.created_at, n.id
-LIMIT $2
-`
-
-type ListPendingEmailsParams struct {
-	StaleBefore time.Time
-	RowLimit    int32
-}
-
-type ListPendingEmailsRow struct {
-	ID             uuid.UUID
-	UserID         uuid.UUID
-	TicketID       uuid.UUID
-	Urgent         bool
-	CreatedAt      time.Time
-	EmailFrequency string
-}
-
-// Email delivery. A send job claims rows (email_claimed_at), sends, then marks them emailed. A
-// claim older than stale_before is abandoned (a crashed job) and the rows are pending again.
-func (q *Queries) ListPendingEmails(ctx context.Context, arg ListPendingEmailsParams) ([]ListPendingEmailsRow, error) {
-	rows, err := q.db.Query(ctx, listPendingEmails, arg.StaleBefore, arg.RowLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListPendingEmailsRow{}
-	for rows.Next() {
-		var i ListPendingEmailsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.TicketID,
-			&i.Urgent,
-			&i.CreatedAt,
-			&i.EmailFrequency,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

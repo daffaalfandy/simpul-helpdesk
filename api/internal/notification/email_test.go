@@ -116,15 +116,15 @@ func TestPlanEmails(t *testing.T) {
 	}
 	at := func(h int) time.Time { return time.Date(2026, 11, 16, h, 0, 0, 0, jakarta) }
 	wantDigests := []DigestArgs{
-		{UserID: hourly, Period: "2026-11-16T10", Before: at(10)},
-		{UserID: daily, Period: "2026-11-16", Before: at(8)},
+		{UserID: hourly, Period: "2026-11-16T10", Before: at(10), FirstID: ids[3]},
+		{UserID: daily, Period: "2026-11-16", Before: at(8), FirstID: ids[7]},
 	}
 	if len(digests) != len(wantDigests) {
 		t.Fatalf("digests = %v", digests)
 	}
 	for i, d := range digests {
 		w := wantDigests[i]
-		if d.UserID != w.UserID || d.Period != w.Period || !d.Before.Equal(w.Before) {
+		if d.UserID != w.UserID || d.Period != w.Period || !d.Before.Equal(w.Before) || d.FirstID != w.FirstID {
 			t.Errorf("digest %d = %v, want %v", i, d, w)
 		}
 	}

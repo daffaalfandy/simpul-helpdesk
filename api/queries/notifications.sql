@@ -105,12 +105,18 @@ SET web = EXCLUDED.web, email = EXCLUDED.email, updated_at = now();
 -- Email delivery. A send job claims rows (email_claimed_at), sends, then marks them emailed. A
 -- claim older than stale_before is abandoned (a crashed job) and the rows are pending again.
 
--- name: ListPendingEmails :many
+-- name: ListDueEmails :many
+-- Pending rows whose email is due: ticket emails (instant users, and urgent rows for everyone)
+-- once the row has gathered for the group window, summary rows from before their user's last
+-- boundary. Rows not yet due stay out, so they can never crowd due ones out of the batch.
 SELECT n.id, n.user_id, n.ticket_id, n.urgent, n.created_at, u.email_frequency
 FROM notifications n
 JOIN users u ON u.id = n.user_id
 WHERE n.email AND n.emailed_at IS NULL
   AND (n.email_claimed_at IS NULL OR n.email_claimed_at < @stale_before::timestamptz)
+  AND (((n.urgent OR u.email_frequency = @instant::text) AND n.created_at <= @group_cutoff::timestamptz)
+    OR (NOT n.urgent AND u.email_frequency = @hourly::text AND n.created_at < @hourly_cutoff::timestamptz)
+    OR (NOT n.urgent AND u.email_frequency = @daily::text AND n.created_at < @daily_cutoff::timestamptz))
 ORDER BY n.created_at, n.id
 LIMIT @row_limit;
 

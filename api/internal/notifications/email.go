@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
@@ -87,14 +88,18 @@ func NewDispatchWorker(st *store.Store, jobs tickets.JobInserter) *DispatchWorke
 func (w *DispatchWorker) Work(ctx context.Context, _ *river.Job[notification.DispatchArgs]) error {
 	now := w.now()
 	return w.store.Tx(ctx, func(tx store.Tx) error {
-		rows, err := tx.Q.ListPendingEmails(ctx, db.ListPendingEmailsParams{
-			StaleBefore: now.Add(-notification.ClaimTimeout), RowLimit: dispatchBatch,
-		})
-		if err != nil || len(rows) == 0 {
-			return err
-		}
 		loc, err := sla.Location(ctx, tx.Q)
 		if err != nil {
+			return err
+		}
+		hourly, _, _ := notification.DigestCutoff(notification.FrequencyHourly, now, loc)
+		daily, _, _ := notification.DigestCutoff(notification.FrequencyDaily, now, loc)
+		rows, err := tx.Q.ListDueEmails(ctx, db.ListDueEmailsParams{
+			StaleBefore: now.Add(-notification.ClaimTimeout), GroupCutoff: now.Add(-notification.GroupWindow),
+			Instant: string(notification.FrequencyInstant), Hourly: string(notification.FrequencyHourly),
+			Daily: string(notification.FrequencyDaily), HourlyCutoff: hourly, DailyCutoff: daily, RowLimit: dispatchBatch,
+		})
+		if err != nil || len(rows) == 0 {
 			return err
 		}
 		pending := make([]notification.Pending, len(rows))
@@ -156,7 +161,7 @@ func (w *TicketEmailWorker) Work(ctx context.Context, job *river.Job[notificatio
 	for i, r := range rows {
 		claimed[i] = claimedRow(r)
 	}
-	return w.m.deliver(ctx, user, claimed, false)
+	return w.m.deliver(ctx, user, claimed, false, lastAttempt(job.JobRow))
 }
 
 // DigestWorker sends one user's hourly or daily summary.
@@ -182,7 +187,7 @@ func (w *DigestWorker) Work(ctx context.Context, job *river.Job[notification.Dig
 	for i, r := range rows {
 		claimed[i] = claimedRow(r)
 	}
-	return w.m.deliver(ctx, user, claimed, true)
+	return w.m.deliver(ctx, user, claimed, true, lastAttempt(job.JobRow))
 }
 
 // claimedRow is a notification a send job holds.
@@ -209,8 +214,9 @@ func (m *Mailer) recipient(ctx context.Context, id uuid.UUID) (*recipient, error
 
 // deliver sends the claimed rows, as one ticket email or one summary, and marks them. Rows the
 // user may no longer get (suspended account, ticket out of reach) are marked skipped. A failed
-// send gives the rows back so River's retry claims them again.
-func (m *Mailer) deliver(ctx context.Context, user *recipient, rows []claimedRow, digest bool) error {
+// send gives the rows back so River's retry claims them again; on the job's last attempt they
+// are marked skipped instead, so an email that can never go out stops being retried.
+func (m *Mailer) deliver(ctx context.Context, user *recipient, rows []claimedRow, digest, last bool) error {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -251,12 +257,24 @@ func (m *Mailer) deliver(ctx context.Context, user *recipient, rows []claimedRow
 		err = m.sender.Send(ctx, msg)
 	}
 	if err != nil {
+		if last {
+			m.log.ErrorContext(ctx, "notification email given up", "user_id", user.ID, "rows", len(send), "error", err)
+			if merr := m.mark(ctx, q, ids(send), true); merr != nil {
+				m.log.ErrorContext(ctx, "mark notification emails skipped", "error", merr)
+			}
+			return err
+		}
 		if rerr := q.ReleaseNotificationClaims(ctx, ids(send)); rerr != nil {
 			m.log.ErrorContext(ctx, "release notification claims", "error", rerr)
 		}
 		return err
 	}
 	return m.mark(ctx, q, ids(send), false)
+}
+
+// lastAttempt reports whether River won't retry this job if it fails.
+func lastAttempt(row *rivertype.JobRow) bool {
+	return row != nil && row.Attempt >= row.MaxAttempts
 }
 
 func (m *Mailer) mark(ctx context.Context, q *db.Queries, rowIDs []uuid.UUID, skipped bool) error {

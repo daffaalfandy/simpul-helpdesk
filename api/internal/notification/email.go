@@ -93,6 +93,7 @@ func PlanEmails(rows []Pending, now time.Time, loc *time.Location) ([]TicketEmai
 	oldest := map[pair]Pending{}
 	var pairs []pair
 	digests := map[uuid.UUID]DigestArgs{}
+	oldestDigest := map[uuid.UUID]time.Time{}
 	var digestUsers []uuid.UUID
 	for _, r := range rows {
 		if UsesTicketEmail(r.Frequency, r.Urgent) {
@@ -109,10 +110,15 @@ func PlanEmails(rows []Pending, now time.Time, loc *time.Location) ([]TicketEmai
 		if !ok || !r.CreatedAt.Before(cutoff) {
 			continue
 		}
-		if _, seen := digests[r.UserID]; !seen {
+		d, seen := digests[r.UserID]
+		if !seen {
 			digestUsers = append(digestUsers, r.UserID)
-			digests[r.UserID] = DigestArgs{UserID: r.UserID, Period: period, Before: cutoff}
+			d = DigestArgs{UserID: r.UserID, Period: period, Before: cutoff}
 		}
+		if !seen || r.CreatedAt.Before(oldestDigest[r.UserID]) {
+			d.FirstID, oldestDigest[r.UserID] = r.ID, r.CreatedAt
+		}
+		digests[r.UserID] = d
 	}
 	var ticketEmails []TicketEmailArgs
 	for _, k := range pairs {

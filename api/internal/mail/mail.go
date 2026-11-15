@@ -160,15 +160,19 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 	return nil
 }
 
-// Recorder is an in-memory Sender for tests.
+// Recorder is an in-memory Sender for tests. With Fail set, every send fails with it.
 type Recorder struct {
 	mu       sync.Mutex
 	messages []Message
+	Fail     error
 }
 
 func (r *Recorder) Send(_ context.Context, m Message) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.Fail != nil {
+		return r.Fail
+	}
 	r.messages = append(r.messages, m)
 	return nil
 }
