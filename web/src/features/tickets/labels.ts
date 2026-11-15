@@ -55,5 +55,10 @@ export function activityText(t: TFunction, names: PriorityNames, entry: TicketAc
       return t('ticket.activity.noteAdded', { actor })
     case 'first_responded':
       return t('ticket.activity.firstResponded')
+    case 'sla_at_risk':
+    case 'sla_breached': {
+      const clock = t(entry.to === 'first_response' ? 'ticket.activity.slaClock.first_response' : 'ticket.activity.slaClock.resolution')
+      return t(entry.action === 'sla_at_risk' ? 'ticket.activity.slaAtRisk' : 'ticket.activity.slaBreached', { clock })
+    }
   }
 }

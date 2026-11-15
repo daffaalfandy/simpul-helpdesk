@@ -51,7 +51,7 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		"BoardColumnId":        strs(ticket.Columns...),
 		"TicketActivityAction": strs(tickets.ActivityCreated, tickets.ActivityStatusChanged,
 			tickets.ActivityAssigneeChanged, tickets.ActivityPriorityChanged, tickets.ActivityReplyAdded,
-			tickets.ActivityNoteAdded, tickets.ActivityFirstResponded),
+			tickets.ActivityNoteAdded, tickets.ActivityFirstResponded, tickets.ActivitySLAAtRisk, tickets.ActivitySLABreached),
 		"NotificationEvent":  strs(notification.Events...),
 		"NotificationKind":   strs(notification.Kinds...),
 		"NotificationFilter": strs(notification.Filters...),

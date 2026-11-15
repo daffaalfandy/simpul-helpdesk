@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -164,7 +165,7 @@ func TestBoard(t *testing.T) {
 		if !slices.Equal(got, f.want) {
 			t.Errorf("%s: %v, want %v", name, got, f.want)
 		}
-		if f.s == te.admin && fb.Stats != b.Stats {
+		if f.s == te.admin && !reflect.DeepEqual(fb.Stats, b.Stats) {
 			t.Errorf("%s: stats = %+v, want %+v", name, fb.Stats, b.Stats)
 		}
 	}

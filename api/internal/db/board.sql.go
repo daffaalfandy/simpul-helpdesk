@@ -14,29 +14,110 @@ import (
 
 const countBoardStats = `-- name: CountBoardStats :one
 SELECT count(*) FILTER (WHERE t.status = ANY($1::text[]))::bigint AS open_tickets,
-       count(*) FILTER (WHERE t.resolved_at >= $2::timestamptz)::bigint AS resolved_this_week
+       count(*) FILTER (WHERE t.resolved_at >= $2::timestamptz)::bigint AS resolved_this_week,
+       count(*) FILTER (WHERE t.status = ANY($1::text[])
+         AND ((s.first_response_met_at IS NULL AND s.first_response_breached_at IS NOT NULL)
+           OR (s.resolution_met_at IS NULL AND s.resolution_breached_at IS NOT NULL)))::bigint AS sla_breached,
+       count(*) FILTER (WHERE t.status = ANY($1::text[])
+         AND NOT ((s.first_response_met_at IS NULL AND s.first_response_breached_at IS NOT NULL)
+               OR (s.resolution_met_at IS NULL AND s.resolution_breached_at IS NOT NULL))
+         AND ((s.first_response_met_at IS NULL AND s.first_response_at_risk_flagged_at IS NOT NULL)
+           OR (s.resolution_met_at IS NULL AND s.resolution_at_risk_flagged_at IS NOT NULL)))::bigint AS sla_at_risk,
+       coalesce(sum(s.first_response_elapsed_ms) FILTER (WHERE s.first_response_met_at >= $3::timestamptz
+         AND t.channel = $4::text), 0)::bigint AS first_response_ms_total,
+       count(*) FILTER (WHERE s.first_response_met_at >= $3::timestamptz
+         AND t.channel = $4::text)::bigint AS first_responses,
+       count(*) FILTER (WHERE t.resolved_at >= $3::timestamptz)::bigint AS resolved_this_month,
+       count(*) FILTER (WHERE t.resolved_at >= $3::timestamptz
+         AND s.first_response_breached_at IS NULL AND s.resolution_breached_at IS NULL)::bigint AS resolved_within_sla
 FROM tickets t
-WHERE $3::uuid IS NULL
+LEFT JOIN ticket_sla s ON s.ticket_id = t.id
+WHERE $5::uuid IS NULL
    OR EXISTS (SELECT 1 FROM client_agents ca
-              WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
+              WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
 `
 
 type CountBoardStatsParams struct {
-	OpenStatuses []string
-	WeekStart    time.Time
-	ScopeAgentID *uuid.UUID
+	OpenStatuses  []string
+	WeekStart     time.Time
+	MonthStart    time.Time
+	PortalChannel string
+	ScopeAgentID  *uuid.UUID
 }
 
 type CountBoardStatsRow struct {
-	OpenTickets      int64
-	ResolvedThisWeek int64
+	OpenTickets          int64
+	ResolvedThisWeek     int64
+	SlaBreached          int64
+	SlaAtRisk            int64
+	FirstResponseMsTotal int64
+	FirstResponses       int64
+	ResolvedThisMonth    int64
+	ResolvedWithinSla    int64
 }
 
-// Open tickets, and tickets resolved or closed since @week_start, in the viewer's scope.
+// In the viewer's scope: open tickets; tickets resolved or closed since @week_start; open
+// tickets with an unmet clock breached, or else at risk; the mean first-response time of
+// portal reports answered since @month_start (agent-logged ones are answered at 0 by rule);
+// tickets resolved since @month_start, and how many of those never breached.
 func (q *Queries) CountBoardStats(ctx context.Context, arg CountBoardStatsParams) (CountBoardStatsRow, error) {
-	row := q.db.QueryRow(ctx, countBoardStats, arg.OpenStatuses, arg.WeekStart, arg.ScopeAgentID)
+	row := q.db.QueryRow(ctx, countBoardStats,
+		arg.OpenStatuses,
+		arg.WeekStart,
+		arg.MonthStart,
+		arg.PortalChannel,
+		arg.ScopeAgentID,
+	)
 	var i CountBoardStatsRow
-	err := row.Scan(&i.OpenTickets, &i.ResolvedThisWeek)
+	err := row.Scan(
+		&i.OpenTickets,
+		&i.ResolvedThisWeek,
+		&i.SlaBreached,
+		&i.SlaAtRisk,
+		&i.FirstResponseMsTotal,
+		&i.FirstResponses,
+		&i.ResolvedThisMonth,
+		&i.ResolvedWithinSla,
+	)
+	return i, err
+}
+
+const getOldestSLAProblem = `-- name: GetOldestSLAProblem :one
+SELECT t.key, c.name AS client_name
+FROM tickets t
+JOIN clients c ON c.id = t.client_id
+JOIN ticket_sla s ON s.ticket_id = t.id
+WHERE t.status = ANY($1::text[])
+  AND ($2::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM client_agents ca
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $2::uuid))
+  AND ((s.first_response_met_at IS NULL
+        AND (s.first_response_at_risk_flagged_at IS NOT NULL OR s.first_response_breached_at IS NOT NULL))
+    OR (s.resolution_met_at IS NULL
+        AND (s.resolution_at_risk_flagged_at IS NOT NULL OR s.resolution_breached_at IS NOT NULL)))
+ORDER BY least(
+  CASE WHEN s.first_response_met_at IS NULL THEN coalesce(s.first_response_breached_at, s.first_response_due_at) END,
+  CASE WHEN s.resolution_met_at IS NULL THEN coalesce(s.resolution_breached_at, s.resolution_due_at) END) NULLS LAST,
+  t.id
+LIMIT 1
+`
+
+type GetOldestSLAProblemParams struct {
+	OpenStatuses []string
+	ScopeAgentID *uuid.UUID
+}
+
+type GetOldestSLAProblemRow struct {
+	Key        string
+	ClientName string
+}
+
+// The open ticket in scope whose flagged, unmet clock fell due (or turns due) first: the
+// board banner names it.
+func (q *Queries) GetOldestSLAProblem(ctx context.Context, arg GetOldestSLAProblemParams) (GetOldestSLAProblemRow, error) {
+	row := q.db.QueryRow(ctx, getOldestSLAProblem, arg.OpenStatuses, arg.ScopeAgentID)
+	var i GetOldestSLAProblemRow
+	err := row.Scan(&i.Key, &i.ClientName)
 	return i, err
 }
 
@@ -45,29 +126,49 @@ const listBoardCards = `-- name: ListBoardCards :many
 WITH board AS (
   SELECT t.id, t.key, t.type, t.status, t.priority, t.subject, t.status_changed_at,
          t.client_id, c.name AS client_name, t.assignee_id, a.name AS assignee_name,
-         ($2::text[])[array_position($3::text[], t.status)]::text AS column_id
+         ($2::text[])[array_position($3::text[], t.status)]::text AS column_id,
+         s.ticket_id AS sla_ticket_id,
+         s.first_response_budget_ms, s.first_response_calendar, s.first_response_elapsed_ms,
+         s.first_response_running_since, s.first_response_due_at, s.first_response_at_risk_flagged_at,
+         s.first_response_breached_at, s.first_response_met_at,
+         s.resolution_budget_ms, s.resolution_calendar, s.resolution_elapsed_ms,
+         s.resolution_running_since, s.resolution_due_at, s.resolution_at_risk_flagged_at,
+         s.resolution_breached_at, s.resolution_met_at
   FROM tickets t
   JOIN clients c ON c.id = t.client_id
   LEFT JOIN users a ON a.id = t.assignee_id
+  LEFT JOIN ticket_sla s ON s.ticket_id = t.id
   WHERE t.status = ANY($3::text[])
-    AND ($4::uuid IS NULL
+    AND (NOT $4::boolean
+         OR (t.status = ANY($5::text[])
+             AND ((s.first_response_met_at IS NULL
+                   AND (s.first_response_at_risk_flagged_at IS NOT NULL OR s.first_response_breached_at IS NOT NULL))
+               OR (s.resolution_met_at IS NULL
+                   AND (s.resolution_at_risk_flagged_at IS NOT NULL OR s.resolution_breached_at IS NOT NULL)))))
+    AND ($6::uuid IS NULL
          OR EXISTS (SELECT 1 FROM client_agents ca
-                    WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid))
-    AND (t.resolved_at IS NULL OR t.resolved_at >= $5::timestamptz)
-    AND ($6::uuid IS NULL OR t.assignee_id = $6::uuid)
-    AND (NOT $7::boolean OR t.assignee_id IS NULL)
-    AND ($8::text IS NULL
-         OR t.key = $9::text
-         OR t.subject ILIKE $8::text
-         OR c.name ILIKE $8::text)
+                    WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid))
+    AND (t.resolved_at IS NULL OR t.resolved_at >= $7::timestamptz)
+    AND ($8::uuid IS NULL OR t.assignee_id = $8::uuid)
+    AND (NOT $9::boolean OR t.assignee_id IS NULL)
+    AND ($10::text IS NULL
+         OR t.key = $11::text
+         OR t.subject ILIKE $10::text
+         OR c.name ILIKE $10::text)
 ), ranked AS (
-  SELECT board.id, board.key, board.type, board.status, board.priority, board.subject, board.status_changed_at, board.client_id, board.client_name, board.assignee_id, board.assignee_name, board.column_id,
+  SELECT board.id, board.key, board.type, board.status, board.priority, board.subject, board.status_changed_at, board.client_id, board.client_name, board.assignee_id, board.assignee_name, board.column_id, board.sla_ticket_id, board.first_response_budget_ms, board.first_response_calendar, board.first_response_elapsed_ms, board.first_response_running_since, board.first_response_due_at, board.first_response_at_risk_flagged_at, board.first_response_breached_at, board.first_response_met_at, board.resolution_budget_ms, board.resolution_calendar, board.resolution_elapsed_ms, board.resolution_running_since, board.resolution_due_at, board.resolution_at_risk_flagged_at, board.resolution_breached_at, board.resolution_met_at,
          row_number() OVER (PARTITION BY column_id ORDER BY priority, status_changed_at, id) AS position,
          count(*) OVER (PARTITION BY column_id) AS column_total
   FROM board
 )
 SELECT id, key, type, status, priority, subject, client_id, client_name, assignee_id, assignee_name,
-       column_id, column_total::bigint AS column_total
+       column_id, column_total::bigint AS column_total, sla_ticket_id,
+       first_response_budget_ms, first_response_calendar, first_response_elapsed_ms,
+       first_response_running_since, first_response_due_at, first_response_at_risk_flagged_at,
+       first_response_breached_at, first_response_met_at,
+       resolution_budget_ms, resolution_calendar, resolution_elapsed_ms,
+       resolution_running_since, resolution_due_at, resolution_at_risk_flagged_at,
+       resolution_breached_at, resolution_met_at
 FROM ranked
 WHERE position <= $1::bigint
 ORDER BY column_id, position
@@ -77,6 +178,8 @@ type ListBoardCardsParams struct {
 	ColumnLimit   int64
 	Columns       []string
 	Statuses      []string
+	SlaAtRisk     bool
+	OpenStatuses  []string
 	ScopeAgentID  *uuid.UUID
 	ResolvedSince time.Time
 	AssigneeID    *uuid.UUID
@@ -86,18 +189,35 @@ type ListBoardCardsParams struct {
 }
 
 type ListBoardCardsRow struct {
-	ID           uuid.UUID
-	Key          string
-	Type         string
-	Status       string
-	Priority     string
-	Subject      string
-	ClientID     uuid.UUID
-	ClientName   string
-	AssigneeID   *uuid.UUID
-	AssigneeName *string
-	ColumnID     string
-	ColumnTotal  int64
+	ID                           uuid.UUID
+	Key                          string
+	Type                         string
+	Status                       string
+	Priority                     string
+	Subject                      string
+	ClientID                     uuid.UUID
+	ClientName                   string
+	AssigneeID                   *uuid.UUID
+	AssigneeName                 *string
+	ColumnID                     string
+	ColumnTotal                  int64
+	SlaTicketID                  *uuid.UUID
+	FirstResponseBudgetMs        *int64
+	FirstResponseCalendar        *string
+	FirstResponseElapsedMs       *int64
+	FirstResponseRunningSince    *time.Time
+	FirstResponseDueAt           *time.Time
+	FirstResponseAtRiskFlaggedAt *time.Time
+	FirstResponseBreachedAt      *time.Time
+	FirstResponseMetAt           *time.Time
+	ResolutionBudgetMs           *int64
+	ResolutionCalendar           *string
+	ResolutionElapsedMs          *int64
+	ResolutionRunningSince       *time.Time
+	ResolutionDueAt              *time.Time
+	ResolutionAtRiskFlaggedAt    *time.Time
+	ResolutionBreachedAt         *time.Time
+	ResolutionMetAt              *time.Time
 }
 
 // The agent board. Staff only, so only the agent scope applies (see tickets.sql).
@@ -105,11 +225,14 @@ type ListBoardCardsRow struct {
 // Done tickets show only once resolved_at >= @resolved_since (open ones have no resolved_at).
 // Each column keeps its first @column_limit cards, P1 first (priority codes sort as text),
 // then the longest in the column, and reports how many it holds in total.
+// With @sla_at_risk, only open tickets with an unmet clock the scan flagged at risk or breached.
 func (q *Queries) ListBoardCards(ctx context.Context, arg ListBoardCardsParams) ([]ListBoardCardsRow, error) {
 	rows, err := q.db.Query(ctx, listBoardCards,
 		arg.ColumnLimit,
 		arg.Columns,
 		arg.Statuses,
+		arg.SlaAtRisk,
+		arg.OpenStatuses,
 		arg.ScopeAgentID,
 		arg.ResolvedSince,
 		arg.AssigneeID,
@@ -137,6 +260,23 @@ func (q *Queries) ListBoardCards(ctx context.Context, arg ListBoardCardsParams) 
 			&i.AssigneeName,
 			&i.ColumnID,
 			&i.ColumnTotal,
+			&i.SlaTicketID,
+			&i.FirstResponseBudgetMs,
+			&i.FirstResponseCalendar,
+			&i.FirstResponseElapsedMs,
+			&i.FirstResponseRunningSince,
+			&i.FirstResponseDueAt,
+			&i.FirstResponseAtRiskFlaggedAt,
+			&i.FirstResponseBreachedAt,
+			&i.FirstResponseMetAt,
+			&i.ResolutionBudgetMs,
+			&i.ResolutionCalendar,
+			&i.ResolutionElapsedMs,
+			&i.ResolutionRunningSince,
+			&i.ResolutionDueAt,
+			&i.ResolutionAtRiskFlaggedAt,
+			&i.ResolutionBreachedAt,
+			&i.ResolutionMetAt,
 		); err != nil {
 			return nil, err
 		}

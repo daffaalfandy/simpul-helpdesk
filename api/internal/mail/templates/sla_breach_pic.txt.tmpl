@@ -1,0 +1,11 @@
+{{define "sla_breach_pic.subject"}}[{{.TicketKey}}] {{.Priority}} missed its fix target: {{.Title}}{{end -}}
+{{.TicketKey}} · {{.Priority}} {{.PriorityName}} · {{.ProjectName}}
+{{.Title}}
+
+This {{.Priority}} ticket for {{.ClientName}} missed its fix target of {{template "label.duration" .}}. The target passed at {{.PassedAt}}.
+
+View the ticket: {{.TicketURL}}
+
+--
+You're getting this because you're the contact person for {{.ClientName}}.
+Powered by SimDesk

@@ -2,15 +2,18 @@ package tickets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/slaengine"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
@@ -19,8 +22,9 @@ const BoardColumnLimit = 100
 
 // BoardFilter narrows the board's cards. The stats ignore it.
 type BoardFilter struct {
-	Assignee AssigneeFilter
-	Query    string // a ticket key, or words in the subject or client name
+	Assignee  AssigneeFilter
+	Query     string // a ticket key, or words in the subject or client name
+	SLAAtRisk bool   // only open tickets with a clock at risk or breached
 }
 
 // BoardCard is a ticket on the board, with the moves the viewer may make.
@@ -34,6 +38,14 @@ type BoardCard struct {
 	Client          Ref
 	Assignee        *Ref
 	AllowedStatuses []ticket.Status
+	SLA             *CardSLA // nil until the SLA engine has run for the ticket
+}
+
+// CardSLA is the clock a card shows: an open ticket's first response until it is sent, then
+// resolution.
+type CardSLA struct {
+	Clock slaengine.Clock
+	View  slaengine.View
 }
 
 type BoardColumn struct {
@@ -45,7 +57,25 @@ type BoardColumn struct {
 type BoardStats struct {
 	OpenTickets      int
 	ResolvedThisWeek int
+	SLABreached      int // open tickets with an unmet clock past its deadline
+	SLAAtRisk        int // open tickets at risk, not yet breached
+	SLAOldest        *SLAProblem
+	// AvgFirstResponse is the mean first-response time of portal reports answered this month,
+	// on their SLA clocks; nil when there were none. Agent-logged tickets are answered at 0.
+	AvgFirstResponse *time.Duration
+	// WithinSLAPercent is the share of tickets resolved this month that never breached; nil
+	// when none were resolved.
+	WithinSLAPercent *float64
 }
+
+// SLAProblem names the ticket the board's SLA banner points at.
+type SLAProblem struct {
+	Key        string
+	ClientName string
+}
+
+// percentScale turns a share into a percentage.
+const percentScale = 100
 
 // Board is every column, left to right, even when empty.
 type Board struct {
@@ -67,6 +97,7 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 	today := calendar.DateOf(s.now().In(loc))
 	midnight := today.In(loc)
 	weekStart := today.AddDays(-daysSince(today.Weekday(), ticket.BoardWeekStart)).In(loc)
+	monthStart := calendar.NewDate(today.Year, today.Month, 1).In(loc)
 
 	statuses := ticket.BoardStatuses()
 	columns := make([]string, len(statuses))
@@ -77,6 +108,7 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 	params := db.ListBoardCardsParams{
 		ColumnLimit: BoardColumnLimit, Statuses: statusStrings(statuses), Columns: columns,
 		ScopeAgentID: a.scopeAgentID, ResolvedSince: midnight, Unassigned: f.Assignee == AssigneeUnassigned,
+		SlaAtRisk: f.SLAAtRisk, OpenStatuses: statusStrings(ticket.OpenStatuses),
 	}
 	if f.Assignee == AssigneeMe {
 		me := p.UserID
@@ -88,17 +120,20 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 	if err != nil {
 		return Board{}, err
 	}
-	stats, err := q.CountBoardStats(ctx, db.CountBoardStatsParams{
-		OpenStatuses: statusStrings(ticket.OpenStatuses), WeekStart: weekStart, ScopeAgentID: a.scopeAgentID,
-	})
+	stats, err := s.boardStats(ctx, q, a, weekStart, monthStart)
 	if err != nil {
 		return Board{}, err
 	}
+	schedules, err := s.sla.Schedules(ctx)
+	if err != nil {
+		return Board{}, err
+	}
+	now := s.now()
 
 	board := Board{
 		Columns:       make([]BoardColumn, len(ticket.Columns)),
 		ResolvedSince: midnight,
-		Stats:         BoardStats{OpenTickets: int(stats.OpenTickets), ResolvedThisWeek: int(stats.ResolvedThisWeek)},
+		Stats:         stats,
 	}
 	index := map[ticket.Column]int{}
 	for i, c := range ticket.Columns {
@@ -117,9 +152,73 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 			ID: r.ID, Key: r.Key, Type: ticket.Type(r.Type), Status: status, Priority: sla.Priority(r.Priority),
 			Subject: r.Subject, Client: Ref{r.ClientID, r.ClientName}, Assignee: optionalRef(r.AssigneeID, r.AssigneeName),
 			AllowedStatuses: ticket.AllowedMoves(status, r.AssigneeID != nil),
+			SLA:             cardSLA(r, status, schedules, now),
 		})
 	}
 	return board, nil
+}
+
+func (s *Service) boardStats(ctx context.Context, q *db.Queries, a access, weekStart, monthStart time.Time) (BoardStats, error) {
+	open := statusStrings(ticket.OpenStatuses)
+	r, err := q.CountBoardStats(ctx, db.CountBoardStatsParams{
+		OpenStatuses: open, WeekStart: weekStart, MonthStart: monthStart, PortalChannel: string(ticket.ChannelPortal),
+		ScopeAgentID: a.scopeAgentID,
+	})
+	if err != nil {
+		return BoardStats{}, err
+	}
+	stats := BoardStats{
+		OpenTickets: int(r.OpenTickets), ResolvedThisWeek: int(r.ResolvedThisWeek),
+		SLABreached: int(r.SlaBreached), SLAAtRisk: int(r.SlaAtRisk),
+	}
+	if r.FirstResponses > 0 {
+		avg := time.Duration(r.FirstResponseMsTotal/r.FirstResponses) * time.Millisecond
+		stats.AvgFirstResponse = &avg
+	}
+	if r.ResolvedThisMonth > 0 {
+		pct := float64(r.ResolvedWithinSla) * percentScale / float64(r.ResolvedThisMonth)
+		stats.WithinSLAPercent = &pct
+	}
+	if stats.SLABreached+stats.SLAAtRisk > 0 {
+		oldest, err := q.GetOldestSLAProblem(ctx, db.GetOldestSLAProblemParams{OpenStatuses: open, ScopeAgentID: a.scopeAgentID})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return BoardStats{}, err
+		}
+		if err == nil {
+			stats.SLAOldest = &SLAProblem{Key: oldest.Key, ClientName: oldest.ClientName}
+		}
+	}
+	return stats, nil
+}
+
+// cardSLA picks the clock a card shows and reads it now.
+func cardSLA(r db.ListBoardCardsRow, status ticket.Status, s sla.Schedules, now time.Time) *CardSLA {
+	if r.SlaTicketID == nil {
+		return nil
+	}
+	row := db.TicketSla{
+		FirstResponseBudgetMs: deref(r.FirstResponseBudgetMs), FirstResponseCalendar: deref(r.FirstResponseCalendar),
+		FirstResponseElapsedMs: deref(r.FirstResponseElapsedMs), FirstResponseRunningSince: r.FirstResponseRunningSince,
+		FirstResponseDueAt: r.FirstResponseDueAt, FirstResponseAtRiskFlaggedAt: r.FirstResponseAtRiskFlaggedAt,
+		FirstResponseBreachedAt: r.FirstResponseBreachedAt, FirstResponseMetAt: r.FirstResponseMetAt,
+		ResolutionBudgetMs: deref(r.ResolutionBudgetMs), ResolutionCalendar: deref(r.ResolutionCalendar),
+		ResolutionElapsedMs: deref(r.ResolutionElapsedMs), ResolutionRunningSince: r.ResolutionRunningSince,
+		ResolutionDueAt: r.ResolutionDueAt, ResolutionAtRiskFlaggedAt: r.ResolutionAtRiskFlaggedAt,
+		ResolutionBreachedAt: r.ResolutionBreachedAt, ResolutionMetAt: r.ResolutionMetAt,
+	}
+	fr, res := storedClocks(row)
+	if status.IsOpen() && fr.MetAt == nil {
+		return &CardSLA{Clock: slaengine.ClockFirstResponse, View: slaengine.ViewAt(fr, s, true, now)}
+	}
+	return &CardSLA{Clock: slaengine.ClockResolution, View: slaengine.ViewAt(res, s, status.IsOpen(), now)}
+}
+
+func deref[T any](p *T) T {
+	var zero T
+	if p == nil {
+		return zero
+	}
+	return *p
 }
 
 // location is the organisation's time zone, which decides where "today" starts.

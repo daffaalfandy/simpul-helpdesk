@@ -3,14 +3,20 @@ package httpapi_test
 import (
 	"context"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/riverqueue/river"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
 func (e *env) clocks(t *testing.T, ticketID uuid.UUID) db.TicketSla {
@@ -99,5 +105,123 @@ func TestCalendarEditRecomputesOpenClocks(t *testing.T) {
 	}
 	if got := te.updatedAt(t, tk.Id); !got.Equal(updated) {
 		t.Fatalf("replaying moved the ticket's updated_at: %v → %v", updated, got)
+	}
+}
+
+// scanAt runs the SLA scan as if the clock read at.
+func (e *env) scanAt(t *testing.T, at time.Time) {
+	t.Helper()
+	e.scan.SetClock(func() time.Time { return at })
+	if err := e.scan.Work(context.Background(), &river.Job[tickets.SLAScanArgs]{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+const picEmail = "head.it@kominfo-jambi.test"
+
+func TestSLAScanFlagsAndAlerts(t *testing.T) {
+	te := newTicketEnv(t)
+	ctx := context.Background()
+	supervisorID := userID(t, te.env, auth.RoleSupervisor)
+	// P1 here runs around the clock (so the test doesn't depend on today's hours): 15 min to
+	// respond, 1 h to resolve, at risk at 75%. The client's contact hears about P1 breaches.
+	for _, sql := range []string{
+		`UPDATE project_sla_targets SET first_response_value = 15, first_response_unit = 'min',
+		   resolve_value = 1, resolve_unit = 'h', calendar = 'always' WHERE project_id = $1 AND priority = 'P1'`,
+		`UPDATE projects SET sla_notify_pic_on_p1_breach = true WHERE id = $1`,
+	} {
+		if _, err := te.st.Pool().Exec(ctx, sql, te.projectA); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := te.st.Pool().Exec(ctx, `UPDATE clients SET pic_name = 'Head of IT', pic_email = $2 WHERE id = $1`, te.clientA, picEmail); err != nil {
+		t.Fatal(err)
+	}
+	in := incident(te.projectA, "Whole office offline")
+	in.Priority = gen.PriorityP1
+	tk := te.requester.report(t, in)
+	decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	te.fanout(t)
+	start := tk.CreatedAt
+
+	// 50 minutes in: first response breached, resolution at risk (45 min is 75% of an hour).
+	te.scanAt(t, start.Add(50*time.Minute))
+	te.fanout(t)
+	if got := te.auditActionsLike(t, "ticket.sla_%"); !slices.Equal(got, []string{"ticket.sla_breached", "ticket.sla_at_risk"}) {
+		t.Fatalf("audit = %v", got)
+	}
+	c := te.clocks(t, tk.Id)
+	if c.FirstResponseBreachedAt == nil || c.ResolutionAtRiskFlaggedAt == nil || c.ResolutionBreachedAt != nil {
+		t.Fatalf("flags = %+v", c)
+	}
+	var slaNotices []notice
+	for _, n := range te.notices(t, tk.Id) {
+		if n.event == notification.EventSLA {
+			slaNotices = append(slaNotices, n)
+		}
+	}
+	want := []notice{{te.agentID, notification.EventSLA}, {supervisorID, notification.EventSLA}, {te.agentID, notification.EventSLA}}
+	if !slices.Equal(slaNotices, want) {
+		t.Fatalf("SLA notices = %v, want %v (breach: assignee and supervisor; at risk: assignee)", slaNotices, want)
+	}
+
+	// Again at the same time: nothing new.
+	te.scanAt(t, start.Add(50*time.Minute))
+	if got := te.auditActionsLike(t, "ticket.sla_%"); len(got) != 2 {
+		t.Fatalf("a second scan added entries: %v", got)
+	}
+
+	// Past the hour: resolution breached, and the client's contact is told.
+	te.scanAt(t, start.Add(70*time.Minute))
+	if n := runJobs(t, te.env, te.pic); n != 1 {
+		t.Fatalf("PIC emails queued = %d, want 1", n)
+	}
+	msgs := mailsTo(te.mailer.Messages(), picEmail)
+	if len(msgs) != 1 || !strings.Contains(msgs[0].Subject, "P1 missed its fix target") ||
+		!strings.Contains(msgs[0].Text, "fix target of 1 hour") || !strings.Contains(msgs[0].Text, "/portal/tickets/"+tk.Key) {
+		t.Fatalf("PIC email = %+v", msgs)
+	}
+
+	// The board filters and counts what the scan flagged.
+	board := decode[gen.Board](t, te.agent.do(http.MethodGet, "/board?sla=at_risk", nil), http.StatusOK)
+	var keys []string
+	for _, col := range board.Columns {
+		for _, card := range col.Cards {
+			keys = append(keys, card.Key)
+			if card.Sla == nil || card.Sla.Phase != gen.SlaPhaseBreached {
+				t.Errorf("card %s sla = %+v", card.Key, card.Sla)
+			}
+		}
+	}
+	if !slices.Equal(keys, []string{tk.Key}) || board.Stats.SlaBreached != 1 || board.Stats.SlaOldest == nil || board.Stats.SlaOldest.Key != tk.Key {
+		t.Fatalf("at-risk board = %v, stats %+v", keys, board.Stats)
+	}
+	activity := decode[[]gen.TicketActivity](t, te.agent.do(http.MethodGet, "/tickets/"+tk.Key+"/activity", nil), http.StatusOK)
+	last := activity[len(activity)-1]
+	if last.Action != gen.TicketActivityActionSlaBreached || last.To == nil || *last.To != "resolution" {
+		t.Fatalf("last activity = %+v", last)
+	}
+}
+
+// A ticket the engine sees for the first time gets its past flags without alerts.
+func TestSLABackfillIsSilent(t *testing.T) {
+	te := newTicketEnv(t)
+	tk := te.requester.report(t, incident(te.projectA, "Old ticket"))
+	te.fanout(t)
+	if _, err := te.st.Pool().Exec(context.Background(), `DELETE FROM ticket_sla WHERE ticket_id = $1`, tk.Id); err != nil {
+		t.Fatal(err)
+	}
+	before := len(te.notices(t, tk.Id))
+	te.scanAt(t, tk.CreatedAt.Add(30*24*time.Hour))
+	c := te.clocks(t, tk.Id)
+	if c.FirstResponseBreachedAt == nil || c.ResolutionBreachedAt == nil {
+		t.Fatalf("backfill should flag the past breaches: %+v", c)
+	}
+	te.fanout(t)
+	if got := te.auditActionsLike(t, "ticket.sla_%"); len(got) != 0 {
+		t.Fatalf("backfill wrote alerts: %v", got)
+	}
+	if n := len(te.notices(t, tk.Id)); n != before {
+		t.Fatalf("backfill notified: %d → %d", before, n)
 	}
 }

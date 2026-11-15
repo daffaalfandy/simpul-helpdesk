@@ -257,6 +257,51 @@ func (q *Queries) GetLatestPublicStaffMessageID(ctx context.Context, arg GetLate
 	return id, err
 }
 
+const getPicEmailContext = `-- name: GetPicEmailContext :one
+SELECT t.key, t.subject, t.type, t.priority, t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
+       c.name AS client_name, c.pic_name, c.pic_email, s.resolution_breached_at
+FROM tickets t
+JOIN projects p ON p.id = t.project_id
+JOIN priorities pl ON pl.code = t.priority
+JOIN clients c ON c.id = t.client_id
+LEFT JOIN ticket_sla s ON s.ticket_id = t.id
+WHERE t.id = $1
+`
+
+type GetPicEmailContextRow struct {
+	Key                  string
+	Subject              string
+	Type                 string
+	Priority             string
+	SlaSnapshot          []byte
+	PriorityName         string
+	ProjectName          string
+	ClientName           string
+	PicName              *string
+	PicEmail             *string
+	ResolutionBreachedAt *time.Time
+}
+
+// What the client contact's breach email shows.
+func (q *Queries) GetPicEmailContext(ctx context.Context, id uuid.UUID) (GetPicEmailContextRow, error) {
+	row := q.db.QueryRow(ctx, getPicEmailContext, id)
+	var i GetPicEmailContextRow
+	err := row.Scan(
+		&i.Key,
+		&i.Subject,
+		&i.Type,
+		&i.Priority,
+		&i.SlaSnapshot,
+		&i.PriorityName,
+		&i.ProjectName,
+		&i.ClientName,
+		&i.PicName,
+		&i.PicEmail,
+		&i.ResolutionBreachedAt,
+	)
+	return i, err
+}
+
 const getTicketForFanout = `-- name: GetTicketForFanout :one
 SELECT t.id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot
 FROM tickets t

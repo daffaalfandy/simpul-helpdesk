@@ -3,6 +3,7 @@ package tickets
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -106,6 +107,19 @@ func NotificationChanges(rows []AuditRow) []notification.Change {
 		case ActionWatcherRemoved:
 			c.Kind = notification.ChangeWatcherRemoved
 			c.WatcherID = decode[uuid.UUID](data, dataWatcher)
+		case ActionSLAAtRisk, ActionSLABreached:
+			c.Kind = notification.ChangeSLAAtRisk
+			if r.Action == ActionSLABreached {
+				c.Kind = notification.ChangeSLABreached
+			}
+			if clock := decode[string](data, dataClock); clock != nil {
+				c.SLAClock = *clock
+			}
+			c.SLADueAt = decode[time.Time](data, dataDueAt)
+			if ms := decode[int64](data, dataLeftMs); ms != nil {
+				left := time.Duration(*ms) * time.Millisecond
+				c.SLALeft = &left
+			}
 		default:
 			continue
 		}

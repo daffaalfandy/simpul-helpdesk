@@ -236,7 +236,7 @@ function projectOf(body: Record<string, unknown>) {
 
 function boardCard(t: Ticket): BoardCard {
   const { id, key, type, status, priority, subject, client, assignee } = t
-  return { id, key, type, status, priority, subject, client, assignee, allowedStatuses: allowedMoves(t) }
+  return { id, key, type, status, priority, subject, client, assignee, allowedStatuses: allowedMoves(t), sla: null }
 }
 
 function startOfToday() {
@@ -268,6 +268,11 @@ function board(assignee: string | null, q: string): Board {
     stats: {
       openTickets: tickets.tickets.filter((t) => t.resolvedAt === null && t.status !== 'closed').length,
       resolvedThisWeek: tickets.tickets.filter((t) => since(t, weekStart)).length,
+      slaBreached: 0,
+      slaAtRisk: 0,
+      slaOldest: null,
+      avgFirstResponseMs: null,
+      withinSlaPercent: null,
     },
   }
 }

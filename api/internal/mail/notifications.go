@@ -94,6 +94,22 @@ type DigestData struct {
 	SettingsURL string
 }
 
+// PicBreachData fills the sla_breach_pic template: a P1 ticket missed its resolution target,
+// told to the client's contact person (who may have no account).
+type PicBreachData struct {
+	OrgName      string
+	ClientName   string
+	TicketKey    string
+	Title        string
+	Priority     string
+	PriorityName string
+	ProjectName  string
+	TargetValue  int
+	TargetUnit   string // min, h, wd or d
+	PassedAt     string
+	TicketURL    string
+}
+
 // palette mirrors web/src/styles/tokens.css: email clients can't read CSS variables.
 var palette = map[string]htmltemplate.CSS{
 	"bg":            "#F5F8FC",

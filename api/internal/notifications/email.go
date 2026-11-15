@@ -18,7 +18,9 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
@@ -512,4 +514,56 @@ func (w *PurgeWorker) Work(ctx context.Context, _ *river.Job[notification.PurgeA
 // River needs its workers before the client exists, and the dispatcher needs the client.
 type LateInserter struct {
 	tickets.JobInserter
+}
+
+// PicEmailWorker tells a client's contact person that a P1 ticket missed its resolution target
+// (the project's "notify the client PIC" switch). The contact may have no account, so there is
+// no inbox item and the link goes to the portal.
+type PicEmailWorker struct {
+	river.WorkerDefaults[notification.PicEmailArgs]
+	m *Mailer
+}
+
+func NewPicEmailWorker(m *Mailer) *PicEmailWorker { return &PicEmailWorker{m: m} }
+
+func (w *PicEmailWorker) Work(ctx context.Context, job *river.Job[notification.PicEmailArgs]) error {
+	q := w.m.store.Q()
+	c, err := q.GetPicEmailContext(ctx, job.Args.TicketID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil || c.PicEmail == nil || *c.PicEmail == "" || c.ResolutionBreachedAt == nil {
+		return err
+	}
+	var snap ticket.SLASnapshot
+	if err := json.Unmarshal(c.SlaSnapshot, &snap); err != nil {
+		return err
+	}
+	eff, err := snap.Effective(sla.Priority(c.Priority), ticket.Type(c.Type))
+	if err != nil {
+		return err
+	}
+	org, err := q.GetOrganization(ctx)
+	if err != nil {
+		return err
+	}
+	loc, err := time.LoadLocation(org.Timezone)
+	if err != nil {
+		return err
+	}
+	f := formatter{loc: loc, now: w.m.now()}
+	name := c.ClientName
+	if c.PicName != nil && *c.PicName != "" {
+		name = *c.PicName
+	}
+	msg, err := mail.Render(mail.TemplatePicBreach, *c.PicEmail, name, mail.PicBreachData{
+		OrgName: org.Name, ClientName: c.ClientName, TicketKey: c.Key, Title: c.Subject, Priority: c.Priority,
+		PriorityName: c.PriorityName, ProjectName: c.ProjectName, TargetValue: eff.Resolution.Value,
+		TargetUnit: string(eff.Resolution.Unit), PassedAt: f.time(*c.ResolutionBreachedAt), TicketURL: w.m.ticketURL(true, c.Key),
+	})
+	if err != nil {
+		return err
+	}
+	msg.Headers = mail.AutoReplyHeaders()
+	return w.m.sender.Send(ctx, msg)
 }

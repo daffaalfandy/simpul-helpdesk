@@ -33,6 +33,7 @@ const (
 	TemplatePasswordReset = "password_reset"
 	TemplateTicketUpdate  = "ticket_update"
 	TemplateDigest        = "digest"
+	TemplatePicBreach     = "sla_breach_pic"
 )
 
 // Headers for automatic email: auto-responders stay quiet (RFC 3834, and Exchange's own
@@ -54,14 +55,20 @@ const (
 	statusLabelTemplate = "label.status"
 )
 
-// AutomaticHeaders are the headers of a notification email, with the settings page for
-// List-Unsubscribe.
-func AutomaticHeaders(settingsURL string) map[string]string {
+// AutoReplyHeaders keep auto-responders quiet on any automatic email.
+func AutoReplyHeaders() map[string]string {
 	return map[string]string{
 		HeaderAutoSubmitted:        AutoSubmittedGenerated,
 		HeaderAutoResponseSuppress: AutoResponseSuppressAll,
-		HeaderListUnsubscribe:      fmt.Sprintf(listUnsubscribeFormat, settingsURL),
 	}
+}
+
+// AutomaticHeaders are the headers of a notification email, with the settings page for
+// List-Unsubscribe.
+func AutomaticHeaders(settingsURL string) map[string]string {
+	h := AutoReplyHeaders()
+	h[HeaderListUnsubscribe] = fmt.Sprintf(listUnsubscribeFormat, settingsURL)
+	return h
 }
 
 // PasswordResetData fills the password_reset template.

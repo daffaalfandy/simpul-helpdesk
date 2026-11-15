@@ -18,6 +18,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
@@ -62,6 +63,9 @@ func Fanout(ctx context.Context, q *db.Queries, log *slog.Logger, ticketID uuid.
 	in := notification.Input{
 		Actor: rows[0].ActorUserID, Assignee: t.AssigneeID, Requester: t.RequesterID,
 		Watchers: watchers, Priority: sla.Priority(t.Priority), Changes: tickets.NotificationChanges(rows),
+	}
+	if in.Supervisors, err = breachSupervisors(ctx, q, in.Changes, t.SlaSnapshot); err != nil {
+		return err
 	}
 	if err := loadRecipients(ctx, q, &in); err != nil {
 		return err
@@ -163,4 +167,23 @@ func quoteQuestions(ctx context.Context, q *db.Queries, ticketID uuid.UUID, ds [
 		ds[i].Change.MessageID = latest
 	}
 	return nil
+}
+
+// breachSupervisors are the active supervisors to alert about a breach, when the ticket's project
+// asks for it (its snapshot's switch); nobody otherwise.
+func breachSupervisors(ctx context.Context, q *db.Queries, changes []notification.Change, snapshot []byte) ([]uuid.UUID, error) {
+	breach := false
+	for _, c := range changes {
+		breach = breach || c.Kind == notification.ChangeSLABreached
+	}
+	if !breach {
+		return nil, nil
+	}
+	var snap ticket.SLASnapshot
+	if err := json.Unmarshal(snapshot, &snap); err != nil || !snap.NotifySupervisorOnBreach {
+		return nil, err
+	}
+	return q.ListActiveUserIDsByRole(ctx, db.ListActiveUserIDsByRoleParams{
+		Role: string(auth.RoleSupervisor), Status: string(auth.UserStatusActive),
+	})
 }

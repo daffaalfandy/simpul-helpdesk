@@ -60,6 +60,8 @@ type env struct {
 	ticketEmail  *notifications.TicketEmailWorker
 	digest       *notifications.DigestWorker
 	recompute    *tickets.SLARecomputer
+	scan         *tickets.SLAScanner
+	pic          *notifications.PicEmailWorker
 	files        *storage.FS
 	users        map[auth.Role]string // role -> email
 }
@@ -88,6 +90,10 @@ func newEnv(t *testing.T) *env {
 	river.AddWorker(workers, notifications.NewPurgeWorker(st))
 	recompute := tickets.NewSLARecomputer(st, slaSvc)
 	river.AddWorker(workers, recompute)
+	scan := tickets.NewSLAScanner(st, slaSvc, late)
+	river.AddWorker(workers, scan)
+	pic := notifications.NewPicEmailWorker(notifyMailer)
+	river.AddWorker(workers, pic)
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), &river.Config{Workers: workers})
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +117,7 @@ func newEnv(t *testing.T) *env {
 	if _, err := st.Q().UpsertClient(ctx, "Dinas Kominfo Jambi"); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, files: files, users: map[auth.Role]string{}}
+	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, pic: pic, files: files, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r}
 		if r == auth.RoleRequester {

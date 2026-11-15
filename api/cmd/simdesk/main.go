@@ -192,12 +192,14 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	river.AddWorker(workers, notifications.NewDigestWorker(notifyMailer))
 	river.AddWorker(workers, notifications.NewPurgeWorker(st))
 	river.AddWorker(workers, tickets.NewSLARecomputer(st, slaSvc))
+	river.AddWorker(workers, tickets.NewSLAScanner(st, slaSvc, late))
+	river.AddWorker(workers, notifications.NewPicEmailWorker(notifyMailer))
 	riverCfg := &river.Config{Workers: workers, Logger: log.With("component", "jobs")}
 	if runJobs {
 		// Periodic jobs only on clients that run jobs: River refuses them on insert-only clients.
 		riverCfg.Queues = map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: jobMaxWorkers}}
 		riverCfg.PeriodicJobs = []*river.PeriodicJob{
-			tickets.AttachmentSweepJob(), notifications.DispatchJob(), notifications.PurgeJob(),
+			tickets.AttachmentSweepJob(), notifications.DispatchJob(), notifications.PurgeJob(), tickets.SLAScanJob(),
 		}
 	}
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), riverCfg)

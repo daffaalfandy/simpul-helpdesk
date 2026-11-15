@@ -748,6 +748,12 @@
       "replyAdded": "{{actor}} replied",
       "noteAdded": "{{actor}} added an internal note",
       "firstResponded": "First response sent",
+      "slaAtRisk": "{{clock}} SLA at risk",
+      "slaBreached": "{{clock}} SLA breached",
+      "slaClock": {
+        "first_response": "First response",
+        "resolution": "Resolution"
+      },
       "loading": "Loading the activity log…"
     },
     "notFound": {

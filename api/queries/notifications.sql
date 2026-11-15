@@ -186,3 +186,14 @@ UPDATE notifications
 SET emailed_at = coalesce(emailed_at, created_at),
     read_at = CASE WHEN created_at < @read_before THEN coalesce(read_at, created_at) ELSE read_at END
 WHERE ticket_id = ANY(@ticket_ids::uuid[]);
+
+-- name: GetPicEmailContext :one
+-- What the client contact's breach email shows.
+SELECT t.key, t.subject, t.type, t.priority, t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
+       c.name AS client_name, c.pic_name, c.pic_email, s.resolution_breached_at
+FROM tickets t
+JOIN projects p ON p.id = t.project_id
+JOIN priorities pl ON pl.code = t.priority
+JOIN clients c ON c.id = t.client_id
+LEFT JOIN ticket_sla s ON s.ticket_id = t.id
+WHERE t.id = @id;

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:24px;background:{{color "tint"}};font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;color:{{color "ink"}}">
+  <div style="max-width:600px;margin:0 auto;background:{{color "surface"}};border:1px solid {{color "border"}};border-radius:16px;overflow:hidden">
+    <div style="padding:20px 28px;border-bottom:1px solid {{color "border-subtle"}};font-size:15px;font-weight:800">{{.OrgName}} Support</div>
+    <div style="padding:26px 28px">
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:{{color "muted"}}">{{.TicketKey}} · {{.Priority}} {{.PriorityName}} · {{.ProjectName}}</p>
+      <h1 style="margin:0 0 14px;font-size:22px;line-height:1.25;font-weight:800">{{.Title}}</h1>
+      <p style="margin:0 0 18px;font-size:14.5px;line-height:1.6">This {{.Priority}} ticket for {{.ClientName}} missed its fix target of {{text "label.duration" .}}. The target passed at {{.PassedAt}}.</p>
+      <p style="margin:0"><a href="{{.TicketURL}}" style="display:inline-block;padding:11px 18px;border:1px solid {{color "border-strong"}};border-radius:10px;color:{{color "primary"}};font-size:14px;font-weight:700;text-decoration:none">View the ticket</a></p>
+    </div>
+    <div style="padding:18px 28px;background:{{color "bg"}};font-size:12px;line-height:1.6;color:{{color "muted"}}">
+      You're getting this because you're the contact person for {{.ClientName}}. · Powered by SimDesk
+    </div>
+  </div>
+</body>
+</html>

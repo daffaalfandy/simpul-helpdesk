@@ -60,3 +60,36 @@ LIMIT @row_limit;
 
 -- name: LockTicketForSLA :one
 SELECT id FROM tickets WHERE id = @id FOR UPDATE;
+
+-- name: ListUnreplayedTicketIDs :many
+-- Tickets the engine hasn't run for yet (seed and tickets from before it): the scan backfills them.
+SELECT t.id FROM tickets t
+WHERE NOT EXISTS (SELECT 1 FROM ticket_sla s WHERE s.ticket_id = t.id)
+ORDER BY t.id
+LIMIT @row_limit;
+
+-- name: ListSLABreaches :many
+-- Running clocks past their due time that aren't flagged yet (breach is strictly after due).
+SELECT ticket_id, @first_response_clock::text AS clock FROM ticket_sla
+WHERE first_response_breached_at IS NULL AND first_response_due_at < @now::timestamptz
+UNION ALL
+SELECT ticket_id, @resolution_clock::text AS clock FROM ticket_sla
+WHERE resolution_breached_at IS NULL AND resolution_due_at < @now::timestamptz
+LIMIT @row_limit;
+
+-- name: ListSLAAtRisk :many
+-- Running clocks past their at-risk share that aren't flagged or breached yet.
+SELECT ticket_id, @first_response_clock::text AS clock FROM ticket_sla
+WHERE first_response_at_risk_flagged_at IS NULL AND first_response_breached_at IS NULL
+  AND first_response_at_risk_at <= @now::timestamptz
+UNION ALL
+SELECT ticket_id, @resolution_clock::text AS clock FROM ticket_sla
+WHERE resolution_at_risk_flagged_at IS NULL AND resolution_breached_at IS NULL
+  AND resolution_at_risk_at <= @now::timestamptz
+LIMIT @row_limit;
+
+-- name: GetTicketForAlert :one
+SELECT t.id, t.status, t.priority, t.sla_snapshot, c.pic_email
+FROM tickets t
+JOIN clients c ON c.id = t.client_id
+WHERE t.id = @id;

@@ -16,6 +16,7 @@ function card(key: string, over: Partial<BoardCard> = {}): BoardCard {
     client: ref('client'),
     assignee: null,
     allowedStatuses: [],
+    sla: null,
     ...over,
   }
 }
@@ -24,7 +25,15 @@ function board(cards: Partial<Record<BoardColumnId, BoardCard[]>>): Board {
   return {
     columns: BOARD_COLUMNS.map((id) => ({ id, total: cards[id]?.length ?? 0, cards: cards[id] ?? [] })),
     resolvedSince: '2026-11-14T00:00:00+07:00',
-    stats: { openTickets: 0, resolvedThisWeek: 0 },
+    stats: {
+      openTickets: 0,
+      resolvedThisWeek: 0,
+      slaBreached: 0,
+      slaAtRisk: 0,
+      slaOldest: null,
+      avgFirstResponseMs: null,
+      withinSlaPercent: null,
+    },
   }
 }
 

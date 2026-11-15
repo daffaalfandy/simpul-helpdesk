@@ -554,7 +554,7 @@ export interface paths {
          *     tickets are off the board. Each column holds at most 100 cards, P1 first, then the
          *     longest in the column, and reports its full size in `total`. Agents see the tickets
          *     of their assigned clients; supervisors and admins every ticket. The stats ignore
-         *     `assignee` and `q`.
+         *     `assignee`, `q` and `sla`.
          */
         get: operations["getBoard"];
         put?: never;
@@ -1472,8 +1472,11 @@ export interface components {
         TicketProgressStep: "received" | "assigned" | "in_progress" | "ready_for_test" | "resolved";
         /** @enum {string} */
         TicketProgressState: "done" | "current" | "upcoming" | "skipped";
-        /** @enum {string} */
-        TicketActivityAction: "created" | "status_changed" | "assignee_changed" | "priority_changed" | "reply_added" | "note_added" | "first_responded";
+        /**
+         * @description `sla_at_risk` and `sla_breached` name the clock (first_response or resolution) in `to`.
+         * @enum {string}
+         */
+        TicketActivityAction: "created" | "status_changed" | "assignee_changed" | "priority_changed" | "reply_added" | "note_added" | "first_responded" | "sla_at_risk" | "sla_breached";
         /**
          * @description Why the system changed the status on its own.
          * @enum {string}
@@ -1553,7 +1556,23 @@ export interface components {
         };
         /** @enum {string} */
         BoardColumnId: "new" | "in_progress" | "waiting_on_client" | "in_uat" | "resolved";
+        /** @enum {string} */
+        BoardSlaFilter: "at_risk";
+        /** @description The clock a card shows (an open ticket's first response until it is sent, then resolution). */
+        BoardCardSla: {
+            clock: components["schemas"]["SlaClockName"];
+            phase: components["schemas"]["SlaPhase"];
+            /**
+             * Format: int64
+             * @description Negative once over the target.
+             */
+            remainingMs: number;
+            /** Format: int64 */
+            dayMs: number;
+        };
         BoardCard: {
+            /** @description Null until the SLA engine has run for the ticket. */
+            sla: components["schemas"]["BoardCardSla"] | null;
             /** Format: uuid */
             id: string;
             /** @example HD-24871 */
@@ -1577,6 +1596,26 @@ export interface components {
             openTickets: number;
             /** @description Resolved or closed since Monday 00:00 in the organisation's time zone. */
             resolvedThisWeek: number;
+            /** @description Open tickets with an unmet clock past its deadline. */
+            slaBreached: number;
+            /** @description Open tickets at risk and not breached. */
+            slaAtRisk: number;
+            /** @description The flagged ticket that fell due first (the banner names it). */
+            slaOldest: components["schemas"]["SlaProblem"] | null;
+            /**
+             * Format: int64
+             * @description Mean first-response time of portal reports answered this month, on their SLA clocks.
+             */
+            avgFirstResponseMs: number | null;
+            /**
+             * Format: double
+             * @description Share of tickets resolved this month that never breached, 0 to 100.
+             */
+            withinSlaPercent: number | null;
+        };
+        SlaProblem: {
+            key: string;
+            clientName: string;
         };
         Board: {
             columns: components["schemas"]["BoardColumn"][];
@@ -2721,6 +2760,8 @@ export interface operations {
         parameters: {
             query?: {
                 assignee?: components["schemas"]["TicketAssigneeFilter"];
+                /** @description `at_risk`: only open tickets with a clock at risk or breached. */
+                sla?: components["schemas"]["BoardSlaFilter"];
                 /** @description A ticket key, or words in the subject or client name. */
                 q?: string;
             };

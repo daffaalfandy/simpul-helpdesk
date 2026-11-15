@@ -774,13 +774,18 @@ paths:
         tickets are off the board. Each column holds at most 100 cards, P1 first, then the
         longest in the column, and reports its full size in `total`. Agents see the tickets
         of their assigned clients; supervisors and admins every ticket. The stats ignore
-        `assignee` and `q`.
+        `assignee`, `q` and `sla`.
       tags: [tickets]
       parameters:
         - name: assignee
           in: query
           required: false
           schema: { $ref: "#/components/schemas/TicketAssigneeFilter" }
+        - name: sla
+          in: query
+          required: false
+          description: "`at_risk`: only open tickets with a clock at risk or breached."
+          schema: { $ref: "#/components/schemas/BoardSlaFilter" }
         - name: q
           in: query
           required: false
@@ -2013,7 +2018,9 @@ components:
 
     TicketActivityAction:
       type: string
-      enum: [created, status_changed, assignee_changed, priority_changed, reply_added, note_added, first_responded]
+      description: "`sla_at_risk` and `sla_breached` name the clock (first_response or resolution) in `to`."
+      enum: [created, status_changed, assignee_changed, priority_changed, reply_added, note_added, first_responded,
+             sla_at_risk, sla_breached]
 
     TicketStatusCause:
       type: string
@@ -2090,10 +2097,28 @@ components:
       type: string
       enum: [new, in_progress, waiting_on_client, in_uat, resolved]
 
+    BoardSlaFilter:
+      type: string
+      enum: [at_risk]
+
+    BoardCardSla:
+      type: object
+      required: [clock, phase, remainingMs, dayMs]
+      description: The clock a card shows (an open ticket's first response until it is sent, then resolution).
+      properties:
+        clock: { $ref: "#/components/schemas/SlaClockName" }
+        phase: { $ref: "#/components/schemas/SlaPhase" }
+        remainingMs: { type: integer, format: int64, description: Negative once over the target. }
+        dayMs: { type: integer, format: int64 }
+
     BoardCard:
       type: object
-      required: [id, key, type, status, priority, subject, client, assignee, allowedStatuses]
+      required: [id, key, type, status, priority, subject, client, assignee, allowedStatuses, sla]
       properties:
+        sla:
+          allOf: [{ $ref: "#/components/schemas/BoardCardSla" }]
+          nullable: true
+          description: Null until the SLA engine has run for the ticket.
         id: { type: string, format: uuid }
         key: { type: string, example: HD-24871 }
         type: { $ref: "#/components/schemas/TicketType" }
@@ -2124,12 +2149,35 @@ components:
 
     BoardStats:
       type: object
-      required: [openTickets, resolvedThisWeek]
+      required: [openTickets, resolvedThisWeek, slaBreached, slaAtRisk, slaOldest, avgFirstResponseMs, withinSlaPercent]
       properties:
         openTickets: { type: integer }
         resolvedThisWeek:
           type: integer
           description: Resolved or closed since Monday 00:00 in the organisation's time zone.
+        slaBreached: { type: integer, description: Open tickets with an unmet clock past its deadline. }
+        slaAtRisk: { type: integer, description: Open tickets at risk and not breached. }
+        slaOldest:
+          allOf: [{ $ref: "#/components/schemas/SlaProblem" }]
+          nullable: true
+          description: The flagged ticket that fell due first (the banner names it).
+        avgFirstResponseMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: Mean first-response time of portal reports answered this month, on their SLA clocks.
+        withinSlaPercent:
+          type: number
+          format: double
+          nullable: true
+          description: Share of tickets resolved this month that never breached, 0 to 100.
+
+    SlaProblem:
+      type: object
+      required: [key, clientName]
+      properties:
+        key: { type: string }
+        clientName: { type: string }
 
     Board:
       type: object

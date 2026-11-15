@@ -12,6 +12,34 @@ import (
 	"github.com/google/uuid"
 )
 
+const getTicketForAlert = `-- name: GetTicketForAlert :one
+SELECT t.id, t.status, t.priority, t.sla_snapshot, c.pic_email
+FROM tickets t
+JOIN clients c ON c.id = t.client_id
+WHERE t.id = $1
+`
+
+type GetTicketForAlertRow struct {
+	ID          uuid.UUID
+	Status      string
+	Priority    string
+	SlaSnapshot []byte
+	PicEmail    *string
+}
+
+func (q *Queries) GetTicketForAlert(ctx context.Context, id uuid.UUID) (GetTicketForAlertRow, error) {
+	row := q.db.QueryRow(ctx, getTicketForAlert, id)
+	var i GetTicketForAlertRow
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.Priority,
+		&i.SlaSnapshot,
+		&i.PicEmail,
+	)
+	return i, err
+}
+
 const getTicketForSLA = `-- name: GetTicketForSLA :one
 SELECT t.id, t.type, t.status, t.priority, t.sla_snapshot, t.first_response_at, t.resolved_at
 FROM tickets t
@@ -109,6 +137,102 @@ func (q *Queries) ListOpenTicketIDsAfter(ctx context.Context, arg ListOpenTicket
 	return items, nil
 }
 
+const listSLAAtRisk = `-- name: ListSLAAtRisk :many
+SELECT ticket_id, $2::text AS clock FROM ticket_sla
+WHERE first_response_at_risk_flagged_at IS NULL AND first_response_breached_at IS NULL
+  AND first_response_at_risk_at <= $3::timestamptz
+UNION ALL
+SELECT ticket_id, $4::text AS clock FROM ticket_sla
+WHERE resolution_at_risk_flagged_at IS NULL AND resolution_breached_at IS NULL
+  AND resolution_at_risk_at <= $3::timestamptz
+LIMIT $1
+`
+
+type ListSLAAtRiskParams struct {
+	RowLimit           int32
+	FirstResponseClock string
+	Now                time.Time
+	ResolutionClock    string
+}
+
+type ListSLAAtRiskRow struct {
+	TicketID uuid.UUID
+	Clock    string
+}
+
+// Running clocks past their at-risk share that aren't flagged or breached yet.
+func (q *Queries) ListSLAAtRisk(ctx context.Context, arg ListSLAAtRiskParams) ([]ListSLAAtRiskRow, error) {
+	rows, err := q.db.Query(ctx, listSLAAtRisk,
+		arg.RowLimit,
+		arg.FirstResponseClock,
+		arg.Now,
+		arg.ResolutionClock,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSLAAtRiskRow{}
+	for rows.Next() {
+		var i ListSLAAtRiskRow
+		if err := rows.Scan(&i.TicketID, &i.Clock); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSLABreaches = `-- name: ListSLABreaches :many
+SELECT ticket_id, $2::text AS clock FROM ticket_sla
+WHERE first_response_breached_at IS NULL AND first_response_due_at < $3::timestamptz
+UNION ALL
+SELECT ticket_id, $4::text AS clock FROM ticket_sla
+WHERE resolution_breached_at IS NULL AND resolution_due_at < $3::timestamptz
+LIMIT $1
+`
+
+type ListSLABreachesParams struct {
+	RowLimit           int32
+	FirstResponseClock string
+	Now                time.Time
+	ResolutionClock    string
+}
+
+type ListSLABreachesRow struct {
+	TicketID uuid.UUID
+	Clock    string
+}
+
+// Running clocks past their due time that aren't flagged yet (breach is strictly after due).
+func (q *Queries) ListSLABreaches(ctx context.Context, arg ListSLABreachesParams) ([]ListSLABreachesRow, error) {
+	rows, err := q.db.Query(ctx, listSLABreaches,
+		arg.RowLimit,
+		arg.FirstResponseClock,
+		arg.Now,
+		arg.ResolutionClock,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSLABreachesRow{}
+	for rows.Next() {
+		var i ListSLABreachesRow
+		if err := rows.Scan(&i.TicketID, &i.Clock); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSLAHistory = `-- name: ListSLAHistory :many
 SELECT id, at, action, data
 FROM audit_log
@@ -148,6 +272,34 @@ func (q *Queries) ListSLAHistory(ctx context.Context, arg ListSLAHistoryParams) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnreplayedTicketIDs = `-- name: ListUnreplayedTicketIDs :many
+SELECT t.id FROM tickets t
+WHERE NOT EXISTS (SELECT 1 FROM ticket_sla s WHERE s.ticket_id = t.id)
+ORDER BY t.id
+LIMIT $1
+`
+
+// Tickets the engine hasn't run for yet (seed and tickets from before it): the scan backfills them.
+func (q *Queries) ListUnreplayedTicketIDs(ctx context.Context, rowLimit int32) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listUnreplayedTicketIDs, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

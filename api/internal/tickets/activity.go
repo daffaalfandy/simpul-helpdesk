@@ -24,6 +24,8 @@ const (
 	ActivityReplyAdded      ActivityAction = "reply_added"
 	ActivityNoteAdded       ActivityAction = "note_added"
 	ActivityFirstResponded  ActivityAction = "first_responded"
+	ActivitySLAAtRisk       ActivityAction = "sla_at_risk"  // To names the clock
+	ActivitySLABreached     ActivityAction = "sla_breached" // To names the clock
 )
 
 // ActivityEntry is one line of a ticket's activity log. From and To hold statuses,
@@ -101,6 +103,12 @@ func activityFromRow(r db.ListAuditByTargetRow) (ActivityEntry, bool) {
 		}
 	case ActionFirstResponded:
 		e.Action = ActivityFirstResponded
+	case ActionSLAAtRisk, ActionSLABreached:
+		e.Action = ActivitySLAAtRisk
+		if r.Action == ActionSLABreached {
+			e.Action = ActivitySLABreached
+		}
+		e.To = decode[string](data, dataClock)
 	default:
 		return e, false
 	}

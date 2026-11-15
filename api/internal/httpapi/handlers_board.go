@@ -20,6 +20,7 @@ func (s *server) GetBoard(ctx context.Context, req gen.GetBoardRequestObject) (g
 	if req.Params.Q != nil {
 		f.Query = *req.Params.Q
 	}
+	f.SLAAtRisk = req.Params.Sla != nil && *req.Params.Sla == gen.BoardSlaFilterAtRisk
 	b, err := s.tickets.Board(ctx, p, f)
 	if err != nil {
 		return nil, err
@@ -27,7 +28,7 @@ func (s *server) GetBoard(ctx context.Context, req gen.GetBoardRequestObject) (g
 	out := gen.GetBoard200JSONResponse{
 		Columns:       make([]gen.BoardColumn, len(b.Columns)),
 		ResolvedSince: b.ResolvedSince,
-		Stats:         gen.BoardStats{OpenTickets: b.Stats.OpenTickets, ResolvedThisWeek: b.Stats.ResolvedThisWeek},
+		Stats:         apiBoardStats(b.Stats),
 	}
 	for i, c := range b.Columns {
 		col := gen.BoardColumn{Id: gen.BoardColumnId(c.ID), Total: c.Total, Cards: make([]gen.BoardCard, len(c.Cards))}
@@ -47,6 +48,27 @@ func apiBoardCard(c tickets.BoardCard) gen.BoardCard {
 	}
 	for i, st := range c.AllowedStatuses {
 		out.AllowedStatuses[i] = gen.TicketStatus(st)
+	}
+	if c.SLA != nil {
+		out.Sla = &gen.BoardCardSla{
+			Clock: gen.SlaClockName(c.SLA.Clock), Phase: gen.SlaPhase(c.SLA.View.Phase),
+			RemainingMs: c.SLA.View.Remaining.Milliseconds(), DayMs: c.SLA.View.Day.Milliseconds(),
+		}
+	}
+	return out
+}
+
+func apiBoardStats(st tickets.BoardStats) gen.BoardStats {
+	out := gen.BoardStats{
+		OpenTickets: st.OpenTickets, ResolvedThisWeek: st.ResolvedThisWeek, SlaBreached: st.SLABreached,
+		SlaAtRisk: st.SLAAtRisk, WithinSlaPercent: st.WithinSLAPercent,
+	}
+	if st.SLAOldest != nil {
+		out.SlaOldest = &gen.SlaProblem{Key: st.SLAOldest.Key, ClientName: st.SLAOldest.ClientName}
+	}
+	if st.AvgFirstResponse != nil {
+		ms := st.AvgFirstResponse.Milliseconds()
+		out.AvgFirstResponseMs = &ms
 	}
 	return out
 }

@@ -56,3 +56,5 @@
 {{define "digest.title"}}{{if .Daily}}Your daily summary{{else}}Your hourly summary{{end}}{{end}}
 
 {{define "digest.count"}}{{.Count}} {{if eq .Count 1}}update{{else}}updates{{end}} on {{len .Tickets}} {{if eq (len .Tickets) 1}}ticket{{else}}tickets{{end}}{{end}}
+
+{{define "label.duration"}}{{.TargetValue}} {{if eq .TargetUnit "min"}}{{if eq .TargetValue 1}}minute{{else}}minutes{{end}}{{else if eq .TargetUnit "h"}}{{if eq .TargetValue 1}}hour{{else}}hours{{end}}{{else if eq .TargetUnit "wd"}}{{if eq .TargetValue 1}}working day{{else}}working days{{end}}{{else}}{{if eq .TargetValue 1}}day{{else}}days{{end}}{{end}}{{end}}
