@@ -82,6 +82,9 @@ export const BOARD_REFRESH_MS = 30_000
 /** How often the bell asks for its unread count (ARCHITECTURE: polling, not SSE). */
 export const NOTIFICATION_POLL_MS = 30_000
 
+/** How often a ticket page refreshes so its SLA clocks move. */
+export const SLA_REFRESH_MS = 60_000
+
 /** Inbox items per page; the bell shows the first page's newest few. */
 export const NOTIFICATION_PAGE_SIZE = 30
 export const BELL_ITEM_COUNT = 8

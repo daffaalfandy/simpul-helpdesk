@@ -13,7 +13,7 @@ import { DescriptionList } from '../../components/DescriptionList'
 import { ErrorAlert } from '../../components/ErrorAlert'
 import { ProgressTracker } from '../../components/ProgressTracker'
 import { TextArea } from '../../components/TextArea'
-import { paths } from '../../lib/constants'
+import { paths, SLA_REFRESH_MS } from '../../lib/constants'
 import { megabytesOf } from '../../lib/files'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { priorityLong, requesterStatus } from '../tickets/labels'
@@ -30,7 +30,8 @@ export function PortalTicketPage({ ticketKey }: { ticketKey: string }) {
   const { t } = useTranslation()
   const names = usePriorityNames()
   const me = useSignedInUser()
-  const { data: ticket } = useSuspenseQuery(ticketQueryOptions(ticketKey))
+  // The SLA clocks move: refresh the ticket now and then.
+  const { data: ticket } = useSuspenseQuery({ ...ticketQueryOptions(ticketKey), refetchInterval: SLA_REFRESH_MS })
   const { data: messages } = useSuspenseQuery(ticketMessagesQueryOptions(ticketKey))
   const { stamp, full } = useTimestamp()
 

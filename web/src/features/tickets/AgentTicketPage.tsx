@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { usePriorityNames } from '../../api/queries'
 import { BackLink } from '../../components/BackLink'
 import { PriorityBadge } from '../../components/Badges'
-import { paths } from '../../lib/constants'
+import { paths, SLA_REFRESH_MS } from '../../lib/constants'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { ActivityLog } from './ActivityLog'
 import { AgentComposer } from './AgentComposer'
@@ -20,7 +20,8 @@ export function AgentTicketPage({ ticketKey }: { ticketKey: string }) {
   const { t } = useTranslation()
   const names = usePriorityNames()
   const me = useSignedInUser()
-  const { data: ticket } = useSuspenseQuery(ticketQueryOptions(ticketKey))
+  // The SLA clocks move: refresh the ticket now and then.
+  const { data: ticket } = useSuspenseQuery({ ...ticketQueryOptions(ticketKey), refetchInterval: SLA_REFRESH_MS })
   const { data: messages } = useSuspenseQuery(ticketMessagesQueryOptions(ticketKey))
   const { stamp } = useTimestamp()
 

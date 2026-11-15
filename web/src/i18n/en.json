@@ -708,7 +708,16 @@
       "replied": "Replied",
       "pausedBoth": "Time waiting for the client's reply or test doesn't count.",
       "pausedWaiting": "Time waiting for the client's reply doesn't count.",
-      "pausedUat": "Time waiting for the client's test doesn't count."
+      "pausedUat": "Time waiting for the client's test doesn't count.",
+      "metIn": "Met in {{span}}",
+      "metAfter": "Met · {{span}}",
+      "atRisk": "At risk · {{span}} left",
+      "repliedLate": "Replied late",
+      "resolvedLate": "Resolved late",
+      "stopped": "Stopped when resolved",
+      "resolved": "Resolved",
+      "inProgress": "In progress",
+      "pausedState": "Paused"
     },
     "message": {
       "conversation": "Conversation",

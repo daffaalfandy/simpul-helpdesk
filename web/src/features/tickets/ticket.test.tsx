@@ -124,3 +124,47 @@ describe('agent ticket detail', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/portal'))
   })
 })
+
+describe('live SLA on the ticket', () => {
+  const MINUTE = 60_000
+  const DAY = 24 * 60 * MINUTE
+
+  function setClocks() {
+    const t = tickets.tickets.find((x) => x.key === 'HD-24871')
+    if (!t) throw new Error('no fixture')
+    t.sla.firstResponseClock = { phase: 'met', usedMs: 8 * MINUTE, budgetMs: 15 * MINUTE, remainingMs: 7 * MINUTE, dayMs: DAY, dueAt: null, metAt: '2026-11-12T01:22:00Z' }
+    t.sla.resolutionClock = { phase: 'breached', usedMs: 252 * MINUTE, budgetMs: 240 * MINUTE, remainingMs: -12 * MINUTE, dayMs: DAY, dueAt: '2026-11-12T05:14:00Z', metAt: null }
+  }
+
+  it('shows each clock with a bar to agents', async () => {
+    state.me = AGENT
+    setClocks()
+    await open()
+    const sla = screen.getByRole('region', { name: 'SLA · P1 · e-Office project' })
+    expect(within(sla).getByText('Met in 8m')).toBeInTheDocument()
+    expect(within(sla).getByText('Breached 12m')).toBeInTheDocument()
+    const bars = within(sla).getAllByRole('meter')
+    expect(bars.map((b) => b.getAttribute('aria-valuenow'))).toEqual(['53', '100'])
+    expect(bars[1]).toHaveAttribute('aria-valuetext', 'Breached 12m')
+  })
+
+  it('shows requesters where things stand, not deadlines', async () => {
+    state.me = REQUESTER
+    setClocks()
+    renderApp('/portal/tickets/HD-24871')
+    const card = (await screen.findByRole('heading', { name: 'Service level (P1)' })).closest('section') as HTMLElement
+    expect(within(card).getByText('Met · 8m')).toBeInTheDocument()
+    expect(within(card).getByText('In progress')).toBeInTheDocument()
+    expect(within(card).queryByText(/Breached/)).not.toBeInTheDocument()
+  })
+
+  it('says a move pauses the clock only when the project pauses it', async () => {
+    state.me = AGENT
+    const t = tickets.tickets.find((x) => x.key === 'HD-24871')
+    if (t) t.sla.pauseOnWaitingClient = false
+    const user = await open()
+    await user.click(screen.getByRole('button', { name: /Status$/ }))
+    const option = await screen.findByRole('option', { name: /Waiting on client/ })
+    expect(option).not.toHaveTextContent('Pauses the SLA clock')
+  })
+})

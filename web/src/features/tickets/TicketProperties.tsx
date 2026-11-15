@@ -33,7 +33,11 @@ export function TicketProperties({ ticket }: { ticket: Ticket }) {
   const statusOptions: DropdownOption<TicketStatus>[] = choices.map((s) => ({
     id: s,
     label: agentStatus(t, s),
-    description: hasHint(s) ? t(`ticket.status.agentHint.${s}`) : undefined,
+    // "Pauses the SLA clock" only where this ticket's project pauses it.
+    description:
+      hasHint(s) && (s !== 'waiting_on_client' || ticket.sla.pauseOnWaitingClient)
+        ? t(`ticket.status.agentHint.${s}`)
+        : undefined,
   }))
 
   const people = assignees ?? []
