@@ -303,8 +303,10 @@ func (q *Queries) GetPicEmailContext(ctx context.Context, id uuid.UUID) (GetPicE
 }
 
 const getTicketForFanout = `-- name: GetTicketForFanout :one
-SELECT t.id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot
+SELECT t.id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot, p.dod_config, o.config AS dod_override
 FROM tickets t
+JOIN projects p ON p.id = t.project_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.id = $1
 `
 
@@ -314,6 +316,8 @@ type GetTicketForFanoutRow struct {
 	RequesterID uuid.UUID
 	AssigneeID  *uuid.UUID
 	SlaSnapshot []byte
+	DodConfig   []byte
+	DodOverride []byte
 }
 
 func (q *Queries) GetTicketForFanout(ctx context.Context, id uuid.UUID) (GetTicketForFanoutRow, error) {
@@ -325,6 +329,8 @@ func (q *Queries) GetTicketForFanout(ctx context.Context, id uuid.UUID) (GetTick
 		&i.RequesterID,
 		&i.AssigneeID,
 		&i.SlaSnapshot,
+		&i.DodConfig,
+		&i.DodOverride,
 	)
 	return i, err
 }

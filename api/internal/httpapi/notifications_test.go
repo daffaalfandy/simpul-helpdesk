@@ -353,7 +353,7 @@ func TestInbox(t *testing.T) {
 func TestNotificationSettings(t *testing.T) {
 	te := newTicketEnv(t)
 	settings := decode[gen.NotificationSettings](t, te.agent.do(http.MethodGet, "/notification-settings", nil), http.StatusOK)
-	if settings.Audience != gen.AudienceTeam || settings.EmailFrequency != gen.EmailFrequencyInstant || len(settings.Events) != 6 {
+	if settings.Audience != gen.AudienceTeam || settings.EmailFrequency != gen.EmailFrequencyInstant || len(settings.Events) != 7 {
 		t.Fatalf("agent settings = %+v", settings)
 	}
 	for _, e := range settings.Events {
@@ -378,9 +378,16 @@ func TestNotificationSettings(t *testing.T) {
 		t.Fatalf("frequency = %s", freq.EmailFrequency)
 	}
 	portal := decode[gen.NotificationSettings](t, te.requester.do(http.MethodGet, "/notification-settings", nil), http.StatusOK)
-	if portal.Audience != gen.AudiencePortal || len(portal.Events) != 5 {
+	if portal.Audience != gen.AudiencePortal || len(portal.Events) != 6 {
 		t.Fatalf("portal settings = %+v", portal)
 	}
+	for _, e := range portal.Events {
+		if e.Locked != (e.Event == gen.NotificationEventUatRequested) {
+			t.Errorf("portal %s locked = %v", e.Event, e.Locked)
+		}
+	}
+	expectProblem(t, set(te.requester, "uat_requested", true, false), http.StatusBadRequest, apperr.CodeNotificationLocked)
+	expectProblem(t, set(te.supervisor, "dod", false, false), http.StatusBadRequest, apperr.CodeNotificationEventUnknown)
 	if got := countOf(te.auditActionsLike(t, "notification_settings.%"), "notification_settings.updated"); got != 2 {
 		t.Errorf("settings audit entries = %d, want 2", got)
 	}

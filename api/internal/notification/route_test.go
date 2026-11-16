@@ -57,6 +57,13 @@ func TestRoute(t *testing.T) {
 	move := func(from, to ticket.Status) Change {
 		return Change{AuditID: auditB, Kind: ChangeStatus, StatusFrom: from, StatusTo: to}
 	}
+	moveFor := func(from, to ticket.Status, cause ticket.Cause) Change {
+		c := move(from, to)
+		c.Cause = cause
+		return c
+	}
+	supervisors := func(in *Input) { in.Supervisors = []uuid.UUID{supervisor} }
+	rejection := Change{AuditID: auditA, Kind: ChangeMessage, MessageID: &messageID}
 	tests := []struct {
 		name    string
 		setup   []func(*Input)
@@ -152,9 +159,70 @@ func TestRoute(t *testing.T) {
 		},
 		{
 			name:    "SLA breach: assignee and supervisors",
-			setup:   []func(*Input){func(in *Input) { in.Supervisors = []uuid.UUID{supervisor} }},
+			setup:   []func(*Input){supervisors, func(in *Input) { in.NotifySupervisorOnBreach = true }},
 			changes: []Change{{AuditID: auditA, Kind: ChangeSLABreached}},
 			want:    []got{{agent, EventSLA, KindBreached, 0}, {supervisor, EventSLA, KindBreached, 0}},
+		},
+		{
+			name:    "SLA breach on a project that doesn't alert supervisors",
+			setup:   []func(*Input){supervisors},
+			changes: []Change{{AuditID: auditA, Kind: ChangeSLABreached}},
+			want:    []got{{agent, EventSLA, KindBreached, 0}},
+		},
+		{
+			name:    "move In UAT asks the client side to test",
+			setup:   []func(*Input){by(agent, true)},
+			changes: []Change{move(ticket.StatusInProgress, ticket.StatusInUAT)},
+			want:    []got{{requester, EventUATRequested, KindNone, 0}, {colleague, EventUATRequested, KindNone, 0}},
+		},
+		{
+			name:    "requester approves: assignee hears the result, the colleague a colleague's change",
+			setup:   []func(*Input){by(requester, false)},
+			changes: []Change{moveFor(ticket.StatusInUAT, ticket.StatusResolved, ticket.CauseUATApproved)},
+			want:    []got{{agent, EventUATResult, KindApproved, 0}, {colleague, EventColleague, KindStatus, 0}},
+		},
+		{
+			name:    "requester rejects with a message: one result item for the assignee",
+			setup:   []func(*Input){by(requester, false)},
+			changes: []Change{rejection, moveFor(ticket.StatusInUAT, ticket.StatusInProgress, ticket.CauseUATRejected)},
+			want:    []got{{agent, EventUATResult, KindRejected, 1}, {colleague, EventColleague, KindReply, 1}},
+		},
+		{
+			name:    "overdue test approved by the system",
+			changes: []Change{moveFor(ticket.StatusInUAT, ticket.StatusResolved, ticket.CauseUATAutoApproved)},
+			want: []got{
+				{agent, EventUATResult, KindAutoApproved, 0}, {requester, EventResolved, KindNone, 0},
+				{colleague, EventResolved, KindNone, 0},
+			},
+		},
+		{
+			name:    "reopen window ends: closed for everyone",
+			changes: []Change{moveFor(ticket.StatusResolved, ticket.StatusClosed, ticket.CauseAutoClosed)},
+			want: []got{
+				{agent, EventStatus, KindNone, 0}, {requester, EventResolved, KindNone, 0},
+				{colleague, EventResolved, KindNone, 0},
+			},
+		},
+		{
+			name:    "requester reopens: the assignee hears it",
+			setup:   []func(*Input){by(requester, false)},
+			changes: []Change{moveFor(ticket.StatusResolved, ticket.StatusInProgress, ticket.CauseReopened)},
+			want:    []got{{agent, EventStatus, KindNone, 0}, {colleague, EventColleague, KindStatus, 0}},
+		},
+		{
+			name:    "resolved without the DoD: supervisors are told",
+			setup:   []func(*Input){by(agent, true), supervisors},
+			changes: []Change{moveFor(ticket.StatusInProgress, ticket.StatusResolved, ticket.CauseDoDSkipped)},
+			want: []got{
+				{supervisor, EventDoD, KindSkipped, 0}, {requester, EventResolved, KindNone, 0},
+				{colleague, EventResolved, KindNone, 0},
+			},
+		},
+		{
+			name:    "a ticket's own DoD: supervisors only",
+			setup:   []func(*Input){by(agent, true), supervisors},
+			changes: []Change{{AuditID: auditA, Kind: ChangeDoD}},
+			want:    []got{{supervisor, EventDoD, KindOverride, 0}},
 		},
 		{
 			name:    "unassigned SLA at risk: nobody (HANDOFF §13 Q7)",
@@ -235,5 +303,32 @@ func TestRouteChannelsFollowPreferences(t *testing.T) {
 	in.Prefs = map[uuid.UUID]map[Event]Pref{agent: {EventInternalNote: {}}}
 	if ds, _ := Route(in); len(ds) != 0 {
 		t.Fatalf("a switched-off event notifies nobody, got %v", ds)
+	}
+}
+
+// UAT items go right away whatever the user's summary setting; staff reasons never reach the
+// client side.
+func TestRouteUrgencyAndReasons(t *testing.T) {
+	in := base()
+	in.Actor, in.ActorStaff = &agent2, true
+	in.Supervisors = []uuid.UUID{supervisor}
+	in.Changes = []Change{{AuditID: auditA, Kind: ChangeStatus, StatusFrom: ticket.StatusInProgress,
+		StatusTo: ticket.StatusResolved, Cause: ticket.CauseDoDSkipped, Reason: "Client confirmed by phone"}}
+	ds, _ := Route(in)
+	for _, d := range ds {
+		staff := users[d.UserID].Staff
+		if (d.Change.Reason != "") != staff {
+			t.Errorf("%s (staff %v) reason = %q", d.UserID, staff, d.Change.Reason)
+		}
+	}
+	in.Changes = []Change{{AuditID: auditA, Kind: ChangeStatus, StatusFrom: ticket.StatusInProgress, StatusTo: ticket.StatusInUAT}}
+	ds, _ = Route(in)
+	for _, d := range ds {
+		if d.UserID == requester && (!d.Urgent || d.Event != EventUATRequested) {
+			t.Fatalf("UAT request = %+v", d)
+		}
+		if d.UserID == agent && d.Urgent {
+			t.Fatalf("a P3 status change is urgent: %+v", d)
+		}
 	}
 }

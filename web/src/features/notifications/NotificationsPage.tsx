@@ -158,7 +158,7 @@ function Settings({ audience }: { audience: Audience }) {
     setFrequency.mutate(f, feedback)
   }
   const label = (e: NotificationEventSetting) => t(`notifications.settings.events.${audience}.${e.event}.label` as never)
-  // Not every event has a hint ("Resolved and closed" gets one when reopening exists, M6).
+  // Not every event has a hint.
   const hint = (e: NotificationEventSetting) =>
     t(`notifications.settings.events.${audience}.${e.event}.hint` as never, { defaultValue: '' })
 
@@ -215,7 +215,7 @@ function Settings({ audience }: { audience: Audience }) {
             ))}
           </tbody>
         </table>
-        {audience === 'team' && <p className="text-xs text-muted">{t('notifications.settings.lockedNote')}</p>}
+        <p className="text-xs text-muted">{t(`notifications.settings.lockedNote.${audience}`)}</p>
         <div className="flex flex-col gap-3 border-t border-border-subtle pt-4">
           <Dropdown
             label={t('notifications.settings.sendEmails')}

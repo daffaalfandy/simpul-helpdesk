@@ -14,7 +14,7 @@ const API = '*/api/v1'
 
 const FILTER_EVENTS: Partial<Record<NotificationFilter, NotificationEvent[]>> = {
   comments: ['comment', 'internal_note'],
-  status: ['status', 'resolved'],
+  status: ['status', 'resolved', 'uat_requested', 'uat_result', 'dod'],
   assigned: ['assignment'],
   sla: ['sla'],
   replies: ['reply', 'question'],
@@ -36,6 +36,9 @@ function item(id: string, over: Partial<Notification>): Notification {
     slaClock: null,
     slaDueAt: null,
     slaMinutesLeft: null,
+    cause: null,
+    autoApproveAt: null,
+    reopenUntil: null,
     quote: null,
     also: [],
     channels: { web: true, email: true },
@@ -110,6 +113,7 @@ function settingsFor(audience: 'team' | 'portal'): NotificationSettings {
           ev('assignment', true, true, true),
           ev('priority', true, false),
           ev('sla', true, true, true),
+          ev('uat_result', true, true),
         ],
       }
     : {
@@ -118,6 +122,7 @@ function settingsFor(audience: 'team' | 'portal'): NotificationSettings {
         events: [
           ev('reply', true, true),
           ev('status', true, true),
+          ev('uat_requested', true, true, true),
           ev('question', true, true),
           ev('resolved', true, true),
           ev('colleague', true, false),

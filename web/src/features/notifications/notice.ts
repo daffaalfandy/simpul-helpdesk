@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next'
-import { ArrowRight, Clock, Flag, MessageSquare, TicketIcon, User, UserPlus, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Clock, Flag, ListChecks, MessageSquare, TicketIcon, User, UserPlus, type LucideIcon } from 'lucide-react'
 
 import type { Audience, Notification, NotificationFilter, TicketStatus } from '../../api/client'
 
@@ -27,7 +27,11 @@ export function noticeIcon(n: Notification): { Icon: LucideIcon; tone: string } 
   switch (n.event) {
     case 'status':
     case 'resolved':
+    case 'uat_requested':
+    case 'uat_result':
       return { Icon: ArrowRight, tone: tones.status }
+    case 'dod':
+      return { Icon: ListChecks, tone: tones.priority }
     case 'assignment':
       return { Icon: User, tone: tones.person }
     case 'priority':
@@ -45,8 +49,11 @@ export function noticeIcon(n: Notification): { Icon: LucideIcon; tone: string } 
   }
 }
 
+/** Formats the times a notice mentions, in the organisation's time zone. */
+type NoticeTimes = { clock: (iso: string) => string; day: (iso: string) => string }
+
 /** What changed, in the recipient's wording ("Status changed: In progress → Ready for your test"). */
-export function noticeText(t: TFunction, n: Notification, audience: Audience, clock: (iso: string) => string): string {
+export function noticeText(t: TFunction, n: Notification, audience: Audience, time: NoticeTimes): string {
   const actor = n.actorName ?? t('notifications.text.system')
   const status = (s?: TicketStatus | null) =>
     s ? t(audience === 'team' ? `ticket.status.agent.${s}` : `ticket.status.requester.${s}`) : ''
@@ -59,8 +66,21 @@ export function noticeText(t: TFunction, n: Notification, audience: Audience, cl
     case 'question':
       return t(`notifications.text.${n.event}`, { actor })
     case 'status':
-    case 'resolved':
       return t('notifications.text.status', { from, to })
+    case 'resolved':
+      return n.reopenUntil && n.statusTo === 'resolved'
+        ? t('notifications.text.resolvedReopen', { from, to, date: time.day(n.reopenUntil) })
+        : t('notifications.text.status', { from, to })
+    case 'uat_requested':
+      return n.autoApproveAt
+        ? t('notifications.text.uatRequested', { from, to, date: time.day(n.autoApproveAt) })
+        : t('notifications.text.status', { from, to })
+    case 'uat_result':
+      if (n.kind === 'rejected') return t('notifications.text.uatRejected', { actor, from, to })
+      if (n.kind === 'auto_approved') return t('notifications.text.uatAutoApproved', { from, to })
+      return t('notifications.text.uatApproved', { actor, from, to })
+    case 'dod':
+      return t(n.kind === 'override' ? 'notifications.text.dodOverride' : 'notifications.text.dodSkipped', { actor })
     case 'assignment':
       return t(n.kind === 'unassigned' ? 'notifications.text.unassigned' : 'notifications.text.assigned', { actor })
     case 'priority':
@@ -74,13 +94,13 @@ export function noticeText(t: TFunction, n: Notification, audience: Audience, cl
     case 'sla': {
       const slaClock = t(`notifications.text.slaClock.${n.slaClock ?? 'resolution'}`)
       return n.kind === 'breached'
-        ? t('notifications.text.slaBreached', { clock: slaClock, time: n.slaDueAt ? clock(n.slaDueAt) : '' })
+        ? t('notifications.text.slaBreached', { clock: slaClock, time: n.slaDueAt ? time.clock(n.slaDueAt) : '' })
         : t('notifications.text.slaAtRisk', { clock: slaClock, minutes: n.slaMinutesLeft ?? 0 })
     }
   }
 }
 
-/** The quoted line under the text: the message, or a priority change's reason. */
+/** The quoted line under the text: the message, or a staff reason (a priority change, a skipped DoD). */
 export function noticeQuote(n: Notification): string | null {
-  return n.quote ?? (n.event === 'priority' ? (n.reason ?? null) : null)
+  return n.quote ?? (n.event === 'priority' || n.event === 'dod' ? (n.reason ?? null) : null)
 }

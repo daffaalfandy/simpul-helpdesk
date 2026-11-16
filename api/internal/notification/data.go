@@ -18,6 +18,9 @@ type Data struct {
 	PriorityTo     sla.Priority  `json:"priority_to,omitempty"`
 	Reason         string        `json:"reason,omitempty"`
 	Assignee       string        `json:"assignee,omitempty"` // the new assignee's name
+	Cause          ticket.Cause  `json:"cause,omitempty"`
+	AutoApproveAt  *time.Time    `json:"auto_approve_at,omitempty"`
+	ReopenUntil    *time.Time    `json:"reopen_until,omitempty"`
 	SLAClock       string        `json:"sla_clock,omitempty"`
 	SLADueAt       *time.Time    `json:"sla_due_at,omitempty"`
 	SLALeftMinutes *int          `json:"sla_left_minutes,omitempty"`
@@ -39,7 +42,8 @@ func DataFor(d Delivery) Data {
 	c := d.Change
 	data := Data{
 		Kind: d.Kind, StatusFrom: c.StatusFrom, StatusTo: c.StatusTo, Reason: c.Reason,
-		SLAClock: c.SLAClock, SLADueAt: c.SLADueAt,
+		SLAClock: c.SLAClock, SLADueAt: c.SLADueAt, Cause: c.Cause, AutoApproveAt: c.AutoApproveAt,
+		ReopenUntil: c.ReopenUntil,
 	}
 	if c.Priority != nil {
 		data.PriorityFrom, data.PriorityTo = c.Priority.From, c.Priority.To

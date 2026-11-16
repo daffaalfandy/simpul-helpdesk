@@ -1912,14 +1912,20 @@ components:
     NotificationEvent:
       type: string
       description: |
-        Team events: comment, internal_note, status, assignment, priority, sla. Portal events:
-        reply, status, question, resolved, colleague, ticket_logged (always on, not listed).
-      enum: [comment, internal_note, status, assignment, priority, sla, reply, question, resolved, colleague, ticket_logged]
+        Team events: comment, internal_note, status, assignment, priority, sla, uat_result, dod
+        (supervisors; always on, not listed). Portal events: reply, status, uat_requested (always
+        on), question, resolved, colleague, ticket_logged (always on, not listed).
+      enum: [comment, internal_note, status, assignment, priority, sla, uat_result, dod, reply, question, resolved,
+             colleague, ticket_logged, uat_requested]
 
     NotificationKind:
       type: string
-      description: Tells apart notifications of one event (assigned or unassigned; what a colleague did; SLA at risk or breached).
-      enum: [assigned, unassigned, reply, status, added, at_risk, breached]
+      description: |
+        Tells apart notifications of one event: assigned or unassigned; what a colleague did; SLA
+        at risk or breached; the test approved, rejected or approved automatically; resolved
+        without the Definition of Done, or a ticket given its own.
+      enum: [assigned, unassigned, reply, status, added, at_risk, breached, approved, rejected, auto_approved, skipped,
+             override]
 
     NotificationFilter:
       type: string
@@ -1928,7 +1934,8 @@ components:
 
     NotificationChange:
       type: string
-      enum: [created, message, status, assignee, priority, watcher_added, watcher_removed, sla_at_risk, sla_breached]
+      enum: [created, message, status, assignee, priority, watcher_added, watcher_removed, sla_at_risk, sla_breached,
+             dod]
 
     Audience:
       type: string
@@ -1972,10 +1979,12 @@ components:
     Notification:
       type: object
       required: [id, event, kind, ticket, actorName, statusFrom, statusTo, priorityFrom, priorityTo, reason,
-                 assigneeName, slaClock, slaDueAt, slaMinutesLeft, quote, also, channels, createdAt, readAt]
+                 assigneeName, slaClock, slaDueAt, slaMinutesLeft, cause, autoApproveAt, reopenUntil, quote, also,
+                 channels, createdAt, readAt]
       description: |
         One inbox item. `quote` is an excerpt of the message it is about (public messages only
-        for client staff). `reason` is the priority change's reason.
+        for client staff). `reason` is a staff reason (a priority change, resolving without the
+        Definition of Done); client staff never get one.
       properties:
         id: { type: string, format: uuid }
         event: { $ref: "#/components/schemas/NotificationEvent" }
@@ -1991,6 +2000,20 @@ components:
         slaClock: { allOf: [{ $ref: "#/components/schemas/SlaClockName" }], nullable: true }
         slaDueAt: { type: string, format: date-time, nullable: true }
         slaMinutesLeft: { type: integer, nullable: true }
+        cause:
+          allOf: [{ $ref: "#/components/schemas/TicketStatusCause" }]
+          nullable: true
+          description: Why the status changed, when it wasn't a plain move by hand.
+        autoApproveAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: A move In UAT; when the fix is approved without an answer.
+        reopenUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: A move to Resolved; until when the client can reopen it.
         quote: { type: string, nullable: true }
         also:
           type: array

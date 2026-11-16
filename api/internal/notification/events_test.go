@@ -14,6 +14,7 @@ func TestSettingsListOrderAndDefaults(t *testing.T) {
 		{EventAssignment, webAndEmail, true},
 		{EventPriority, webOnly, false},
 		{EventSLA, webAndEmail, true},
+		{EventUATResult, webAndEmail, false},
 	}
 	if !slices.Equal(team, want) {
 		t.Errorf("team settings\n got %v\nwant %v", team, want)
@@ -23,8 +24,8 @@ func TestSettingsListOrderAndDefaults(t *testing.T) {
 	for _, s := range portal {
 		events = append(events, s.Event)
 	}
-	// ticket_logged is always on and not listed.
-	if !slices.Equal(events, []Event{EventReply, EventStatus, EventQuestion, EventResolved, EventColleague}) {
+	// ticket_logged is always on and not listed; UAT requests are always on and listed.
+	if !slices.Equal(events, []Event{EventReply, EventStatus, EventUATRequested, EventQuestion, EventResolved, EventColleague}) {
 		t.Errorf("portal events = %v", events)
 	}
 }

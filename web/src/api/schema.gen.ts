@@ -1406,23 +1406,26 @@ export interface components {
             skippedCount: number;
         };
         /**
-         * @description Team events: comment, internal_note, status, assignment, priority, sla. Portal events:
-         *     reply, status, question, resolved, colleague, ticket_logged (always on, not listed).
+         * @description Team events: comment, internal_note, status, assignment, priority, sla, uat_result, dod
+         *     (supervisors; always on, not listed). Portal events: reply, status, uat_requested (always
+         *     on), question, resolved, colleague, ticket_logged (always on, not listed).
          * @enum {string}
          */
-        NotificationEvent: "comment" | "internal_note" | "status" | "assignment" | "priority" | "sla" | "reply" | "question" | "resolved" | "colleague" | "ticket_logged";
+        NotificationEvent: "comment" | "internal_note" | "status" | "assignment" | "priority" | "sla" | "uat_result" | "dod" | "reply" | "question" | "resolved" | "colleague" | "ticket_logged" | "uat_requested";
         /**
-         * @description Tells apart notifications of one event (assigned or unassigned; what a colleague did; SLA at risk or breached).
+         * @description Tells apart notifications of one event: assigned or unassigned; what a colleague did; SLA
+         *     at risk or breached; the test approved, rejected or approved automatically; resolved
+         *     without the Definition of Done, or a ticket given its own.
          * @enum {string}
          */
-        NotificationKind: "assigned" | "unassigned" | "reply" | "status" | "added" | "at_risk" | "breached";
+        NotificationKind: "assigned" | "unassigned" | "reply" | "status" | "added" | "at_risk" | "breached" | "approved" | "rejected" | "auto_approved" | "skipped" | "override";
         /**
          * @description `comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed.
          * @enum {string}
          */
         NotificationFilter: "all" | "unread" | "comments" | "status" | "assigned" | "sla" | "replies";
         /** @enum {string} */
-        NotificationChange: "created" | "message" | "status" | "assignee" | "priority" | "watcher_added" | "watcher_removed" | "sla_at_risk" | "sla_breached";
+        NotificationChange: "created" | "message" | "status" | "assignee" | "priority" | "watcher_added" | "watcher_removed" | "sla_at_risk" | "sla_breached" | "dod";
         /** @enum {string} */
         Audience: "team" | "portal";
         /**
@@ -1454,7 +1457,8 @@ export interface components {
         };
         /**
          * @description One inbox item. `quote` is an excerpt of the message it is about (public messages only
-         *     for client staff). `reason` is the priority change's reason.
+         *     for client staff). `reason` is a staff reason (a priority change, resolving without the
+         *     Definition of Done); client staff never get one.
          */
         Notification: {
             /** Format: uuid */
@@ -1474,6 +1478,18 @@ export interface components {
             /** Format: date-time */
             slaDueAt: string | null;
             slaMinutesLeft: number | null;
+            /** @description Why the status changed, when it wasn't a plain move by hand. */
+            cause: components["schemas"]["TicketStatusCause"] | null;
+            /**
+             * Format: date-time
+             * @description A move In UAT; when the fix is approved without an answer.
+             */
+            autoApproveAt: string | null;
+            /**
+             * Format: date-time
+             * @description A move to Resolved; until when the client can reopen it.
+             */
+            reopenUntil: string | null;
             quote: string | null;
             also: components["schemas"]["NotificationAlso"][];
             channels: components["schemas"]["NotificationChannels"];

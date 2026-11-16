@@ -23,30 +23,50 @@ const (
 	ChangeWatcherRemoved ChangeKind = "watcher_removed"
 	ChangeSLAAtRisk      ChangeKind = "sla_at_risk"
 	ChangeSLABreached    ChangeKind = "sla_breached"
+	ChangeDoD            ChangeKind = "dod" // an agent gave the ticket its own Definition of Done
 )
 
 // ChangeKinds lists every change kind.
 var ChangeKinds = []ChangeKind{
 	ChangeCreated, ChangeMessage, ChangeStatus, ChangeAssignee, ChangePriority,
-	ChangeWatcherAdded, ChangeWatcherRemoved, ChangeSLAAtRisk, ChangeSLABreached,
+	ChangeWatcherAdded, ChangeWatcherRemoved, ChangeSLAAtRisk, ChangeSLABreached, ChangeDoD,
 }
 
 // Kind tells apart notifications of one event, e.g. assigned and unassigned.
 type Kind string
 
 const (
-	KindNone       Kind = ""
-	KindAssigned   Kind = "assigned"
-	KindUnassigned Kind = "unassigned"
-	KindReply      Kind = "reply"  // a colleague replied
-	KindStatus     Kind = "status" // a colleague's change moved the ticket
-	KindAdded      Kind = "added"  // a colleague added you to the ticket
-	KindAtRisk     Kind = "at_risk"
-	KindBreached   Kind = "breached"
+	KindNone         Kind = ""
+	KindAssigned     Kind = "assigned"
+	KindUnassigned   Kind = "unassigned"
+	KindReply        Kind = "reply"  // a colleague replied
+	KindStatus       Kind = "status" // a colleague's change moved the ticket
+	KindAdded        Kind = "added"  // a colleague added you to the ticket
+	KindAtRisk       Kind = "at_risk"
+	KindBreached     Kind = "breached"
+	KindApproved     Kind = "approved"      // the client approved the test
+	KindRejected     Kind = "rejected"      // the client sent the fix back
+	KindAutoApproved Kind = "auto_approved" // nobody answered in time
+	KindSkipped      Kind = "skipped"       // resolved without meeting the Definition of Done
+	KindOverride     Kind = "override"      // the ticket got a Definition of Done of its own
 )
 
 // Kinds lists every kind a notification can carry (KindNone is stored as no kind).
-var Kinds = []Kind{KindAssigned, KindUnassigned, KindReply, KindStatus, KindAdded, KindAtRisk, KindBreached}
+var Kinds = []Kind{
+	KindAssigned, KindUnassigned, KindReply, KindStatus, KindAdded, KindAtRisk, KindBreached,
+	KindApproved, KindRejected, KindAutoApproved, KindSkipped, KindOverride,
+}
+
+// uatKinds name the client's answer behind a status change.
+var uatKinds = map[ticket.Cause]Kind{
+	ticket.CauseUATApproved:     KindApproved,
+	ticket.CauseUATRejected:     KindRejected,
+	ticket.CauseUATAutoApproved: KindAutoApproved,
+}
+
+// urgentEvents always email right away, whatever the user's summary setting (HANDOFF §9: P1,
+// SLA and UAT items).
+var urgentEvents = []Event{EventSLA, EventUATRequested, EventUATResult}
 
 // Person is a user named in a change.
 type Person struct {
@@ -71,6 +91,12 @@ type Change struct {
 	SLAClock    string // which SLA clock: first response or resolution
 	SLADueAt    *time.Time
 	SLALeft     *time.Duration // time left when the clock turned at risk
+	Cause       ticket.Cause   // status: why it moved, when it wasn't a plain move by hand
+	At          time.Time      // when the change happened
+	// AutoApproveAt (a move In UAT) and ReopenUntil (a move to resolved) are the client's
+	// deadlines as of the change; the fan-out fills them in.
+	AutoApproveAt *time.Time
+	ReopenUntil   *time.Time
 }
 
 // PriorityChange is a priority's old and new value.
@@ -92,11 +118,13 @@ type Input struct {
 	Assignee    *uuid.UUID // after the transaction
 	Requester   uuid.UUID
 	Watchers    []uuid.UUID
-	Supervisors []uuid.UUID // filled only when the ticket's project alerts supervisors on breach
-	Priority    sla.Priority
-	Changes     []Change
-	Users       map[uuid.UUID]Recipient
-	Prefs       map[uuid.UUID]map[Event]Pref
+	Supervisors []uuid.UUID // the active supervisors, filled only when a change concerns them
+	// NotifySupervisorOnBreach is the ticket's project switch for SLA breach alerts.
+	NotifySupervisorOnBreach bool
+	Priority                 sla.Priority
+	Changes                  []Change
+	Users                    map[uuid.UUID]Recipient
+	Prefs                    map[uuid.UUID]map[Event]Pref
 }
 
 // Delivery is the notification one user gets for a transaction: its main change, the other
@@ -113,8 +141,8 @@ type Delivery struct {
 
 // precedence orders events when one transaction gives a user several: the first wins.
 var precedence = []Event{
-	EventSLA, EventTicketLogged, EventQuestion, EventResolved, EventAssignment,
-	EventReply, EventComment, EventInternalNote, EventStatus, EventPriority, EventColleague,
+	EventSLA, EventTicketLogged, EventUATRequested, EventUATResult, EventQuestion, EventResolved, EventDoD,
+	EventAssignment, EventReply, EventComment, EventInternalNote, EventStatus, EventPriority, EventColleague,
 }
 
 type candidate struct {
@@ -173,7 +201,7 @@ func (in Input) deliver(user uuid.UUID, cands []candidate) (Delivery, bool) {
 		}
 		d := Delivery{
 			UserID: user, Event: c.event, Kind: c.kind, Change: c.change, Channels: ch,
-			Urgent: in.Priority == sla.P1 || c.event == EventSLA,
+			Urgent: in.Priority == sla.P1 || slices.Contains(urgentEvents, c.event),
 		}
 		for j, other := range cands {
 			if j != i && other.change.AuditID != c.change.AuditID {
@@ -215,7 +243,16 @@ func (in Input) candidates(c Change) []candidate {
 			clientSide(EventColleague, KindReply)
 		}
 	case ChangeStatus:
-		add(in.Assignee, EventStatus, KindNone)
+		if k, ok := uatKinds[c.Cause]; ok {
+			add(in.Assignee, EventUATResult, k)
+		} else {
+			add(in.Assignee, EventStatus, KindNone)
+		}
+		if c.Cause == ticket.CauseDoDSkipped {
+			for _, s := range in.Supervisors {
+				add(&s, EventDoD, KindSkipped)
+			}
+		}
 		if in.Actor != nil && !in.ActorStaff {
 			clientSide(EventColleague, KindStatus)
 		} else {
@@ -236,8 +273,14 @@ func (in Input) candidates(c Change) []candidate {
 		add(in.Assignee, EventSLA, KindAtRisk)
 	case ChangeSLABreached:
 		add(in.Assignee, EventSLA, KindBreached)
+		if in.NotifySupervisorOnBreach {
+			for _, s := range in.Supervisors {
+				add(&s, EventSLA, KindBreached)
+			}
+		}
+	case ChangeDoD:
 		for _, s := range in.Supervisors {
-			add(&s, EventSLA, KindBreached)
+			add(&s, EventDoD, KindOverride)
 		}
 	}
 	return out
@@ -254,12 +297,15 @@ func (in Input) clientSide() []uuid.UUID {
 	return out
 }
 
-// portalStatusEvent is the portal event for a move by the team: a move to Waiting on client is
-// a question for the requester (HANDOFF §13 Q8), a move to Resolved or Closed its own event.
+// portalStatusEvent is the portal event for a move by the team or the system: a move to Waiting
+// on client is a question for the requester (HANDOFF §13 Q8), a move In UAT asks for their test,
+// and a move to Resolved or Closed is its own event.
 func portalStatusEvent(to ticket.Status) Event {
 	switch to {
 	case ticket.StatusWaitingOnClient:
 		return EventQuestion
+	case ticket.StatusInUAT:
+		return EventUATRequested
 	case ticket.StatusResolved, ticket.StatusClosed:
 		return EventResolved
 	}

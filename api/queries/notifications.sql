@@ -1,6 +1,8 @@
 -- name: GetTicketForFanout :one
-SELECT t.id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot
+SELECT t.id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot, p.dod_config, o.config AS dod_override
 FROM tickets t
+JOIN projects p ON p.id = t.project_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.id = @id;
 
 -- name: ListNotifyRecipients :many

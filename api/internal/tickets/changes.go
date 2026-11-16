@@ -13,6 +13,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
@@ -75,7 +76,7 @@ func NotificationChanges(rows []AuditRow) []notification.Change {
 	for _, r := range rows {
 		data := map[string]json.RawMessage{}
 		_ = json.Unmarshal(r.Data, &data)
-		c := notification.Change{AuditID: r.ID}
+		c := notification.Change{AuditID: r.ID, At: r.At}
 		if r.Reason != nil {
 			c.Reason = *r.Reason
 		}
@@ -96,6 +97,16 @@ func NotificationChanges(rows []AuditRow) []notification.Change {
 			if st := decode[change[ticket.Status]](data, dataStatus); st != nil {
 				c.StatusFrom, c.StatusTo = st.From, st.To
 			}
+			if cause := decode[ticket.Cause](data, dataCause); cause != nil {
+				c.Cause = *cause
+			}
+			c.MessageID = decode[uuid.UUID](data, dataMessageID) // a rejected test's message
+		case ActionDoDChanged:
+			// Only a ticket's own Definition of Done alerts the supervisors; a reset doesn't.
+			if src := decode[change[dod.Source]](data, dataDoDSource); src == nil || src.To != dod.SourceTicket {
+				continue
+			}
+			c.Kind = notification.ChangeDoD
 		case ActionAssigneeChanged:
 			c.Kind = notification.ChangeAssignee
 			if a := decode[change[*refJSON]](data, dataAssignee); a != nil {

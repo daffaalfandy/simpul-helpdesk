@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"slices"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
@@ -64,7 +66,15 @@ func Fanout(ctx context.Context, q *db.Queries, log *slog.Logger, ticketID uuid.
 		Actor: rows[0].ActorUserID, Assignee: t.AssigneeID, Requester: t.RequesterID,
 		Watchers: watchers, Priority: sla.Priority(t.Priority), Changes: tickets.NotificationChanges(rows),
 	}
-	if in.Supervisors, err = breachSupervisors(ctx, q, in.Changes, t.SlaSnapshot); err != nil {
+	var snap ticket.SLASnapshot
+	if err := json.Unmarshal(t.SlaSnapshot, &snap); err != nil {
+		return err
+	}
+	in.NotifySupervisorOnBreach = snap.NotifySupervisorOnBreach
+	if in.Supervisors, err = supervisorsFor(ctx, q, in); err != nil {
+		return err
+	}
+	if err := clientDeadlines(ctx, q, in.Changes, t.DodConfig, t.DodOverride); err != nil {
 		return err
 	}
 	if err := loadRecipients(ctx, q, &in); err != nil {
@@ -75,7 +85,7 @@ func Fanout(ctx context.Context, q *db.Queries, log *slog.Logger, ticketID uuid.
 		log.ErrorContext(ctx, "notification rule reached client staff with an internal note; dropped",
 			"ticket_id", ticketID, "dropped", dropped)
 	}
-	if err := quoteQuestions(ctx, q, ticketID, deliveries); err != nil {
+	if err := quoteLatestStaffReply(ctx, q, ticketID, deliveries); err != nil {
 		return err
 	}
 	for _, d := range deliveries {
@@ -143,13 +153,16 @@ func loadRecipients(ctx context.Context, q *db.Queries, in *notification.Input) 
 	return nil
 }
 
-// quoteQuestions points "question for you" notifications at the team's latest public reply,
-// the question they are asked to answer.
-func quoteQuestions(ctx context.Context, q *db.Queries, ticketID uuid.UUID, ds []notification.Delivery) error {
+// quotedEvents quote the team's latest public reply: the question the requester is asked, or
+// what the team asks them to test.
+var quotedEvents = []notification.Event{notification.EventQuestion, notification.EventUATRequested}
+
+// quoteLatestStaffReply points question and test notifications at the team's latest public reply.
+func quoteLatestStaffReply(ctx context.Context, q *db.Queries, ticketID uuid.UUID, ds []notification.Delivery) error {
 	var latest *uuid.UUID
 	looked := false
 	for i := range ds {
-		if ds[i].Event != notification.EventQuestion || ds[i].Change.MessageID != nil {
+		if !slices.Contains(quotedEvents, ds[i].Event) || ds[i].Change.MessageID != nil {
 			continue
 		}
 		if !looked {
@@ -169,21 +182,60 @@ func quoteQuestions(ctx context.Context, q *db.Queries, ticketID uuid.UUID, ds [
 	return nil
 }
 
-// breachSupervisors are the active supervisors to alert about a breach, when the ticket's project
-// asks for it (its snapshot's switch); nobody otherwise.
-func breachSupervisors(ctx context.Context, q *db.Queries, changes []notification.Change, snapshot []byte) ([]uuid.UUID, error) {
-	breach := false
-	for _, c := range changes {
-		breach = breach || c.Kind == notification.ChangeSLABreached
+// supervisorsFor loads the active supervisors when a change concerns them: a breach the ticket's
+// project alerts them about, a ticket resolved without its Definition of Done, or a ticket given
+// its own. The router decides which of them hears what.
+func supervisorsFor(ctx context.Context, q *db.Queries, in notification.Input) ([]uuid.UUID, error) {
+	needed := false
+	for _, c := range in.Changes {
+		needed = needed || (c.Kind == notification.ChangeSLABreached && in.NotifySupervisorOnBreach) ||
+			c.Kind == notification.ChangeDoD || c.Cause == ticket.CauseDoDSkipped
 	}
-	if !breach {
+	if !needed {
 		return nil, nil
-	}
-	var snap ticket.SLASnapshot
-	if err := json.Unmarshal(snapshot, &snap); err != nil || !snap.NotifySupervisorOnBreach {
-		return nil, err
 	}
 	return q.ListActiveUserIDsByRole(ctx, db.ListActiveUserIDsByRoleParams{
 		Role: string(auth.RoleSupervisor), Status: string(auth.UserStatusActive),
 	})
+}
+
+// clientDeadlines dates the client's deadlines on moves In UAT (when the fix is approved without
+// an answer) and to resolved (until when it can be reopened), as of the change, so the inbox and
+// the email promise the same date. The calendar is read only when a change needs it.
+func clientDeadlines(ctx context.Context, q *db.Queries, changes []notification.Change, projectDoD, override []byte) error {
+	var schedules *sla.Schedules
+	for i := range changes {
+		c := &changes[i]
+		if c.Kind != notification.ChangeStatus || (c.StatusTo != ticket.StatusInUAT && c.StatusTo != ticket.StatusResolved) {
+			continue
+		}
+		if schedules == nil {
+			s, err := sla.LoadSchedules(ctx, q)
+			if err != nil {
+				return err
+			}
+			schedules = &s
+		}
+		if c.StatusTo == ticket.StatusResolved {
+			until := ticket.ReopenUntil(c.At, *schedules)
+			c.ReopenUntil = &until
+			continue
+		}
+		cfg, err := effectiveDoD(projectDoD, override)
+		if err != nil {
+			return err
+		}
+		if at, ok := dod.AutoApproveAt(cfg, c.At, *schedules); ok {
+			c.AutoApproveAt = &at
+		}
+	}
+	return nil
+}
+
+func effectiveDoD(projectDoD, override []byte) (dod.Config, error) {
+	project, err := dod.Parse(projectDoD)
+	if err != nil || override == nil {
+		return project, err
+	}
+	return dod.Parse(override)
 }

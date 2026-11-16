@@ -965,7 +965,10 @@
       "email": "Email",
       "webFor": "Web notifications for {{event}}",
       "emailFor": "Email for {{event}}",
-      "lockedNote": "Assignments and SLA alerts are always on, so nothing slips past its deadline.",
+      "lockedNote": {
+        "team": "Assignments and SLA alerts are always on, so nothing slips past its deadline.",
+        "portal": "UAT requests are always on, because tickets wait for your approval."
+      },
       "sendEmails": "Send emails",
       "frequency": {
         "instant": "Right away",
@@ -974,7 +977,7 @@
       },
       "frequencyHint": {
         "instant": "One email per change",
-        "hourly": "Urgent items (P1, SLA) still sent right away",
+        "hourly": "Urgent items (P1, SLA, UAT) still sent right away",
         "daily": "Urgent items still sent right away"
       },
       "ownChanges": "Never notify me about my own changes",
@@ -1005,6 +1008,10 @@
           "sla": {
             "label": "SLA at risk and breached",
             "hint": "Always on"
+          },
+          "uat_result": {
+            "label": "Client approved or rejected UAT",
+            "hint": "Rejections include the client's reason"
           }
         },
         "portal": {
@@ -1016,12 +1023,17 @@
             "label": "Status changes",
             "hint": "e.g. In progress, Waiting on you, Resolved"
           },
+          "uat_requested": {
+            "label": "Ready for your test (UAT)",
+            "hint": "A fix is ready and needs your approval"
+          },
           "question": {
             "label": "Questions for you",
             "hint": "The team needs information before they can continue"
           },
           "resolved": {
-            "label": "Resolved and closed"
+            "label": "Resolved and closed",
+            "hint": "Includes the 3-working-day reopen window"
           },
           "colleague": {
             "label": "Changes by colleagues",
@@ -1036,6 +1048,13 @@
       "reply": "{{actor}} replied",
       "question": "{{actor}} asked you a question",
       "status": "Status changed: {{from}} → {{to}}",
+      "uatRequested": "Status changed: {{from}} → {{to}}. If we don't hear back, it's approved on {{date}}.",
+      "resolvedReopen": "Status changed: {{from}} → {{to}}. You can reopen it until {{date}}.",
+      "uatApproved": "{{actor}} approved UAT: {{from}} → {{to}}",
+      "uatRejected": "{{actor}} rejected UAT: {{from}} → {{to}}",
+      "uatAutoApproved": "UAT approved automatically, nobody answered in time: {{from}} → {{to}}",
+      "dodSkipped": "{{actor}} resolved this ticket without meeting its Definition of Done",
+      "dodOverride": "{{actor}} set a Definition of Done for this ticket",
       "assigned": "{{actor}} assigned this ticket to you",
       "unassigned": "{{actor}} unassigned you from this ticket",
       "priority": "{{actor}} changed priority: {{from}} → {{to}}",

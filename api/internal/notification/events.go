@@ -16,6 +16,8 @@ const (
 	EventAssignment   Event = "assignment"
 	EventPriority     Event = "priority"
 	EventSLA          Event = "sla"
+	EventUATResult    Event = "uat_result" // the client approved or rejected a test, or it was approved automatically
+	EventDoD          Event = "dod"        // supervisors: resolved without the DoD, or a ticket's own DoD
 )
 
 // Portal events (client staff).
@@ -25,12 +27,13 @@ const (
 	EventResolved     Event = "resolved"      // resolved or closed
 	EventColleague    Event = "colleague"     // a colleague's change on a ticket you follow
 	EventTicketLogged Event = "ticket_logged" // an agent logged a ticket for you
+	EventUATRequested Event = "uat_requested" // a fix is ready for the client's test
 )
 
 // Events lists every event; the database CHECK constraints hold the same set.
 var Events = []Event{
-	EventComment, EventInternalNote, EventStatus, EventAssignment, EventPriority, EventSLA,
-	EventReply, EventQuestion, EventResolved, EventColleague, EventTicketLogged,
+	EventComment, EventInternalNote, EventStatus, EventAssignment, EventPriority, EventSLA, EventUATResult, EventDoD,
+	EventReply, EventQuestion, EventResolved, EventColleague, EventTicketLogged, EventUATRequested,
 }
 
 func (e Event) Valid() bool { return slices.Contains(Events, e) }
@@ -74,8 +77,9 @@ type eventSpec struct {
 }
 
 // audienceEvents holds each audience's events in Settings order, with the defaults from the
-// Notifications artboard. Settings lists only events the build sends: UAT events arrive in
-// M6 and code activity in M7.
+// Notifications artboard. Settings lists only events the build sends: code activity arrives
+// in M7. Supervisors' Definition of Done alerts are always on, like SLA breaches, and have no
+// row of their own.
 var audienceEvents = map[Audience][]eventSpec{
 	AudienceTeam: {
 		{event: EventComment, defaults: webAndEmail},
@@ -84,10 +88,13 @@ var audienceEvents = map[Audience][]eventSpec{
 		{event: EventAssignment, defaults: webAndEmail, locked: true},
 		{event: EventPriority, defaults: webOnly},
 		{event: EventSLA, defaults: webAndEmail, locked: true},
+		{event: EventUATResult, defaults: webAndEmail},
+		{event: EventDoD, defaults: webAndEmail, locked: true, hidden: true},
 	},
 	AudiencePortal: {
 		{event: EventReply, defaults: webAndEmail},
 		{event: EventStatus, defaults: webAndEmail},
+		{event: EventUATRequested, defaults: webAndEmail, locked: true},
 		{event: EventQuestion, defaults: webAndEmail},
 		{event: EventResolved, defaults: webAndEmail},
 		{event: EventColleague, defaults: webOnly},
@@ -170,7 +177,7 @@ func (f Filter) Valid() bool { return slices.Contains(Filters, f) }
 // filterEvents are the events each type filter shows. All and Unread show every event.
 var filterEvents = map[Filter][]Event{
 	FilterComments: {EventComment, EventInternalNote},
-	FilterStatus:   {EventStatus, EventResolved},
+	FilterStatus:   {EventStatus, EventResolved, EventUATRequested, EventUATResult, EventDoD},
 	FilterAssigned: {EventAssignment},
 	FilterSLA:      {EventSLA},
 	FilterReplies:  {EventReply, EventQuestion},

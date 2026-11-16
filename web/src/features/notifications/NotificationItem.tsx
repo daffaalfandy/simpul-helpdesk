@@ -25,7 +25,7 @@ export function NotificationItem({ notification: n, audience, variant, onOpen, o
   const unread = n.readAt == null
   const inbox = variant === 'inbox'
   const { Icon, tone } = noticeIcon(n)
-  const text = noticeText(t, n, audience, time.clock)
+  const text = noticeText(t, n, audience, time)
   const quote = noticeQuote(n)
   const ticketLine = t('notifications.page.ticketLine', { key: n.ticket.key, subject: n.ticket.subject })
   const label = t(unread ? 'notifications.page.itemLabelUnread' : 'notifications.page.itemLabel', {

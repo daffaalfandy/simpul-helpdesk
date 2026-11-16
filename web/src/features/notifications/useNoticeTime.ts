@@ -5,7 +5,8 @@ import { agoKind, dayKind, formatClock, formatDayMonth } from '../../lib/dates'
 
 /**
  * Notification times in the organisation's time zone. The bell says how long ago ("2 min ago",
- * "Yesterday", "9 Nov"); the inbox gives the time ("Today, 14:02", "Yesterday", "9 Nov").
+ * "Yesterday", "9 Nov"); the inbox gives the time ("Today, 14:02", "Yesterday", "9 Nov"); clock
+ * and day write the times a notice mentions ("14:02", "18 Nov").
  */
 export function useNoticeTime() {
   const { t } = useTranslation()
@@ -36,5 +37,6 @@ export function useNoticeTime() {
     }
   }
   const clock = (iso: string) => formatClock(iso, timeZone)
-  return { ago, at, clock }
+  const day = (iso: string) => formatDayMonth(iso, timeZone)
+  return { ago, at, clock, day }
 }

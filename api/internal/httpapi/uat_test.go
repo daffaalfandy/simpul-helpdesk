@@ -8,8 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
@@ -165,4 +170,93 @@ func TestUATRequests(t *testing.T) {
 		t.Fatalf("another client's requester sees %+v", got)
 	}
 	expectProblem(t, te.agent.do(http.MethodGet, "/uat-requests", nil), http.StatusForbidden, apperr.CodeForbidden)
+}
+
+// stored is one notification as the fan-out stored it.
+type stored struct {
+	event       string
+	kind        *string
+	messageID   *uuid.UUID
+	autoApprove *string
+	reopenUntil *string
+	reason      *string
+}
+
+func (te *ticketEnv) notificationFor(t *testing.T, user, ticketID uuid.UUID, event string) stored {
+	t.Helper()
+	var n stored
+	err := te.st.Pool().QueryRow(context.Background(), `
+		SELECT event_type, data->>'kind', message_id, data->>'auto_approve_at', data->>'reopen_until', data->>'reason'
+		FROM notifications WHERE user_id = $1 AND ticket_id = $2 AND event_type = $3
+		ORDER BY created_at DESC, id DESC LIMIT 1`, user, ticketID, event).
+		Scan(&n.event, &n.kind, &n.messageID, &n.autoApprove, &n.reopenUntil, &n.reason)
+	if err != nil {
+		t.Fatalf("%s notification for %s: %v", event, user, err)
+	}
+	return n
+}
+
+func TestUATNotifications(t *testing.T) {
+	te := newTicketEnv(t)
+	testdb.SetProjectDoD(t, te.st, te.projectA, uatDoD())
+	supervisorID := userID(t, te.env, auth.RoleSupervisor)
+	te.setFrequency(t, te.requester, gen.EmailFrequencyDaily)
+	tk := te.requester.report(t, incident(te.projectA, "Disposition letter shows the wrong date"))
+	id := te.ticketID(t, tk.Key)
+	decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	te.toUAT(t, tk.Key)
+	te.fanout(t)
+
+	// The test request quotes the instructions and dates the auto-approval; it is urgent, so a
+	// daily-summary requester gets it right away.
+	req := te.notificationFor(t, te.requesterID, id, string(notification.EventUATRequested))
+	msgs := te.requester.messages(t, tk.Key)
+	if req.messageID == nil || *req.messageID != msgs[len(msgs)-1].Id || req.autoApprove == nil {
+		t.Fatalf("UAT request = %+v", req)
+	}
+	te.age(t, notification.GroupWindow)
+	te.sendEmails(t)
+	if got := mailsTo(te.mailer.Messages(), te.users[auth.RoleRequester]); len(got) != 1 {
+		t.Fatalf("daily requester got %v, want the UAT request right away", subjects(got))
+	}
+
+	// A rejection reaches the assignee with the client's words.
+	te.fanout(t)
+	decode[gen.Ticket](t, te.requester.answer(tk.Key, gen.UatAnswerReject, rejectMessage), http.StatusOK)
+	te.fanout(t)
+	res := te.notificationFor(t, te.agentID, id, string(notification.EventUATResult))
+	msgs = te.agent.messages(t, tk.Key)
+	if res.kind == nil || *res.kind != string(notification.KindRejected) || res.messageID == nil || *res.messageID != msgs[len(msgs)-1].Id {
+		t.Fatalf("UAT result = %+v", res)
+	}
+
+	// Resolving without the Definition of Done tells the supervisors, with the reason; the
+	// requester hears it's resolved, with the reopen date and without the reason.
+	decode[gen.Ticket](t, te.agent.setStatus(tk.Key, gen.TicketStatusResolved, skipReason), http.StatusOK)
+	te.fanout(t)
+	sup := te.notificationFor(t, supervisorID, id, string(notification.EventDoD))
+	if sup.kind == nil || *sup.kind != string(notification.KindSkipped) || sup.reason == nil || *sup.reason != skipReason {
+		t.Fatalf("supervisor alert = %+v", sup)
+	}
+	done := te.notificationFor(t, te.requesterID, id, string(notification.EventResolved))
+	if done.reopenUntil == nil || done.reason != nil {
+		t.Fatalf("requester resolved = %+v", done)
+	}
+
+	// A ticket's own Definition of Done tells the supervisors too; resetting it doesn't.
+	other := te.requester.report(t, incident(te.projectA, "Archive search is slow"))
+	otherID := te.ticketID(t, other.Key)
+	hotfix := dod.None()
+	decode[gen.Ticket](t, te.agent.setDod(other.Key, &hotfix, hotfixReason), http.StatusOK)
+	decode[gen.Ticket](t, te.agent.setDod(other.Key, nil, ""), http.StatusOK)
+	te.fanout(t)
+	n := 0
+	for _, x := range te.notices(t, otherID) {
+		if x.user == supervisorID && x.event == notification.EventDoD {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("supervisor DoD alerts = %d, want 1", n)
+	}
 }

@@ -115,7 +115,8 @@ func apiNotification(it notifications.Item) gen.Notification {
 		Kind: enumPtr[gen.NotificationKind](d.Kind), StatusFrom: statusPtr(d.StatusFrom), StatusTo: statusPtr(d.StatusTo),
 		PriorityFrom: priorityPtr(d.PriorityFrom), PriorityTo: priorityPtr(d.PriorityTo),
 		Reason: strPtr(d.Reason), AssigneeName: strPtr(d.Assignee), SlaClock: enumPtr[gen.SlaClockName](d.SLAClock),
-		SlaDueAt: d.SLADueAt, SlaMinutesLeft: d.SLALeftMinutes,
+		SlaDueAt: d.SLADueAt, SlaMinutesLeft: d.SLALeftMinutes, Cause: enumPtr[gen.TicketStatusCause](d.Cause),
+		AutoApproveAt: d.AutoApproveAt, ReopenUntil: d.ReopenUntil,
 		Channels: gen.NotificationChannels{Web: it.Channels.Web, Email: it.Channels.Email},
 		Also:     make([]gen.NotificationAlso, len(d.Also)),
 	}
