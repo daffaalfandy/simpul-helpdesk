@@ -659,6 +659,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/webhooks/{repositoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repositoryId: components["parameters"]["RepositoryId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A webhook delivery from GitHub or GitLab
+         * @description Public: the repository's secret authenticates it (GitHub signs the body with
+         *     `X-Hub-Signature-256`; GitLab sends `X-Gitlab-Token`). The body is read as sent, JSON or
+         *     GitHub's form encoding, up to 5 MiB, and processed in the background. A redelivery, a
+         *     ping or an event the connector doesn't read is acknowledged and changes nothing. Error
+         *     codes are `invalid_signature` (401), `repository_mismatch` (409, the webhook was added to
+         *     another repository), `invalid_request` (unreadable payload) and `request_too_large`
+         *     (413); each is shown on the Integrations page.
+         */
+        post: operations["receiveWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/uat-requests": {
         parameters: {
             query?: never;
@@ -3364,6 +3392,51 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    receiveWebhook: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-GitHub-Event"?: string;
+                "X-GitHub-Delivery"?: string;
+                "X-Hub-Signature-256"?: string;
+                "X-Gitlab-Event"?: string;
+                "X-Gitlab-Token"?: string;
+                "X-Gitlab-Event-UUID"?: string;
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                repositoryId: components["parameters"]["RepositoryId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Received before, a ping, or an event the connector doesn't read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stored; processed in the background */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

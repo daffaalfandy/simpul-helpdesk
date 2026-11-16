@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"io"
+	"net/http"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
@@ -88,4 +90,40 @@ func apiRepository(r connector.Repository) gen.Repository {
 		WebUrl: r.Location.WebURL, WebhookUrl: r.WebhookURL, Status: gen.RepositoryStatus(r.Status),
 		LastDeliveryAt: r.LastDeliveryAt, LastError: lastError, LastErrorAt: r.LastErrorAt, Projects: projects,
 	}
+}
+
+// ReceiveWebhook takes a delivery from GitHub or GitLab. It is public: the repository's secret
+// authenticates it, so the body is read exactly as sent (the spec's x-raw-body).
+func (s *server) ReceiveWebhook(ctx context.Context, req gen.ReceiveWebhookRequestObject) (gen.ReceiveWebhookResponseObject, error) {
+	body, err := io.ReadAll(req.Body)
+	if tooLargeError(err) {
+		return nil, s.connector.RefuseTooLarge(ctx, req.RepositoryId)
+	}
+	if err != nil {
+		return nil, err
+	}
+	receipt, err := s.connector.Receive(ctx, req.RepositoryId, webhookHeader(req.Params), body)
+	if err != nil {
+		return nil, err
+	}
+	if receipt == connector.ReceiptQueued {
+		return gen.ReceiveWebhook202Response{}, nil
+	}
+	return gen.ReceiveWebhook200Response{}, nil
+}
+
+// webhookHeader puts back the headers the providers send, as the spec declares them.
+func webhookHeader(p gen.ReceiveWebhookParams) http.Header {
+	h := http.Header{}
+	for name, v := range map[string]*string{
+		gitevent.HeaderGitHubEvent: p.XGitHubEvent, gitevent.HeaderGitHubDelivery: p.XGitHubDelivery,
+		gitevent.HeaderGitHubSignature: p.XHubSignature256, gitevent.HeaderGitLabEvent: p.XGitlabEvent,
+		gitevent.HeaderGitLabToken: p.XGitlabToken, gitevent.HeaderGitLabEventUUID: p.XGitlabEventUUID,
+		gitevent.HeaderIdempotencyKey: p.IdempotencyKey,
+	} {
+		if v != nil {
+			h.Set(name, *v)
+		}
+	}
+	return h
 }

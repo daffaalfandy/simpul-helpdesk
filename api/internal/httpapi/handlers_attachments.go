@@ -27,7 +27,7 @@ func (s *server) GetAttachmentPolicy(ctx context.Context, _ gen.GetAttachmentPol
 }
 
 // UploadAttachment streams the first part of a multipart body to storage. This route skips
-// the spec validator (see streamedRoutes), so the part is checked here and in the service.
+// the spec validator (see rawBodyRoutes), so the part is checked here and in the service.
 func (s *server) UploadAttachment(ctx context.Context, req gen.UploadAttachmentRequestObject) (gen.UploadAttachmentResponseObject, error) {
 	p, err := signedIn(ctx)
 	if err != nil {

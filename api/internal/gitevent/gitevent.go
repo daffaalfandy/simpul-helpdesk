@@ -4,12 +4,12 @@
 package gitevent
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"mime"
 	"net/http"
 	"net/url"
 	"slices"
@@ -89,17 +89,13 @@ const (
 	HeaderGitLabToken     = "X-Gitlab-Token"
 	HeaderGitLabEventUUID = "X-Gitlab-Event-UUID"
 	HeaderIdempotencyKey  = "Idempotency-Key" // newer GitLab versions; the same on retries
-	HeaderContentType     = "Content-Type"
 )
 
 // gitHubSignaturePrefix starts X-Hub-Signature-256: "sha256=<hex HMAC of the body>".
 const gitHubSignaturePrefix = "sha256="
 
 // GitHub sends a form with the JSON in this field unless the webhook is set to application/json.
-const (
-	contentTypeForm  = "application/x-www-form-urlencoded"
-	formPayloadField = "payload"
-)
+const formPayloadField = "payload"
 
 // MaxTitleRunes caps the stored first line of a message or title.
 const MaxTitleRunes = 200
@@ -189,10 +185,10 @@ func Supported(p Provider, eventName string) bool {
 	return false
 }
 
-// JSON returns the delivery's JSON: the body itself, or GitHub's payload form field.
-func JSON(h http.Header, body []byte) ([]byte, error) {
-	mt, _, err := mime.ParseMediaType(h.Get(HeaderContentType))
-	if err != nil || mt != contentTypeForm {
+// JSON returns the delivery's JSON: the body itself, or the payload field of the form GitHub
+// sends when the webhook's content type is left at application/x-www-form-urlencoded.
+func JSON(body []byte) ([]byte, error) {
+	if !bytes.HasPrefix(bytes.TrimSpace(body), []byte(formPayloadField+"=")) {
 		return body, nil
 	}
 	form, err := url.ParseQuery(string(body))

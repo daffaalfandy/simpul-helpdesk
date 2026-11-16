@@ -24,6 +24,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/secretbox"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
 // Audit actions and target type written by this package.
@@ -109,10 +110,11 @@ type Service struct {
 	store  *store.Store
 	box    *secretbox.Box
 	appURL *url.URL
+	jobs   tickets.JobInserter
 }
 
-func NewService(st *store.Store, box *secretbox.Box, appURL *url.URL) *Service {
-	return &Service{store: st, box: box, appURL: appURL}
+func NewService(st *store.Store, box *secretbox.Box, appURL *url.URL, jobs tickets.JobInserter) *Service {
+	return &Service{store: st, box: box, appURL: appURL, jobs: jobs}
 }
 
 // Overview lists the connected repositories with their projects.

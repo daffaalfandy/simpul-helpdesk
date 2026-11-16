@@ -113,21 +113,18 @@ func TestDeliveryID(t *testing.T) {
 }
 
 func TestJSONFromForm(t *testing.T) {
-	h := http.Header{}
-	if got, _ := JSON(h, []byte(`{"a":1}`)); string(got) != `{"a":1}` {
-		t.Errorf("no content type = %s", got)
-	}
-	h.Set(HeaderContentType, "application/json")
-	if got, _ := JSON(h, []byte(`{"a":1}`)); string(got) != `{"a":1}` {
+	if got, _ := JSON([]byte(`{"a":1}`)); string(got) != `{"a":1}` {
 		t.Errorf("JSON = %s", got)
 	}
-	h.Set(HeaderContentType, "application/x-www-form-urlencoded; charset=utf-8")
 	form := url.Values{formPayloadField: {`{"a":1}`}}.Encode()
-	if got, err := JSON(h, []byte(form)); err != nil || string(got) != `{"a":1}` {
+	if got, err := JSON([]byte(form)); err != nil || string(got) != `{"a":1}` {
 		t.Errorf("form = %s, %v", got, err)
 	}
-	if _, err := JSON(h, []byte("other=1")); !errors.Is(err, ErrMalformed) {
-		t.Errorf("form without payload = %v", err)
+	if _, err := JSON([]byte("payload=")); !errors.Is(err, ErrMalformed) {
+		t.Errorf("empty payload = %v", err)
+	}
+	if _, err := JSON([]byte("payload=%zz")); !errors.Is(err, ErrMalformed) {
+		t.Errorf("bad form = %v", err)
 	}
 }
 

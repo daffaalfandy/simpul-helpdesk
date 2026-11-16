@@ -68,6 +68,7 @@ type env struct {
 	pic          *notifications.PicEmailWorker
 	files        *storage.FS
 	connector    *connector.Service
+	process      *connector.ProcessWorker
 	users        map[auth.Role]string // role -> email
 }
 
@@ -110,17 +111,19 @@ func newEnv(t *testing.T) *env {
 	ticketSvc := tickets.NewService(st, files, slaSvc, late)
 	lifecycle := tickets.NewLifecycleScanner(ticketSvc, log)
 	river.AddWorker(workers, lifecycle)
+	box, err := secretbox.New(testEncryptionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	connectorSvc := connector.NewService(st, box, u, late)
+	process := connector.NewProcessWorker(connectorSvc, log)
+	river.AddWorker(workers, process)
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), &river.Config{Workers: workers})
 	if err != nil {
 		t.Fatal(err)
 	}
 	late.JobInserter = jobs
 	svc := auth.NewService(st, auth.NewHasher(cheapParams, auth.DefaultMaxConcurrentHashes), jobs, auth.DefaultOptions(), log)
-	box, err := secretbox.New(testEncryptionKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	connectorSvc := connector.NewService(st, box, u)
 	h, err := httpapi.New(httpapi.Deps{
 		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st), SLA: slaSvc,
 		Catalog: catalog.NewService(st), Projects: projects.NewService(st, slaSvc), Priorities: priorities.NewService(st),
@@ -133,7 +136,7 @@ func newEnv(t *testing.T) *env {
 	if _, err := st.Q().UpsertClient(ctx, "Dinas Kominfo Jambi"); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, pic: pic, files: files, connector: connectorSvc, users: map[auth.Role]string{}}
+	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, pic: pic, files: files, connector: connectorSvc, process: process, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r}
 		if r == auth.RoleRequester {

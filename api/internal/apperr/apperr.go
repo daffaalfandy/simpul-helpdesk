@@ -74,6 +74,8 @@ const (
 	CodeInvalidRepositoryURL      = "invalid_repository_url"
 	CodeRepositoryTaken           = "repository_taken"
 	CodeRepositoryInUse           = "repository_in_use"
+	CodeRepositoryMismatch        = "repository_mismatch"
+	CodeInvalidSignature          = "invalid_signature"
 )
 
 // Error is a domain error with a stable machine-readable code.
@@ -154,6 +156,11 @@ func Conflict(code, title, detail string) *Error {
 // TooLarge is a 413: the request or file is over a size limit.
 func TooLarge(code, title, detail string) *Error {
 	return &Error{Status: http.StatusRequestEntityTooLarge, Code: code, Title: title, Detail: detail}
+}
+
+// InvalidSignature is a 401 for a webhook sent without the repository's secret.
+func InvalidSignature() *Error {
+	return &Error{Status: http.StatusUnauthorized, Code: CodeInvalidSignature, Title: "The webhook secret doesn't match"}
 }
 
 // InvalidRequest means the request doesn't match the API contract.

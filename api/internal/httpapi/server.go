@@ -79,7 +79,7 @@ func New(d Deps) (http.Handler, error) {
 		connector: d.Connector, log: d.Logger,
 		cookieName: cookieName(d.Config.CookieSecure),
 	}
-	streamed := streamedRoutes(spec)
+	raw := rawBodyRoutes(spec)
 
 	r := chi.NewRouter()
 	r.Use(withRequestID)
@@ -111,8 +111,8 @@ func New(d Deps) (http.Handler, error) {
 		}
 		api.Route(apiVersionPath, func(v1 chi.Router) {
 			v1.Use(s.session)
-			v1.Use(bodyLimits(streamed))
-			v1.Use(s.validator(streamed))
+			v1.Use(bodyLimits(raw))
+			v1.Use(s.validator(raw))
 			middlewares := []gen.StrictMiddlewareFunc{downloadDeadline(binaryResponseOps(spec)), requireAuth(publicOperations(spec))}
 			strict := gen.NewStrictHandlerWithOptions(s, middlewares,
 				gen.StrictHTTPServerOptions{
@@ -141,8 +141,8 @@ func New(d Deps) (http.Handler, error) {
 }
 
 // validator checks requests against the OpenAPI spec before they reach handlers. Streamed
-// (multipart) routes skip it; see streamedRoutes.
-func (s *server) validator(streamed map[string]bool) func(http.Handler) http.Handler {
+// (multipart) and raw-body routes skip it; see rawBodyRoutes.
+func (s *server) validator(raw rawRoutes) func(http.Handler) http.Handler {
 	spec, err := gen.GetSpec() // fresh copy: the middleware mutates Servers
 	if err != nil {
 		panic(err)
@@ -151,7 +151,10 @@ func (s *server) validator(streamed map[string]bool) func(http.Handler) http.Han
 		DoNotValidateServers:  true,
 		SilenceServersWarning: true,
 		Prefix:                apiPrefix,
-		Skipper:               func(r *http.Request) bool { return streamed[routeKey(r.Method, r.URL.Path)] },
+		Skipper: func(r *http.Request) bool {
+			_, ok := raw.match(r)
+			return ok
+		},
 		Options: openapi3filter.Options{
 			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc, // the session middleware owns auth
 		},

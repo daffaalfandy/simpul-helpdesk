@@ -901,6 +901,48 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /webhooks/{repositoryId}:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryId"
+    post:
+      operationId: receiveWebhook
+      summary: A webhook delivery from GitHub or GitLab
+      description: |
+        Public: the repository's secret authenticates it (GitHub signs the body with
+        `X-Hub-Signature-256`; GitLab sends `X-Gitlab-Token`). The body is read as sent, JSON or
+        GitHub's form encoding, up to 5 MiB, and processed in the background. A redelivery, a
+        ping or an event the connector doesn't read is acknowledged and changes nothing. Error
+        codes are `invalid_signature` (401), `repository_mismatch` (409, the webhook was added to
+        another repository), `invalid_request` (unreadable payload) and `request_too_large`
+        (413); each is shown on the Integrations page.
+      tags: [integrations]
+      security: []
+      x-raw-body: true
+      parameters:
+        - { name: X-GitHub-Event, in: header, required: false, schema: { type: string } }
+        - { name: X-GitHub-Delivery, in: header, required: false, schema: { type: string } }
+        - { name: X-Hub-Signature-256, in: header, required: false, schema: { type: string } }
+        - { name: X-Gitlab-Event, in: header, required: false, schema: { type: string } }
+        - { name: X-Gitlab-Token, in: header, required: false, schema: { type: string } }
+        - { name: X-Gitlab-Event-UUID, in: header, required: false, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Received before, a ping, or an event the connector doesn't read
+        "202":
+          description: Stored; processed in the background
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /uat-requests:
     get:
       operationId: listUatRequests
