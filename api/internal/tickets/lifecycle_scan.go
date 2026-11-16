@@ -3,6 +3,7 @@ package tickets
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,7 +27,7 @@ const (
 	LifecycleScanInterval = time.Minute
 	lifecycleScanAttempts = 3
 	lifecycleBatchSize    = 100
-	// lifecycleMaxBatches bounds one run; the next run continues.
+	// lifecycleMaxBatches bounds one run's reading; the next run continues after it.
 	lifecycleMaxBatches = 50
 )
 
@@ -51,12 +52,18 @@ func LifecycleScanJob() *river.PeriodicJob {
 }
 
 // LifecycleScanner moves tickets past a client deadline, each in its own transaction with its
-// audit entries, SLA replay and notifications, like a change by hand.
+// audit entries, SLA replay and notifications, like a change by hand. It reads the candidates
+// without locks and locks only those that are due, re-checking there. One run reads at most
+// lifecycleMaxBatches pages; the next run continues after the last ticket it read and wraps
+// around at the end, so a long tail of tickets that are never due can't starve the rest.
 type LifecycleScanner struct {
 	river.WorkerDefaults[LifecycleScanArgs]
 	svc *Service
 	log *slog.Logger
 	now func() time.Time
+
+	mu   sync.Mutex
+	next *uuid.UUID // where the next run starts; nil for the first ticket
 }
 
 func NewLifecycleScanner(svc *Service, log *slog.Logger) *LifecycleScanner {
@@ -67,33 +74,59 @@ func NewLifecycleScanner(svc *Service, log *slog.Logger) *LifecycleScanner {
 func (w *LifecycleScanner) SetClock(now func() time.Time) { w.now = now }
 
 func (w *LifecycleScanner) Work(ctx context.Context, _ *river.Job[LifecycleScanArgs]) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	now := w.now()
 	schedules, err := w.svc.sla.Schedules(ctx)
 	if err != nil {
 		return err
 	}
-	var after *uuid.UUID
+	after := w.next
 	for range lifecycleMaxBatches {
-		ids, err := w.svc.store.Q().ListLifecycleCandidates(ctx, db.ListLifecycleCandidatesParams{
+		rows, err := w.svc.store.Q().ListLifecycleCandidates(ctx, db.ListLifecycleCandidatesParams{
 			Statuses: statusStrings(lifecycleStatuses), ChangedBefore: now.Add(-schedules.WorkingDay),
 			After: after, RowLimit: lifecycleBatchSize,
 		})
 		if err != nil {
 			return err
 		}
-		for _, id := range ids {
-			if err := w.svc.passDeadline(ctx, schedules, id, now); err != nil {
+		for _, r := range rows {
+			due, err := deadlinePassed(ticket.Status(r.Status), r.ResolvedAt, r.StatusChangedAt, r.DodConfig, r.DodOverride, schedules, now)
+			if err == nil && due {
+				err = w.svc.passDeadline(ctx, schedules, r.ID, now)
+			}
+			if err != nil {
 				// One broken ticket never holds back the others; the next run tries it again.
-				w.log.ErrorContext(ctx, "lifecycle scan: ticket skipped", "ticket_id", id, "error", err)
+				w.log.ErrorContext(ctx, "lifecycle scan: ticket skipped", "ticket_id", r.ID, "error", err)
 			}
 		}
-		if len(ids) < lifecycleBatchSize {
+		if len(rows) < lifecycleBatchSize {
+			w.next = nil // read to the end: the next run starts over
 			return nil
 		}
-		last := ids[len(ids)-1]
+		last := rows[len(rows)-1].ID
 		after = &last
 	}
+	w.next = after
 	return nil
+}
+
+// deadlinePassed reports whether a ticket is past its client deadline: In UAT past its
+// auto-approve time, or resolved past its reopen window. Both are strictly after the instant.
+func deadlinePassed(status ticket.Status, resolvedAt *time.Time, statusChangedAt time.Time, projectDoD, override []byte,
+	schedules sla.Schedules, now time.Time) (bool, error) {
+	switch status {
+	case ticket.StatusInUAT:
+		eff, _, err := dod.ParseEffective(projectDoD, override)
+		if err != nil {
+			return false, err
+		}
+		at, ok := dod.AutoApproveAt(eff, statusChangedAt, schedules)
+		return ok && now.After(at), nil
+	case ticket.StatusResolved:
+		return resolvedAt != nil && now.After(ticket.ReopenUntil(*resolvedAt, schedules)), nil
+	}
+	return false, nil
 }
 
 // passDeadline re-checks one ticket under its lock and moves it if a client deadline has
@@ -104,38 +137,26 @@ func (s *Service) passDeadline(ctx context.Context, schedules sla.Schedules, id 
 		if err != nil {
 			return err
 		}
+		from := ticket.Status(row.Status)
+		due, err := deadlinePassed(from, row.ResolvedAt, row.StatusChangedAt, row.DodConfig, row.DodOverride, schedules, now)
+		if err != nil || !due {
+			return err // the ticket moved on since it was listed, or its deadline moved
+		}
 		cs := newChangeSet(row.ID)
 		actor := audit.SystemActor(ActorNameLifecycle)
-		switch from := ticket.Status(row.Status); from {
-		case ticket.StatusInUAT:
-			sd, err := parseDoD(row.DodConfig, row.DodOverride)
+		move := statusMove{from: from, to: ticket.StatusClosed, cause: ticket.CauseAutoClosed}
+		if from == ticket.StatusInUAT {
+			eff, _, err := dod.ParseEffective(row.DodConfig, row.DodOverride)
 			if err != nil {
 				return err
-			}
-			eff, _ := sd.effective()
-			at, ok := dod.AutoApproveAt(eff, row.StatusChangedAt, schedules)
-			if !ok || !now.After(at) {
-				return nil
 			}
 			if err := tickClientItems(ctx, tx.Q, cs, actor, eff, nil); err != nil {
 				return err
 			}
-			if err := s.writeStatus(ctx, tx, cs, actor, statusMove{
-				from: from, to: ticket.StatusResolved, cause: ticket.CauseUATAutoApproved,
-			}); err != nil {
-				return err
-			}
-		case ticket.StatusResolved:
-			if row.ResolvedAt == nil || !now.After(ticket.ReopenUntil(*row.ResolvedAt, schedules)) {
-				return nil
-			}
-			if err := s.writeStatus(ctx, tx, cs, actor, statusMove{
-				from: from, to: ticket.StatusClosed, cause: ticket.CauseAutoClosed,
-			}); err != nil {
-				return err
-			}
-		default:
-			return nil // the ticket moved on since it was listed
+			move = statusMove{from: from, to: ticket.StatusResolved, cause: ticket.CauseUATAutoApproved}
+		}
+		if err := s.writeStatus(ctx, tx, cs, actor, move); err != nil {
+			return err
 		}
 		return s.commit(ctx, tx, cs)
 	})

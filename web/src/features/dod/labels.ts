@@ -47,6 +47,8 @@ export function flowSteps(t: TFunction, c: DodConfig): string[] {
 export function dodSummary(t: TFunction, c: DodConfig): string {
   const parts: string[] = []
   if (c.merged.enabled) parts.push(t('dod.summary.merged', { branch: c.merged.branch }))
+  // The mock's chip leaves CI out next to the merge it follows; alone, it has to show.
+  else if (c.ciPassed) parts.push(t('dod.summary.ci', { branch: c.merged.branch }))
   if (c.deployedProduction) parts.push(t('dod.summary.deployed'))
   if (c.uat.enabled) parts.push(t('dod.summary.uat'))
   if (c.requesterConfirms) parts.push(t('dod.summary.confirm'))

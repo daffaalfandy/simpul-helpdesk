@@ -336,7 +336,7 @@ func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, id uuid.UUID
 		if err != nil {
 			return notFound(err)
 		}
-		if err := dod.Validate(in.Config, hasRepository); err != nil {
+		if err := dod.Validate(in.Config, RepositoriesLinked); err != nil {
 			return apperr.Invalid(apperr.CodeInvalidDoD, "Check the Definition of Done", err.Error())
 		}
 		prev, err := dod.Parse(old.DodConfig)
@@ -362,8 +362,9 @@ func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, id uuid.UUID
 	return get(ctx, s.store.Q(), id, nil)
 }
 
-// hasRepository is false until the GitHub/GitLab connector links repositories to projects (M7).
-const hasRepository = false
+// RepositoriesLinked is false until the GitHub/GitLab connector links repositories to projects
+// (M7): code conditions of a project's or a ticket's Definition of Done need one.
+const RepositoriesLinked = false
 
 func makeDefault(ctx context.Context, q *db.Queries, actor audit.Actor, id, clientID uuid.UUID) error {
 	previous, err := q.ListProjects(ctx, db.ListProjectsParams{ClientID: &clientID})
@@ -504,7 +505,7 @@ func fromRow(r db.GetProjectRow, targets []sla.ProjectTarget) (Project, error) {
 			NotifySupervisorOnBreach: r.SlaNotifySupervisorOnBreach,
 			NotifyPicOnP1Breach:      r.SlaNotifyPicOnP1Breach,
 		}},
-		DoD: cfg, AllowTicketOverride: r.AllowTicketOverride, HasRepository: hasRepository,
+		DoD: cfg, AllowTicketOverride: r.AllowTicketOverride, HasRepository: RepositoriesLinked,
 		OpenTicketCount: int(r.OpenTicketCount), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}, nil
 }

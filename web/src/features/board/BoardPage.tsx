@@ -27,6 +27,7 @@ import {
   type BoardSearch,
 } from './boardSearch'
 import { dropStatus } from './columns'
+import { EarlierTickets } from './EarlierTickets'
 import { KanbanBoard } from './KanbanBoard'
 import { LogTicketDialog } from './LogTicketDialog'
 import { SlaBanner } from './SlaBanner'
@@ -64,6 +65,7 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
     setNotice(null)
     const status = dropStatus(column, card)
     if (status === 'resolved' && reason === undefined && card.dodPending.length > 0) {
+      move.reset() // an earlier move's error isn't this card's
       setGuard(card)
       return
     }
@@ -82,8 +84,10 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
         },
         onError: (error) => {
           // The board was stale: the ticket's Definition of Done isn't met after all.
-          if (error instanceof ApiError && error.code === ErrorCode.DodUnmet && reason === undefined) setGuard(card)
-          else if (reason === undefined) setNotice({ kind: 'error', error })
+          if (error instanceof ApiError && error.code === ErrorCode.DodUnmet && reason === undefined) {
+            move.reset() // the dialog explains it; no error banner inside it
+            setGuard(card)
+          } else if (reason === undefined) setNotice({ kind: 'error', error })
         },
       },
     )
@@ -146,6 +150,7 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
         onDraggingChange={setDragging}
         onMove={moveTo}
       />
+      {search.q && <EarlierTickets q={search.q} board={board} />}
       {guard && (
         <ResolveGuardDialog
           ticketKey={guard.key}

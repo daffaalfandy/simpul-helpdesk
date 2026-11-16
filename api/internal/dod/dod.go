@@ -186,6 +186,17 @@ func Evaluate(c Config, done map[Item]bool) (met bool, pending []Item) {
 	return len(pending) == 0, pending
 }
 
+// ClientRequired lists the client items c requires: what one answer to the test meets.
+func ClientRequired(c Config) []Item {
+	var out []Item
+	for _, it := range Required(c) {
+		if slices.Contains(ClientItems, it) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
 // HasClientCheck reports whether the client answers before the ticket is done. UAT and the
 // requester's confirmation are one step: the ticket waits In UAT and one answer ticks both.
 func HasClientCheck(c Config) bool { return c.UAT.Enabled || c.RequesterConfirms }
@@ -209,6 +220,23 @@ func Effective(project Config, override *Config) (Config, Source) {
 		return *override, SourceTicket
 	}
 	return project, SourceProject
+}
+
+// ParseEffective reads a ticket's stored Definition of Done (the project's JSON and the
+// ticket's own, nil when it has none) and returns the one it follows.
+func ParseEffective(projectJSON, overrideJSON []byte) (Config, Source, error) {
+	project, err := Parse(projectJSON)
+	if err != nil {
+		return Config{}, "", err
+	}
+	if overrideJSON == nil {
+		return project, SourceProject, nil
+	}
+	own, err := Parse(overrideJSON)
+	if err != nil {
+		return Config{}, "", err
+	}
+	return own, SourceTicket, nil
 }
 
 // AutoApproveAt is when a ticket that entered In UAT at enteredAt is approved automatically.

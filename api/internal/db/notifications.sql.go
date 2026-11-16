@@ -234,29 +234,6 @@ func (q *Queries) GetEmailRecipient(ctx context.Context, id uuid.UUID) (GetEmail
 	return i, err
 }
 
-const getLatestPublicStaffMessageID = `-- name: GetLatestPublicStaffMessageID :one
-SELECT m.id
-FROM ticket_messages m
-JOIN users u ON u.id = m.author_id
-WHERE m.ticket_id = $1 AND m.visibility = $2 AND u.role <> $3
-ORDER BY m.created_at DESC, m.id DESC
-LIMIT 1
-`
-
-type GetLatestPublicStaffMessageIDParams struct {
-	TicketID      uuid.UUID
-	Visibility    string
-	RequesterRole string
-}
-
-// The team's latest public reply: what a "question for you" quotes.
-func (q *Queries) GetLatestPublicStaffMessageID(ctx context.Context, arg GetLatestPublicStaffMessageIDParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getLatestPublicStaffMessageID, arg.TicketID, arg.Visibility, arg.RequesterRole)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
 const getPicEmailContext = `-- name: GetPicEmailContext :one
 SELECT t.key, t.subject, t.type, t.priority, t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
        c.name AS client_name, c.pic_name, c.pic_email, s.resolution_breached_at

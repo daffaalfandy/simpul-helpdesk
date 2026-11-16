@@ -159,6 +159,18 @@ describe('board', () => {
     expect(within(card).getByText('Client testing · day 2 of 3')).toBeInTheDocument()
   })
 
+  it('finds closed tickets off the board when searching', async () => {
+    const user = userEvent.setup()
+    renderApp('/board')
+    await screen.findByRole('region', { name: 'Ticket board' })
+    await user.type(screen.getByRole('searchbox', { name: 'Search tickets' }), 'pdf reader')
+    const earlier = await screen.findByRole('region', { name: 'Resolved before today, and closed' })
+    const link = within(earlier).getByRole('link', { name: 'HD-24790 · Install a PDF reader' })
+    expect(link).toHaveAttribute('href', '/tickets/HD-24790')
+    expect(earlier).toHaveTextContent('Closed')
+    expect(lastRequest('GET', '/tickets')?.search).toContain('status=resolved&status=closed')
+  })
+
   it('keeps an owned ticket assigned when it goes back to New', async () => {
     const user = userEvent.setup()
     renderApp('/board')

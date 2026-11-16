@@ -102,8 +102,11 @@ func NotificationChanges(rows []AuditRow) []notification.Change {
 			}
 			c.MessageID = decode[uuid.UUID](data, dataMessageID) // a rejected test's message
 		case ActionDoDChanged:
-			// Only a ticket's own Definition of Done alerts the supervisors; a reset doesn't.
-			if src := decode[change[dod.Source]](data, dataDoDSource); src == nil || src.To != dod.SourceTicket {
+			// Supervisors hear when a ticket gets a Definition of Done of its own or its conditions
+			// change; not a reset to the project's, nor a new reason for the same conditions.
+			src := decode[change[dod.Source]](data, dataDoDSource)
+			cfg := decode[change[dod.Config]](data, dataDoD)
+			if src == nil || cfg == nil || src.To != dod.SourceTicket || (src.From == src.To && cfg.From == cfg.To) {
 				continue
 			}
 			c.Kind = notification.ChangeDoD

@@ -66,7 +66,7 @@ WHERE t.key = @key
 -- Locks the ticket only; the project's Definition of Done and the override are read as they are.
 SELECT t.id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
        a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
-       p.dod_config, p.allow_ticket_override, o.config AS dod_override
+       p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 LEFT JOIN users a ON a.id = t.assignee_id
 JOIN projects p ON p.id = t.project_id
@@ -135,3 +135,13 @@ VALUES (@id, @ticket_id, @author_id, @visibility, @body, @created_at);
 -- name: SetTicketNumberFloor :exec
 -- Seed only: continue numbering after the highest seeded ticket.
 SELECT setval('ticket_number_seq', (SELECT max(number) FROM tickets));
+
+-- name: GetLatestPublicStaffMessage :one
+-- The team's latest public reply: what a "question for you" or a test request quotes, and the
+-- test instructions the portal shows. tickets.LatestStaffReply is the only caller.
+SELECT m.id, m.body
+FROM ticket_messages m
+JOIN users u ON u.id = m.author_id
+WHERE m.ticket_id = @ticket_id AND m.visibility = @visibility AND u.role <> @requester_role
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT 1;

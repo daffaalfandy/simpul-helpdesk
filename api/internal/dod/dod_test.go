@@ -254,3 +254,33 @@ func TestUATDay(t *testing.T) {
 		})
 	}
 }
+
+func TestClientRequired(t *testing.T) {
+	tests := []struct {
+		c    Config
+		want []Item
+	}{
+		{None(), nil},
+		{with(merged(BranchMain), uat(3)), []Item{ItemUATApproved}},
+		{with(uat(0), confirms), []Item{ItemUATApproved, ItemRequesterConfirmed}},
+		{with(deployed), nil},
+	}
+	for _, tt := range tests {
+		if got := ClientRequired(tt.c); !slices.Equal(got, tt.want) {
+			t.Errorf("ClientRequired(%+v) = %v, want %v", tt.c, got, tt.want)
+		}
+	}
+}
+
+func TestParseEffective(t *testing.T) {
+	project, own := with(uat(3)).JSON(), with(confirms).JSON()
+	if c, src, err := ParseEffective(project, nil); err != nil || src != SourceProject || c != with(uat(3)) {
+		t.Errorf("project = %+v %s %v", c, src, err)
+	}
+	if c, src, err := ParseEffective(project, own); err != nil || src != SourceTicket || c != with(confirms) {
+		t.Errorf("own = %+v %s %v", c, src, err)
+	}
+	if _, _, err := ParseEffective([]byte(`{"uat": "yes"}`), nil); err == nil {
+		t.Error("a broken config parsed")
+	}
+}

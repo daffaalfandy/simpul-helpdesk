@@ -196,7 +196,14 @@
     },
     "movedPaused": "{{key}} moved to {{column}} · SLA clock paused.",
     "movedUat": "{{key}} moved to In UAT · client asked to test",
-    "movedSkipped": "{{key}} moved to Resolved · reason saved to the audit log"
+    "movedSkipped": "{{key}} moved to Resolved · reason saved to the audit log",
+    "earlier": {
+      "title": "Resolved before today, and closed",
+      "description": "Matches for your search that are off the board.",
+      "loading": "Searching resolved and closed tickets…",
+      "resolvedOn": "Resolved {{when}}",
+      "ticket": "{{key}} · {{subject}}"
+    }
   },
   "portal": {
     "support": "{{org}} Support",
@@ -1305,7 +1312,8 @@
       "uat": "UAT",
       "confirm": "Requester confirms",
       "none": "Resolved by hand",
-      "separator": " + "
+      "separator": " + ",
+      "ci": "CI passes on {{branch}}"
     },
     "check": {
       "fix_committed": "Fix committed",

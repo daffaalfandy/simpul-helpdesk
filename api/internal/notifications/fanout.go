@@ -6,12 +6,10 @@ package notifications
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"slices"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
@@ -166,14 +164,12 @@ func quoteLatestStaffReply(ctx context.Context, q *db.Queries, ticketID uuid.UUI
 			continue
 		}
 		if !looked {
-			id, err := q.GetLatestPublicStaffMessageID(ctx, db.GetLatestPublicStaffMessageIDParams{
-				TicketID: ticketID, Visibility: publicVisibility, RequesterRole: string(auth.RoleRequester),
-			})
-			switch {
-			case err == nil:
-				latest = &id
-			case !errors.Is(err, pgx.ErrNoRows):
+			reply, err := tickets.LatestStaffReply(ctx, q, ticketID)
+			if err != nil {
 				return err
+			}
+			if reply != nil {
+				latest = &reply.ID
 			}
 			looked = true
 		}
@@ -221,7 +217,7 @@ func clientDeadlines(ctx context.Context, q *db.Queries, changes []notification.
 			c.ReopenUntil = &until
 			continue
 		}
-		cfg, err := effectiveDoD(projectDoD, override)
+		cfg, _, err := dod.ParseEffective(projectDoD, override)
 		if err != nil {
 			return err
 		}
@@ -230,12 +226,4 @@ func clientDeadlines(ctx context.Context, q *db.Queries, changes []notification.
 		}
 	}
 	return nil
-}
-
-func effectiveDoD(projectDoD, override []byte) (dod.Config, error) {
-	project, err := dod.Parse(projectDoD)
-	if err != nil || override == nil {
-		return project, err
-	}
-	return dod.Parse(override)
 }

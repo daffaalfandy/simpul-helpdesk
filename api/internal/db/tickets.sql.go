@@ -96,6 +96,35 @@ func (q *Queries) CreateTicketMessage(ctx context.Context, arg CreateTicketMessa
 	return i, err
 }
 
+const getLatestPublicStaffMessage = `-- name: GetLatestPublicStaffMessage :one
+SELECT m.id, m.body
+FROM ticket_messages m
+JOIN users u ON u.id = m.author_id
+WHERE m.ticket_id = $1 AND m.visibility = $2 AND u.role <> $3
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT 1
+`
+
+type GetLatestPublicStaffMessageParams struct {
+	TicketID      uuid.UUID
+	Visibility    string
+	RequesterRole string
+}
+
+type GetLatestPublicStaffMessageRow struct {
+	ID   uuid.UUID
+	Body string
+}
+
+// The team's latest public reply: what a "question for you" or a test request quotes, and the
+// test instructions the portal shows. tickets.LatestStaffReply is the only caller.
+func (q *Queries) GetLatestPublicStaffMessage(ctx context.Context, arg GetLatestPublicStaffMessageParams) (GetLatestPublicStaffMessageRow, error) {
+	row := q.db.QueryRow(ctx, getLatestPublicStaffMessage, arg.TicketID, arg.Visibility, arg.RequesterRole)
+	var i GetLatestPublicStaffMessageRow
+	err := row.Scan(&i.ID, &i.Body)
+	return i, err
+}
+
 const getTicket = `-- name: GetTicket :one
 SELECT t.id, t.key, t.type, t.status, t.priority, t.channel, t.subject, t.description, t.sla_snapshot,
        t.first_response_at, t.resolved_at, t.closed_at, t.created_at, t.updated_at,
@@ -208,7 +237,7 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 const getTicketForUpdate = `-- name: GetTicketForUpdate :one
 SELECT t.id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
        a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
-       p.dod_config, p.allow_ticket_override, o.config AS dod_override
+       p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 LEFT JOIN users a ON a.id = t.assignee_id
 JOIN projects p ON p.id = t.project_id
@@ -243,6 +272,7 @@ type GetTicketForUpdateRow struct {
 	DodConfig           []byte
 	AllowTicketOverride bool
 	DodOverride         []byte
+	DodOverrideReason   *string
 }
 
 // Locks the ticket only; the project's Definition of Done and the override are read as they are.
@@ -265,6 +295,7 @@ func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdate
 		&i.DodConfig,
 		&i.AllowTicketOverride,
 		&i.DodOverride,
+		&i.DodOverrideReason,
 	)
 	return i, err
 }

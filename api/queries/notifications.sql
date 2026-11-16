@@ -26,15 +26,6 @@ VALUES (@user_id, @ticket_id, @event_type, sqlc.narg(actor_user_id), @source_id,
         @data, @web, @email, @urgent, @created_at)
 ON CONFLICT (source_id, user_id) DO NOTHING;
 
--- name: GetLatestPublicStaffMessageID :one
--- The team's latest public reply: what a "question for you" quotes.
-SELECT m.id
-FROM ticket_messages m
-JOIN users u ON u.id = m.author_id
-WHERE m.ticket_id = @ticket_id AND m.visibility = @visibility AND u.role <> @requester_role
-ORDER BY m.created_at DESC, m.id DESC
-LIMIT 1;
-
 -- Inbox queries are scoped like tickets.sql: scope_client_id and scope_agent_id come from
 -- internal/tickets access rules (tickets.ScopeFor), so a user stops seeing items about tickets
 -- they lose access to.

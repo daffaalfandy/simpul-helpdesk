@@ -495,12 +495,14 @@ export const ticketsHandlers = [
     const statuses = params.getAll('status') as TicketStatus[]
     const assignee = params.get('assignee')
     const client = params.get('clientId')
+    const q = (params.get('q') ?? '').toLowerCase()
     const list = tickets.tickets
       .filter(visible)
       .filter((t) => statuses.length === 0 || statuses.includes(t.status))
       .filter((t) => assignee !== 'me' || t.assignee?.id === state.me?.id)
       .filter((t) => assignee !== 'unassigned' || t.assignee === null)
       .filter((t) => !client || t.client.id === client)
+      .filter((t) => !q || t.key.toLowerCase() === q || t.subject.toLowerCase().includes(q) || t.client.name.toLowerCase().includes(q))
     return HttpResponse.json(list.map(summary))
   }),
   http.post(`${API}/tickets`, async ({ request }) => {

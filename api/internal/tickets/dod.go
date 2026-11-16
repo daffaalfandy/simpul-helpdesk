@@ -11,6 +11,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
@@ -28,10 +29,6 @@ const (
 	dataDoDSource = "dod_source"
 	dataItems     = "items"
 )
-
-// projectHasRepository is false until the GitHub/GitLab connector links repositories (M7), so
-// a ticket's own Definition of Done can't ask for code conditions either.
-const projectHasRepository = false
 
 // TicketDoD is a ticket's Definition of Done as the agent app shows it.
 type TicketDoD struct {
@@ -144,7 +141,7 @@ func (s *Service) SetDoD(ctx context.Context, p *auth.Principal, key string, cfg
 		if reason == "" || len([]rune(reason)) > MaxReasonLen {
 			return Ticket{}, apperr.Invalid(apperr.CodeReasonRequired, "Give a reason", "")
 		}
-		if err := dod.Validate(*cfg, projectHasRepository); err != nil {
+		if err := dod.Validate(*cfg, projects.RepositoriesLinked); err != nil {
 			return Ticket{}, apperr.Invalid(apperr.CodeInvalidDoD, "Check the Definition of Done", err.Error())
 		}
 	}
@@ -156,8 +153,12 @@ func (s *Service) SetDoD(ctx context.Context, p *auth.Principal, key string, cfg
 		if err != nil {
 			return err
 		}
-		if cfg == nil && sd.override == nil {
-			return nil
+		switch {
+		case cfg == nil && sd.override == nil:
+			return nil // already the project's
+		case cfg != nil && sd.override != nil && *sd.override == *cfg &&
+			row.DodOverrideReason != nil && *row.DodOverrideReason == reason:
+			return nil // saved again unchanged
 		}
 		next := storedDoD{project: sd.project, override: cfg}
 		if cfg == nil {

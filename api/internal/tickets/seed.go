@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -199,10 +198,7 @@ func seedClientItems(ctx context.Context, q *db.Queries, ticketID, projectID uui
 		return nil, err
 	}
 	var items []string
-	for _, it := range dod.Required(p.DoD) {
-		if !slices.Contains(dod.ClientItems, it) {
-			continue
-		}
+	for _, it := range dod.ClientRequired(p.DoD) {
 		if err := q.InsertSeedDoDItem(ctx, db.InsertSeedDoDItemParams{
 			TicketID: ticketID, Item: string(it), DoneAt: st.At, DoneBy: &st.Actor.ID,
 		}); err != nil {

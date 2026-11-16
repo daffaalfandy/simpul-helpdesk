@@ -268,4 +268,32 @@ func TestUATNotifications(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("supervisor DoD alerts = %d, want 1", n)
 	}
+
+	// Saving the same Definition of Done again changes nothing; a new reason alone is recorded
+	// but alerts nobody.
+	decode[gen.Ticket](t, te.agent.setDod(other.Key, &hotfix, hotfixReason), http.StatusOK)
+	actions := len(te.auditActions(t, otherID))
+	decode[gen.Ticket](t, te.agent.setDod(other.Key, &hotfix, hotfixReason), http.StatusOK)
+	if got := len(te.auditActions(t, otherID)); got != actions {
+		t.Fatalf("an unchanged save wrote %d audit entries", got-actions)
+	}
+	te.fanout(t)
+	alerts := func() int {
+		n := 0
+		for _, x := range te.notices(t, otherID) {
+			if x.user == supervisorID && x.event == notification.EventDoD {
+				n++
+			}
+		}
+		return n
+	}
+	before := alerts()
+	saved := decode[gen.Ticket](t, te.agent.setDod(other.Key, &hotfix, "Hotfix, confirmed again with the PIC"), http.StatusOK)
+	if saved.Dod.OverrideReason == nil || *saved.Dod.OverrideReason != "Hotfix, confirmed again with the PIC" {
+		t.Fatalf("reason = %v", saved.Dod.OverrideReason)
+	}
+	te.fanout(t)
+	if after := alerts(); after != before {
+		t.Fatalf("a new reason alerted the supervisors again (%d → %d)", before, after)
+	}
 }

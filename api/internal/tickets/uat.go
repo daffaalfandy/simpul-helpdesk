@@ -3,7 +3,6 @@ package tickets
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"time"
 
@@ -130,9 +129,7 @@ func (s *Service) UATRequests(ctx context.Context, p *auth.Principal) ([]UATRequ
 	}
 	q := s.store.Q()
 	rows, err := q.ListUATRequests(ctx, db.ListUATRequestsParams{
-		ClientID: *a.scopeClientID, Status: string(ticket.StatusInUAT), UserID: p.UserID,
-		PublicVisibility: string(ticket.VisibilityPublic), RequesterRole: string(auth.RoleRequester),
-		RowLimit: MaxUATRequests,
+		ClientID: *a.scopeClientID, Status: string(ticket.StatusInUAT), UserID: p.UserID, RowLimit: MaxUATRequests,
 	})
 	if err != nil || len(rows) == 0 {
 		return []UATRequest{}, err
@@ -151,8 +148,13 @@ func (s *Service) UATRequests(ctx context.Context, p *auth.Principal) ([]UATRequ
 			Key: r.Key, Subject: r.Subject, Project: Ref{r.ProjectID, r.ProjectName},
 			Requester: Ref{r.RequesterID, r.RequesterName}, AutoApproveAt: autoApproveAt(sd, r.StatusChangedAt, schedules),
 		}
-		if r.Instructions != "" {
-			req.Instructions = &r.Instructions
+		// At most MaxUATRequests lookups, and usually one or two.
+		reply, err := LatestStaffReply(ctx, q, r.ID)
+		if err != nil {
+			return nil, err
+		}
+		if reply != nil {
+			req.Instructions = &reply.Body
 		}
 		out = append(out, req)
 	}
@@ -179,14 +181,12 @@ func (s *Service) clientState(ctx context.Context, q *db.Queries, t *Ticket, r d
 			return err
 		}
 		u := TicketUAT{AutoApproveAt: autoApproveAt(sd, r.StatusChangedAt, schedules), CanAnswer: requester}
-		body, err := q.GetLatestPublicStaffMessage(ctx, db.GetLatestPublicStaffMessageParams{
-			TicketID: r.ID, PublicVisibility: string(ticket.VisibilityPublic), RequesterRole: string(auth.RoleRequester),
-		})
-		switch {
-		case err == nil:
-			u.Instructions = &body
-		case !errors.Is(err, pgx.ErrNoRows):
+		reply, err := LatestStaffReply(ctx, q, r.ID)
+		if err != nil {
 			return err
+		}
+		if reply != nil {
+			u.Instructions = &reply.Body
 		}
 		t.UAT = &u
 	case ticket.StatusResolved:
@@ -199,14 +199,28 @@ func (s *Service) clientState(ctx context.Context, q *db.Queries, t *Ticket, r d
 	return nil
 }
 
+// LatestStaffReply is the team's latest public reply on a ticket, or nil: the one rule for what a
+// question or a test request quotes and what the portal shows as test instructions. It is a
+// public message, so any requester of the client may read it.
+func LatestStaffReply(ctx context.Context, q *db.Queries, ticketID uuid.UUID) (*db.GetLatestPublicStaffMessageRow, error) {
+	r, err := q.GetLatestPublicStaffMessage(ctx, db.GetLatestPublicStaffMessageParams{
+		TicketID: ticketID, Visibility: string(ticket.VisibilityPublic), RequesterRole: string(auth.RoleRequester),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 // tickClientItems records the client's answer (or the system's, with doneBy nil) on the items of
 // the client check the ticket's Definition of Done asks for.
 func tickClientItems(ctx context.Context, q *db.Queries, cs *changeSet, actor audit.Actor, eff dod.Config, doneBy *uuid.UUID) error {
 	var items []string
-	for _, it := range dod.Required(eff) {
-		if slices.Contains(dod.ClientItems, it) {
-			items = append(items, string(it))
-		}
+	for _, it := range dod.ClientRequired(eff) {
+		items = append(items, string(it))
 	}
 	if len(items) == 0 {
 		return nil

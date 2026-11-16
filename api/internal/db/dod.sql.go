@@ -54,27 +54,6 @@ func (q *Queries) DeleteTicketDoDOverride(ctx context.Context, ticketID uuid.UUI
 	return result.RowsAffected(), nil
 }
 
-const getLatestPublicStaffMessage = `-- name: GetLatestPublicStaffMessage :one
-SELECT m.body FROM ticket_messages m JOIN users u ON u.id = m.author_id
-WHERE m.ticket_id = $1 AND m.visibility = $2 AND u.role <> $3
-ORDER BY m.created_at DESC, m.id DESC
-LIMIT 1
-`
-
-type GetLatestPublicStaffMessageParams struct {
-	TicketID         uuid.UUID
-	PublicVisibility string
-	RequesterRole    string
-}
-
-// The team's latest public reply on a ticket: what the client is asked to test.
-func (q *Queries) GetLatestPublicStaffMessage(ctx context.Context, arg GetLatestPublicStaffMessageParams) (string, error) {
-	row := q.db.QueryRow(ctx, getLatestPublicStaffMessage, arg.TicketID, arg.PublicVisibility, arg.RequesterRole)
-	var body string
-	err := row.Scan(&body)
-	return body, err
-}
-
 const getTicketForLifecycle = `-- name: GetTicketForLifecycle :one
 SELECT t.id, t.status, t.assignee_id, t.resolved_at, t.status_changed_at, p.dod_config, o.config AS dod_override
 FROM tickets t
@@ -168,7 +147,10 @@ func (q *Queries) InsertTicketDoDItems(ctx context.Context, arg InsertTicketDoDI
 }
 
 const listLifecycleCandidates = `-- name: ListLifecycleCandidates :many
-SELECT t.id FROM tickets t
+SELECT t.id, t.status, t.resolved_at, t.status_changed_at, p.dod_config, o.config AS dod_override
+FROM tickets t
+JOIN projects p ON p.id = t.project_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.status = ANY($1::text[]) AND t.status_changed_at <= $2
   AND ($3::uuid IS NULL OR t.id > $3::uuid)
 ORDER BY t.id
@@ -182,10 +164,19 @@ type ListLifecycleCandidatesParams struct {
 	RowLimit      int32
 }
 
+type ListLifecycleCandidatesRow struct {
+	ID              uuid.UUID
+	Status          string
+	ResolvedAt      *time.Time
+	StatusChangedAt time.Time
+	DodConfig       []byte
+	DodOverride     []byte
+}
+
 // Tickets that may be past a client deadline: In UAT or resolved since before @changed_before
 // (a deadline is at least one working day of business time, which never passes faster than
-// real time). Keyset pages by id.
-func (q *Queries) ListLifecycleCandidates(ctx context.Context, arg ListLifecycleCandidatesParams) ([]uuid.UUID, error) {
+// real time), with what the deadline is computed from. Read without locks; keyset pages by id.
+func (q *Queries) ListLifecycleCandidates(ctx context.Context, arg ListLifecycleCandidatesParams) ([]ListLifecycleCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, listLifecycleCandidates,
 		arg.Statuses,
 		arg.ChangedBefore,
@@ -196,13 +187,20 @@ func (q *Queries) ListLifecycleCandidates(ctx context.Context, arg ListLifecycle
 		return nil, err
 	}
 	defer rows.Close()
-	items := []uuid.UUID{}
+	items := []ListLifecycleCandidatesRow{}
 	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
+		var i ListLifecycleCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.ResolvedAt,
+			&i.StatusChangedAt,
+			&i.DodConfig,
+			&i.DodOverride,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -252,31 +250,23 @@ func (q *Queries) ListTicketDoDItems(ctx context.Context, ticketID uuid.UUID) ([
 
 const listUATRequests = `-- name: ListUATRequests :many
 SELECT t.id, t.key, t.subject, t.status_changed_at, t.project_id, p.name AS project_name,
-       p.dod_config, o.config AS dod_override, t.requester_id, r.name AS requester_name,
-       coalesce(last.body, '')::text AS instructions
+       p.dod_config, o.config AS dod_override, t.requester_id, r.name AS requester_name
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 JOIN users r ON r.id = t.requester_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
-LEFT JOIN LATERAL (
-  SELECT m.body FROM ticket_messages m JOIN users u ON u.id = m.author_id
-  WHERE m.ticket_id = t.id AND m.visibility = $1 AND u.role <> $2
-  ORDER BY m.created_at DESC, m.id DESC LIMIT 1
-) last ON true
-WHERE t.client_id = $3 AND t.status = $4
-  AND (t.requester_id = $5
-       OR EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = $5))
+WHERE t.client_id = $1 AND t.status = $2
+  AND (t.requester_id = $3
+       OR EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = $3))
 ORDER BY t.status_changed_at, t.id
-LIMIT $6
+LIMIT $4
 `
 
 type ListUATRequestsParams struct {
-	PublicVisibility string
-	RequesterRole    string
-	ClientID         uuid.UUID
-	Status           string
-	UserID           uuid.UUID
-	RowLimit         int32
+	ClientID uuid.UUID
+	Status   string
+	UserID   uuid.UUID
+	RowLimit int32
 }
 
 type ListUATRequestsRow struct {
@@ -290,16 +280,12 @@ type ListUATRequestsRow struct {
 	DodOverride     []byte
 	RequesterID     uuid.UUID
 	RequesterName   string
-	Instructions    string
 }
 
 // The tests waiting on a requester: their client's tickets In UAT that they reported or follow,
-// oldest first, with the team's latest public reply as the test instructions (” when the
-// team hasn't written one; message bodies are never empty).
+// oldest first.
 func (q *Queries) ListUATRequests(ctx context.Context, arg ListUATRequestsParams) ([]ListUATRequestsRow, error) {
 	rows, err := q.db.Query(ctx, listUATRequests,
-		arg.PublicVisibility,
-		arg.RequesterRole,
 		arg.ClientID,
 		arg.Status,
 		arg.UserID,
@@ -323,7 +309,6 @@ func (q *Queries) ListUATRequests(ctx context.Context, arg ListUATRequestsParams
 			&i.DodOverride,
 			&i.RequesterID,
 			&i.RequesterName,
-			&i.Instructions,
 		); err != nil {
 			return nil, err
 		}
