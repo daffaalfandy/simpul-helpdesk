@@ -61,6 +61,7 @@ type env struct {
 	digest       *notifications.DigestWorker
 	recompute    *tickets.SLARecomputer
 	scan         *tickets.SLAScanner
+	lifecycle    *tickets.LifecycleScanner
 	pic          *notifications.PicEmailWorker
 	files        *storage.FS
 	users        map[auth.Role]string // role -> email
@@ -94,21 +95,24 @@ func newEnv(t *testing.T) *env {
 	river.AddWorker(workers, scan)
 	pic := notifications.NewPicEmailWorker(notifyMailer)
 	river.AddWorker(workers, pic)
+	files, err := storage.NewFS(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = files.Close() })
+	ticketSvc := tickets.NewService(st, files, slaSvc, late)
+	lifecycle := tickets.NewLifecycleScanner(ticketSvc, log)
+	river.AddWorker(workers, lifecycle)
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), &river.Config{Workers: workers})
 	if err != nil {
 		t.Fatal(err)
 	}
 	late.JobInserter = jobs
 	svc := auth.NewService(st, auth.NewHasher(cheapParams, auth.DefaultMaxConcurrentHashes), jobs, auth.DefaultOptions(), log)
-	files, err := storage.NewFS(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = files.Close() })
 	h, err := httpapi.New(httpapi.Deps{
 		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st), SLA: slaSvc,
 		Catalog: catalog.NewService(st), Projects: projects.NewService(st, slaSvc), Priorities: priorities.NewService(st),
-		Tickets: tickets.NewService(st, files, slaSvc, jobs), Notifications: notifications.NewService(st), Logger: log,
+		Tickets: ticketSvc, Notifications: notifications.NewService(st), Logger: log,
 		WebUI: fstest.MapFS{"index.html": {Data: []byte(spaMarker)}, "assets/app.js": {Data: []byte("//js")}},
 	})
 	if err != nil {
@@ -117,7 +121,7 @@ func newEnv(t *testing.T) *env {
 	if _, err := st.Q().UpsertClient(ctx, "Dinas Kominfo Jambi"); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, pic: pic, files: files, users: map[auth.Role]string{}}
+	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, pic: pic, files: files, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r}
 		if r == auth.RoleRequester {

@@ -53,3 +53,21 @@ SELECT m.body FROM ticket_messages m JOIN users u ON u.id = m.author_id
 WHERE m.ticket_id = @ticket_id AND m.visibility = @public_visibility AND u.role <> @requester_role
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT 1;
+
+-- name: ListLifecycleCandidates :many
+-- Tickets that may be past a client deadline: In UAT or resolved since before @changed_before
+-- (a deadline is at least one working day of business time, which never passes faster than
+-- real time). Keyset pages by id.
+SELECT t.id FROM tickets t
+WHERE t.status = ANY(@statuses::text[]) AND t.status_changed_at <= @changed_before
+  AND (sqlc.narg(after)::uuid IS NULL OR t.id > sqlc.narg(after)::uuid)
+ORDER BY t.id
+LIMIT @row_limit;
+
+-- name: GetTicketForLifecycle :one
+SELECT t.id, t.status, t.assignee_id, t.resolved_at, t.status_changed_at, p.dod_config, o.config AS dod_override
+FROM tickets t
+JOIN projects p ON p.id = t.project_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
+WHERE t.id = @id
+FOR UPDATE OF t;

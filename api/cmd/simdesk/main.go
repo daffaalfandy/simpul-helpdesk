@@ -194,12 +194,15 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	river.AddWorker(workers, tickets.NewSLARecomputer(st, slaSvc, log))
 	river.AddWorker(workers, tickets.NewSLAScanner(st, slaSvc, late, log))
 	river.AddWorker(workers, notifications.NewPicEmailWorker(notifyMailer))
+	ticketSvc := tickets.NewService(st, files, slaSvc, late)
+	river.AddWorker(workers, tickets.NewLifecycleScanner(ticketSvc, log))
 	riverCfg := &river.Config{Workers: workers, Logger: log.With("component", "jobs")}
 	if runJobs {
 		// Periodic jobs only on clients that run jobs: River refuses them on insert-only clients.
 		riverCfg.Queues = map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: jobMaxWorkers}}
 		riverCfg.PeriodicJobs = []*river.PeriodicJob{
 			tickets.AttachmentSweepJob(), notifications.DispatchJob(), notifications.PurgeJob(), tickets.SLAScanJob(),
+			tickets.LifecycleScanJob(),
 		}
 	}
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), riverCfg)
@@ -218,7 +221,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 		catalog:       catalog.NewService(st),
 		projects:      projects.NewService(st, slaSvc),
 		priorities:    priorities.NewService(st),
-		tickets:       tickets.NewService(st, files, slaSvc, jobs),
+		tickets:       ticketSvc,
 		notifications: notifications.NewService(st),
 	}, nil
 }

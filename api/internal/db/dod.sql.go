@@ -75,6 +75,40 @@ func (q *Queries) GetLatestPublicStaffMessage(ctx context.Context, arg GetLatest
 	return body, err
 }
 
+const getTicketForLifecycle = `-- name: GetTicketForLifecycle :one
+SELECT t.id, t.status, t.assignee_id, t.resolved_at, t.status_changed_at, p.dod_config, o.config AS dod_override
+FROM tickets t
+JOIN projects p ON p.id = t.project_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
+WHERE t.id = $1
+FOR UPDATE OF t
+`
+
+type GetTicketForLifecycleRow struct {
+	ID              uuid.UUID
+	Status          string
+	AssigneeID      *uuid.UUID
+	ResolvedAt      *time.Time
+	StatusChangedAt time.Time
+	DodConfig       []byte
+	DodOverride     []byte
+}
+
+func (q *Queries) GetTicketForLifecycle(ctx context.Context, id uuid.UUID) (GetTicketForLifecycleRow, error) {
+	row := q.db.QueryRow(ctx, getTicketForLifecycle, id)
+	var i GetTicketForLifecycleRow
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.AssigneeID,
+		&i.ResolvedAt,
+		&i.StatusChangedAt,
+		&i.DodConfig,
+		&i.DodOverride,
+	)
+	return i, err
+}
+
 const insertTicketDoDItems = `-- name: InsertTicketDoDItems :many
 INSERT INTO ticket_dod_items (ticket_id, item, done_by)
 SELECT $1, unnest($2::text[]), $3::uuid
@@ -102,6 +136,49 @@ func (q *Queries) InsertTicketDoDItems(ctx context.Context, arg InsertTicketDoDI
 			return nil, err
 		}
 		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLifecycleCandidates = `-- name: ListLifecycleCandidates :many
+SELECT t.id FROM tickets t
+WHERE t.status = ANY($1::text[]) AND t.status_changed_at <= $2
+  AND ($3::uuid IS NULL OR t.id > $3::uuid)
+ORDER BY t.id
+LIMIT $4
+`
+
+type ListLifecycleCandidatesParams struct {
+	Statuses      []string
+	ChangedBefore time.Time
+	After         *uuid.UUID
+	RowLimit      int32
+}
+
+// Tickets that may be past a client deadline: In UAT or resolved since before @changed_before
+// (a deadline is at least one working day of business time, which never passes faster than
+// real time). Keyset pages by id.
+func (q *Queries) ListLifecycleCandidates(ctx context.Context, arg ListLifecycleCandidatesParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listLifecycleCandidates,
+		arg.Statuses,
+		arg.ChangedBefore,
+		arg.After,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
