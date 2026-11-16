@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next'
 
 import type { Priority, TicketActivity, TicketStatus, TicketType } from '../../api/client'
 import type { PriorityNames } from '../../api/queries'
+import { codeEventText } from '../code/labels'
 
 /**
  * "Critical" (Settings › Priorities), or the report form's request wording, e.g. "Urgent" for a
@@ -51,6 +52,12 @@ export function activityText(t: TFunction, names: PriorityNames, entry: TicketAc
           return t('ticket.activity.statusByAutoClose', values)
         case 'dod_skipped':
           return t('ticket.activity.statusByDoDSkipped', { actor, reason: entry.reason ?? '' })
+        case 'code_activity':
+          return t('ticket.activity.statusByCodeActivity', values)
+        case 'code_done':
+          return t('ticket.activity.statusByCodeDone', values)
+        case 'code_reopened':
+          return t('ticket.activity.statusByCodeReopened', values)
       }
       return t('ticket.activity.statusChanged', values)
     }
@@ -75,6 +82,17 @@ export function activityText(t: TFunction, names: PriorityNames, entry: TicketAc
       return entry.to === 'ticket'
         ? t('ticket.activity.dodChangedTicket', { actor, reason: entry.reason ?? '' })
         : t('ticket.activity.dodChangedProject', { actor })
+    case 'code_linked': {
+      const code = entry.code
+      if (!code) return t('ticket.activity.codeLinked', { provider: '', event: '' })
+      const line = t('ticket.activity.codeLinked', {
+        provider: t(`code.providers.${code.provider}`),
+        event: codeEventText(t, code),
+      })
+      if (code.items.length === 0) return line
+      const items = code.items.map((it) => t(`dod.check.${it}`, { branch: code.target || code.branch }))
+      return t('ticket.activity.codeItems', { line, items: items.join(t('ticket.activity.codeItemSeparator')) })
+    }
     case 'sla_at_risk':
     case 'sla_breached': {
       const clock = t(entry.to === 'first_response' ? 'ticket.activity.slaClock.first_response' : 'ticket.activity.slaClock.resolution')

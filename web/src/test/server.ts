@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 
 import type { Me, Organization, Problem } from '../api/client'
+import { integrationsHandlers, resetIntegrations } from './integrationsApi'
 import { notificationsHandlers, resetNotifications } from './notificationsApi'
 import { projectsHandlers, resetProjects } from './projectsApi'
 import { resetSettings, settingsHandlers } from './settingsApi'
@@ -50,6 +51,7 @@ export function resetApi() {
   resetTickets()
   resetProjects()
   resetNotifications()
+  resetIntegrations()
 }
 
 export function problem(status: number, code: string, headers?: Record<string, string>) {
@@ -90,4 +92,5 @@ export const server = setupServer(
   ...ticketsHandlers,
   ...projectsHandlers,
   ...notificationsHandlers,
+  ...integrationsHandlers,
 )

@@ -156,6 +156,11 @@
   --count-badge: 18px;         /* red unread count on the bell */
   --notif-inbox-basis: 520px;  /* inbox card grows from this width beside settings */
   --notif-settings-basis: 420px;
+  --provider-card-min-w: 320px; /* GitHub and GitLab cards wrap below this (Integrations mock) */
+  --rules-card-basis: 600px;   /* commit message rules grow from this width beside the tester */
+  --tester-card-basis: 360px;  /* "Try a commit message" card */
+  --log-time-w: 46px;          /* time column of the recent events log */
+  --log-provider-w: 64px;      /* provider column of the recent events log */
 
   /* ---------- Focus & motion ---------- */
   --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);

@@ -1,10 +1,11 @@
 import type { TFunction } from 'i18next'
-import { ArrowRight, Clock, Flag, ListChecks, MessageSquare, TicketIcon, User, UserPlus, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Clock, Flag, GitBranch, ListChecks, MessageSquare, TicketIcon, User, UserPlus, type LucideIcon } from 'lucide-react'
 
 import type { Audience, Notification, NotificationFilter, TicketStatus } from '../../api/client'
+import { codeEventText } from '../code/labels'
 
-/** Inbox filters each audience offers (HANDOFF §4). SLA arrives with the SLA engine; code activity in M7. */
-export const TEAM_FILTERS: readonly NotificationFilter[] = ['all', 'unread', 'comments', 'status', 'assigned', 'sla']
+/** Inbox filters each audience offers (HANDOFF §4). */
+export const TEAM_FILTERS: readonly NotificationFilter[] = ['all', 'unread', 'comments', 'status', 'assigned', 'sla', 'code']
 export const PORTAL_FILTERS: readonly NotificationFilter[] = ['all', 'unread', 'replies', 'status']
 export const BELL_FILTERS: readonly NotificationFilter[] = ['all', 'unread']
 export const DEFAULT_FILTER: NotificationFilter = 'all'
@@ -20,6 +21,7 @@ const tones = {
   person: 'bg-chip-paused-bg text-chip-paused-fg',
   priority: 'bg-chip-warning-bg text-chip-warning-fg',
   sla: 'bg-danger-tint text-danger',
+  code: 'bg-chip-code-bg text-chip-code-fg',
 } as const
 
 /** The type icon of a notification: what kind of change it is, never decoration. */
@@ -40,6 +42,8 @@ export function noticeIcon(n: Notification): { Icon: LucideIcon; tone: string } 
       return { Icon: Clock, tone: tones.sla }
     case 'ticket_logged':
       return { Icon: TicketIcon, tone: tones.message }
+    case 'code':
+      return { Icon: GitBranch, tone: tones.code }
     case 'colleague':
       if (n.kind === 'added') return { Icon: UserPlus, tone: tones.person }
       if (n.kind === 'status') return { Icon: ArrowRight, tone: tones.status }
@@ -65,8 +69,12 @@ export function noticeText(t: TFunction, n: Notification, audience: Audience, ti
     case 'reply':
     case 'question':
       return t(`notifications.text.${n.event}`, { actor })
-    case 'status':
-      return t('notifications.text.status', { from, to })
+    case 'status': {
+      const code = n.also.find((a) => a.code)?.code
+      return code
+        ? t('notifications.text.statusByCode', { from, to, event: codeEventText(t, code) })
+        : t('notifications.text.status', { from, to })
+    }
     case 'resolved':
       return n.reopenUntil && n.statusTo === 'resolved'
         ? t('notifications.text.resolvedReopen', { from, to, date: time.day(n.reopenUntil) })
@@ -91,6 +99,10 @@ export function noticeText(t: TFunction, n: Notification, audience: Audience, ti
       return t('notifications.text.colleagueReply', { actor })
     case 'ticket_logged':
       return t('notifications.text.ticketLogged', { actor })
+    case 'code':
+      return n.code
+        ? t('notifications.text.code', { provider: t(`code.providers.${n.code.provider}`), event: codeEventText(t, n.code) })
+        : t('notifications.text.codeUnknown')
     case 'sla': {
       const slaClock = t(`notifications.text.slaClock.${n.slaClock ?? 'resolution'}`)
       return n.kind === 'breached'

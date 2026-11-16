@@ -38,6 +38,10 @@ export const queryKeys = {
   notificationList: (filter: string) => ['notifications', 'list', filter] as const,
   unreadCount: ['notifications', 'unread'],
   notificationSettings: ['notification-settings'],
+  integrations: ['integrations'],
+  codeEvents: ['integrations', 'events'],
+  commitTest: (message: string) => ['integrations', 'commit-test', message] as const,
+  ticketCode: (key: string) => ['tickets', 'code', key] as const,
 } as const
 
 /** Invalidates queries by key prefix. */

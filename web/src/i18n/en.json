@@ -21,7 +21,8 @@
     "retry": "Try again",
     "errorTitle": "Something went wrong",
     "separator": " · ",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "newTab": "(opens in a new tab)"
   },
   "roles": {
     "admin": "Administrator",
@@ -563,6 +564,188 @@
           "stopped": "Stopped"
         }
       }
+    },
+    "integrations": {
+      "how": {
+        "github": "Repository webhooks with a secret. Events: push, pull request, deployment status, workflow run.",
+        "gitlab": "Project webhooks with a secret token. Events: push, merge request, pipeline, deployment."
+      },
+      "providerStatus": {
+        "notSetUp": "Not set up",
+        "connected": "Connected",
+        "waiting": "Waiting for the first event",
+        "failing": "Needs attention"
+      },
+      "noRepos": "No {{provider}} repositories yet. Add one to start reading its commits.",
+      "noProjects": "No projects read code from it yet.",
+      "projectsLabel": "Projects",
+      "projectClient": "({{client}})",
+      "lastEvent": "Last event {{time}}",
+      "waiting": "No events yet. Add the webhook to start.",
+      "refused": "Refused {{time}}: {{reason}}",
+      "errors": {
+        "bad_signature": "the secret doesn't match",
+        "repository_mismatch": "the webhook belongs to another repository",
+        "malformed": "the delivery couldn't be read",
+        "too_large": "the delivery was too large"
+      },
+      "add": "Add repository",
+      "addFor": "Add a {{provider}} repository",
+      "addTitle": "Add a {{provider}} repository",
+      "addSubtitle": "You get the webhook address and secret to paste into its settings next.",
+      "url": "Repository address",
+      "urlHint": {
+        "github": "The address you open the repository at.",
+        "gitlab": "The address you open the project at, on gitlab.com or your own GitLab."
+      },
+      "urlPlaceholder": {
+        "github": "https://github.com/owner/repository",
+        "gitlab": "https://gitlab.example.com/group/project"
+      },
+      "urlRequired": "Enter the repository's address.",
+      "pickerHint": "Their tickets move with this repository's commits, merges, CI runs and deploys. A project reads one repository.",
+      "pickerEmpty": "No projects yet. Add one under Projects first.",
+      "pickerMoves": "{{client}}. Reads {{repo}} now; it moves here.",
+      "editProjects": "Edit projects",
+      "editProjectsLabel": "Edit the projects of {{name}}",
+      "projectsTitle": "Projects reading {{name}}",
+      "projectsSaved": "Projects of {{name}} saved.",
+      "newSecret": "New secret",
+      "newSecretLabel": "Make a new secret for {{name}}",
+      "rotateTitle": "Make a new secret for {{name}}?",
+      "rotateBody": "The old secret stops working at once. Deliveries are refused until you paste the new one into the webhook settings.",
+      "rotateConfirm": "Make a new secret",
+      "remove": "Disconnect",
+      "removeLabel": "Disconnect {{name}}",
+      "removeTitle": "Disconnect {{name}}?",
+      "removeBody": "Its webhooks are refused from now on and its projects stop reading code. Tickets keep the code activity they have.",
+      "removed": "{{name}} disconnected.",
+      "added": "{{name}} connected. It shows as connected after its first delivery.",
+      "secretSaved": "New secret for {{name}} made.",
+      "setupTitle": "Add the webhook to {{name}}",
+      "setupSecretTitle": "New secret for {{name}}",
+      "setupWhere": {
+        "github": "On GitHub, open the repository's Settings › Webhooks › Add webhook and fill in:",
+        "gitlab": "On GitLab, open the project's Settings › Webhooks › Add new webhook and fill in:"
+      },
+      "setupUrl": {
+        "github": "Payload URL",
+        "gitlab": "URL"
+      },
+      "setupContentType": "Content type",
+      "contentTypeJson": "application/json",
+      "setupSecret": {
+        "github": "Secret",
+        "gitlab": "Secret token"
+      },
+      "secretOnce": "Shown only now. Copy it before you close this; you can make a new one at any time.",
+      "setupEventsLabel": {
+        "github": "Which events",
+        "gitlab": "Trigger"
+      },
+      "setupEvents": {
+        "github": "Let me select individual events: Pushes, Pull requests, Deployment statuses, Workflow runs, Check suites.",
+        "gitlab": "Push events (all branches), Merge request events, Pipeline events, Deployment events."
+      },
+      "setupReachable": "{{provider}} must be able to reach this address, so the install has to be reachable from the internet or from your own GitLab.",
+      "setupDone": "Done",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyLabel": "Copy the {{label}}",
+      "rules": {
+        "title": "Commit message rules",
+        "description": "Keywords match GitHub and GitLab habits (fix, close, resolve) so developers don't learn new ones. Unlike their built-in closing, this works on any branch.",
+        "cols": {
+          "contains": "Message contains",
+          "example": "Example",
+          "effect": "What happens"
+        },
+        "link": {
+          "contains": "Ticket ID only",
+          "example": "refs {{prefix}}-24871 add logging",
+          "effect": "Linked to the ticket; New or Assigned → In progress. A new ticket goes to the commit's author when they're on the team."
+        },
+        "fix": {
+          "contains": "fix / close / resolve + ID",
+          "example": "Fixes {{prefix}}-24871: revert TTL",
+          "effect": "DoD item “Fix committed” ticked"
+        },
+        "opened": {
+          "contains": "PR/MR opened with ID",
+          "example": "branch fix/{{prefix}}-24871-sso",
+          "effect": "Shown on the ticket as “In review”"
+        },
+        "merged": {
+          "contains": "PR/MR merged, or a commit pushed straight to the branch",
+          "example": "into the DoD branch",
+          "effect": "DoD item ticked → In UAT, or Resolved if nothing else is required"
+        },
+        "reopen": {
+          "contains": "reopen + ID",
+          "example": "reopen {{prefix}}-24830 date bug back",
+          "effect": "Back to In progress; assignee notified"
+        },
+        "runs": "CI runs on the DoD branch and production deployments after the merge tick “CI passed” and “Deployed” when the project asks for them."
+      },
+      "tester": {
+        "title": "Try a commit message",
+        "label": "Message",
+        "initial": "Fixes {{prefix}}-24871: revert SSO token TTL to 8h",
+        "reading": "Reading the message…",
+        "emptyTitle": "Nothing to read",
+        "empty": "Type a commit message to see what it would do.",
+        "noneTitle": "No ticket found",
+        "none": "No {{prefix}} number in the message, so the commit is ignored.",
+        "keySeparator": ", ",
+        "reopen": {
+          "title": "Reopen · {{keys}}",
+          "text": "Moves {{keys}} back to In progress and notifies the assignee."
+        },
+        "fix": {
+          "title": "Fix committed · {{keys}}",
+          "text": "Links the commit and ticks “Fix committed”. The ticket still waits for the rest of its project DoD, such as the merge into main or client UAT."
+        },
+        "link": {
+          "title": "Linked · {{keys}}",
+          "text": "Adds the commit to the activity log. If the ticket is New or Assigned, it moves to In progress."
+        },
+        "missing_one": "No ticket {{keys}} yet, so it would be logged and ignored.",
+        "missing_other": "No tickets {{keys}} yet, so they would be logged and ignored.",
+        "samples": {
+          "link": "refs {{prefix}}-24859 add retry",
+          "fix": "Closes {{prefix}}-24830",
+          "reopen": "reopen {{prefix}}-24830",
+          "none": "update readme"
+        }
+      },
+      "log": {
+        "title": "Recent events",
+        "description": "What the latest commits, pull/merge requests, CI runs and deployments did, newest first.",
+        "loading": "Loading recent events…",
+        "empty": "No events yet. They show up here once a connected repository sends a commit, pull request or deployment that names a ticket.",
+        "cut": "{{text}}…",
+        "kind": {
+          "commit": "Push {{ref}} “{{title}}”",
+          "pr_opened": "{{request}} opened on {{repo}}",
+          "pr_merged": "{{request}} merged into {{target}}",
+          "pr_closed": "{{request}} closed without merging",
+          "pipeline": "CI passed on {{branch}}",
+          "deployment": "Deployment to {{ref}} succeeded"
+        },
+        "outcome": {
+          "moved": "{{what}} → <key>{{key}}</key> moved to {{status}}",
+          "linked": "{{what}} → linked to <key>{{key}}</key>",
+          "in_review": "{{what}} → linked to <key>{{key}}</key>, in review",
+          "fix_committed": "{{what}} → <key>{{key}}</key>: “{{item}}” ticked",
+          "merged": "{{what}} → <key>{{key}}</key>: “{{item}}” ticked",
+          "ci_passed": "{{what}} → <key>{{key}}</key>: “{{item}}” ticked",
+          "deployed": "{{what}} → <key>{{key}}</key>: “{{item}}” ticked",
+          "reopened": "{{what}} → <key>{{key}}</key> reopened",
+          "unknown_ticket": "{{what}} mentioned <key>{{key}}</key>: no such ticket, ignored",
+          "other_repository": "{{what}} mentioned <key>{{key}}</key>: its project reads another repository, ignored",
+          "ticket_closed": "{{what}} mentioned <key>{{key}}</key>: the ticket is closed, ignored"
+        }
+      }
     }
   },
   "priority": {
@@ -841,7 +1024,13 @@
         "first_response": "First response",
         "resolution": "Resolution"
       },
-      "loading": "Loading the activity log…"
+      "loading": "Loading the activity log…",
+      "statusByCodeActivity": "Status changed from {{from}} to {{to}}: {{actor}} started on the code",
+      "statusByCodeDone": "Status changed from {{from}} to {{to}}: the code conditions of the Definition of Done were met",
+      "statusByCodeReopened": "Status changed from {{from}} to {{to}}: a commit by {{actor}} reopened the ticket",
+      "codeLinked": "{{provider}}: {{event}}",
+      "codeItems": "{{line}}. Done: {{items}}",
+      "codeItemSeparator": ", "
     },
     "notFound": {
       "title": "Ticket not found",
@@ -1063,7 +1252,8 @@
         "status": "Status",
         "assigned": "Assigned",
         "sla": "SLA",
-        "replies": "Replies"
+        "replies": "Replies",
+        "code": "Code"
       },
       "empty": "Nothing here.",
       "emptyFiltered": "Nothing here for this filter.",
@@ -1125,7 +1315,7 @@
           },
           "status": {
             "label": "Status changes",
-            "hint": "Including moves on the board"
+            "hint": "Including moves on the board and by GitHub/GitLab"
           },
           "assignment": {
             "label": "Assigned to me or unassigned",
@@ -1142,6 +1332,10 @@
           "uat_result": {
             "label": "Client approved or rejected UAT",
             "hint": "Rejections include the client's reason"
+          },
+          "code": {
+            "label": "Code activity",
+            "hint": "Commits, pull/merge requests, deploys"
           }
         },
         "portal": {
@@ -1199,7 +1393,10 @@
         "resolution": "resolve"
       },
       "system": "The helpdesk",
-      "quote": "“{{text}}”"
+      "quote": "“{{text}}”",
+      "statusByCode": "{{event}}, moved: {{from}} → {{to}}",
+      "code": "{{provider}}: {{event}}",
+      "codeUnknown": "Code activity on this ticket"
     }
   },
   "sla": {
@@ -1322,6 +1519,27 @@
       "deployed": "Deployed to production",
       "uat_approved": "UAT approved by client",
       "requester_confirmed": "Requester confirmed it's fixed"
+    }
+  },
+  "code": {
+    "providers": {
+      "github": "GitHub",
+      "gitlab": "GitLab"
+    },
+    "request": {
+      "github": "PR #{{number}}",
+      "gitlab": "MR !{{number}}"
+    },
+    "event": {
+      "commit": "commit {{sha}} on {{branch}} mentions this ticket",
+      "commitFixes": "commit {{sha}} on {{branch}} fixes this ticket",
+      "commitLanded": "commit {{sha}} landed on {{branch}}",
+      "commitReopened": "commit {{sha}} says the problem is back",
+      "pr_opened": "{{request}} opened → {{target}}",
+      "pr_merged": "{{request}} merged into {{target}}",
+      "pr_closed": "{{request}} closed without merging",
+      "pipeline": "CI passed on {{branch}}",
+      "deployment": "deployed to {{environment}}"
     }
   }
 }

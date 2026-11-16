@@ -18,6 +18,7 @@ const FILTER_EVENTS: Partial<Record<NotificationFilter, NotificationEvent[]>> = 
   assigned: ['assignment'],
   sla: ['sla'],
   replies: ['reply', 'question'],
+  code: ['code'],
 }
 
 function item(id: string, over: Partial<Notification>): Notification {
@@ -39,6 +40,7 @@ function item(id: string, over: Partial<Notification>): Notification {
     cause: null,
     autoApproveAt: null,
     reopenUntil: null,
+    code: null,
     quote: null,
     also: [],
     channels: { web: true, email: true },

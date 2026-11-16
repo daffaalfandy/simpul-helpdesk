@@ -8,6 +8,7 @@ import type {
   AttachmentPolicy,
   Board,
   BoardCard,
+  BoardCardCode,
   BoardCardUat,
   CatalogItem,
   DodConfig,
@@ -16,6 +17,7 @@ import type {
   Requester,
   Ticket,
   TicketActivity,
+  TicketCode,
   TicketDod,
   TicketDodInput,
   TicketMessage,
@@ -70,10 +72,11 @@ export function ticketDod(project: DodConfig, own?: { config: DodConfig; reason:
     config,
     projectConfig: project,
     overrideReason: own?.reason ?? null,
-    items: items.map((item) => ({ item, doneAt: null, doneBy: null })),
+    items: items.map((item) => ({ item, doneAt: null, doneBy: null, source: null })),
     met: items.length === 0,
     pending: items,
     canOverride: true,
+    hasRepository: false,
   }
 }
 const rina = ref(IDS.rina, 'Rina Pratiwi')
@@ -195,8 +198,8 @@ function fixtures() {
   }
   const activity: Record<string, TicketActivity[]> = {
     'HD-24871': [
-      { id: 'e-1', at: '2026-11-12T01:14:00Z', actorName: 'Hendra Gunawan', action: 'created', from: null, to: null, reason: null, cause: null, channel: 'portal' },
-      { id: 'e-2', at: '2026-11-12T01:16:00Z', actorName: 'Rina Pratiwi', action: 'assignee_changed', from: null, to: 'Rina Pratiwi', reason: null, cause: null, channel: null },
+      { id: 'e-1', at: '2026-11-12T01:14:00Z', actorName: 'Hendra Gunawan', action: 'created', from: null, to: null, reason: null, cause: null, channel: 'portal', code: null },
+      { id: 'e-2', at: '2026-11-12T01:16:00Z', actorName: 'Rina Pratiwi', action: 'assignee_changed', from: null, to: 'Rina Pratiwi', reason: null, cause: null, channel: null, code: null },
     ],
   }
   const catalogItems: CatalogItem[] = [
@@ -223,7 +226,31 @@ function fixtures() {
   }
   /** Which day of the client's test each In UAT card is on. */
   const cardUat: Record<string, BoardCardUat> = { 'HD-24915': { day: 2, days: 3 } }
-  return { tickets, messages, activity, catalogItems, requesters, assignees, watchers, cardSla, cardUat }
+  const cardCode: Record<string, BoardCardCode> = {
+    'HD-24871': { provider: 'github', request: { number: 42, state: 'open', target: 'main' }, commits: 2, branch: 'fix/HD-24871-sso', deployed: false },
+  }
+  const code: Record<string, TicketCode> = {
+    'HD-24871': {
+      repository: { id: 'r-1', provider: 'github', fullName: 'vendor-id/eoffice-jambi', webUrl: 'https://github.com/vendor-id/eoffice-jambi' },
+      requests: [
+        {
+          provider: 'github', number: 42, title: 'Revert SSO token TTL change', state: 'open', branch: 'fix/HD-24871-sso',
+          target: 'main', url: 'https://github.com/vendor-id/eoffice-jambi/pull/42', author: 'Adi Saputra', at: '2026-11-12T02:05:00Z',
+        },
+      ],
+      commits: [
+        {
+          provider: 'github', sha: 'a1f9c2e', title: 'Fix HD-24871: revert SSO token TTL to 8h', branch: 'fix/HD-24871-sso',
+          author: 'Adi Saputra', url: 'https://github.com/vendor-id/eoffice-jambi/commit/a1f9c2e', at: '2026-11-12T01:52:00Z',
+        },
+        {
+          provider: 'github', sha: '7c3d019', title: 'refs HD-24871 add logging around token refresh', branch: 'fix/HD-24871-sso',
+          author: 'Adi Saputra', url: 'https://github.com/vendor-id/eoffice-jambi/commit/7c3d019', at: '2026-11-12T01:40:00Z',
+        },
+      ],
+    },
+  }
+  return { tickets, messages, activity, catalogItems, requesters, assignees, watchers, cardSla, cardUat, cardCode, code }
 }
 
 type Recorded = { method: string; path: string; search: string; body: unknown }
@@ -327,6 +354,7 @@ function boardCard(t: Ticket): BoardCard {
     sla: tickets.cardSla[key] ?? null,
     dodPending: t.dod?.pending ?? [],
     uat: tickets.cardUat[key] ?? null,
+    code: tickets.cardCode[key] ?? null,
   }
 }
 
@@ -579,7 +607,7 @@ export const ticketsHandlers = [
       ...(tickets.activity[t.key] ?? []),
       {
         id: newId('e'), at: new Date().toISOString(), actorName: state.me?.name ?? null, action: 'status_changed', from, to: status,
-        reason: skipped ? (body.reason ?? null) : null, cause: skipped ? 'dod_skipped' : null, channel: null,
+        reason: skipped ? (body.reason ?? null) : null, cause: skipped ? 'dod_skipped' : null, channel: null, code: null,
       },
     ]
     return HttpResponse.json(t)
@@ -596,7 +624,7 @@ export const ticketsHandlers = [
       {
         id: newId('e'), at: new Date().toISOString(), actorName: state.me?.name ?? null, action: 'dod_changed',
         from: body.dod ? 'project' : 'ticket', to: body.dod ? 'ticket' : 'project', reason: body.reason ?? null, cause: null,
-        channel: null,
+        channel: null, code: null,
       },
     ]
     return HttpResponse.json(t)
@@ -616,6 +644,12 @@ export const ticketsHandlers = [
     t.priority = body.priority
     t.sla = { ...t.sla, priority: body.priority }
     return HttpResponse.json(t)
+  }),
+  http.get(`${API}/tickets/:key/code`, ({ params }) => {
+    if (isRequester()) return problem(403, 'forbidden')
+    const t = find(params.key)
+    if (!t) return problem(404, 'not_found')
+    return HttpResponse.json(tickets.code[t.key] ?? { repository: null, requests: [], commits: [] })
   }),
   http.get(`${API}/tickets/:key/activity`, ({ params }) => {
     if (isRequester()) return problem(403, 'forbidden')

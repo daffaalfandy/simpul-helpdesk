@@ -27,6 +27,8 @@ type FormDialogProps = {
   error?: ReactNode
   /** Extra footer content on the left, e.g. a delete button. */
   footerStart?: ReactNode
+  /** Leaves out Cancel when the dialog only shows something and its one button closes it. */
+  hideCancel?: boolean
   children: ReactNode
 }
 
@@ -41,6 +43,7 @@ export function FormDialog({
   isPending,
   error,
   footerStart,
+  hideCancel,
   children,
 }: FormDialogProps) {
   const { t } = useTranslation()
@@ -75,9 +78,11 @@ export function FormDialog({
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4">
                 <div>{footerStart}</div>
                 <div className="flex flex-wrap gap-3">
-                  <Button variant="outline" onPress={close}>
-                    {t('common.cancel')}
-                  </Button>
+                  {!hideCancel && (
+                    <Button variant="outline" onPress={close}>
+                      {t('common.cancel')}
+                    </Button>
+                  )}
                   <Button type="submit" isPending={isPending}>
                     {submitLabel}
                   </Button>

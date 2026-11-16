@@ -19,6 +19,7 @@ function card(key: string, over: Partial<BoardCard> = {}): BoardCard {
     sla: null,
     dodPending: [],
     uat: null,
+    code: null,
     ...over,
   }
 }

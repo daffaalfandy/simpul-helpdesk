@@ -60,18 +60,18 @@ function fixtures() {
   const projects: Project[] = [
     {
       id: PROJECT_IDS.eOffice, client: JAMBI, name: 'e-Office', description: 'Letters, dispositions, archives',
-      isDefault: true, active: true, sla: fastSla, dod: uatDod, allowTicketOverride: true, hasRepository: false,
+      isDefault: true, active: true, sla: fastSla, dod: uatDod, allowTicketOverride: true, hasRepository: false, repository: null,
       openTicketCount: 2, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.email, client: JAMBI, name: 'Email', description: 'Mailboxes and accounts',
-      isDefault: false, active: true, sla: defaultSla, dod: noDod, allowTicketOverride: true, hasRepository: false,
+      isDefault: false, active: true, sla: defaultSla, dod: noDod, allowTicketOverride: true, hasRepository: false, repository: null,
       openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.network, client: BATAM, name: 'Network & infra support', description: null,
       isDefault: true, active: true, sla: defaultSla, dod: { ...noDod, requesterConfirms: true }, allowTicketOverride: true,
-      hasRepository: false, openTicketCount: 1, createdAt: STAMP, updatedAt: STAMP,
+      hasRepository: false, repository: null, openTicketCount: 1, createdAt: STAMP, updatedAt: STAMP,
     },
   ]
   return { levels, projects }
@@ -131,7 +131,7 @@ export const projectsHandlers = [
     const project: Project = {
       id: newId(), client, name: body.name, description: body.description ?? null,
       isDefault: body.isDefault || first, active: body.active || first, sla: defaultSla, dod: uatDod,
-      allowTicketOverride: true, hasRepository: false, openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
+      allowTicketOverride: true, hasRepository: false, repository: null, openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
     }
     projectsApi.projects.push(project)
     return HttpResponse.json(project, { status: 201 })

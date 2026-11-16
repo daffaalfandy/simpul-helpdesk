@@ -88,6 +88,28 @@ export type SlaClockName = components['schemas']['SlaClockName']
 export type SlaPhase = components['schemas']['SlaPhase']
 export type BoardCardSla = components['schemas']['BoardCardSla']
 export type BoardSlaFilter = components['schemas']['BoardSlaFilter']
+export type GitProvider = components['schemas']['GitProvider']
+export type Integrations = components['schemas']['Integrations']
+export type Repository = components['schemas']['Repository']
+export type RepositoryRef = components['schemas']['RepositoryRef']
+export type RepositoryCreate = components['schemas']['RepositoryCreate']
+export type RepositoryWithSecret = components['schemas']['RepositoryWithSecret']
+export type RepositoryStatus = components['schemas']['RepositoryStatus']
+export type RepositoryError = components['schemas']['RepositoryError']
+export type CodeEventKind = components['schemas']['CodeEventKind']
+export type CodeOutcome = components['schemas']['CodeOutcome']
+export type CodeEventLog = components['schemas']['CodeEventLog']
+export type CommitTest = components['schemas']['CommitTest']
+export type CommitTestRef = components['schemas']['CommitTestRef']
+export type CommitRefAction = components['schemas']['CommitRefAction']
+export type TicketCode = components['schemas']['TicketCode']
+export type CodeRequest = components['schemas']['CodeRequest']
+export type CodeRequestState = components['schemas']['CodeRequestState']
+export type CodeCommit = components['schemas']['CodeCommit']
+export type CodeSource = components['schemas']['CodeSource']
+export type BoardCardCode = components['schemas']['BoardCardCode']
+export type TicketActivityCode = components['schemas']['TicketActivityCode']
+export type NotificationCode = components['schemas']['NotificationCode']
 
 /** Stable error codes returned by the API (api/internal/apperr). */
 export const ErrorCode = {
@@ -109,6 +131,9 @@ export const ErrorCode = {
   ClientHasNoProject: 'client_has_no_project',
   AttachmentTooLarge: 'attachment_too_large',
   AttachmentTypeNotAllowed: 'attachment_type_not_allowed',
+  InvalidRepositoryUrl: 'invalid_repository_url',
+  RepositoryTaken: 'repository_taken',
+  RepositoryInUse: 'repository_in_use',
 } as const
 
 export const HttpStatus = {

@@ -26,6 +26,7 @@ function notice(over: Partial<Notification>): Notification {
     cause: null,
     autoApproveAt: null,
     reopenUntil: null,
+    code: null,
     quote: null,
     also: [],
     channels: { web: true, email: true },

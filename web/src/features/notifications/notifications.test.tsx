@@ -90,6 +90,7 @@ describe('notifications page', () => {
       'Status',
       'Assigned',
       'SLA',
+      'Code',
     ])
     const inbox = screen.getByRole('list')
     expect(within(inbox).getByText('Adi Saputra changed priority: P3 → P2')).toBeInTheDocument()
