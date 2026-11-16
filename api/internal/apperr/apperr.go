@@ -76,6 +76,7 @@ const (
 	CodeRepositoryInUse           = "repository_in_use"
 	CodeRepositoryMismatch        = "repository_mismatch"
 	CodeInvalidSignature          = "invalid_signature"
+	CodeMonthInFuture             = "month_in_future"
 )
 
 // Error is a domain error with a stable machine-readable code.

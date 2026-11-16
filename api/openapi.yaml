@@ -30,6 +30,7 @@ tags:
   - name: projects
   - name: notifications
   - name: integrations
+  - name: reports
 
 paths:
   /organization:
@@ -1663,6 +1664,29 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /reports/sla:
+    get:
+      operationId: getSlaReport
+      summary: The monthly SLA report for every client (supervisors and admins)
+      description: |
+        A month holds the tickets created in it, in the organisation's time zone, open or done.
+        A ticket is within SLA while neither of its clocks has breached; breaches count tickets,
+        not clocks. Every client is listed, busiest first, clients without tickets last.
+        Error code `month_in_future` (400).
+      tags: [reports]
+      parameters:
+        - $ref: "#/components/parameters/ReportMonth"
+      responses:
+        "200":
+          description: The report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SlaReport" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1713,6 +1737,12 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    ReportMonth:
+      name: month
+      in: query
+      required: false
+      description: A month such as `2026-11`; the current month when left out.
+      schema: { type: string, pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" }
 
   responses:
     Problem:
@@ -3245,3 +3275,69 @@ components:
           allOf: [{ $ref: "#/components/schemas/TicketActivityCode" }]
           nullable: true
           description: Set on code_linked.
+
+    SlaReport:
+      type: object
+      required: [month, currentMonth, firstMonth, toDate, targetPercent, waitingPause, totals,
+        clientsWithTickets, clientsBelowTarget, clients]
+      properties:
+        month: { type: string, description: "The report's month, e.g. `2026-11`." }
+        currentMonth: { type: string, description: "This month in the organisation's time zone." }
+        firstMonth:
+          type: string
+          nullable: true
+          description: The month of the first ticket ever; null without tickets.
+        toDate: { type: boolean, description: The month hasn't ended yet. }
+        targetPercent:
+          type: number
+          format: double
+          description: The contract target for the share of tickets within SLA, 0 to 100.
+        waitingPause:
+          allOf: [{ $ref: "#/components/schemas/SlaWaitingPause" }]
+          nullable: true
+          description: Null without tickets.
+        totals: { $ref: "#/components/schemas/SlaFigures" }
+        clientsWithTickets: { type: integer }
+        clientsBelowTarget:
+          type: integer
+          description: Clients with tickets and a share within SLA under the target.
+        clients:
+          type: array
+          items: { $ref: "#/components/schemas/SlaReportClient" }
+
+    SlaWaitingPause:
+      type: string
+      enum: [all, some, none]
+      description: |
+        How many of the month's tickets stop their resolution clock while waiting on the
+        client (each ticket follows its project's SLA as it was when the ticket was created).
+
+    SlaReportClient:
+      type: object
+      required: [id, name, belowTarget, figures]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        belowTarget: { type: boolean }
+        figures: { $ref: "#/components/schemas/SlaFigures" }
+
+    SlaFigures:
+      type: object
+      required: [tickets, incidents, requests, breaches, withinSlaPercent, avgFirstResponseMs]
+      properties:
+        tickets: { type: integer }
+        incidents: { type: integer }
+        requests: { type: integer }
+        breaches: { type: integer, description: Tickets that missed a target, met late included. }
+        withinSlaPercent:
+          type: number
+          format: double
+          nullable: true
+          description: Share of tickets without a breach, 0 to 100; null without tickets.
+        avgFirstResponseMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: |
+            Mean first-response time of answered portal reports, on their SLA clocks. Tickets the
+            team logs are answered when logged and are left out. Null when none.

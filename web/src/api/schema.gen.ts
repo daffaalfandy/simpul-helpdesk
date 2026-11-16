@@ -1293,6 +1293,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports/sla": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The monthly SLA report for every client (supervisors and admins)
+         * @description A month holds the tickets created in it, in the organisation's time zone, open or done.
+         *     A ticket is within SLA while neither of its clocks has breached; breaches count tickets,
+         *     not clocks. Every client is listed, busiest first, clients without tickets last.
+         *     Error code `month_in_future` (400).
+         */
+        get: operations["getSlaReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2428,6 +2451,59 @@ export interface components {
             /** @description Set on code_linked. */
             code: components["schemas"]["TicketActivityCode"] | null;
         };
+        SlaReport: {
+            /** @description The report's month, e.g. `2026-11`. */
+            month: string;
+            /** @description This month in the organisation's time zone. */
+            currentMonth: string;
+            /** @description The month of the first ticket ever; null without tickets. */
+            firstMonth: string | null;
+            /** @description The month hasn't ended yet. */
+            toDate: boolean;
+            /**
+             * Format: double
+             * @description The contract target for the share of tickets within SLA, 0 to 100.
+             */
+            targetPercent: number;
+            /** @description Null without tickets. */
+            waitingPause: components["schemas"]["SlaWaitingPause"] | null;
+            totals: components["schemas"]["SlaFigures"];
+            clientsWithTickets: number;
+            /** @description Clients with tickets and a share within SLA under the target. */
+            clientsBelowTarget: number;
+            clients: components["schemas"]["SlaReportClient"][];
+        };
+        /**
+         * @description How many of the month's tickets stop their resolution clock while waiting on the
+         *     client (each ticket follows its project's SLA as it was when the ticket was created).
+         * @enum {string}
+         */
+        SlaWaitingPause: "all" | "some" | "none";
+        SlaReportClient: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            belowTarget: boolean;
+            figures: components["schemas"]["SlaFigures"];
+        };
+        SlaFigures: {
+            tickets: number;
+            incidents: number;
+            requests: number;
+            /** @description Tickets that missed a target */
+            breaches: number;
+            /**
+             * Format: double
+             * @description Share of tickets without a breach, 0 to 100; null without tickets.
+             */
+            withinSlaPercent: number | null;
+            /**
+             * Format: int64
+             * @description Mean first-response time of answered portal reports, on their SLA clocks. Tickets the
+             *     team logs are answered when logged and are left out. Null when none.
+             */
+            avgFirstResponseMs: number | null;
+        };
     };
     responses: {
         /** @description Error (RFC 9457 problem details) */
@@ -2461,6 +2537,8 @@ export interface components {
         RepositoryId: string;
         UserId: string;
         NotificationId: string;
+        /** @description A month such as `2026-11`; the current month when left out. */
+        ReportMonth: string;
     };
     requestBodies: never;
     headers: never;
@@ -4494,6 +4572,33 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSlaReport: {
+        parameters: {
+            query?: {
+                /** @description A month such as `2026-11`; the current month when left out. */
+                month?: components["parameters"]["ReportMonth"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlaReport"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
