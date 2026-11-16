@@ -1702,11 +1702,13 @@ export interface components {
         /**
          * @description Why the status changed when it wasn't a plain move by hand: the system moved it
          *     (assignment, requester_reply, uat_auto_approved, auto_closed), the client answered
-         *     (uat_approved, uat_rejected, reopened), or an agent resolved with the Definition of Done
-         *     unmet (dod_skipped, with the reason).
+         *     (uat_approved, uat_rejected, reopened), an agent resolved with the Definition of Done
+         *     unmet (dod_skipped, with the reason), or GitHub/GitLab moved it: a commit or pull/merge
+         *     request started the work (code_activity), the code conditions were met (code_done), or a
+         *     commit said the problem is back (code_reopened).
          * @enum {string}
          */
-        TicketStatusCause: "assignment" | "requester_reply" | "uat_approved" | "uat_rejected" | "uat_auto_approved" | "reopened" | "auto_closed" | "dod_skipped";
+        TicketStatusCause: "assignment" | "requester_reply" | "uat_approved" | "uat_rejected" | "uat_auto_approved" | "reopened" | "auto_closed" | "dod_skipped" | "code_activity" | "code_done" | "code_reopened";
         /**
          * @description `fix_committed` is shown with code conditions but never required.
          * @enum {string}

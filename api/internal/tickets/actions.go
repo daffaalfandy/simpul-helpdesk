@@ -12,6 +12,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
@@ -177,8 +178,9 @@ type statusMove struct {
 	messageID *uuid.UUID
 }
 
-// writeStatus stores a status change and its audit entry. A done ticket that opens again
-// forgets the client's answer, so the next resolution asks again.
+// writeStatus stores a status change and its audit entry, and forgets the Definition of Done
+// items the move clears (dod.Cleared): the client's answer when a done ticket opens again, the
+// code items when the ticket goes back to work.
 func (s *Service) writeStatus(ctx context.Context, tx store.Tx, cs *changeSet, actor audit.Actor, m statusMove) error {
 	if err := tx.Q.UpdateTicketStatus(ctx, db.UpdateTicketStatusParams{
 		ID: cs.ticketID, Status: string(m.to), Resolved: ticket.MarksResolved(m.to), Closed: m.to == ticket.StatusClosed,
@@ -197,10 +199,7 @@ func (s *Service) writeStatus(ctx context.Context, tx store.Tx, cs *changeSet, a
 	if err := cs.write(ctx, tx.Q, e); err != nil {
 		return err
 	}
-	if ticket.MarksResolved(m.from) && !ticket.MarksResolved(m.to) {
-		return clearClientItems(ctx, tx.Q, cs, actor)
-	}
-	return nil
+	return clearItems(ctx, tx.Q, cs, actor, dod.Cleared(m.from, m.to))
 }
 
 func sameID(a, b *uuid.UUID) bool {

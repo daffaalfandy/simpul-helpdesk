@@ -185,11 +185,13 @@ func (s *Service) SetDoD(ctx context.Context, p *auth.Principal, key string, cfg
 	return s.Get(ctx, p, key)
 }
 
-// clearClientItems forgets the client's answer when a done ticket opens again, so the next
-// resolution asks again. Code items stay: the merge still happened.
-func clearClientItems(ctx context.Context, q *db.Queries, cs *changeSet, actor audit.Actor) error {
-	items := make([]string, len(dod.ClientItems))
-	for i, it := range dod.ClientItems {
+// clearItems forgets Definition of Done items a status change clears (dod.Cleared).
+func clearItems(ctx context.Context, q *db.Queries, cs *changeSet, actor audit.Actor, clear []dod.Item) error {
+	if len(clear) == 0 {
+		return nil
+	}
+	items := make([]string, len(clear))
+	for i, it := range clear {
 		items[i] = string(it)
 	}
 	removed, err := q.DeleteTicketDoDItems(ctx, db.DeleteTicketDoDItemsParams{TicketID: cs.ticketID, Items: items})

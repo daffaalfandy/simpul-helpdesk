@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
 // Item is one condition on the way to done. Values match the ticket_dod_items.item CHECK.
@@ -31,6 +32,26 @@ var Items = []Item{ItemFixCommitted, ItemMerged, ItemCIPassed, ItemDeployed, Ite
 // ClientItems are the items the client ticks by answering the test (or the system, when the
 // answer is overdue). Leaving a done status clears them, so a reopened ticket asks again.
 var ClientItems = []Item{ItemUATApproved, ItemRequesterConfirmed}
+
+// CodeItems are the items read from the repository, in checklist order.
+var CodeItems = []Item{ItemFixCommitted, ItemMerged, ItemCIPassed, ItemDeployed}
+
+// workStatuses are where a ticket is worked on, before anyone checks the result.
+var workStatuses = []ticket.Status{ticket.StatusNew, ticket.StatusAssigned, ticket.StatusInProgress, ticket.StatusWaitingOnClient}
+
+// Cleared lists the items a status change forgets. A done ticket that opens again asks the
+// client again. A ticket sent back to work from the client's test or from resolved needs a new
+// fix, so its code items go too; otherwise the next commit would move it straight back.
+func Cleared(from, to ticket.Status) []Item {
+	var out []Item
+	if ticket.MarksResolved(from) && !ticket.MarksResolved(to) {
+		out = append(out, ClientItems...)
+	}
+	if (from == ticket.StatusInUAT || ticket.MarksResolved(from)) && slices.Contains(workStatuses, to) {
+		out = append(out, CodeItems...)
+	}
+	return out
+}
 
 func (i Item) Valid() bool { return slices.Contains(Items, i) }
 

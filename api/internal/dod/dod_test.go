@@ -9,6 +9,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
 var jakarta = func() *time.Location {
@@ -306,6 +307,30 @@ func TestBranchMatches(t *testing.T) {
 	for _, tt := range tests {
 		if got := tt.branch.Matches(tt.name); got != tt.want {
 			t.Errorf("%s.Matches(%q) = %v, want %v", tt.branch, tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestCleared(t *testing.T) {
+	code, client := CodeItems, ClientItems
+	both := append(slices.Clone(client), code...)
+	tests := []struct {
+		from, to ticket.Status
+		want     []Item
+	}{
+		{ticket.StatusResolved, ticket.StatusInProgress, both},
+		{ticket.StatusResolved, ticket.StatusNew, both},
+		{ticket.StatusResolved, ticket.StatusClosed, nil},
+		{ticket.StatusInUAT, ticket.StatusInProgress, code},
+		{ticket.StatusInUAT, ticket.StatusWaitingOnClient, code},
+		{ticket.StatusInUAT, ticket.StatusResolved, nil},
+		{ticket.StatusInProgress, ticket.StatusInUAT, nil},
+		{ticket.StatusInProgress, ticket.StatusResolved, nil},
+		{ticket.StatusNew, ticket.StatusAssigned, nil},
+	}
+	for _, tt := range tests {
+		if got := Cleared(tt.from, tt.to); !slices.Equal(got, tt.want) {
+			t.Errorf("Cleared(%s, %s) = %v, want %v", tt.from, tt.to, got, tt.want)
 		}
 	}
 }
