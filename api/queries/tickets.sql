@@ -122,10 +122,11 @@ ORDER BY m.created_at, m.id;
 -- Seed only: explicit number, status and times. Returns no row if the key exists.
 INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
                      created_by, project_id, catalog_item_id, subject, description, sla_snapshot,
-                     first_response_at, resolved_at, status_changed_at, created_at, updated_at)
+                     first_response_at, resolved_at, closed_at, status_changed_at, created_at, updated_at)
 VALUES (@number, @key, @type, @status, @priority, @channel, @client_id, @requester_id, sqlc.narg(assignee_id),
         @created_by, @project_id, sqlc.narg(catalog_item_id), @subject, @description, @sla_snapshot,
-        sqlc.narg(first_response_at), sqlc.narg(resolved_at), @status_changed_at, @created_at, @updated_at)
+        sqlc.narg(first_response_at), sqlc.narg(resolved_at), sqlc.narg(closed_at), @status_changed_at,
+        @created_at, @updated_at)
 ON CONFLICT (key) DO NOTHING
 RETURNING id;
 

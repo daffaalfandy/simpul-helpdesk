@@ -188,6 +188,9 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		if err != nil {
 			return err
 		}
+		if err := seedHistory(ctx, tx.Q, now, r); err != nil {
+			return err
+		}
 		if err := seedTickets(ctx, tx.Q, now, r, repos); err != nil {
 			return err
 		}

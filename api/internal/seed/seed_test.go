@@ -50,6 +50,8 @@ func TestSeedIsIdempotent(t *testing.T) {
 		}
 		return n
 	}
+	// The demo tickets from the mock; the closed history below them is checked on its own.
+	const demo = "t.number >= 24826"
 	presetDays := 0
 	for _, year := range holidaypreset.Years() {
 		p, _ := holidaypreset.ForYear(year)
@@ -62,16 +64,16 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"holidays":            count(`SELECT count(*) FROM holidays`),
 		"invited":             count(`SELECT count(*) FROM users WHERE status = 'invited' AND password_hash IS NULL`),
 		"catalog items":       count(`SELECT count(*) FROM catalog_items`),
-		"tickets on projects": count(`SELECT count(*) FROM tickets t JOIN projects p ON p.id = t.project_id AND p.client_id = t.client_id`),
-		"requests on default": count(`SELECT count(*) FROM tickets t JOIN projects p ON p.id = t.project_id WHERE t.type = 'request' AND p.is_default`),
+		"tickets on projects": count(`SELECT count(*) FROM tickets t JOIN projects p ON p.id = t.project_id AND p.client_id = t.client_id WHERE ` + demo),
+		"requests on default": count(`SELECT count(*) FROM tickets t JOIN projects p ON p.id = t.project_id WHERE t.type = 'request' AND p.is_default AND ` + demo),
 		"projects":            count(`SELECT count(*) FROM projects`),
 		"project targets":     count(`SELECT count(*) FROM project_sla_targets`),
 		"default projects":    count(`SELECT count(*) FROM projects WHERE is_default`),
 		"e-Office P1 fix":     count(`SELECT resolve_value FROM project_sla_targets t JOIN projects p ON p.id = t.project_id WHERE p.name = 'e-Office' AND t.priority = 'P1'`),
-		"tickets":             count(`SELECT count(*) FROM tickets`),
-		"messages":            count(`SELECT count(*) FROM ticket_messages`),
+		"tickets":             count(`SELECT count(*) FROM tickets t WHERE ` + demo),
+		"messages":            count(`SELECT count(*) FROM ticket_messages m JOIN tickets t ON t.id = m.ticket_id WHERE ` + demo),
 		"internal notes":      count(`SELECT count(*) FROM ticket_messages WHERE visibility = 'internal'`),
-		"ticket history":      count(`SELECT count(DISTINCT target_id) FROM audit_log WHERE action = 'ticket.created'`),
+		"ticket history":      count(`SELECT count(DISTINCT a.target_id) FROM audit_log a JOIN tickets t ON t.id = a.target_id WHERE a.action = 'ticket.created' AND ` + demo),
 		"next number":         count(`SELECT nextval('ticket_number_seq')::int`),
 		// The board's resolved column starts at local midnight.
 		"resolved today": count(`SELECT count(*) FROM tickets, organization o
@@ -86,7 +88,7 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"projects asking for UAT":      count(`SELECT count(*) FROM projects WHERE (dod_config->'uat'->>'enabled')::boolean`),
 		"projects asking to confirm":   count(`SELECT count(*) FROM projects WHERE (dod_config->>'requester_confirms')::boolean`),
 		"in UAT":                       count(`SELECT count(*) FROM tickets WHERE status = 'in_uat'`),
-		"items met by the requester":   count(`SELECT count(*) FROM ticket_dod_items i JOIN tickets t ON t.id = i.ticket_id WHERE i.done_by = t.requester_id`),
+		"items met by the requester":   count(`SELECT count(*) FROM ticket_dod_items i JOIN tickets t ON t.id = i.ticket_id WHERE i.done_by = t.requester_id AND ` + demo),
 		"UAT requests to client staff": count(`SELECT count(*) FROM notifications WHERE event_type = 'uat_requested'`),
 		"repositories":                 count(`SELECT count(*) FROM repositories WHERE last_delivery_at IS NOT NULL`),
 		"projects reading code":        count(`SELECT count(*) FROM projects WHERE repository_id IS NOT NULL`),
@@ -123,12 +125,48 @@ func TestSeedIsIdempotent(t *testing.T) {
 		t.Fatalf("org = %+v err %v", org, err)
 	}
 
+	// History: closed tickets over more than one month, closed after they were resolved.
+	history := count(`SELECT count(*) FROM tickets t WHERE NOT ` + demo)
+	if history == 0 {
+		t.Error("no history tickets")
+	}
+	if n := count(`SELECT count(*) FROM tickets t WHERE NOT ` + demo + ` AND (status <> 'closed' OR closed_at < resolved_at)`); n != 0 {
+		t.Errorf("%d history tickets are not closed after being resolved", n)
+	}
+	if n := count(`SELECT count(DISTINCT date_trunc('month', created_at AT TIME ZONE 'Asia/Jakarta')) FROM tickets t WHERE NOT ` + demo); n < 2 {
+		t.Errorf("history spans %d months, want at least 2", n)
+	}
+
+	// The SLA scan replays every history ticket (silently: no notifications) and finds the
+	// breaches the history was built with.
+	var logs bytes.Buffer
+	notificationsBefore := count(`SELECT count(*) FROM notifications`)
+	slaScan := tickets.NewSLAScanner(st, sla.NewService(st, nil), nil, slog.New(slog.NewTextHandler(&logs, nil)))
+	if err := slaScan.Work(ctx, &river.Job[tickets.SLAScanArgs]{}); err != nil {
+		t.Fatal(err)
+	}
+	if logs.Len() > 0 {
+		t.Errorf("SLA scan: %s", logs.String())
+	}
+	if n := count(`SELECT count(*) FROM tickets t LEFT JOIN ticket_sla s ON s.ticket_id = t.id WHERE s.ticket_id IS NULL`); n != 0 {
+		t.Errorf("%d tickets not replayed", n)
+	}
+	if n := count(`SELECT count(*) FROM ticket_sla s JOIN tickets t ON t.id = s.ticket_id WHERE NOT ` + demo +
+		` AND (s.first_response_breached_at IS NOT NULL OR s.resolution_breached_at IS NOT NULL)`); n == 0 {
+		t.Error("no history ticket breached")
+	}
+	if n := count(`SELECT count(*) FROM notifications`) - notificationsBefore; n != 0 {
+		t.Errorf("the backfill notified %d times", n)
+	}
+
 	// No client deadline has passed yet: the demo's tests and reopen windows are all open.
+	lifecycle := `SELECT count(*) FROM audit_log WHERE actor_name = '` + tickets.ActorNameLifecycle + `'`
+	before := count(lifecycle)
 	scan := tickets.NewLifecycleScanner(tickets.NewService(st, nil, sla.NewService(st, nil), nil), slog.New(slog.DiscardHandler))
 	if err := scan.Work(ctx, &river.Job[tickets.LifecycleScanArgs]{}); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(`SELECT count(*) FROM audit_log WHERE actor_name = '` + tickets.ActorNameLifecycle + `'`); n != 0 {
+	if n := count(lifecycle) - before; n != 0 {
 		t.Errorf("the lifecycle scan moved %d demo tickets", n)
 	}
 }

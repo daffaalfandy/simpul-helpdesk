@@ -52,7 +52,8 @@ type SeedCode struct {
 
 // SeedStep is a change after creation: an assignee change, a status change, or both. A move
 // with CauseUATApproved is the client approving the test, which meets the client items of the
-// project's Definition of Done. A move with a code cause is written by a git actor.
+// project's Definition of Done. A move with a code cause is written by a git actor, and one with
+// CauseAutoClosed by the lifecycle scan (Actor is then ignored).
 type SeedStep struct {
 	At       time.Time
 	Actor    Ref
@@ -75,6 +76,7 @@ type seedEntry struct {
 	action string
 	data   map[string]any
 	git    bool // code activity: a git actor, the member when ID is set
+	system bool // the lifecycle scan
 }
 
 // InsertSeed writes the ticket, its messages and its audit history. It reports false and
@@ -82,7 +84,7 @@ type seedEntry struct {
 func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) {
 	status, assignee := ticket.StatusNew, (*Ref)(nil)
 	statusChangedAt := t.CreatedAt
-	var resolvedAt *time.Time
+	var resolvedAt, closedAt *time.Time
 	var approvals []SeedStep
 	entries := []seedEntry{}
 	for _, st := range t.Steps {
@@ -98,13 +100,22 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 		}
 		if st.Status != "" && st.Status != status {
 			entries = append(entries, statusEntry(st.At, st.Actor, status, st.Status, st.Cause))
+			wasDone := ticket.MarksResolved(status)
 			status, statusChangedAt = st.Status, st.At
 			if st.Cause == ticket.CauseUATApproved {
 				approvals = append(approvals, st)
 			}
-			if ticket.MarksResolved(status) {
-				at := st.At
+			// Like UpdateTicketStatus: resolving stamps resolved_at, closing keeps it.
+			at := st.At
+			switch {
+			case !ticket.MarksResolved(status):
+				resolvedAt = nil
+			case !wasDone:
 				resolvedAt = &at
+			}
+			closedAt = nil
+			if status == ticket.StatusClosed {
+				closedAt = &at
 			}
 		}
 	}
@@ -139,7 +150,7 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 		Priority: string(t.Priority), Channel: string(t.Channel), ClientID: t.ClientID, RequesterID: t.Requester.ID,
 		CreatedBy: t.CreatedBy.ID, ProjectID: t.ProjectID, CatalogItemID: t.CatalogItemID, Subject: t.Subject,
 		Description: t.Description, SlaSnapshot: snapJSON, FirstResponseAt: firstResponse, ResolvedAt: resolvedAt,
-		StatusChangedAt: statusChangedAt, CreatedAt: t.CreatedAt, UpdatedAt: updatedAt,
+		ClosedAt: closedAt, StatusChangedAt: statusChangedAt, CreatedAt: t.CreatedAt, UpdatedAt: updatedAt,
 	}
 	if assignee != nil {
 		params.AssigneeID = &assignee.ID
@@ -210,6 +221,9 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 			return false, err
 		}
 		kind, actorID, actorName, target := audit.ActorUser, &e.actor.ID, e.actor.Name, TargetTicket
+		if e.system {
+			kind, actorID, actorName = audit.ActorSystem, nil, ActorNameLifecycle
+		}
 		if e.git {
 			kind = audit.ActorGit
 			if e.actor.ID == uuid.Nil {
@@ -293,7 +307,8 @@ func statusEntry(at time.Time, actor Ref, from, to ticket.Status, cause ticket.C
 	if cause != "" {
 		data[dataCause] = cause
 	}
-	return seedEntry{at: at, actor: actor, action: ActionStatusChanged, data: data, git: cause.FromCode()}
+	return seedEntry{at: at, actor: actor, action: ActionStatusChanged, data: data, git: cause.FromCode(),
+		system: cause == ticket.CauseAutoClosed}
 }
 
 func refDataPtr(r *Ref) any {

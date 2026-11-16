@@ -336,10 +336,11 @@ func (q *Queries) InsertSeedMessage(ctx context.Context, arg InsertSeedMessagePa
 const insertSeedTicket = `-- name: InsertSeedTicket :one
 INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
                      created_by, project_id, catalog_item_id, subject, description, sla_snapshot,
-                     first_response_at, resolved_at, status_changed_at, created_at, updated_at)
+                     first_response_at, resolved_at, closed_at, status_changed_at, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
         $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20)
+        $16, $17, $18, $19,
+        $20, $21)
 ON CONFLICT (key) DO NOTHING
 RETURNING id
 `
@@ -362,6 +363,7 @@ type InsertSeedTicketParams struct {
 	SlaSnapshot     []byte
 	FirstResponseAt *time.Time
 	ResolvedAt      *time.Time
+	ClosedAt        *time.Time
 	StatusChangedAt time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
@@ -387,6 +389,7 @@ func (q *Queries) InsertSeedTicket(ctx context.Context, arg InsertSeedTicketPara
 		arg.SlaSnapshot,
 		arg.FirstResponseAt,
 		arg.ResolvedAt,
+		arg.ClosedAt,
 		arg.StatusChangedAt,
 		arg.CreatedAt,
 		arg.UpdatedAt,
