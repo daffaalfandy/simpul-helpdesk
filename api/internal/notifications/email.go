@@ -35,12 +35,15 @@ const (
 	// purgeMaxBatches bounds one run; the next run deletes the rest.
 	purgeMaxBatches = 100
 
-	ActionPurged        = "notification.purged"
-	TargetNotification  = "notification"
-	ActorNamePurge      = "notification_purge"
-	dataCount           = "count"
-	timeLayoutToday     = "15:04"
-	timeLayoutOtherDay  = "2 Jan, 15:04"
+	ActionPurged       = "notification.purged"
+	TargetNotification = "notification"
+	ActorNamePurge     = "notification_purge"
+	dataCount          = "count"
+	timeLayoutToday    = "15:04"
+	timeLayoutOtherDay = "2 Jan, 15:04"
+	dateLayoutDay      = "2 Jan"
+	// queryAnswer opens the portal ticket with that answer's dialog (web: the ticket route's search).
+	queryAnswer         = "answer"
 	settingsFragment    = "settings"
 	pathTickets         = "tickets"
 	pathPortal          = "portal"
@@ -351,6 +354,15 @@ func (m *Mailer) render(ctx context.Context, q *db.Queries, user *recipient, row
 	if portal {
 		data.SLA = slaLine(t)
 	}
+	// The answer buttons only while the ticket still waits for the test.
+	if portal && notification.Event(main.EventType) == notification.EventUATRequested && ticket.Status(t.Status) == ticket.StatusInUAT {
+		data.UAT = &mail.UATData{
+			ApproveURL: m.answerURL(t.Key, ticket.UATApprove), RejectURL: m.answerURL(t.Key, ticket.UATReject),
+		}
+		if at := f.data(main).AutoApproveAt; at != nil {
+			data.UAT.AutoApproveOn = f.day(*at)
+		}
+	}
 	msg, err := mail.Render(mail.TemplateTicketUpdate, user.Email, user.Name, data)
 	msg.Headers = headers
 	return msg, err
@@ -418,6 +430,13 @@ func (m *Mailer) ticketURL(portal bool, key string) string {
 	return m.appURL.JoinPath(pathTickets, key).String()
 }
 
+// answerURL opens the portal ticket with the answer's dialog; the requester signs in first.
+func (m *Mailer) answerURL(key string, a ticket.UATAnswer) string {
+	u := m.appURL.JoinPath(pathPortal, pathTickets, key)
+	u.RawQuery = url.Values{queryAnswer: {string(a)}}.Encode()
+	return u.String()
+}
+
 func (m *Mailer) settingsURL(portal bool) string {
 	u := m.appURL.JoinPath(pathNotificationsUI)
 	if portal {
@@ -440,6 +459,8 @@ func relation(user *recipient, t db.ListEmailTicketsRow, main claimedRow) mail.R
 		return mail.RelationAssigned
 	case notification.Event(main.EventType) == notification.EventSLA && auth.Role(user.Role) == auth.RoleSupervisor:
 		return mail.RelationSupervisor
+	case notification.Event(main.EventType) == notification.EventDoD:
+		return mail.RelationSupervisorDoD
 	}
 	return mail.RelationTeam
 }
@@ -464,7 +485,10 @@ func (f formatter) notice(r claimedRow) mail.NoticeData {
 		Event: r.EventType, Kind: string(d.Kind), Portal: f.portal, StatusFrom: string(d.StatusFrom),
 		StatusTo: string(d.StatusTo), PriorityFrom: string(d.PriorityFrom), PriorityTo: string(d.PriorityTo),
 		Assignee: d.Assignee, Reason: d.Reason, SLAClock: d.SLAClock, SLAMinutesLeft: d.SLALeftMinutes,
-		Time: f.time(r.CreatedAt),
+		Cause: string(d.Cause), Time: f.time(r.CreatedAt),
+	}
+	if d.ReopenUntil != nil {
+		n.ReopenUntil = f.day(*d.ReopenUntil)
 	}
 	if r.ActorUserID != nil {
 		n.ActorName = f.names[*r.ActorUserID]
@@ -474,6 +498,9 @@ func (f formatter) notice(r claimedRow) mail.NoticeData {
 	}
 	return n
 }
+
+// day is a date the client is promised, "18 Nov".
+func (f formatter) day(t time.Time) string { return t.In(f.loc).Format(dateLayoutDay) }
 
 // time is "14:02" today, "12 Nov, 14:02" otherwise.
 func (f formatter) time(t time.Time) string {

@@ -10,6 +10,19 @@ Status: {{status .Main.StatusFrom .Portal}} → {{status .Main.StatusTo .Portal}
 {{.Author}}{{if .FromSupport}} · Support team{{end}} · {{.Time}}
 {{.Body}}
 {{end}}
+{{- with .UAT}}
+{{template "uat.question"}}
+{{template "uat.approve"}}: {{.ApproveURL}}
+{{template "uat.reject"}}: {{.RejectURL}}
+{{- with .AutoApproveOn}}
+{{template "uat.auto" .}}
+{{- end}}
+
+{{end -}}
+{{- if and .Portal .Main.ReopenUntil}}
+{{template "reopen.line" .Main.ReopenUntil}}
+
+{{end -}}
 View the ticket: {{.TicketURL}}
 {{- if or .Changes .Others}}
 

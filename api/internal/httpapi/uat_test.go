@@ -216,8 +216,17 @@ func TestUATNotifications(t *testing.T) {
 	}
 	te.age(t, notification.GroupWindow)
 	te.sendEmails(t)
-	if got := mailsTo(te.mailer.Messages(), te.users[auth.RoleRequester]); len(got) != 1 {
+	got := mailsTo(te.mailer.Messages(), te.users[auth.RoleRequester])
+	if len(got) != 1 {
 		t.Fatalf("daily requester got %v, want the UAT request right away", subjects(got))
+	}
+	for _, want := range []string{
+		"[" + tk.Key + "] Ready for your test: ", appURL + "/portal/tickets/" + tk.Key + "?answer=approve",
+		appURL + "/portal/tickets/" + tk.Key + "?answer=reject", "approved automatically on", testInstructions,
+	} {
+		if !strings.Contains(got[0].Subject+got[0].Text, want) {
+			t.Errorf("UAT email lacks %q:\n%s\n%s", want, got[0].Subject, got[0].Text)
+		}
 	}
 
 	// A rejection reaches the assignee with the client's words.

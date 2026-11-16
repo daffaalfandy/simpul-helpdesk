@@ -158,7 +158,7 @@ SELECT id, email, name, role, status, client_id, email_frequency FROM users WHER
 -- What an email shows about each ticket, and whether the recipient may still see it (the same
 -- rule as internal/tickets access: all for admins and supervisors, linked clients for agents,
 -- their own client for requesters).
-SELECT t.id, t.key, t.subject, t.type, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
+SELECT t.id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
        pl.name AS priority_name, p.name AS project_name,
        (u.role = ANY(@all_client_roles::text[])
         OR (u.role = @agent_role AND EXISTS (SELECT 1 FROM client_agents ca

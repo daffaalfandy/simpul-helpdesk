@@ -15,6 +15,8 @@ const (
 	RelationAssigned   Relation = "assigned"   // the ticket's assignee
 	RelationTeam       Relation = "team"       // staff who worked on it (e.g. unassigned)
 	RelationSupervisor Relation = "supervisor" // SLA breach alerts
+	// RelationSupervisorDoD: supervisors hear when a Definition of Done is skipped or changed.
+	RelationSupervisorDoD Relation = "supervisor_dod"
 )
 
 // NoticeData is one notification as a line of an email.
@@ -32,7 +34,17 @@ type NoticeData struct {
 	SLAClock       string
 	SLAMinutesLeft *int
 	SLADue         string
+	Cause          string // why the status changed, when it wasn't a plain move by hand
+	ReopenUntil    string // a resolved ticket's reopen deadline ("19 Nov")
 	Time           string
+}
+
+// UATData is the "Does it work now?" block of a test request: the answer links open the
+// ticket in the portal with that answer's dialog (owner, 16 Nov: sign in, then confirm).
+type UATData struct {
+	ApproveURL    string
+	RejectURL     string
+	AutoApproveOn string // "18 Nov"; empty when the test waits for an answer however long it takes
 }
 
 // ChangeData is another change of the same transaction ("Also changed").
@@ -78,6 +90,7 @@ type TicketUpdateData struct {
 	Others       []NoticeData // other notifications in this email
 	Quote        *QuoteData
 	SLA          *SLALineData // requesters only: the target and what doesn't count
+	UAT          *UATData     // a test request while the ticket still waits for it
 	TicketURL    string
 	SettingsURL  string
 }
@@ -132,6 +145,8 @@ var palette = map[string]htmltemplate.CSS{
 	"muted":         "#52607A",
 	"primary":       "#1D4ED8",
 	"on-primary":    "#FFFFFF",
+	"success":       "#15803D",
+	"danger":        "#DC2626",
 	"warning-bg":    "#FDF0CF",
 	"warning-fg":    "#6E4D00",
 	"info-bg":       "#EEF4FF",

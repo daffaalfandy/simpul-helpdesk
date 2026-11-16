@@ -52,6 +52,68 @@ func TestTicketUpdateRenders(t *testing.T) {
 	}
 }
 
+// A test request asks "Does it work now?" with links that open the answer's dialog; a
+// resolved ticket says until when it can be reopened.
+func TestUATAndReopenRender(t *testing.T) {
+	approve := "https://helpdesk.example/portal/tickets/HD-24871?answer=approve"
+	reject := "https://helpdesk.example/portal/tickets/HD-24871?answer=reject"
+	data := TicketUpdateData{
+		OrgName: "Demo Vendor", Portal: true, Relation: RelationReported, TicketKey: "HD-24871",
+		Title: "e-Office login fails", Priority: "P1", PriorityName: "Critical", ProjectName: "e-Office",
+		Main: NoticeData{Event: "uat_requested", Portal: true, ActorName: "Rina Pratiwi", StatusFrom: "in_progress",
+			StatusTo: "in_uat", Time: "12:45"},
+		UAT:       &UATData{ApproveURL: approve, RejectURL: reject, AutoApproveOn: "18 Nov"},
+		TicketURL: "https://helpdesk.example/portal/tickets/HD-24871", SettingsURL: "s",
+	}
+	msg, err := Render(TemplateTicketUpdate, "hendra@example.test", "Hendra", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "[HD-24871] Ready for your test: e-Office login fails"; msg.Subject != want {
+		t.Errorf("subject = %q", msg.Subject)
+	}
+	for _, want := range []string{
+		"Rina Pratiwi asked you to test the fix", "Does it work now?", "Approve, it works: " + approve,
+		"Still a problem: " + reject, "If we don't hear back, the fix is approved automatically on 18 Nov.",
+	} {
+		if !strings.Contains(msg.Text, want) {
+			t.Errorf("text lacks %q:\n%s", want, msg.Text)
+		}
+	}
+	for _, want := range []string{"Does it work now?", `href="` + approve + `"`, `href="` + reject + `"`, "Approve, it works"} {
+		if !strings.Contains(msg.HTML, want) {
+			t.Errorf("html lacks %q", want)
+		}
+	}
+
+	data.UAT = nil
+	data.Main = NoticeData{Event: "resolved", Portal: true, StatusFrom: "in_uat", StatusTo: "resolved", ReopenUntil: "19 Nov"}
+	msg, err = Render(TemplateTicketUpdate, "hendra@example.test", "Hendra", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "You can reopen this ticket until 19 Nov if the problem comes back."; !strings.Contains(msg.Text, want) || !strings.Contains(msg.HTML, want) {
+		t.Errorf("reopen line missing:\n%s", msg.Text)
+	}
+	if strings.Contains(msg.Text, "Does it work now?") || strings.Contains(msg.Text+msg.HTML, noValue) {
+		t.Errorf("resolved email:\n%s", msg.Text)
+	}
+
+	data.Portal, data.Relation = false, RelationSupervisorDoD
+	data.Main = NoticeData{Event: "dod", Kind: "skipped", ActorName: "Rina Pratiwi", Reason: "Client confirmed by phone"}
+	msg, err = Render(TemplateTicketUpdate, "dewi@example.test", "Dewi", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"[HD-24871] Resolved without its Definition of Done: e-Office login fails",
+		"Rina Pratiwi resolved this ticket without meeting its Definition of Done (Client confirmed by phone)",
+		"supervisors hear when a Definition of Done is skipped or changed"} {
+		if !strings.Contains(msg.Subject+msg.Text, want) {
+			t.Errorf("supervisor email lacks %q:\n%s\n%s", want, msg.Subject, msg.Text)
+		}
+	}
+}
+
 func TestTeamWordingAndRelations(t *testing.T) {
 	data := TicketUpdateData{
 		OrgName: "Demo Vendor", Relation: RelationAssigned, TicketKey: "HD-1", Title: "VPN",
