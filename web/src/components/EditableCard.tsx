@@ -2,7 +2,9 @@ import { Pencil } from 'lucide-react'
 import { useEffect, useId, useRef, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { cx } from '../lib/text'
 import { Button } from './Button'
+import { cardTones } from './Card'
 
 const FOCUSABLE = 'input, button, [role="button"], textarea, [tabindex]:not([tabindex="-1"])'
 
@@ -23,6 +25,8 @@ type EditableCardProps = {
   isPending?: boolean
   /** The read-only body, or the form fields while editing. */
   children: ReactNode
+  /** "emphasis" draws the 2px ink border of a card that decides the outcome (HANDOFF §14.3). */
+  tone?: 'default' | 'emphasis'
 }
 
 /**
@@ -43,6 +47,7 @@ export function EditableCard({
   isSaveDisabled,
   isPending,
   children,
+  tone = 'default',
 }: EditableCardProps) {
   const { t } = useTranslation()
   const titleId = useId()
@@ -67,7 +72,7 @@ export function EditableCard({
   return (
     <section
       aria-labelledby={titleId}
-      className="flex flex-col gap-3.5 rounded-3xl border border-border bg-surface px-5.5 py-5 shadow-card"
+      className={cx('flex flex-col gap-3.5 rounded-3xl px-5.5 py-5 shadow-card', cardTones[tone])}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex max-w-3xl min-w-0 flex-1 flex-col gap-1">

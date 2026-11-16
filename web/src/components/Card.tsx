@@ -13,6 +13,20 @@ type CardProps = {
   labelledBy?: string
   /** "compact" is the side-column card in the mock: radius 16, tighter padding, 14px title. */
   variant?: 'default' | 'compact'
+  /**
+   * HANDOFF §14.3 card variants: "emphasis" (2px ink border) marks the card that decides the
+   * outcome, e.g. the Definition of Done; "dark" (ink, white text) is a request waiting on the
+   * reader, e.g. a UAT request.
+   */
+  tone?: CardTone
+}
+
+export type CardTone = 'default' | 'emphasis' | 'dark'
+
+export const cardTones: Record<CardTone, string> = {
+  default: 'border border-border bg-surface',
+  emphasis: 'border-2 border-ink bg-surface',
+  dark: 'border border-ink bg-ink text-on-primary',
 }
 
 const variants = {
@@ -30,13 +44,11 @@ export function Card({
   className,
   labelledBy,
   variant = 'default',
+  tone = 'default',
 }: CardProps) {
   const v = variants[variant]
   return (
-    <section
-      aria-labelledby={labelledBy}
-      className={cx('flex flex-col border border-border bg-surface shadow-card', v.box, className)}
-    >
+    <section aria-labelledby={labelledBy} className={cx('flex flex-col shadow-card', cardTones[tone], v.box, className)}>
       {(title || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">

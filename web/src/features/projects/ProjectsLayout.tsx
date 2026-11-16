@@ -8,6 +8,7 @@ import type { Project } from '../../api/client'
 import { Pill } from '../../components/Badges'
 import { Button } from '../../components/Button'
 import { can } from '../../lib/roles'
+import { dodSummary } from '../dod/labels'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { ProjectDialog } from './ProjectDialog'
 import { projectsQueryOptions } from './queries'
@@ -63,7 +64,6 @@ export function ProjectsLayout() {
 
 function ProjectLink({ project }: { project: Project }) {
   const { t } = useTranslation()
-  const hasChips = project.isDefault || !project.active
   return (
     <Link
       to="/projects/$projectId"
@@ -76,12 +76,11 @@ function ProjectLink({ project }: { project: Project }) {
     >
       <span className="text-md font-extrabold">{project.name}</span>
       <span className="text-xs text-muted">{project.client.name}</span>
-      {hasChips && (
-        <span className="mt-1.5 flex flex-wrap gap-1.5">
-          {project.isDefault && <Pill tone="info">{t('projects.chips.default')}</Pill>}
-          {!project.active && <Pill tone="neutral">{t('projects.chips.hidden')}</Pill>}
-        </span>
-      )}
+      <span className="mt-1.5 flex flex-wrap gap-1.5">
+        <Pill tone="neutral">{dodSummary(t, project.dod)}</Pill>
+        {project.isDefault && <Pill tone="info">{t('projects.chips.default')}</Pill>}
+        {!project.active && <Pill tone="neutral">{t('projects.chips.hidden')}</Pill>}
+      </span>
     </Link>
   )
 }

@@ -11,10 +11,14 @@ import { can } from '../../lib/roles'
 import { businessHoursQueryOptions } from '../settings/queries'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { ProjectDialog } from './ProjectDialog'
+import { ProjectDodCard } from './ProjectDodCard'
 import { projectQueryOptions } from './queries'
 import { SlaCard } from './SlaCard'
 
-/** One project: its details and its SLA card. Keyed by project, so switching resets everything. */
+/**
+ * One project: its details, its Definition of Done and its SLA card (Projects mock order). Keyed
+ * by project, so switching resets everything.
+ */
 export function ProjectPage({ projectId }: { projectId: string }) {
   const { t } = useTranslation()
   const me = useSignedInUser()
@@ -48,6 +52,13 @@ export function ProjectPage({ projectId }: { projectId: string }) {
         )}
       </section>
       {flash && <Alert tone="success">{flash}</Alert>}
+      <ProjectDodCard
+        key={`dod-${project.id}`}
+        project={project}
+        canEdit={canManage}
+        onEditStart={() => setFlash(null)}
+        onSaved={() => setFlash(t('projects.dod.saved'))}
+      />
       <SlaCard
         key={project.id}
         project={project}

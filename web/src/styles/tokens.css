@@ -138,6 +138,7 @@
   --tab-bar-h: 3px;            /* selected tab underline */
   --nav-indicator-w: 3px;      /* current settings item bar */
   --number-input-w: 76px;      /* number beside a unit picker (project SLA targets) */
+  --dod-control-w: 240px;      /* setting beside a Definition of Done condition (branch, auto-approve) */
   --board-column-w: 272px;     /* board column where the columns scroll sideways (below xl) */
   --board-column-min-h: 160px; /* an empty board column still reads as a drop target */
   --stat-tile-min-w: 180px;    /* board stat tiles */

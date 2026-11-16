@@ -1,6 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import { api, type Project, type ProjectCreate, type ProjectSla, type ProjectUpdate } from '../../api/client'
+import { api, type Project, type ProjectCreate, type ProjectDodInput, type ProjectSla, type ProjectUpdate } from '../../api/client'
 import { queryKeys, useInvalidate } from '../../api/queries'
 import { unwrap } from '../../api/unwrap'
 
@@ -60,6 +60,15 @@ export function useSaveProjectSla(id: string) {
   return useMutation({
     mutationFn: (sla: ProjectSla) =>
       unwrap(api.PUT('/projects/{projectId}/sla', { params: { path: { projectId: id } }, body: sla })),
+    onSuccess: (project) => after(project),
+  })
+}
+
+export function useSaveProjectDod(id: string) {
+  const after = useAfterProjectChange()
+  return useMutation({
+    mutationFn: (input: ProjectDodInput) =>
+      unwrap(api.PUT('/projects/{projectId}/dod', { params: { path: { projectId: id } }, body: input })),
     onSuccess: (project) => after(project),
   })
 }

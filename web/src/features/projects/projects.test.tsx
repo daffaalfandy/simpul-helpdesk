@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { ProjectSla } from '../../api/client'
+import type { ProjectDodInput, ProjectSla } from '../../api/client'
 import { PROJECT_IDS, projectsApi } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
 import { state, USERS } from '../../test/server'
@@ -24,6 +24,7 @@ async function openProjects(url = '/projects') {
 }
 
 const slaCard = () => screen.getByRole('region', { name: /^Service level \(SLA\)/ })
+const dodCard = () => screen.getByRole('region', { name: 'Definition of Done' })
 
 describe('projects', () => {
   beforeEach(() => {
@@ -98,6 +99,45 @@ describe('projects', () => {
     expect(lastRequest('PUT', '/sla')).toBeUndefined()
   })
 
+  it("shows each project's Definition of Done in the list and on its page", async () => {
+    await openProjects()
+    const list = screen.getByRole('navigation', { name: 'Projects' })
+    expect(within(list).getByRole('link', { name: /e-Office/ })).toHaveTextContent('UAT')
+    expect(within(list).getByRole('link', { name: /Email/ })).toHaveTextContent('Resolved by hand')
+    expect(within(list).getByRole('link', { name: /Network/ })).toHaveTextContent('Requester confirms')
+
+    const card = dodCard()
+    expect(card).toHaveTextContent('Done means: the client approves UAT (auto-approved after 3 working days).')
+    const flow = within(card).getByRole('list', { name: 'Status flow' })
+    expect(within(flow).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['In progress', 'In UAT', 'Resolved'])
+    expect(card).toHaveTextContent('Agents may set a different Definition of Done on a single ticket, with a reason.')
+  })
+
+  it('edits the Definition of Done with a live preview and saves it', async () => {
+    const { user } = await openProjects()
+    await user.click(within(dodCard()).getByRole('button', { name: 'Edit DoD' }))
+    // Code conditions wait for a repository (GitHub/GitLab connector).
+    const merged = within(dodCard()).getByRole('checkbox', { name: /Pull\/merge request merged/ })
+    expect(merged).toBeDisabled()
+    expect(within(dodCard()).getAllByText(/Needs a repository linked to this project/, { selector: 'span' })).toHaveLength(3)
+
+    await user.click(within(dodCard()).getByRole('checkbox', { name: /Requester confirms it's fixed/ }))
+    await user.click(within(dodCard()).getByRole('button', { name: /Auto-approve if no answer/ }))
+    await user.click(await screen.findByRole('option', { name: /Never/ }))
+    expect(dodCard()).toHaveTextContent('Done means: the client approves UAT and the requester confirms it is fixed.')
+    await user.click(within(dodCard()).getByRole('checkbox', { name: /Let agents set a different DoD/ }))
+    await user.click(within(dodCard()).getByRole('button', { name: 'Save DoD' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      "Definition of Done saved. It applies to this project's open tickets now, except tickets with their own.",
+    )
+    const body = lastRequest('PUT', `/projects/${PROJECT_IDS.eOffice}/dod`)?.body as ProjectDodInput
+    expect(body.dod.requesterConfirms).toBe(true)
+    expect(body.dod.uat).toEqual({ enabled: true, autoApproveWorkingDays: 0 })
+    expect(body.allowTicketOverride).toBe(false)
+    expect(dodCard()).toHaveTextContent('Only supervisors and admins may set a different Definition of Done on a ticket.')
+  })
+
   it('adds a project and opens it', async () => {
     const { user, router } = await openProjects()
     await user.click(screen.getByRole('button', { name: 'New project' }))
@@ -127,6 +167,7 @@ describe('projects', () => {
     await openProjects()
     expect(screen.getByRole('navigation', { name: 'Main' })).toHaveTextContent('Projects')
     expect(within(slaCard()).queryByRole('button', { name: 'Edit SLA' })).not.toBeInTheDocument()
+    expect(within(dodCard()).queryByRole('button', { name: 'Edit DoD' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'New project' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit project' })).not.toBeInTheDocument()
   })

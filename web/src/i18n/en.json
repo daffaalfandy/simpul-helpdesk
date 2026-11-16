@@ -896,6 +896,20 @@
       "notifySupervisorHint": "Email + highlight on the board",
       "notifyPic": "Notify the client PIC when a P1 breaches",
       "notifyPicHint": "Email to the contact person on the client record"
+    },
+    "dod": {
+      "title": "Definition of Done",
+      "description": "Every ticked condition must be met before a ticket resolves by itself. Applies to new and open tickets in this project.",
+      "edit": "Edit DoD",
+      "save": "Save DoD",
+      "saved": "Definition of Done saved. It applies to this project's open tickets now, except tickets with their own.",
+      "conditionsLabel": "Conditions",
+      "allowOverride": {
+        "label": "Let agents set a different DoD on a single ticket",
+        "hint": "For example a P1 hotfix that skips UAT. They must give a reason; it goes in the audit log."
+      },
+      "overrideOn": "Agents may set a different Definition of Done on a single ticket, with a reason.",
+      "overrideOff": "Only supervisors and admins may set a different Definition of Done on a ticket."
     }
   },
   "durationCompact": {
@@ -1086,6 +1100,103 @@
       "detail": "{{breached}} breached · {{atRisk}} at risk.",
       "oldest": "Oldest is {{key}}, {{client}}.",
       "show": "Show me"
+    }
+  },
+  "dod": {
+    "items": {
+      "fix_committed": {
+        "label": "Fix committed"
+      },
+      "merged": {
+        "label": "Pull/merge request merged into a branch",
+        "hint": "Read from GitHub or GitLab. The PR or a commit must mention the ticket ID."
+      },
+      "ci_passed": {
+        "label": "CI pipeline passed on that branch",
+        "hint": "GitHub Actions or GitLab CI status after the merge"
+      },
+      "deployed": {
+        "label": "Deployed to production",
+        "hint": "Reported by a deployment event or a webhook from your pipeline"
+      },
+      "uat_approved": {
+        "label": "UAT approved by the client",
+        "hint": "The ticket moves to In UAT; the client approves or rejects in the portal"
+      },
+      "requester_confirmed": {
+        "label": "Requester confirms it's fixed",
+        "hint": "For support work with no code. Auto-confirms after 3 working days."
+      }
+    },
+    "short": {
+      "fix_committed": "fix committed",
+      "merged": "code merged",
+      "ci_passed": "CI passed",
+      "deployed": "deployed to production",
+      "uat_approved": "the client's UAT approval",
+      "requester_confirmed": "the requester's confirmation"
+    },
+    "branchLabel": "Target branch",
+    "branch": {
+      "main": {
+        "label": "main",
+        "hint": "Default branch"
+      },
+      "develop": {
+        "label": "develop",
+        "hint": "Integration branch"
+      },
+      "release/*": {
+        "label": "release/*",
+        "hint": "Any release branch, e.g. release/2026.11"
+      },
+      "staging": {
+        "label": "staging",
+        "hint": "Staging environment branch"
+      }
+    },
+    "autoApproveLabel": "Auto-approve if no answer",
+    "autoApprove": {
+      "0": {
+        "label": "Never",
+        "hint": "Wait for the client to answer"
+      },
+      "3": {
+        "label": "After 3 working days"
+      },
+      "5": {
+        "label": "After 5 working days"
+      }
+    },
+    "needsRepo": "Needs a repository linked to this project",
+    "doneMeans": "Done means:",
+    "sentence": "{{conditions}}.",
+    "nothing": "nothing automatic. An agent resolves each ticket by hand.",
+    "conditions": {
+      "merged": "the pull/merge request is merged into {{branch}}",
+      "ci": "CI passes on {{branch}}",
+      "deployed": "it is deployed to production",
+      "uat": "the client approves UAT",
+      "uatAuto_one": "the client approves UAT (auto-approved after {{count}} working day)",
+      "uatAuto_other": "the client approves UAT (auto-approved after {{count}} working days)",
+      "confirm": "the requester confirms it is fixed"
+    },
+    "flowLabel": "Status flow",
+    "flow": {
+      "in_progress": "In progress",
+      "merged": "Merged",
+      "mergedDeployed": "Merged & deployed",
+      "in_uat": "In UAT",
+      "confirm": "Awaiting confirmation",
+      "resolved": "Resolved"
+    },
+    "summary": {
+      "merged": "Merged → {{branch}}",
+      "deployed": "Deployed",
+      "uat": "UAT",
+      "confirm": "Requester confirms",
+      "none": "Resolved by hand",
+      "separator": " + "
     }
   }
 }
