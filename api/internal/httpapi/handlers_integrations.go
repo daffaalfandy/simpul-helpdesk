@@ -127,3 +127,42 @@ func webhookHeader(p gen.ReceiveWebhookParams) http.Header {
 	}
 	return h
 }
+
+func (s *server) TestCommitMessage(ctx context.Context, req gen.TestCommitMessageRequestObject) (gen.TestCommitMessageResponseObject, error) {
+	if _, err := auth.Require(ctx, auth.CapSettingsManage); err != nil {
+		return nil, err
+	}
+	refs, err := s.connector.TestMessage(ctx, req.Body.Message)
+	if err != nil {
+		return nil, err
+	}
+	out := gen.TestCommitMessage200JSONResponse{Refs: make([]gen.CommitTestRef, len(refs))}
+	for i, r := range refs {
+		out.Refs[i] = gen.CommitTestRef{Key: r.Key, Action: gen.CommitRefAction(r.Action), TicketExists: r.TicketExists}
+	}
+	return out, nil
+}
+
+func (s *server) ListCodeEvents(ctx context.Context, _ gen.ListCodeEventsRequestObject) (gen.ListCodeEventsResponseObject, error) {
+	if _, err := auth.Require(ctx, auth.CapSettingsManage); err != nil {
+		return nil, err
+	}
+	log, err := s.connector.Log(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(gen.ListCodeEvents200JSONResponse, len(log))
+	for i, l := range log {
+		items := make([]gen.DodItem, len(l.Items))
+		for j, it := range l.Items {
+			items[j] = gen.DodItem(it)
+		}
+		out[i] = gen.CodeEventLog{
+			Id: l.ID, At: l.At, Provider: gen.GitProvider(l.Provider), Repository: l.Repository, Kind: gen.CodeEventKind(l.Kind),
+			Ref: l.Ref, Title: l.Title, Branch: l.Branch, Target: l.Target, Url: l.URL, TicketKey: l.TicketKey,
+			TicketFound: l.TicketFound, Outcome: gen.CodeOutcome(l.Outcome), Items: items,
+			StatusFrom: (*gen.TicketStatus)(l.StatusFrom), StatusTo: (*gen.TicketStatus)(l.StatusTo),
+		}
+	}
+	return out, nil
+}

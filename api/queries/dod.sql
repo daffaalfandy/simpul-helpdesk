@@ -1,7 +1,13 @@
 -- name: ListTicketDoDItems :many
-SELECT i.item, i.done_at, i.done_by, u.name AS done_by_name
+-- With the code event that met an item, if one did.
+SELECT i.item, i.done_at, i.done_by, u.name AS done_by_name, e.id AS code_event_id, e.kind AS code_kind,
+       e.sha AS code_sha, e.number AS code_number, e.title AS code_title, e.branch AS code_branch,
+       e.target AS code_target, e.url AS code_url, e.author_login AS code_author_login,
+       e.author_name AS code_author_name, e.occurred_at AS code_at, r.provider AS code_provider
 FROM ticket_dod_items i
 LEFT JOIN users u ON u.id = i.done_by
+LEFT JOIN code_events e ON e.id = i.code_event_id
+LEFT JOIN repositories r ON r.id = e.repository_id
 WHERE i.ticket_id = @ticket_id
 ORDER BY i.done_at, i.item;
 

@@ -43,7 +43,8 @@ type BoardCard struct {
 	// DoDPending is what an open ticket's Definition of Done still needs; resolving before then
 	// needs a reason. Empty for done tickets.
 	DoDPending []dod.Item
-	UAT        *CardUAT // set while the client tests
+	UAT        *CardUAT  // set while the client tests
+	Code       *CardCode // set once code reached the ticket
 }
 
 // CardUAT is how far into the client's test a ticket is: day Day of Days working days, or of
@@ -181,7 +182,30 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 			UAT:             uat,
 		})
 	}
-	return board, nil
+	return board, s.addCardCodes(ctx, q, &board)
+}
+
+// addCardCodes sets the code chip of every card that code reached.
+func (s *Service) addCardCodes(ctx context.Context, q *db.Queries, b *Board) error {
+	var ids []uuid.UUID
+	for _, col := range b.Columns {
+		for _, c := range col.Cards {
+			ids = append(ids, c.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	codes, err := cardCodes(ctx, q, ids)
+	if err != nil {
+		return err
+	}
+	for i := range b.Columns {
+		for j := range b.Columns[i].Cards {
+			b.Columns[i].Cards[j].Code = codes[b.Columns[i].Cards[j].ID]
+		}
+	}
+	return nil
 }
 
 func (s *Service) boardStats(ctx context.Context, q *db.Queries, a access, weekStart, monthStart time.Time) (BoardStats, error) {

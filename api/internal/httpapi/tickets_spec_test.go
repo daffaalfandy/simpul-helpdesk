@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/commitmsg"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
@@ -75,6 +76,8 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		"GitProvider":        strs(gitevent.Providers...),
 		"CodeEventKind":      strs(gitevent.Kinds...),
 		"CodeOutcome":        strs(codeflow.Outcomes...),
+		"CodeRequestState":   strs(tickets.RequestOpen, tickets.RequestMerged, tickets.RequestClosed),
+		"CommitRefAction":    strs(commitmsg.ActionLink, commitmsg.ActionFix, commitmsg.ActionReopen),
 		"RepositoryStatus":   strs(connector.StatusWaiting, connector.StatusConnected, connector.StatusFailing),
 		"RepositoryError": strs(connector.ErrorBadSignature, connector.ErrorRepositoryMismatch, connector.ErrorMalformed,
 			connector.ErrorTooLarge),
@@ -123,6 +126,7 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		{"BoardColumn", "cards", 0, tickets.BoardColumnLimit},
 		{"Board", "columns", 0, len(ticket.Columns)},
 		{"RepositoryCreate", "projectIds", 0, connector.MaxLinkedProjects},
+		{"CommitTestInput", "message", connector.MaxTestMessageLen, 0},
 		{"RepositoryUpdate", "projectIds", 0, connector.MaxLinkedProjects},
 	}
 	for _, l := range limits {

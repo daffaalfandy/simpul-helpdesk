@@ -45,7 +45,7 @@ func apiBoardCard(c tickets.BoardCard) gen.BoardCard {
 		Id: c.ID, Key: c.Key, Type: gen.TicketType(c.Type), Status: gen.TicketStatus(c.Status),
 		Priority: gen.Priority(c.Priority), Subject: c.Subject, Client: apiRef(c.Client), Assignee: apiRefPtr(c.Assignee),
 		AllowedStatuses: make([]gen.TicketStatus, len(c.AllowedStatuses)), DodPending: apiDodItems(c.DoDPending),
-		Uat: apiCardUat(c.UAT),
+		Uat: apiCardUat(c.UAT), Code: apiCardCode(c.Code),
 	}
 	for i, st := range c.AllowedStatuses {
 		out.AllowedStatuses[i] = gen.TicketStatus(st)
@@ -70,6 +70,17 @@ func apiBoardStats(st tickets.BoardStats) gen.BoardStats {
 	if st.AvgFirstResponse != nil {
 		ms := st.AvgFirstResponse.Milliseconds()
 		out.AvgFirstResponseMs = &ms
+	}
+	return out
+}
+
+func apiCardCode(c *tickets.CardCode) *gen.BoardCardCode {
+	if c == nil {
+		return nil
+	}
+	out := &gen.BoardCardCode{Provider: gen.GitProvider(c.Provider), Commits: c.Commits, Branch: c.Branch, Deployed: c.Deployed}
+	if r := c.Request; r != nil {
+		out.Request = &gen.BoardCardRequest{Number: r.Number, State: gen.CodeRequestState(r.State), Target: r.Target}
 	}
 	return out
 }

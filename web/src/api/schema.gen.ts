@@ -586,6 +586,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations/commit-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a commit message would do (admin only)
+         * @description The "Try a commit message" tester; it reads the message the way the connector does.
+         */
+        post: operations["testCommitMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What recent code events did, newest first (admin only) */
+        get: operations["listCodeEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repositories": {
         parameters: {
             query?: never;
@@ -922,6 +959,30 @@ export interface paths {
         };
         /** The ticket's activity log, oldest first (staff) */
         get: operations["listTicketActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The ticket's code activity, newest first (staff)
+         * @description Pull/merge requests (one per number, in their latest state) and commits that named the
+         *     ticket. Commit messages are internal, so client staff get 404.
+         */
+        get: operations["getTicketCode"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1953,6 +2014,114 @@ export interface components {
             doneAt: string | null;
             /** @description Null when not done yet, or when the system met it. */
             doneBy: components["schemas"]["Ref"] | null;
+            /** @description The code event that met it. */
+            source: components["schemas"]["CodeSource"] | null;
+        };
+        CodeSource: {
+            provider: components["schemas"]["GitProvider"];
+            kind: components["schemas"]["CodeEventKind"];
+            /** @description A short commit sha, a request or run number, or the environment deployed to. */
+            ref: string;
+            /** @description The commit's first line or the request's title. */
+            title: string;
+            branch: string;
+            target: string;
+            author: string;
+            url: string;
+            /** Format: date-time */
+            at: string;
+        };
+        /**
+         * @description `open` is shown as In review; `closed` was closed without merging.
+         * @enum {string}
+         */
+        CodeRequestState: "open" | "merged" | "closed";
+        CodeRequest: {
+            provider: components["schemas"]["GitProvider"];
+            /** Format: int64 */
+            number: number;
+            title: string;
+            state: components["schemas"]["CodeRequestState"];
+            branch: string;
+            target: string;
+            url: string;
+            /** @description Who opened it */
+            author: string;
+            /** Format: date-time */
+            at: string;
+        };
+        CodeCommit: {
+            provider: components["schemas"]["GitProvider"];
+            /** @description The short sha. */
+            sha: string;
+            title: string;
+            branch: string;
+            author: string;
+            url: string;
+            /** Format: date-time */
+            at: string;
+        };
+        TicketCode: {
+            /** @description Where the ticket's project reads code from. */
+            repository: components["schemas"]["RepositoryRef"] | null;
+            requests: components["schemas"]["CodeRequest"][];
+            commits: components["schemas"]["CodeCommit"][];
+        };
+        /** @description The card's code chip. */
+        BoardCardCode: {
+            provider: components["schemas"]["GitProvider"];
+            /** @description The latest pull/merge request. */
+            request: components["schemas"]["BoardCardRequest"] | null;
+            /** @description Commits that named the ticket. */
+            commits: number;
+            /** @description The latest commit's branch. */
+            branch: string;
+            deployed: boolean;
+        };
+        BoardCardRequest: {
+            /** Format: int64 */
+            number: number;
+            state: components["schemas"]["CodeRequestState"];
+            target: string;
+        };
+        /**
+         * @description `link` (the key alone), `fix` (fix/close/resolve right before it), `reopen`.
+         * @enum {string}
+         */
+        CommitRefAction: "link" | "fix" | "reopen";
+        CommitTestInput: {
+            message: string;
+        };
+        CommitTest: {
+            refs: components["schemas"]["CommitTestRef"][];
+        };
+        CommitTestRef: {
+            /** @example HD-24871 */
+            key: string;
+            action: components["schemas"]["CommitRefAction"];
+            ticketExists: boolean;
+        };
+        CodeEventLog: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            at: string;
+            provider: components["schemas"]["GitProvider"];
+            /** @description The repository's full name. */
+            repository: string;
+            kind: components["schemas"]["CodeEventKind"];
+            ref: string;
+            title: string;
+            branch: string;
+            target: string;
+            url: string;
+            ticketKey: string;
+            /** @description False when no ticket has the key. */
+            ticketFound: boolean;
+            outcome: components["schemas"]["CodeOutcome"];
+            items: components["schemas"]["DodItem"][];
+            statusFrom: components["schemas"]["TicketStatus"] | null;
+            statusTo: components["schemas"]["TicketStatus"] | null;
         };
         TicketDod: {
             source: components["schemas"]["DodSource"];
@@ -1968,6 +2137,8 @@ export interface components {
             pending: components["schemas"]["DodItem"][];
             /** @description The viewer may set or reset the ticket's own Definition of Done. */
             canOverride: boolean;
+            /** @description The ticket's project reads code, so merge, CI and deploy can be asked for. */
+            hasRepository: boolean;
         };
         TicketDodInput: {
             /** @description null returns the ticket to the project's Definition of Done. */
@@ -2081,6 +2252,8 @@ export interface components {
             dodPending: components["schemas"]["DodItem"][];
             /** @description Set while the client tests. */
             uat: components["schemas"]["BoardCardUat"] | null;
+            /** @description Set once code reached the ticket. */
+            code: components["schemas"]["BoardCardCode"] | null;
         };
         BoardColumn: {
             id: components["schemas"]["BoardColumnId"];
@@ -3317,6 +3490,57 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    testCommitMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitTestInput"];
+            };
+        };
+        responses: {
+            /** @description The tickets the message names and what it asks of each */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitTest"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCodeEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent events, ignored keys included */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeEventLog"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     createRepository: {
         parameters: {
             query?: never;
@@ -3826,6 +4050,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TicketActivity"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getTicketCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Code activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketCode"];
                 };
             };
             401: components["responses"]["Problem"];

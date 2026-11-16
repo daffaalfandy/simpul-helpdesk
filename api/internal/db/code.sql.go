@@ -52,6 +52,34 @@ func (q *Queries) GetTicketForCode(ctx context.Context, id uuid.UUID) (GetTicket
 	return i, err
 }
 
+const getTicketRepository = `-- name: GetTicketRepository :one
+SELECT r.id, r.provider, r.full_name, r.web_url
+FROM tickets t
+JOIN projects p ON p.id = t.project_id
+JOIN repositories r ON r.id = p.repository_id
+WHERE t.id = $1
+`
+
+type GetTicketRepositoryRow struct {
+	ID       uuid.UUID
+	Provider string
+	FullName string
+	WebUrl   string
+}
+
+// The repository a ticket's project reads code from.
+func (q *Queries) GetTicketRepository(ctx context.Context, ticketID uuid.UUID) (GetTicketRepositoryRow, error) {
+	row := q.db.QueryRow(ctx, getTicketRepository, ticketID)
+	var i GetTicketRepositoryRow
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.FullName,
+		&i.WebUrl,
+	)
+	return i, err
+}
+
 const insertCodeLink = `-- name: InsertCodeLink :exec
 INSERT INTO code_event_links (code_event_id, ticket_id, ticket_key, outcome, items, status_from, status_to)
 VALUES ($1, $2, $3, $4, $5::text[], $6, $7)
@@ -80,6 +108,142 @@ func (q *Queries) InsertCodeLink(ctx context.Context, arg InsertCodeLinkParams) 
 		arg.StatusTo,
 	)
 	return err
+}
+
+const listCodeLog = `-- name: ListCodeLog :many
+SELECT l.id, l.at, l.ticket_key, (l.ticket_id IS NOT NULL)::boolean AS ticket_found, l.outcome, l.items,
+       l.status_from, l.status_to, e.kind, e.sha, e.number, e.title, e.branch, e.target, e.url,
+       r.provider, r.full_name
+FROM code_event_links l
+JOIN code_events e ON e.id = l.code_event_id
+JOIN repositories r ON r.id = e.repository_id
+ORDER BY l.at DESC, l.id DESC
+LIMIT $1
+`
+
+type ListCodeLogRow struct {
+	ID          uuid.UUID
+	At          time.Time
+	TicketKey   string
+	TicketFound bool
+	Outcome     string
+	Items       []string
+	StatusFrom  *string
+	StatusTo    *string
+	Kind        string
+	Sha         string
+	Number      *int64
+	Title       string
+	Branch      string
+	Target      string
+	Url         string
+	Provider    string
+	FullName    string
+}
+
+// The latest things code events did, ignored keys included, for the Integrations page.
+func (q *Queries) ListCodeLog(ctx context.Context, rowLimit int32) ([]ListCodeLogRow, error) {
+	rows, err := q.db.Query(ctx, listCodeLog, rowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCodeLogRow{}
+	for rows.Next() {
+		var i ListCodeLogRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.TicketKey,
+			&i.TicketFound,
+			&i.Outcome,
+			&i.Items,
+			&i.StatusFrom,
+			&i.StatusTo,
+			&i.Kind,
+			&i.Sha,
+			&i.Number,
+			&i.Title,
+			&i.Branch,
+			&i.Target,
+			&i.Url,
+			&i.Provider,
+			&i.FullName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLinkedCodeEvents = `-- name: ListLinkedCodeEvents :many
+SELECT DISTINCT ON (l.ticket_id, e.id)
+       l.ticket_id, e.id, e.kind, e.sha, e.number, e.title, e.branch, e.target, e.url, e.author_login,
+       e.author_name, u.name AS author_user_name, e.occurred_at, r.provider
+FROM code_event_links l
+JOIN code_events e ON e.id = l.code_event_id
+JOIN repositories r ON r.id = e.repository_id
+LEFT JOIN users u ON u.id = e.author_user_id
+WHERE l.ticket_id = ANY($1::uuid[])
+  AND l.outcome NOT IN ('ticket_closed', 'unknown_ticket', 'other_repository')
+ORDER BY l.ticket_id, e.id
+`
+
+type ListLinkedCodeEventsRow struct {
+	TicketID       *uuid.UUID
+	ID             uuid.UUID
+	Kind           string
+	Sha            string
+	Number         *int64
+	Title          string
+	Branch         string
+	Target         string
+	Url            string
+	AuthorLogin    string
+	AuthorName     string
+	AuthorUserName *string
+	OccurredAt     time.Time
+	Provider       string
+}
+
+// The code events that reached the tickets (ignored keys left out), once per ticket and event.
+func (q *Queries) ListLinkedCodeEvents(ctx context.Context, ticketIds []uuid.UUID) ([]ListLinkedCodeEventsRow, error) {
+	rows, err := q.db.Query(ctx, listLinkedCodeEvents, ticketIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLinkedCodeEventsRow{}
+	for rows.Next() {
+		var i ListLinkedCodeEventsRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.ID,
+			&i.Kind,
+			&i.Sha,
+			&i.Number,
+			&i.Title,
+			&i.Branch,
+			&i.Target,
+			&i.Url,
+			&i.AuthorLogin,
+			&i.AuthorName,
+			&i.AuthorUserName,
+			&i.OccurredAt,
+			&i.Provider,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRunCandidates = `-- name: ListRunCandidates :many
@@ -293,6 +457,30 @@ func (q *Queries) ListTicketsByKeys(ctx context.Context, keys []string) ([]ListT
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ticketKeysExist = `-- name: TicketKeysExist :many
+SELECT key FROM tickets WHERE key = ANY($1::text[])
+`
+
+func (q *Queries) TicketKeysExist(ctx context.Context, keys []string) ([]string, error) {
+	rows, err := q.db.Query(ctx, ticketKeysExist, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		items = append(items, key)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

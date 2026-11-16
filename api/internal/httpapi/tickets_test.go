@@ -182,6 +182,7 @@ var scopedOps = map[string]struct{ otherRequester, otherAgent int }{
 	"answerTicketUat":             {http.StatusNotFound, http.StatusForbidden},
 	"reopenTicket":                {http.StatusNotFound, http.StatusForbidden},
 	"listTicketActivity":          {http.StatusForbidden, http.StatusNotFound},
+	"getTicketCode":               {http.StatusForbidden, http.StatusNotFound},
 	"downloadAttachment":          {http.StatusNotFound, http.StatusNotFound},
 	"listTicketWatchers":          {http.StatusNotFound, http.StatusNotFound},
 	"addTicketWatcher":            {http.StatusNotFound, http.StatusForbidden},
@@ -220,6 +221,7 @@ func TestTicketScope(t *testing.T) {
 		},
 		"reopenTicket":       func(s session) *httptest.ResponseRecorder { return s.do(http.MethodPost, path+"/reopen", nil) },
 		"listTicketActivity": func(s session) *httptest.ResponseRecorder { return s.do(http.MethodGet, path+"/activity", nil) },
+		"getTicketCode":      func(s session) *httptest.ResponseRecorder { return s.do(http.MethodGet, path+"/code", nil) },
 		"downloadAttachment": func(s session) *httptest.ResponseRecorder {
 			return s.do(http.MethodGet, "/attachments/"+file.Id.String(), nil)
 		},

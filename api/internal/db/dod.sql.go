@@ -216,20 +216,38 @@ func (q *Queries) ListLifecycleCandidates(ctx context.Context, arg ListLifecycle
 }
 
 const listTicketDoDItems = `-- name: ListTicketDoDItems :many
-SELECT i.item, i.done_at, i.done_by, u.name AS done_by_name
+SELECT i.item, i.done_at, i.done_by, u.name AS done_by_name, e.id AS code_event_id, e.kind AS code_kind,
+       e.sha AS code_sha, e.number AS code_number, e.title AS code_title, e.branch AS code_branch,
+       e.target AS code_target, e.url AS code_url, e.author_login AS code_author_login,
+       e.author_name AS code_author_name, e.occurred_at AS code_at, r.provider AS code_provider
 FROM ticket_dod_items i
 LEFT JOIN users u ON u.id = i.done_by
+LEFT JOIN code_events e ON e.id = i.code_event_id
+LEFT JOIN repositories r ON r.id = e.repository_id
 WHERE i.ticket_id = $1
 ORDER BY i.done_at, i.item
 `
 
 type ListTicketDoDItemsRow struct {
-	Item       string
-	DoneAt     time.Time
-	DoneBy     *uuid.UUID
-	DoneByName *string
+	Item            string
+	DoneAt          time.Time
+	DoneBy          *uuid.UUID
+	DoneByName      *string
+	CodeEventID     *uuid.UUID
+	CodeKind        *string
+	CodeSha         *string
+	CodeNumber      *int64
+	CodeTitle       *string
+	CodeBranch      *string
+	CodeTarget      *string
+	CodeUrl         *string
+	CodeAuthorLogin *string
+	CodeAuthorName  *string
+	CodeAt          *time.Time
+	CodeProvider    *string
 }
 
+// With the code event that met an item, if one did.
 func (q *Queries) ListTicketDoDItems(ctx context.Context, ticketID uuid.UUID) ([]ListTicketDoDItemsRow, error) {
 	rows, err := q.db.Query(ctx, listTicketDoDItems, ticketID)
 	if err != nil {
@@ -244,6 +262,18 @@ func (q *Queries) ListTicketDoDItems(ctx context.Context, ticketID uuid.UUID) ([
 			&i.DoneAt,
 			&i.DoneBy,
 			&i.DoneByName,
+			&i.CodeEventID,
+			&i.CodeKind,
+			&i.CodeSha,
+			&i.CodeNumber,
+			&i.CodeTitle,
+			&i.CodeBranch,
+			&i.CodeTarget,
+			&i.CodeUrl,
+			&i.CodeAuthorLogin,
+			&i.CodeAuthorName,
+			&i.CodeAt,
+			&i.CodeProvider,
 		); err != nil {
 			return nil, err
 		}

@@ -310,3 +310,33 @@ func apiClock(v slaengine.View) gen.SlaClock {
 		RemainingMs: v.Remaining.Milliseconds(), DayMs: v.Day.Milliseconds(), DueAt: v.DueAt, MetAt: v.MetAt,
 	}
 }
+
+func (s *server) GetTicketCode(ctx context.Context, req gen.GetTicketCodeRequestObject) (gen.GetTicketCodeResponseObject, error) {
+	p, err := auth.Require(ctx, auth.CapAgentApp)
+	if err != nil {
+		return nil, err
+	}
+	c, err := s.tickets.Code(ctx, p, req.TicketKey)
+	if err != nil {
+		return nil, err
+	}
+	out := gen.GetTicketCode200JSONResponse{
+		Requests: make([]gen.CodeRequest, len(c.Requests)), Commits: make([]gen.CodeCommit, len(c.Commits)),
+	}
+	if r := c.Repository; r != nil {
+		out.Repository = &gen.RepositoryRef{Id: r.ID, Provider: gen.GitProvider(r.Provider), FullName: r.FullName, WebUrl: r.WebURL}
+	}
+	for i, r := range c.Requests {
+		out.Requests[i] = gen.CodeRequest{
+			Provider: gen.GitProvider(r.Provider), Number: r.Number, Title: r.Title, State: gen.CodeRequestState(r.State),
+			Branch: r.Branch, Target: r.Target, Url: r.URL, Author: r.Author, At: r.At,
+		}
+	}
+	for i, cm := range c.Commits {
+		out.Commits[i] = gen.CodeCommit{
+			Provider: gen.GitProvider(cm.Provider), Sha: cm.SHA, Title: cm.Title, Branch: cm.Branch, Author: cm.Author,
+			Url: cm.URL, At: cm.At,
+		}
+	}
+	return out, nil
+}

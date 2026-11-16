@@ -3,6 +3,7 @@ package tickets
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
@@ -39,6 +41,7 @@ type TicketDoD struct {
 	Met            bool
 	Pending        []dod.Item // required items not met yet
 	CanOverride    bool       // the viewer may set or reset the ticket's own Definition of Done
+	HasRepository  bool       // the project reads code, so merge, CI and deploy can be asked for
 }
 
 // DoDItem is one checklist line: done once DoneAt is set. DoneBy is nil when the system met it.
@@ -46,6 +49,20 @@ type DoDItem struct {
 	Item   dod.Item
 	DoneAt *time.Time
 	DoneBy *Ref
+	Source *CodeSource // the code event that met it
+}
+
+// CodeSource is the code event that met a Definition of Done item, for "how" it was met.
+type CodeSource struct {
+	Provider gitevent.Provider
+	Kind     gitevent.Kind
+	Ref      string // short commit sha, request or run number, or the environment
+	Title    string
+	Branch   string
+	Target   string
+	Author   string
+	URL      string
+	At       time.Time
 }
 
 // storedDoD is a ticket's Definition of Done as its row holds it.
@@ -94,7 +111,7 @@ func pendingFor(sd storedDoD, done []string) []dod.Item {
 }
 
 // ticketDoD builds the agent app's view of the ticket's Definition of Done.
-func ticketDoD(sd storedDoD, reason *string, rows []db.ListTicketDoDItemsRow, canOverride bool) TicketDoD {
+func ticketDoD(sd storedDoD, reason *string, rows []db.ListTicketDoDItemsRow, canOverride, hasRepository bool) TicketDoD {
 	eff, src := sd.effective()
 	byItem := map[dod.Item]db.ListTicketDoDItemsRow{}
 	names := make([]string, 0, len(rows))
@@ -108,7 +125,7 @@ func ticketDoD(sd storedDoD, reason *string, rows []db.ListTicketDoDItemsRow, ca
 	}
 	t := TicketDoD{
 		Source: src, Config: eff, ProjectConfig: sd.project, Items: []DoDItem{}, Met: met, Pending: pending,
-		CanOverride: canOverride,
+		CanOverride: canOverride, HasRepository: hasRepository,
 	}
 	if src == dod.SourceTicket {
 		t.OverrideReason = reason
@@ -119,10 +136,35 @@ func ticketDoD(sd storedDoD, reason *string, rows []db.ListTicketDoDItemsRow, ca
 			at := r.DoneAt
 			item.DoneAt = &at
 			item.DoneBy = optionalRef(r.DoneBy, r.DoneByName)
+			item.Source = codeSource(r)
 		}
 		t.Items = append(t.Items, item)
 	}
 	return t
+}
+
+func codeSource(r db.ListTicketDoDItemsRow) *CodeSource {
+	if r.CodeEventID == nil || r.CodeKind == nil || r.CodeProvider == nil || r.CodeAt == nil {
+		return nil
+	}
+	kind := gitevent.Kind(*r.CodeKind)
+	src := &CodeSource{
+		Provider: gitevent.Provider(*r.CodeProvider), Kind: kind, Title: deref(r.CodeTitle), Branch: deref(r.CodeBranch),
+		Target: deref(r.CodeTarget), URL: deref(r.CodeUrl), At: *r.CodeAt,
+	}
+	src.Author = deref(r.CodeAuthorLogin)
+	if src.Author == "" {
+		src.Author = deref(r.CodeAuthorName)
+	}
+	switch {
+	case kind == gitevent.KindCommit:
+		src.Ref = shortSHA(deref(r.CodeSha))
+	case kind == gitevent.KindDeployment:
+		src.Ref = src.Title
+	case r.CodeNumber != nil:
+		src.Ref = strconv.FormatInt(*r.CodeNumber, 10)
+	}
+	return src
 }
 
 // canOverrideDoD: agents may set a ticket's own Definition of Done when its project allows it;

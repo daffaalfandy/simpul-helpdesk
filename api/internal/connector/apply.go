@@ -16,9 +16,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
-// shortSHALen is how a commit is named in the activity log, as on GitHub and GitLab.
-const shortSHALen = 7
-
 // maxStoredRuns caps the earlier CI runs and deployments read for one ticket.
 const maxStoredRuns = 100
 
@@ -162,8 +159,8 @@ func codeEvent(provider gitevent.Provider, e storedEvent) tickets.CodeEvent {
 // the environment a deployment went to.
 func ref(kind gitevent.Kind, sha string, number *int64, title string) string {
 	switch {
-	case kind == gitevent.KindCommit && len(sha) > shortSHALen:
-		return sha[:shortSHALen]
+	case kind == gitevent.KindCommit && len(sha) > tickets.ShortSHALen:
+		return sha[:tickets.ShortSHALen]
 	case kind == gitevent.KindCommit:
 		return sha
 	case kind == gitevent.KindDeployment:

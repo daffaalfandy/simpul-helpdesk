@@ -56,12 +56,22 @@ func apiTicketDod(d tickets.TicketDoD) gen.TicketDod {
 	out := gen.TicketDod{
 		Source: gen.DodSource(d.Source), Config: apiDodConfig(d.Config), ProjectConfig: apiDodConfig(d.ProjectConfig),
 		OverrideReason: d.OverrideReason, Items: make([]gen.TicketDodItem, len(d.Items)), Met: d.Met,
-		Pending: apiDodItems(d.Pending), CanOverride: d.CanOverride,
+		Pending: apiDodItems(d.Pending), CanOverride: d.CanOverride, HasRepository: d.HasRepository,
 	}
 	for i, it := range d.Items {
-		out.Items[i] = gen.TicketDodItem{Item: gen.DodItem(it.Item), DoneAt: it.DoneAt, DoneBy: apiRefPtr(it.DoneBy)}
+		out.Items[i] = gen.TicketDodItem{Item: gen.DodItem(it.Item), DoneAt: it.DoneAt, DoneBy: apiRefPtr(it.DoneBy), Source: apiCodeSource(it.Source)}
 	}
 	return out
+}
+
+func apiCodeSource(s *tickets.CodeSource) *gen.CodeSource {
+	if s == nil {
+		return nil
+	}
+	return &gen.CodeSource{
+		Provider: gen.GitProvider(s.Provider), Kind: gen.CodeEventKind(s.Kind), Ref: s.Ref, Title: s.Title, Branch: s.Branch,
+		Target: s.Target, Author: s.Author, Url: s.URL, At: s.At,
+	}
 }
 
 func apiDodItems(items []dod.Item) []gen.DodItem {

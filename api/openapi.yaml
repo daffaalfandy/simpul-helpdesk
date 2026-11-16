@@ -812,6 +812,46 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /integrations/commit-test:
+    post:
+      operationId: testCommitMessage
+      summary: What a commit message would do (admin only)
+      description: The "Try a commit message" tester; it reads the message the way the connector does.
+      tags: [integrations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommitTestInput" }
+      responses:
+        "200":
+          description: The tickets the message names and what it asks of each
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommitTest" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /integrations/events:
+    get:
+      operationId: listCodeEvents
+      summary: What recent code events did, newest first (admin only)
+      tags: [integrations]
+      responses:
+        "200":
+          description: Recent events, ignored keys included
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 20
+                items: { $ref: "#/components/schemas/CodeEventLog" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /repositories:
     post:
       operationId: createRepository
@@ -1266,6 +1306,27 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/TicketActivity" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/code:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    get:
+      operationId: getTicketCode
+      summary: The ticket's code activity, newest first (staff)
+      description: |
+        Pull/merge requests (one per number, in their latest state) and commits that named the
+        ticket. Commit messages are internal, so client staff get 404.
+      tags: [tickets]
+      responses:
+        "200":
+          description: Code activity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketCode" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -2635,7 +2696,7 @@ components:
 
     TicketDodItem:
       type: object
-      required: [item, doneAt, doneBy]
+      required: [item, doneAt, doneBy, source]
       properties:
         item: { $ref: "#/components/schemas/DodItem" }
         doneAt: { type: string, format: date-time, nullable: true }
@@ -2643,10 +2704,149 @@ components:
           allOf: [{ $ref: "#/components/schemas/Ref" }]
           nullable: true
           description: Null when not done yet, or when the system met it.
+        source:
+          allOf: [{ $ref: "#/components/schemas/CodeSource" }]
+          nullable: true
+          description: The code event that met it.
+
+    CodeSource:
+      type: object
+      required: [provider, kind, ref, title, branch, target, author, url, at]
+      properties:
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        kind: { $ref: "#/components/schemas/CodeEventKind" }
+        ref:
+          type: string
+          description: A short commit sha, a request or run number, or the environment deployed to.
+        title: { type: string, description: The commit's first line or the request's title. }
+        branch: { type: string }
+        target: { type: string }
+        author: { type: string }
+        url: { type: string }
+        at: { type: string, format: date-time }
+
+    CodeRequestState:
+      type: string
+      description: "`open` is shown as In review; `closed` was closed without merging."
+      enum: [open, merged, closed]
+
+    CodeRequest:
+      type: object
+      required: [provider, number, title, state, branch, target, url, author, at]
+      properties:
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        number: { type: integer, format: int64 }
+        title: { type: string }
+        state: { $ref: "#/components/schemas/CodeRequestState" }
+        branch: { type: string }
+        target: { type: string }
+        url: { type: string }
+        author: { type: string, description: Who opened it, or who merged it once merged. }
+        at: { type: string, format: date-time }
+
+    CodeCommit:
+      type: object
+      required: [provider, sha, title, branch, author, url, at]
+      properties:
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        sha: { type: string, description: The short sha. }
+        title: { type: string }
+        branch: { type: string }
+        author: { type: string }
+        url: { type: string }
+        at: { type: string, format: date-time }
+
+    TicketCode:
+      type: object
+      required: [repository, requests, commits]
+      properties:
+        repository:
+          allOf: [{ $ref: "#/components/schemas/RepositoryRef" }]
+          nullable: true
+          description: Where the ticket's project reads code from.
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/CodeRequest" }
+        commits:
+          type: array
+          items: { $ref: "#/components/schemas/CodeCommit" }
+
+    BoardCardCode:
+      type: object
+      required: [provider, request, commits, branch, deployed]
+      description: The card's code chip.
+      properties:
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        request:
+          allOf: [{ $ref: "#/components/schemas/BoardCardRequest" }]
+          nullable: true
+          description: The latest pull/merge request.
+        commits: { type: integer, description: Commits that named the ticket. }
+        branch: { type: string, description: The latest commit's branch. }
+        deployed: { type: boolean }
+
+    BoardCardRequest:
+      type: object
+      required: [number, state, target]
+      properties:
+        number: { type: integer, format: int64 }
+        state: { $ref: "#/components/schemas/CodeRequestState" }
+        target: { type: string }
+
+    CommitRefAction:
+      type: string
+      description: "`link` (the key alone), `fix` (fix/close/resolve right before it), `reopen`."
+      enum: [link, fix, reopen]
+
+    CommitTestInput:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, maxLength: 5000 }
+
+    CommitTest:
+      type: object
+      required: [refs]
+      properties:
+        refs:
+          type: array
+          items: { $ref: "#/components/schemas/CommitTestRef" }
+
+    CommitTestRef:
+      type: object
+      required: [key, action, ticketExists]
+      properties:
+        key: { type: string, example: HD-24871 }
+        action: { $ref: "#/components/schemas/CommitRefAction" }
+        ticketExists: { type: boolean }
+
+    CodeEventLog:
+      type: object
+      required: [id, at, provider, repository, kind, ref, title, branch, target, url, ticketKey, ticketFound,
+                 outcome, items, statusFrom, statusTo]
+      properties:
+        id: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        repository: { type: string, description: The repository's full name. }
+        kind: { $ref: "#/components/schemas/CodeEventKind" }
+        ref: { type: string }
+        title: { type: string }
+        branch: { type: string }
+        target: { type: string }
+        url: { type: string }
+        ticketKey: { type: string }
+        ticketFound: { type: boolean, description: False when no ticket has the key. }
+        outcome: { $ref: "#/components/schemas/CodeOutcome" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DodItem" }
+        statusFrom: { allOf: [{ $ref: "#/components/schemas/TicketStatus" }], nullable: true }
+        statusTo: { allOf: [{ $ref: "#/components/schemas/TicketStatus" }], nullable: true }
 
     TicketDod:
       type: object
-      required: [source, config, projectConfig, overrideReason, items, met, pending, canOverride]
+      required: [source, config, projectConfig, overrideReason, items, met, pending, canOverride, hasRepository]
       properties:
         source: { $ref: "#/components/schemas/DodSource" }
         config:
@@ -2668,6 +2868,9 @@ components:
         canOverride:
           type: boolean
           description: The viewer may set or reset the ticket's own Definition of Done.
+        hasRepository:
+          type: boolean
+          description: The ticket's project reads code, so merge, CI and deploy can be asked for.
 
     TicketDodInput:
       type: object
@@ -2765,7 +2968,8 @@ components:
 
     BoardCard:
       type: object
-      required: [id, key, type, status, priority, subject, client, assignee, allowedStatuses, sla, dodPending, uat]
+      required: [id, key, type, status, priority, subject, client, assignee, allowedStatuses, sla, dodPending, uat,
+                 code]
       properties:
         sla:
           allOf: [{ $ref: "#/components/schemas/BoardCardSla" }]
@@ -2793,6 +2997,10 @@ components:
           allOf: [{ $ref: "#/components/schemas/BoardCardUat" }]
           nullable: true
           description: Set while the client tests.
+        code:
+          allOf: [{ $ref: "#/components/schemas/BoardCardCode" }]
+          nullable: true
+          description: Set once code reached the ticket.
 
     BoardColumn:
       type: object

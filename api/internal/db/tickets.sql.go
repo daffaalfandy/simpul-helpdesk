@@ -135,7 +135,8 @@ SELECT t.id, t.key, t.type, t.status, t.priority, t.channel, t.subject, t.descri
        t.project_id, p.name AS project_name,
        t.catalog_item_id, ci.name AS catalog_item_name,
        t.status_changed_at, p.dod_config, p.allow_ticket_override,
-       o.config AS dod_override, o.reason AS dod_override_reason
+       o.config AS dod_override, o.reason AS dod_override_reason,
+       (p.repository_id IS NOT NULL)::boolean AS has_repository
 FROM tickets t
 JOIN clients c ON c.id = t.client_id
 JOIN users r ON r.id = t.requester_id
@@ -191,6 +192,7 @@ type GetTicketRow struct {
 	AllowTicketOverride bool
 	DodOverride         []byte
 	DodOverrideReason   *string
+	HasRepository       bool
 }
 
 func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicketRow, error) {
@@ -230,6 +232,7 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 		&i.AllowTicketOverride,
 		&i.DodOverride,
 		&i.DodOverrideReason,
+		&i.HasRepository,
 	)
 	return i, err
 }

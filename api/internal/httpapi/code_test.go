@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
@@ -272,4 +273,72 @@ func TestCodeNotifications(t *testing.T) {
 	if n := count(agentEmail); n != 1 {
 		t.Fatalf("own commit notified the author: %d", n)
 	}
+}
+
+func TestCodeReads(t *testing.T) {
+	ce := newCodeEnv(t, eOfficeDoD())
+	tk := ce.requester.report(t, incident(ce.projectA, "Login fails"))
+	ce.agent.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &ce.agentID})
+	branch := "fix/" + tk.Key + "-sso"
+	ce.send(t, "push", pushJSON(branch,
+		commitJSON(sha(1), "refs "+tk.Key+" add logging", agentEmail, "2026-11-16T08:40:00+07:00"),
+		commitJSON(sha(2), "Fix "+tk.Key+": revert TTL", agentEmail, "2026-11-16T08:52:00+07:00")))
+	ce.send(t, "pull_request", prJSON("opened", false, 142, "Revert TTL", branch, "main", "2026-11-16T02:05:00Z"))
+
+	// The board chip shows the pull request in review.
+	board := decode[gen.Board](t, ce.agent.do(http.MethodGet, "/board", nil), http.StatusOK)
+	var chip *gen.BoardCardCode
+	for _, col := range board.Columns {
+		for _, c := range col.Cards {
+			if c.Key == tk.Key {
+				chip = c.Code
+			}
+		}
+	}
+	if chip == nil || chip.Request == nil || chip.Request.Number != 142 || chip.Request.State != gen.CodeRequestStateOpen ||
+		chip.Commits != 2 || chip.Branch != branch || chip.Deployed {
+		t.Fatalf("board chip = %+v", chip)
+	}
+
+	// Merged: the request's state follows, and the merged item says how it was met.
+	ce.send(t, "pull_request", prJSON("closed", true, 142, "Revert TTL", branch, "main", "2026-11-16T05:40:00Z"))
+	code := decode[gen.TicketCode](t, ce.agent.do(http.MethodGet, "/tickets/"+tk.Key+"/code", nil), http.StatusOK)
+	if code.Repository == nil || code.Repository.FullName != "vendor-id/eoffice-jambi" || len(code.Requests) != 1 ||
+		code.Requests[0].State != gen.CodeRequestStateMerged || code.Requests[0].Author != "dewi.w" || len(code.Commits) != 2 ||
+		code.Commits[0].Sha != sha(2)[:7] || code.Commits[0].Title != "Fix "+tk.Key+": revert TTL" || code.Commits[0].Author != "User agent" {
+		t.Fatalf("code = %+v", code)
+	}
+	got := ce.agent.ticket(t, tk.Key)
+	if got.Dod == nil || !got.Dod.HasRepository {
+		t.Fatal("ticket DoD lacks its repository")
+	}
+	for _, it := range got.Dod.Items {
+		switch it.Item {
+		case gen.DodItemMerged:
+			if it.Source == nil || it.Source.Kind != gen.CodeEventKindPrMerged || it.Source.Ref != "142" || it.Source.Author != "dewi.w" {
+				t.Errorf("merged source = %+v", it.Source)
+			}
+		case gen.DodItemFixCommitted:
+			if it.Source == nil || it.Source.Kind != gen.CodeEventKindCommit || it.Source.Ref != sha(2)[:7] {
+				t.Errorf("fix source = %+v", it.Source)
+			}
+		}
+	}
+	// Commit messages are internal.
+	expectProblem(t, ce.requester.do(http.MethodGet, "/tickets/"+tk.Key+"/code", nil), http.StatusForbidden, apperr.CodeForbidden)
+
+	// Settings: the tester reads messages like the connector; the log lists what happened.
+	admin := ce.admin
+	test := decode[gen.CommitTest](t, admin.do(http.MethodPost, "/integrations/commit-test",
+		gen.CommitTestInput{Message: "Closes " + tk.Key + ", refs HD-99999"}), http.StatusOK)
+	want := []gen.CommitTestRef{{Key: tk.Key, Action: gen.CommitRefActionFix, TicketExists: true}, {Key: "HD-99999", Action: gen.CommitRefActionLink}}
+	if !slices.Equal(test.Refs, want) {
+		t.Fatalf("tester = %+v", test.Refs)
+	}
+	log := decode[[]gen.CodeEventLog](t, admin.do(http.MethodGet, "/integrations/events", nil), http.StatusOK)
+	if len(log) == 0 || log[0].Kind != gen.CodeEventKindPrMerged || log[0].Outcome != gen.CodeOutcomeMerged ||
+		log[0].StatusTo == nil || *log[0].StatusTo != gen.TicketStatusInUat || log[0].Repository != "vendor-id/eoffice-jambi" {
+		t.Fatalf("log = %+v", log)
+	}
+	expectProblem(t, ce.agent.do(http.MethodGet, "/integrations/events", nil), http.StatusForbidden, apperr.CodeForbidden)
 }
