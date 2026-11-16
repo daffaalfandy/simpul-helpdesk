@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 )
@@ -29,6 +30,22 @@ const (
 type project struct {
 	client, name, description string
 	sla                       sla.ProjectSLA
+	dod                       dod.Config
+}
+
+// uatDoD is a client test approved automatically after days working days. Code conditions
+// (Projects mock: e-Office merges into main, SIPD into release/*) need repositories, from M7.
+func uatDoD(days int) dod.Config {
+	c := dod.None()
+	c.UAT = dod.UAT{Enabled: true, AutoApproveWorkingDays: days}
+	return c
+}
+
+// confirmDoD is support work with no code: the requester confirms the fix.
+func confirmDoD() dod.Config {
+	c := dod.None()
+	c.RequesterConfirms = true
+	return c
 }
 
 // fastSLA is the quicker set the Projects mock gives e-Office: P1 fixed in 2 hours, at risk at
@@ -48,17 +65,17 @@ func fastSLA() sla.ProjectSLA {
 }
 
 var demoProjects = []project{
-	{RequesterClient, projectEOffice, "Letters, dispositions, archives", fastSLA()},
-	{RequesterClient, projectWebsite, "Public website", sla.DefaultProjectSLA()},
-	{RequesterClient, projectEmail, "Mailboxes and accounts", sla.DefaultProjectSLA()},
-	{clientBatam, projectNetwork, "Internet, Wi-Fi, remote access", sla.DefaultProjectSLA()},
-	{clientBatam, projectFinanceApps, "Budgeting and finance systems", sla.DefaultProjectSLA()},
-	{clientRiau, projectSIPD, "Regional budgeting and finance (SIPD)", sla.DefaultProjectSLA()},
-	{clientBintan, projectBintanWeb, "Public website", sla.DefaultProjectSLA()},
-	{clientPANRB, projectGeneral, "Day-to-day IT support", sla.DefaultProjectSLA()},
+	{RequesterClient, projectEOffice, "Letters, dispositions, archives", fastSLA(), uatDoD(dod.AutoApproveThreeDays)},
+	{RequesterClient, projectWebsite, "Public website", sla.DefaultProjectSLA(), dod.None()},
+	{RequesterClient, projectEmail, "Mailboxes and accounts", sla.DefaultProjectSLA(), dod.None()},
+	{clientBatam, projectNetwork, "Internet, Wi-Fi, remote access", sla.DefaultProjectSLA(), confirmDoD()},
+	{clientBatam, projectFinanceApps, "Budgeting and finance systems", sla.DefaultProjectSLA(), uatDoD(dod.AutoApproveFiveDays)},
+	{clientRiau, projectSIPD, "Regional budgeting and finance (SIPD)", sla.DefaultProjectSLA(), dod.None()},
+	{clientBintan, projectBintanWeb, "Public website", sla.DefaultProjectSLA(), dod.None()},
+	{clientPANRB, projectGeneral, "Day-to-day IT support", sla.DefaultProjectSLA(), confirmDoD()},
 }
 
-// seedProjects upserts the demo projects and their SLAs and returns IDs by client and name.
+// seedProjects upserts the demo projects, their SLAs and Definitions of Done and returns IDs by client and name.
 // Each client's first project is made its default, so a re-run restores the demo defaults.
 func seedProjects(ctx context.Context, q *db.Queries, clientIDs map[string]uuid.UUID) (map[string]map[string]uuid.UUID, error) {
 	out := make(map[string]map[string]uuid.UUID)
@@ -80,6 +97,9 @@ func seedProjects(ctx context.Context, q *db.Queries, clientIDs map[string]uuid.
 		}
 		if err := projects.WriteSLA(ctx, q, id, p.sla); err != nil {
 			return nil, fmt.Errorf("project %s SLA: %w", p.name, err)
+		}
+		if err := q.UpdateProjectDoD(ctx, db.UpdateProjectDoDParams{ID: id, DodConfig: p.dod.JSON(), AllowTicketOverride: true}); err != nil {
+			return nil, fmt.Errorf("project %s DoD: %w", p.name, err)
 		}
 		if out[p.client] == nil {
 			out[p.client] = make(map[string]uuid.UUID)

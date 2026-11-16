@@ -12,6 +12,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
@@ -134,6 +135,64 @@ func TestProjectSLA(t *testing.T) {
 	}
 }
 
+func TestProjectDoD(t *testing.T) {
+	e := newEnv(t)
+	sup := e.as(auth.RoleSupervisor)
+	p := decode[gen.Project](t, sup.do(http.MethodPost, "/projects", projectInput(newClient(t, e, "Bappeda"), "e-Office")), http.StatusCreated)
+	path := projectPath(p) + "/dod"
+
+	// A new project asks the client to test, approved automatically after 3 working days.
+	if want := apiDod(dod.Default()); p.Dod != want || !p.AllowTicketOverride || p.HasRepository {
+		t.Fatalf("new project DoD = %+v, override %v, repo %v", p.Dod, p.AllowTicketOverride, p.HasRepository)
+	}
+
+	next := p.Dod
+	next.Uat.Enabled = false
+	next.RequesterConfirms = true
+	got := decode[gen.Project](t, sup.do(http.MethodPut, path, gen.ProjectDodInput{Dod: next, AllowTicketOverride: false}), http.StatusOK)
+	if got.Dod != next || got.AllowTicketOverride {
+		t.Fatalf("saved = %+v, override %v", got.Dod, got.AllowTicketOverride)
+	}
+	if again := decode[gen.Project](t, sup.do(http.MethodGet, projectPath(p), nil), http.StatusOK); again.Dod != next {
+		t.Fatalf("read back = %+v", again.Dod)
+	}
+	// Saving the same again writes no audit entry.
+	decode[gen.Project](t, sup.do(http.MethodPut, path, gen.ProjectDodInput{Dod: next, AllowTicketOverride: false}), http.StatusOK)
+
+	// Code conditions need a repository; repositories arrive with the connector.
+	code := next
+	code.Merged.Enabled = true
+	expectProblem(t, sup.do(http.MethodPut, path, gen.ProjectDodInput{Dod: code, AllowTicketOverride: true}), http.StatusBadRequest, apperr.CodeInvalidDoD)
+	days := next
+	days.Uat.AutoApproveWorkingDays = 4
+	if rec := sup.do(http.MethodPut, path, gen.ProjectDodInput{Dod: days}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("4 days: %d", rec.Code)
+	}
+	expectProblem(t, e.as(auth.RoleAgent).do(http.MethodPut, path, gen.ProjectDodInput{Dod: next}), http.StatusForbidden, apperr.CodeForbidden)
+
+	var data map[string]any
+	if err := e.st.Pool().QueryRow(context.Background(),
+		`SELECT data FROM audit_log WHERE action = $1 AND target_id = $2`, projects.ActionDoDUpdated, p.Id).Scan(&data); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := data["dod"]; !ok {
+		t.Errorf("audit data lacks dod: %v", data)
+	}
+	if _, ok := data["allow_ticket_override"]; !ok {
+		t.Errorf("audit data lacks allow_ticket_override: %v", data)
+	}
+}
+
+func apiDod(c dod.Config) gen.DodConfig {
+	return gen.DodConfig{
+		Merged:             gen.DodMerged{Enabled: c.Merged.Enabled, Branch: gen.DodBranch(c.Merged.Branch)},
+		CiPassed:           c.CIPassed,
+		DeployedProduction: c.DeployedProduction,
+		Uat:                gen.DodUat{Enabled: c.UAT.Enabled, AutoApproveWorkingDays: gen.AutoApproveDays(c.UAT.AutoApproveWorkingDays)},
+		RequesterConfirms:  c.RequesterConfirms,
+	}
+}
+
 // projectOps are the operations on one project, with what each role gets for a client it isn't
 // linked to (agent) or a project it can see but not change.
 var projectOps = map[string]struct{ requester, otherAgent, linkedAgent int }{
@@ -141,6 +200,7 @@ var projectOps = map[string]struct{ requester, otherAgent, linkedAgent int }{
 	"updateProject":    {http.StatusForbidden, http.StatusForbidden, http.StatusForbidden},
 	"deleteProject":    {http.StatusForbidden, http.StatusForbidden, http.StatusForbidden},
 	"updateProjectSla": {http.StatusForbidden, http.StatusForbidden, http.StatusForbidden},
+	"updateProjectDod": {http.StatusForbidden, http.StatusForbidden, http.StatusForbidden},
 }
 
 func TestProjectScope(t *testing.T) {
@@ -164,6 +224,9 @@ func TestProjectScope(t *testing.T) {
 		},
 		"updateProjectSla": func(s session, p gen.Project) *httptest.ResponseRecorder {
 			return s.do(http.MethodPut, projectPath(p)+"/sla", p.Sla)
+		},
+		"updateProjectDod": func(s session, p gen.Project) *httptest.ResponseRecorder {
+			return s.do(http.MethodPut, projectPath(p)+"/dod", gen.ProjectDodInput{Dod: p.Dod, AllowTicketOverride: true})
 		},
 	}
 

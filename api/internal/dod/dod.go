@@ -4,6 +4,7 @@
 package dod
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"time"
@@ -104,6 +105,22 @@ func Default() Config {
 	c := None()
 	c.UAT.Enabled = true
 	return c
+}
+
+// Parse reads a stored configuration. Fields missing from older JSON keep None's values.
+func Parse(b []byte) (Config, error) {
+	c := None()
+	err := json.Unmarshal(b, &c)
+	return c, err
+}
+
+// JSON is the stored form of c.
+func (c Config) JSON() []byte {
+	b, err := json.Marshal(c)
+	if err != nil {
+		panic(err) // a struct of bools, ints and strings always marshals
+	}
+	return b
 }
 
 var (

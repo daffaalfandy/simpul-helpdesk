@@ -65,9 +65,15 @@ func TestStorageFormat(t *testing.T) {
 	if string(got) != want {
 		t.Fatalf("JSON = %s\nwant   %s", got, want)
 	}
-	var back Config
-	if err := json.Unmarshal(got, &back); err != nil || back != with(merged(BranchRelease), ci, uat(AutoApproveFiveDays)) {
+	if string(with(merged(BranchRelease), ci, uat(AutoApproveFiveDays)).JSON()) != want {
+		t.Fatal("JSON() differs from json.Marshal")
+	}
+	back, err := Parse(got)
+	if err != nil || back != with(merged(BranchRelease), ci, uat(AutoApproveFiveDays)) {
 		t.Fatalf("round trip = %+v, %v", back, err)
+	}
+	if partial, err := Parse([]byte(`{"ci_passed":true}`)); err != nil || partial != with(ci) {
+		t.Fatalf("missing fields = %+v, %v", partial, err)
 	}
 }
 

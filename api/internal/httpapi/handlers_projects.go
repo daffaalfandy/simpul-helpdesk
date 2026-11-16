@@ -91,10 +91,25 @@ func (s *server) UpdateProjectSla(ctx context.Context, req gen.UpdateProjectSlaR
 	return gen.UpdateProjectSla200JSONResponse(apiProject(pr)), nil
 }
 
+func (s *server) UpdateProjectDod(ctx context.Context, req gen.UpdateProjectDodRequestObject) (gen.UpdateProjectDodResponseObject, error) {
+	p, err := auth.Require(ctx, auth.CapProjectsManage)
+	if err != nil {
+		return nil, err
+	}
+	pr, err := s.projects.UpdateDoD(ctx, p.AuditActor(), req.ProjectId, projects.DoDInput{
+		Config: domainDodConfig(req.Body.Dod), AllowTicketOverride: req.Body.AllowTicketOverride,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return gen.UpdateProjectDod200JSONResponse(apiProject(pr)), nil
+}
+
 func apiProject(p projects.Project) gen.Project {
 	return gen.Project{
 		Id: p.ID, Client: gen.Ref{Id: p.Client.ID, Name: p.Client.Name}, Name: p.Name, Description: p.Description,
-		IsDefault: p.IsDefault, Active: p.Active, Sla: apiProjectSLA(p.SLA), OpenTicketCount: p.OpenTicketCount,
+		IsDefault: p.IsDefault, Active: p.Active, Sla: apiProjectSLA(p.SLA), Dod: apiDodConfig(p.DoD),
+		AllowTicketOverride: p.AllowTicketOverride, HasRepository: p.HasRepository, OpenTicketCount: p.OpenTicketCount,
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }

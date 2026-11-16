@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
@@ -20,7 +21,8 @@ SELECT p.id, pr.code, 1, 'h', 4, 'h', 4, 'h', 'business_hours' FROM p, prioritie
 RETURNING project_id`
 
 // Project inserts a project for clientID with simple targets (1 h response, 4 h resolve and
-// deliver) and returns its id. Pass isDefault for a client's first project.
+// deliver) and no Definition of Done conditions, and returns its id. Pass isDefault for a
+// client's first project.
 func Project(tb testing.TB, st *store.Store, clientID uuid.UUID, name string, isDefault bool) uuid.UUID {
 	tb.Helper()
 	rows, err := st.Pool().Query(context.Background(), insertProject, clientID, name, isDefault)
@@ -38,4 +40,13 @@ func Project(tb testing.TB, st *store.Store, clientID uuid.UUID, name string, is
 		tb.Fatalf("testdb: insert project: %v", err)
 	}
 	return id
+}
+
+// SetProjectDoD replaces a project's Definition of Done.
+func SetProjectDoD(tb testing.TB, st *store.Store, id uuid.UUID, c dod.Config) {
+	tb.Helper()
+	if _, err := st.Pool().Exec(context.Background(),
+		`UPDATE projects SET dod_config = $2 WHERE id = $1`, id, c.JSON()); err != nil {
+		tb.Fatalf("testdb: set project DoD: %v", err)
+	}
 }

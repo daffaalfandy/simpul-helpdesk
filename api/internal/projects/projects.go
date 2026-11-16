@@ -1,5 +1,5 @@
 // Package projects manages the projects each client has. A project carries the SLA its tickets
-// follow (follow-up #1) and, in later milestones, its repository and Definition of Done.
+// follow (follow-up #1), its Definition of Done (HANDOFF §7) and, from M7, its repository.
 // Projects are scoped like clients: agents see the projects of clients they are linked to.
 package projects
 
@@ -18,6 +18,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
@@ -29,6 +30,7 @@ const (
 	ActionDeleted        = "project.deleted"
 	ActionDefaultChanged = "project.default_changed"
 	ActionSLAUpdated     = "project.sla_updated"
+	ActionDoDUpdated     = "project.dod_updated"
 
 	TargetProject = "project"
 )
@@ -48,6 +50,8 @@ const (
 	dataResolve                  = "resolve"
 	dataDeliver                  = "deliver"
 	dataCalendar                 = "calendar"
+	dataDoD                      = "dod"
+	dataAllowTicketOverride      = "allow_ticket_override"
 	// dataTargetField names one priority's field in audit data, e.g. "P1.resolve".
 	dataTargetField = "%s.%s"
 )
@@ -74,6 +78,11 @@ type Project struct {
 	IsDefault   bool
 	Active      bool
 	SLA         sla.ProjectSLA
+	DoD         dod.Config
+	// AllowTicketOverride lets agents set a different Definition of Done on one ticket.
+	AllowTicketOverride bool
+	// HasRepository says whether code conditions can be read; repositories arrive in M7.
+	HasRepository bool
 	// OpenTicketCount counts tickets not yet resolved or closed.
 	OpenTicketCount int
 	CreatedAt       time.Time
@@ -87,6 +96,12 @@ type CreateInput struct {
 	Description *string
 	IsDefault   bool
 	Active      bool
+}
+
+// DoDInput replaces a project's Definition of Done and its per-ticket override switch.
+type DoDInput struct {
+	Config              dod.Config
+	AllowTicketOverride bool
 }
 
 // UpdateInput changes a project's details. The client never changes.
@@ -125,7 +140,11 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, clientID *uuid.UU
 	}
 	out := make([]Project, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, fromRow(db.GetProjectRow(r), targets[r.ID]))
+		pr, err := fromRow(db.GetProjectRow(r), targets[r.ID])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pr)
 	}
 	return out, nil
 }
@@ -165,6 +184,11 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, in CreateInput)
 			return err
 		}
 		if err := WriteSLA(ctx, tx.Q, id, defaults); err != nil {
+			return err
+		}
+		if err := tx.Q.UpdateProjectDoD(ctx, db.UpdateProjectDoDParams{
+			ID: id, DodConfig: dod.Default().JSON(), AllowTicketOverride: true,
+		}); err != nil {
 			return err
 		}
 		if isDefault {
@@ -304,6 +328,43 @@ func (s *Service) UpdateSLA(ctx context.Context, actor audit.Actor, id uuid.UUID
 	return get(ctx, s.store.Q(), id, nil)
 }
 
+// UpdateDoD replaces a project's Definition of Done. It applies to the project's open tickets
+// at once, except tickets with a Definition of Done of their own.
+func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, id uuid.UUID, in DoDInput) (Project, error) {
+	err := s.store.Tx(ctx, func(tx store.Tx) error {
+		old, err := tx.Q.GetProjectForUpdate(ctx, id)
+		if err != nil {
+			return notFound(err)
+		}
+		if err := dod.Validate(in.Config, hasRepository); err != nil {
+			return apperr.Invalid(apperr.CodeInvalidDoD, "Check the Definition of Done", err.Error())
+		}
+		prev, err := dod.Parse(old.DodConfig)
+		if err != nil {
+			return err
+		}
+		if err := tx.Q.UpdateProjectDoD(ctx, db.UpdateProjectDoDParams{
+			ID: id, DodConfig: in.Config.JSON(), AllowTicketOverride: in.AllowTicketOverride,
+		}); err != nil {
+			return err
+		}
+		changes := audit.Changes{}
+		audit.Track(changes, dataDoD, prev, in.Config)
+		audit.Track(changes, dataAllowTicketOverride, old.AllowTicketOverride, in.AllowTicketOverride)
+		if len(changes) == 0 {
+			return nil
+		}
+		return audit.Write(ctx, tx.Q, actor.Entry(ActionDoDUpdated, TargetProject, &id, changes))
+	})
+	if err != nil {
+		return Project{}, projectError(err)
+	}
+	return get(ctx, s.store.Q(), id, nil)
+}
+
+// hasRepository is false until the GitHub/GitLab connector links repositories to projects (M7).
+const hasRepository = false
+
 func makeDefault(ctx context.Context, q *db.Queries, actor audit.Actor, id, clientID uuid.UUID) error {
 	previous, err := q.ListProjects(ctx, db.ListProjectsParams{ClientID: &clientID})
 	if err != nil {
@@ -388,7 +449,7 @@ func get(ctx context.Context, q *db.Queries, id uuid.UUID, agentID *uuid.UUID) (
 	if err != nil {
 		return Project{}, err
 	}
-	return fromRow(r, targets[id]), nil
+	return fromRow(r, targets[id])
 }
 
 // TargetsByProject reads targets for one project, or for all when id is nil, ordered P1–P4.
@@ -425,9 +486,13 @@ func settingsFromRow(r db.GetProjectForUpdateRow) sla.ProjectSettings {
 	}
 }
 
-func fromRow(r db.GetProjectRow, targets []sla.ProjectTarget) Project {
+func fromRow(r db.GetProjectRow, targets []sla.ProjectTarget) (Project, error) {
 	if targets == nil {
 		targets = []sla.ProjectTarget{}
+	}
+	cfg, err := dod.Parse(r.DodConfig)
+	if err != nil {
+		return Project{}, fmt.Errorf("project %s: definition of done: %w", r.ID, err)
 	}
 	return Project{
 		ID: r.ID, Client: clients.Ref{ID: r.ClientID, Name: r.ClientName}, Name: r.Name, Description: r.Description,
@@ -439,8 +504,9 @@ func fromRow(r db.GetProjectRow, targets []sla.ProjectTarget) Project {
 			NotifySupervisorOnBreach: r.SlaNotifySupervisorOnBreach,
 			NotifyPicOnP1Breach:      r.SlaNotifyPicOnP1Breach,
 		}},
+		DoD: cfg, AllowTicketOverride: r.AllowTicketOverride, HasRepository: hasRepository,
 		OpenTicketCount: int(r.OpenTicketCount), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-	}
+	}, nil
 }
 
 // normalize trims the name and description and checks their length; a blank description is unset.

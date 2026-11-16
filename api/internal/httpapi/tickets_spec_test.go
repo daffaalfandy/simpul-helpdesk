@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
@@ -63,6 +64,14 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		"Priority":           strs(sla.Priorities...),
 		"SlaCalendar":        strs(sla.CalendarBusinessHours, sla.CalendarAlways),
 		"DurationUnit":       strs(sla.Units...),
+		"DodBranch":          strs(dod.Branches...),
+		"AutoApproveDays": func() []string {
+			out := make([]string, len(dod.AutoApproveDayOptions))
+			for i, d := range dod.AutoApproveDayOptions {
+				out[i] = fmt.Sprint(d)
+			}
+			return out
+		}(),
 		"AtRiskPercent": func() []string {
 			out := make([]string, len(sla.AtRiskPercents))
 			for i, p := range sla.AtRiskPercents {

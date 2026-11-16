@@ -2,7 +2,8 @@
 -- client_id NULL lists every client's projects; agent_id NULL skips the agent scope.
 SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_default, p.active,
        p.sla_pause_on_waiting_client, p.sla_pause_on_uat, p.sla_at_risk_percent,
-       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at,
+       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.dod_config, p.allow_ticket_override,
+       p.created_at, p.updated_at,
        (SELECT count(*) FROM tickets t
         WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
 FROM projects p
@@ -15,7 +16,8 @@ ORDER BY lower(c.name), lower(p.name);
 -- name: GetProject :one
 SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_default, p.active,
        p.sla_pause_on_waiting_client, p.sla_pause_on_uat, p.sla_at_risk_percent,
-       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at,
+       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.dod_config, p.allow_ticket_override,
+       p.created_at, p.updated_at,
        (SELECT count(*) FROM tickets t
         WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
 FROM projects p
@@ -27,7 +29,7 @@ WHERE p.id = @id
 -- name: GetProjectForUpdate :one
 SELECT id, client_id, name, description, is_default, active,
        sla_pause_on_waiting_client, sla_pause_on_uat, sla_at_risk_percent,
-       sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach
+       sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach, dod_config, allow_ticket_override
 FROM projects WHERE id = @id FOR UPDATE;
 
 -- name: ListProjectSlaTargets :many
@@ -67,6 +69,9 @@ SET sla_pause_on_waiting_client = @pause_on_waiting_client,
     sla_notify_supervisor_on_breach = @notify_supervisor_on_breach,
     sla_notify_pic_on_p1_breach = @notify_pic_on_p1_breach
 WHERE id = @id;
+
+-- name: UpdateProjectDoD :exec
+UPDATE projects SET dod_config = @dod_config, allow_ticket_override = @allow_ticket_override WHERE id = @id;
 
 -- name: UpsertProjectSlaTarget :exec
 INSERT INTO project_sla_targets (project_id, priority, first_response_value, first_response_unit,

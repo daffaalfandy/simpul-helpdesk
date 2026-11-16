@@ -511,6 +511,34 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /projects/{projectId}/dod:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    put:
+      operationId: updateProjectDod
+      summary: Replace a project's Definition of Done (supervisors and admins)
+      description: |
+        Applies at once to the project's open tickets, except tickets with a Definition of Done
+        of their own. Merge, CI and deploy conditions are read from the project's repository, so
+        they need one (`invalid_dod`).
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectDodInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /business-hours:
     get:
       operationId: getBusinessHours
@@ -1614,9 +1642,61 @@ components:
         notifySupervisorOnBreach: { type: boolean }
         notifyPicOnP1Breach: { type: boolean }
 
+    DodBranch:
+      type: string
+      description: The branch a pull/merge request merges into; `release/*` matches any release branch.
+      enum: [main, develop, release/*, staging]
+
+    AutoApproveDays:
+      type: integer
+      description: Working days a ticket waits In UAT before the test is approved automatically; 0 never.
+      enum: [0, 3, 5]
+
+    DodMerged:
+      type: object
+      required: [enabled, branch]
+      properties:
+        enabled: { type: boolean }
+        branch: { $ref: "#/components/schemas/DodBranch" }
+
+    DodUat:
+      type: object
+      required: [enabled, autoApproveWorkingDays]
+      properties:
+        enabled: { type: boolean }
+        autoApproveWorkingDays: { $ref: "#/components/schemas/AutoApproveDays" }
+
+    DodConfig:
+      type: object
+      description: |
+        A Definition of Done: every enabled condition must be met before a ticket counts as done.
+        UAT and the requester's confirmation are one client check: the ticket waits In UAT and one
+        answer meets both. The branch and day count are kept while their condition is off.
+      required: [merged, ciPassed, deployedProduction, uat, requesterConfirms]
+      properties:
+        merged: { $ref: "#/components/schemas/DodMerged" }
+        ciPassed:
+          type: boolean
+          description: CI passed on the merge branch.
+        deployedProduction: { type: boolean }
+        uat: { $ref: "#/components/schemas/DodUat" }
+        requesterConfirms:
+          type: boolean
+          description: For support work with no code; assumed after 3 working days without an answer.
+
+    ProjectDodInput:
+      type: object
+      required: [dod, allowTicketOverride]
+      properties:
+        dod: { $ref: "#/components/schemas/DodConfig" }
+        allowTicketOverride:
+          type: boolean
+          description: Lets agents set a different Definition of Done on one ticket, with a reason.
+
     Project:
       type: object
-      required: [id, client, name, description, isDefault, active, sla, openTicketCount, createdAt, updatedAt]
+      required: [id, client, name, description, isDefault, active, sla, dod, allowTicketOverride, hasRepository,
+                 openTicketCount, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         client: { $ref: "#/components/schemas/Ref" }
@@ -1633,6 +1713,13 @@ components:
           type: boolean
           description: Hidden projects keep their tickets but are left off the report form.
         sla: { $ref: "#/components/schemas/ProjectSla" }
+        dod: { $ref: "#/components/schemas/DodConfig" }
+        allowTicketOverride:
+          type: boolean
+          description: Agents may set a different Definition of Done on one ticket, with a reason.
+        hasRepository:
+          type: boolean
+          description: Whether merge, CI and deploy conditions can be read; false until a repository is linked.
         openTicketCount:
           type: integer
           description: Tickets not yet resolved or closed.

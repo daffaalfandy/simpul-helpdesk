@@ -142,7 +142,8 @@ func (q *Queries) GetClientDefaultProject(ctx context.Context, clientID uuid.UUI
 const getProject = `-- name: GetProject :one
 SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_default, p.active,
        p.sla_pause_on_waiting_client, p.sla_pause_on_uat, p.sla_at_risk_percent,
-       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at,
+       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.dod_config, p.allow_ticket_override,
+       p.created_at, p.updated_at,
        (SELECT count(*) FROM tickets t
         WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
 FROM projects p
@@ -170,6 +171,8 @@ type GetProjectRow struct {
 	SlaAtRiskPercent            int16
 	SlaNotifySupervisorOnBreach bool
 	SlaNotifyPicOnP1Breach      bool
+	DodConfig                   []byte
+	AllowTicketOverride         bool
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
 	OpenTicketCount             int32
@@ -191,6 +194,8 @@ func (q *Queries) GetProject(ctx context.Context, arg GetProjectParams) (GetProj
 		&i.SlaAtRiskPercent,
 		&i.SlaNotifySupervisorOnBreach,
 		&i.SlaNotifyPicOnP1Breach,
+		&i.DodConfig,
+		&i.AllowTicketOverride,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OpenTicketCount,
@@ -218,7 +223,7 @@ func (q *Queries) GetProjectByName(ctx context.Context, arg GetProjectByNamePara
 const getProjectForUpdate = `-- name: GetProjectForUpdate :one
 SELECT id, client_id, name, description, is_default, active,
        sla_pause_on_waiting_client, sla_pause_on_uat, sla_at_risk_percent,
-       sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach
+       sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach, dod_config, allow_ticket_override
 FROM projects WHERE id = $1 FOR UPDATE
 `
 
@@ -234,6 +239,8 @@ type GetProjectForUpdateRow struct {
 	SlaAtRiskPercent            int16
 	SlaNotifySupervisorOnBreach bool
 	SlaNotifyPicOnP1Breach      bool
+	DodConfig                   []byte
+	AllowTicketOverride         bool
 }
 
 func (q *Queries) GetProjectForUpdate(ctx context.Context, id uuid.UUID) (GetProjectForUpdateRow, error) {
@@ -251,6 +258,8 @@ func (q *Queries) GetProjectForUpdate(ctx context.Context, id uuid.UUID) (GetPro
 		&i.SlaAtRiskPercent,
 		&i.SlaNotifySupervisorOnBreach,
 		&i.SlaNotifyPicOnP1Breach,
+		&i.DodConfig,
+		&i.AllowTicketOverride,
 	)
 	return i, err
 }
@@ -340,7 +349,8 @@ func (q *Queries) ListProjectSlaTargets(ctx context.Context, projectID *uuid.UUI
 const listProjects = `-- name: ListProjects :many
 SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_default, p.active,
        p.sla_pause_on_waiting_client, p.sla_pause_on_uat, p.sla_at_risk_percent,
-       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.created_at, p.updated_at,
+       p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.dod_config, p.allow_ticket_override,
+       p.created_at, p.updated_at,
        (SELECT count(*) FROM tickets t
         WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
 FROM projects p
@@ -369,6 +379,8 @@ type ListProjectsRow struct {
 	SlaAtRiskPercent            int16
 	SlaNotifySupervisorOnBreach bool
 	SlaNotifyPicOnP1Breach      bool
+	DodConfig                   []byte
+	AllowTicketOverride         bool
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
 	OpenTicketCount             int32
@@ -397,6 +409,8 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]L
 			&i.SlaAtRiskPercent,
 			&i.SlaNotifySupervisorOnBreach,
 			&i.SlaNotifyPicOnP1Breach,
+			&i.DodConfig,
+			&i.AllowTicketOverride,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.OpenTicketCount,
@@ -438,6 +452,21 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) er
 		arg.Active,
 		arg.ID,
 	)
+	return err
+}
+
+const updateProjectDoD = `-- name: UpdateProjectDoD :exec
+UPDATE projects SET dod_config = $1, allow_ticket_override = $2 WHERE id = $3
+`
+
+type UpdateProjectDoDParams struct {
+	DodConfig           []byte
+	AllowTicketOverride bool
+	ID                  uuid.UUID
+}
+
+func (q *Queries) UpdateProjectDoD(ctx context.Context, arg UpdateProjectDoDParams) error {
+	_, err := q.db.Exec(ctx, updateProjectDoD, arg.DodConfig, arg.AllowTicketOverride, arg.ID)
 	return err
 }
 

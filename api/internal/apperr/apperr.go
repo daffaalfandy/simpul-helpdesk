@@ -38,6 +38,7 @@ const (
 	CodeProjectNameTaken      = "project_name_taken"
 	CodeProjectIsDefault      = "project_is_default"
 	CodeProjectInUse          = "project_in_use"
+	CodeInvalidDoD            = "invalid_dod"
 
 	CodeRequestTooLarge           = "request_too_large"
 	CodeAttachmentTooLarge        = "attachment_too_large"

@@ -161,6 +161,8 @@ type Project struct {
 	SlaNotifyPicOnP1Breach      bool
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
+	DodConfig                   []byte
+	AllowTicketOverride         bool
 }
 
 type ProjectSlaTarget struct {
@@ -210,6 +212,21 @@ type Ticket struct {
 	UpdatedAt       time.Time
 	ProjectID       uuid.UUID
 	StatusChangedAt time.Time
+}
+
+type TicketDodItem struct {
+	TicketID uuid.UUID
+	Item     string
+	DoneAt   time.Time
+	DoneBy   *uuid.UUID
+}
+
+type TicketDodOverride struct {
+	TicketID uuid.UUID
+	Config   []byte
+	Reason   string
+	SetBy    uuid.UUID
+	SetAt    time.Time
 }
 
 type TicketMessage struct {

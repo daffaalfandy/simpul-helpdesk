@@ -353,6 +353,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{projectId}/dod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a project's Definition of Done (supervisors and admins)
+         * @description Applies at once to the project's open tickets, except tickets with a Definition of Done
+         *     of their own. Merge, CI and deploy conditions are read from the project's repository, so
+         *     they need one (`invalid_dod`).
+         */
+        put: operations["updateProjectDod"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/business-hours": {
         parameters: {
             query?: never;
@@ -1158,6 +1182,43 @@ export interface components {
             notifySupervisorOnBreach: boolean;
             notifyPicOnP1Breach: boolean;
         };
+        /**
+         * @description The branch a pull/merge request merges into; `release/*` matches any release branch.
+         * @enum {string}
+         */
+        DodBranch: "main" | "develop" | "release/*" | "staging";
+        /**
+         * @description Working days a ticket waits In UAT before the test is approved automatically; 0 never.
+         * @enum {integer}
+         */
+        AutoApproveDays: 0 | 3 | 5;
+        DodMerged: {
+            enabled: boolean;
+            branch: components["schemas"]["DodBranch"];
+        };
+        DodUat: {
+            enabled: boolean;
+            autoApproveWorkingDays: components["schemas"]["AutoApproveDays"];
+        };
+        /**
+         * @description A Definition of Done: every enabled condition must be met before a ticket counts as done.
+         *     UAT and the requester's confirmation are one client check: the ticket waits In UAT and one
+         *     answer meets both. The branch and day count are kept while their condition is off.
+         */
+        DodConfig: {
+            merged: components["schemas"]["DodMerged"];
+            /** @description CI passed on the merge branch. */
+            ciPassed: boolean;
+            deployedProduction: boolean;
+            uat: components["schemas"]["DodUat"];
+            /** @description For support work with no code; assumed after 3 working days without an answer. */
+            requesterConfirms: boolean;
+        };
+        ProjectDodInput: {
+            dod: components["schemas"]["DodConfig"];
+            /** @description Lets agents set a different Definition of Done on one ticket, with a reason. */
+            allowTicketOverride: boolean;
+        };
         Project: {
             /** Format: uuid */
             id: string;
@@ -1174,6 +1235,11 @@ export interface components {
             /** @description Hidden projects keep their tickets but are left off the report form. */
             active: boolean;
             sla: components["schemas"]["ProjectSla"];
+            dod: components["schemas"]["DodConfig"];
+            /** @description Agents may set a different Definition of Done on one ticket, with a reason. */
+            allowTicketOverride: boolean;
+            /** @description Whether merge, CI and deploy conditions can be read; false until a repository is linked. */
+            hasRepository: boolean;
             /** @description Tickets not yet resolved or closed. */
             openTicketCount: number;
             /** Format: date-time */
@@ -2401,6 +2467,37 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProjectSla"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateProjectDod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectDodInput"];
             };
         };
         responses: {

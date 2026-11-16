@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 
-import type { PriorityLevel, Project, ProjectCreate, ProjectSla, ProjectTarget, ProjectUpdate } from '../api/client'
+import type { DodConfig, PriorityLevel, Project, ProjectCreate, ProjectDodInput, ProjectSla, ProjectTarget, ProjectUpdate } from '../api/client'
 import { IDS } from './settingsApi'
 
 const API = '*/api/v1'
@@ -34,6 +34,18 @@ const fastSla: ProjectSla = {
   notifyPicOnP1Breach: true,
 }
 
+/** No conditions: an agent resolves each ticket by hand. */
+export const noDod: DodConfig = {
+  merged: { enabled: false, branch: 'main' },
+  ciPassed: false,
+  deployedProduction: false,
+  uat: { enabled: false, autoApproveWorkingDays: 3 },
+  requesterConfirms: false,
+}
+
+/** The client tests; approved automatically after 3 working days (a new project's default). */
+export const uatDod: DodConfig = { ...noDod, uat: { enabled: true, autoApproveWorkingDays: 3 } }
+
 const STAMP = '2026-11-13T00:00:00Z'
 const JAMBI = { id: IDS.jambi, name: 'Dinas Kominfo Jambi' }
 const BATAM = { id: IDS.batam, name: 'BPKAD Kota Batam' }
@@ -48,15 +60,18 @@ function fixtures() {
   const projects: Project[] = [
     {
       id: PROJECT_IDS.eOffice, client: JAMBI, name: 'e-Office', description: 'Letters, dispositions, archives',
-      isDefault: true, active: true, sla: fastSla, openTicketCount: 2, createdAt: STAMP, updatedAt: STAMP,
+      isDefault: true, active: true, sla: fastSla, dod: uatDod, allowTicketOverride: true, hasRepository: false,
+      openTicketCount: 2, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.email, client: JAMBI, name: 'Email', description: 'Mailboxes and accounts',
-      isDefault: false, active: true, sla: defaultSla, openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
+      isDefault: false, active: true, sla: defaultSla, dod: noDod, allowTicketOverride: true, hasRepository: false,
+      openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.network, client: BATAM, name: 'Network & infra support', description: null,
-      isDefault: true, active: true, sla: defaultSla, openTicketCount: 1, createdAt: STAMP, updatedAt: STAMP,
+      isDefault: true, active: true, sla: defaultSla, dod: { ...noDod, requesterConfirms: true }, allowTicketOverride: true,
+      hasRepository: false, openTicketCount: 1, createdAt: STAMP, updatedAt: STAMP,
     },
   ]
   return { levels, projects }
@@ -115,8 +130,8 @@ export const projectsHandlers = [
     const first = !projectsApi.projects.some((p) => p.client.id === body.clientId)
     const project: Project = {
       id: newId(), client, name: body.name, description: body.description ?? null,
-      isDefault: body.isDefault || first, active: body.active || first, sla: defaultSla, openTicketCount: 0,
-      createdAt: STAMP, updatedAt: STAMP,
+      isDefault: body.isDefault || first, active: body.active || first, sla: defaultSla, dod: uatDod,
+      allowTicketOverride: true, hasRepository: false, openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
     }
     projectsApi.projects.push(project)
     return HttpResponse.json(project, { status: 201 })
@@ -142,6 +157,16 @@ export const projectsHandlers = [
     const p = find(String(params.id))
     if (!p) return problem(404, 'not_found')
     p.sla = body
+    return HttpResponse.json(p)
+  }),
+  http.put(`${API}/projects/:id/dod`, async ({ request, params }) => {
+    const body = (await record(request)) as ProjectDodInput
+    const p = find(String(params.id))
+    if (!p) return problem(404, 'not_found')
+    const code = body.dod.merged.enabled || body.dod.ciPassed || body.dod.deployedProduction
+    if (code && !p.hasRepository) return problem(400, 'invalid_dod')
+    p.dod = body.dod
+    p.allowTicketOverride = body.allowTicketOverride
     return HttpResponse.json(p)
   }),
 ]
