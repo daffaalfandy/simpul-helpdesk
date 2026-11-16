@@ -2176,10 +2176,11 @@ components:
       type: string
       description: |
         Team events: comment, internal_note, status, assignment, priority, sla, uat_result, dod
-        (supervisors; always on, not listed). Portal events: reply, status, uat_requested (always
-        on), question, resolved, colleague, ticket_logged (always on, not listed).
-      enum: [comment, internal_note, status, assignment, priority, sla, uat_result, dod, reply, question, resolved,
-             colleague, ticket_logged, uat_requested]
+        (supervisors; always on, not listed), code (commits, pull/merge requests, CI and deploys).
+        Portal events: reply, status, uat_requested (always on), question, resolved, colleague,
+        ticket_logged (always on, not listed).
+      enum: [comment, internal_note, status, assignment, priority, sla, uat_result, dod, code, reply, question,
+             resolved, colleague, ticket_logged, uat_requested]
 
     NotificationKind:
       type: string
@@ -2192,13 +2193,13 @@ components:
 
     NotificationFilter:
       type: string
-      description: "`comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed."
-      enum: [all, unread, comments, status, assigned, sla, replies]
+      description: "`comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed; `code` = code activity (team)."
+      enum: [all, unread, comments, status, assigned, sla, replies, code]
 
     NotificationChange:
       type: string
       enum: [created, message, status, assignee, priority, watcher_added, watcher_removed, sla_at_risk, sla_breached,
-             dod]
+             dod, code]
 
     Audience:
       type: string
@@ -2223,7 +2224,7 @@ components:
 
     NotificationAlso:
       type: object
-      required: [change, statusFrom, statusTo, priorityFrom, priorityTo, assigneeName]
+      required: [change, statusFrom, statusTo, priorityFrom, priorityTo, assigneeName, code]
       properties:
         change: { $ref: "#/components/schemas/NotificationChange" }
         statusFrom: { allOf: [{ $ref: "#/components/schemas/TicketStatus" }], nullable: true }
@@ -2231,6 +2232,19 @@ components:
         priorityFrom: { allOf: [{ $ref: "#/components/schemas/Priority" }], nullable: true }
         priorityTo: { allOf: [{ $ref: "#/components/schemas/Priority" }], nullable: true }
         assigneeName: { type: string, nullable: true }
+        code: { allOf: [{ $ref: "#/components/schemas/NotificationCode" }], nullable: true }
+
+    NotificationCode:
+      type: object
+      required: [provider, kind, ref, branch, target, outcome]
+      description: What a code event did to the ticket; never the commit message.
+      properties:
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        kind: { $ref: "#/components/schemas/CodeEventKind" }
+        ref: { type: string }
+        branch: { type: string }
+        target: { type: string }
+        outcome: { $ref: "#/components/schemas/CodeOutcome" }
 
     NotificationChannels:
       type: object
@@ -2242,8 +2256,8 @@ components:
     Notification:
       type: object
       required: [id, event, kind, ticket, actorName, statusFrom, statusTo, priorityFrom, priorityTo, reason,
-                 assigneeName, slaClock, slaDueAt, slaMinutesLeft, cause, autoApproveAt, reopenUntil, quote, also,
-                 channels, createdAt, readAt]
+                 assigneeName, slaClock, slaDueAt, slaMinutesLeft, cause, autoApproveAt, reopenUntil, code, quote,
+                 also, channels, createdAt, readAt]
       description: |
         One inbox item. `quote` is an excerpt of the message it is about (public messages only
         for client staff). `reason` is a staff reason (a priority change, resolving without the
@@ -2277,6 +2291,7 @@ components:
           format: date-time
           nullable: true
           description: A move to Resolved; until when the client can reopen it.
+        code: { allOf: [{ $ref: "#/components/schemas/NotificationCode" }], nullable: true }
         quote: { type: string, nullable: true }
         also:
           type: array

@@ -18,6 +18,7 @@
 {{- else if eq .Event "uat_requested"}}Ready for your test
 {{- else if eq .Event "uat_result"}}{{if eq .Kind "rejected"}}UAT rejected{{else if eq .Kind "auto_approved"}}UAT approved automatically{{else}}UAT approved{{end}}
 {{- else if eq .Event "dod"}}{{if eq .Kind "override"}}Definition of Done changed{{else}}Resolved without its Definition of Done{{end}}
+{{- else if eq .Event "code"}}Code activity
 {{- else}}Ticket updated{{end}}
 {{- end}}
 
@@ -36,8 +37,22 @@
 {{- else if eq .Event "uat_requested"}}{{template "notice.actor" .}} asked you to test the fix
 {{- else if eq .Event "uat_result"}}{{if eq .Kind "rejected"}}{{template "notice.actor" .}} sent the fix back{{else if eq .Kind "auto_approved"}}Nobody answered the test in time, so the fix was approved automatically{{else}}{{template "notice.actor" .}} approved the fix{{end}}
 {{- else if eq .Event "dod"}}{{if eq .Kind "override"}}{{template "notice.actor" .}} set a Definition of Done for this ticket{{else}}{{template "notice.actor" .}} resolved this ticket without meeting its Definition of Done{{end}}{{if .Reason}} ({{.Reason}}){{end}}
+{{- else if and (eq .Event "code") .Code}}{{template "code.summary" .Code}}
 {{- end}}
 {{- end}}
+
+{{define "code.provider"}}{{if eq . "gitlab"}}GitLab{{else}}GitHub{{end}}{{end}}
+
+{{define "code.request"}}{{if eq .Provider "gitlab"}}MR !{{.Ref}}{{else}}PR #{{.Ref}}{{end}}{{end}}
+
+{{define "code.summary"}}{{template "code.provider" .Provider}}: 
+{{- if eq .Kind "commit"}} commit {{.Ref}}{{if eq .Outcome "reopened"}} reopened this ticket{{else if eq .Outcome "merged"}} landed on {{.Branch}}{{else if eq .Outcome "fix_committed"}} on {{.Branch}} fixes this ticket{{else}} on {{.Branch}} mentions this ticket{{end}}
+{{- else if eq .Kind "pr_opened"}} {{template "code.request" .}} opened → {{.Target}}
+{{- else if eq .Kind "pr_merged"}} {{template "code.request" .}} merged into {{.Target}}
+{{- else if eq .Kind "pr_closed"}} {{template "code.request" .}} closed without merging
+{{- else if eq .Kind "pipeline"}} CI passed on {{.Branch}}
+{{- else if eq .Kind "deployment"}} deployed to {{.Ref}}
+{{- end}}{{end}}
 
 {{define "change.summary"}}
 {{- if eq .Change "status"}}Status changed: {{status .StatusFrom .Portal}} → {{status .StatusTo .Portal}}
@@ -45,6 +60,7 @@
 {{- else if eq .Change "assignee"}}{{if .Assignee}}Assigned to {{.Assignee}}{{else}}Unassigned{{end}}
 {{- else if eq .Change "message"}}New message
 {{- else if eq .Change "watcher_added"}}A colleague was added
+{{- else if eq .Change "code"}}Code activity
 {{- else}}Ticket updated{{end}}
 {{- end}}
 

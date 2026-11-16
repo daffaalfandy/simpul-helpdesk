@@ -24,6 +24,7 @@ type Data struct {
 	SLAClock       string        `json:"sla_clock,omitempty"`
 	SLADueAt       *time.Time    `json:"sla_due_at,omitempty"`
 	SLALeftMinutes *int          `json:"sla_left_minutes,omitempty"`
+	Code           *Code         `json:"code,omitempty"`
 	Also           []Also        `json:"also,omitempty"`
 }
 
@@ -35,6 +36,7 @@ type Also struct {
 	PriorityFrom sla.Priority  `json:"priority_from,omitempty"`
 	PriorityTo   sla.Priority  `json:"priority_to,omitempty"`
 	Assignee     string        `json:"assignee,omitempty"`
+	Code         *Code         `json:"code,omitempty"`
 }
 
 // DataFor is the stored form of a delivery.
@@ -43,7 +45,7 @@ func DataFor(d Delivery) Data {
 	data := Data{
 		Kind: d.Kind, StatusFrom: c.StatusFrom, StatusTo: c.StatusTo, Reason: c.Reason,
 		SLAClock: c.SLAClock, SLADueAt: c.SLADueAt, Cause: c.Cause, AutoApproveAt: c.AutoApproveAt,
-		ReopenUntil: c.ReopenUntil,
+		ReopenUntil: c.ReopenUntil, Code: c.Code,
 	}
 	if c.Priority != nil {
 		data.PriorityFrom, data.PriorityTo = c.Priority.From, c.Priority.To
@@ -56,7 +58,7 @@ func DataFor(d Delivery) Data {
 		data.SLALeftMinutes = &minutes
 	}
 	for _, o := range d.Also {
-		a := Also{Change: o.Kind, StatusFrom: o.StatusFrom, StatusTo: o.StatusTo}
+		a := Also{Change: o.Kind, StatusFrom: o.StatusFrom, StatusTo: o.StatusTo, Code: o.Code}
 		if o.Priority != nil {
 			a.PriorityFrom, a.PriorityTo = o.Priority.From, o.Priority.To
 		}

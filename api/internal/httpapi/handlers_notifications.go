@@ -116,7 +116,7 @@ func apiNotification(it notifications.Item) gen.Notification {
 		PriorityFrom: priorityPtr(d.PriorityFrom), PriorityTo: priorityPtr(d.PriorityTo),
 		Reason: strPtr(d.Reason), AssigneeName: strPtr(d.Assignee), SlaClock: enumPtr[gen.SlaClockName](d.SLAClock),
 		SlaDueAt: d.SLADueAt, SlaMinutesLeft: d.SLALeftMinutes, Cause: enumPtr[gen.TicketStatusCause](d.Cause),
-		AutoApproveAt: d.AutoApproveAt, ReopenUntil: d.ReopenUntil,
+		AutoApproveAt: d.AutoApproveAt, ReopenUntil: d.ReopenUntil, Code: apiNotificationCode(d.Code),
 		Channels: gen.NotificationChannels{Web: it.Channels.Web, Email: it.Channels.Email},
 		Also:     make([]gen.NotificationAlso, len(d.Also)),
 	}
@@ -124,9 +124,20 @@ func apiNotification(it notifications.Item) gen.Notification {
 		out.Also[i] = gen.NotificationAlso{
 			Change: gen.NotificationChange(a.Change), StatusFrom: statusPtr(a.StatusFrom), StatusTo: statusPtr(a.StatusTo),
 			PriorityFrom: priorityPtr(a.PriorityFrom), PriorityTo: priorityPtr(a.PriorityTo), AssigneeName: strPtr(a.Assignee),
+			Code: apiNotificationCode(a.Code),
 		}
 	}
 	return out
+}
+
+func apiNotificationCode(c *notification.Code) *gen.NotificationCode {
+	if c == nil {
+		return nil
+	}
+	return &gen.NotificationCode{
+		Provider: gen.GitProvider(c.Provider), Kind: gen.CodeEventKind(c.Kind), Ref: c.Ref, Branch: c.Branch,
+		Target: c.Target, Outcome: gen.CodeOutcome(c.Outcome),
+	}
 }
 
 func apiNotificationSettings(st notifications.Settings) gen.NotificationSettings {

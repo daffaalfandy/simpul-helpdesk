@@ -126,6 +126,13 @@ func NotificationChanges(rows []AuditRow) []notification.Change {
 		case ActionWatcherRemoved:
 			c.Kind = notification.ChangeWatcherRemoved
 			c.WatcherID = decode[uuid.UUID](data, dataWatcher)
+		case ActionCodeLinked:
+			c.Kind = notification.ChangeCode
+			c.Code = &notification.Code{
+				Provider: deref(decode[string](data, dataProvider)), Kind: deref(decode[string](data, dataCodeKind)),
+				Ref: deref(decode[string](data, dataCodeRef)), Branch: deref(decode[string](data, dataBranch)),
+				Target: deref(decode[string](data, dataTarget)), Outcome: deref(decode[string](data, dataOutcome)),
+			}
 		case ActionSLAAtRisk, ActionSLABreached:
 			c.Kind = notification.ChangeSLAAtRisk
 			if r.Action == ActionSLABreached {

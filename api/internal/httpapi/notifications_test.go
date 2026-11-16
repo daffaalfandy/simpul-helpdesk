@@ -353,7 +353,7 @@ func TestInbox(t *testing.T) {
 func TestNotificationSettings(t *testing.T) {
 	te := newTicketEnv(t)
 	settings := decode[gen.NotificationSettings](t, te.agent.do(http.MethodGet, "/notification-settings", nil), http.StatusOK)
-	if settings.Audience != gen.AudienceTeam || settings.EmailFrequency != gen.EmailFrequencyInstant || len(settings.Events) != 7 {
+	if settings.Audience != gen.AudienceTeam || settings.EmailFrequency != gen.EmailFrequencyInstant || len(settings.Events) != 8 {
 		t.Fatalf("agent settings = %+v", settings)
 	}
 	for _, e := range settings.Events {

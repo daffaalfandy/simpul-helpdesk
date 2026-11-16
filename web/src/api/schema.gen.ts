@@ -1603,11 +1603,12 @@ export interface components {
         };
         /**
          * @description Team events: comment, internal_note, status, assignment, priority, sla, uat_result, dod
-         *     (supervisors; always on, not listed). Portal events: reply, status, uat_requested (always
-         *     on), question, resolved, colleague, ticket_logged (always on, not listed).
+         *     (supervisors; always on, not listed), code (commits, pull/merge requests, CI and deploys).
+         *     Portal events: reply, status, uat_requested (always on), question, resolved, colleague,
+         *     ticket_logged (always on, not listed).
          * @enum {string}
          */
-        NotificationEvent: "comment" | "internal_note" | "status" | "assignment" | "priority" | "sla" | "uat_result" | "dod" | "reply" | "question" | "resolved" | "colleague" | "ticket_logged" | "uat_requested";
+        NotificationEvent: "comment" | "internal_note" | "status" | "assignment" | "priority" | "sla" | "uat_result" | "dod" | "code" | "reply" | "question" | "resolved" | "colleague" | "ticket_logged" | "uat_requested";
         /**
          * @description Tells apart notifications of one event: assigned or unassigned; what a colleague did; SLA
          *     at risk or breached; the test approved, rejected or approved automatically; resolved
@@ -1616,12 +1617,12 @@ export interface components {
          */
         NotificationKind: "assigned" | "unassigned" | "reply" | "status" | "added" | "at_risk" | "breached" | "approved" | "rejected" | "auto_approved" | "skipped" | "override";
         /**
-         * @description `comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed.
+         * @description `comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed; `code` = code activity (team).
          * @enum {string}
          */
-        NotificationFilter: "all" | "unread" | "comments" | "status" | "assigned" | "sla" | "replies";
+        NotificationFilter: "all" | "unread" | "comments" | "status" | "assigned" | "sla" | "replies" | "code";
         /** @enum {string} */
-        NotificationChange: "created" | "message" | "status" | "assignee" | "priority" | "watcher_added" | "watcher_removed" | "sla_at_risk" | "sla_breached" | "dod";
+        NotificationChange: "created" | "message" | "status" | "assignee" | "priority" | "watcher_added" | "watcher_removed" | "sla_at_risk" | "sla_breached" | "dod" | "code";
         /** @enum {string} */
         Audience: "team" | "portal";
         /**
@@ -1646,6 +1647,16 @@ export interface components {
             priorityFrom: components["schemas"]["Priority"] | null;
             priorityTo: components["schemas"]["Priority"] | null;
             assigneeName: string | null;
+            code: components["schemas"]["NotificationCode"] | null;
+        };
+        /** @description What a code event did to the ticket; never the commit message. */
+        NotificationCode: {
+            provider: components["schemas"]["GitProvider"];
+            kind: components["schemas"]["CodeEventKind"];
+            ref: string;
+            branch: string;
+            target: string;
+            outcome: components["schemas"]["CodeOutcome"];
         };
         NotificationChannels: {
             web: boolean;
@@ -1686,6 +1697,7 @@ export interface components {
              * @description A move to Resolved; until when the client can reopen it.
              */
             reopenUntil: string | null;
+            code: components["schemas"]["NotificationCode"] | null;
             quote: string | null;
             also: components["schemas"]["NotificationAlso"][];
             channels: components["schemas"]["NotificationChannels"];

@@ -224,3 +224,52 @@ func TestCodeCIAndDeploy(t *testing.T) {
 		t.Fatalf("resolve cause = %q, %v", cause, err)
 	}
 }
+
+func TestCodeNotifications(t *testing.T) {
+	ce := newCodeEnv(t, eOfficeDoD())
+	tk := ce.requester.report(t, incident(ce.projectA, "Login fails"))
+	ce.agent.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &ce.agentID})
+	ce.fanout(t)
+	count := func(user string) int {
+		return ce.count(t, `SELECT count(*) FROM notifications n JOIN users u ON u.id = n.user_id
+			WHERE u.email = $1 AND n.ticket_id = $2 AND n.event_type = $3`, user, tk.Id, string(notification.EventCode))
+	}
+
+	// A commit that starts the work: the assignee hears of the status change, with the code
+	// folded in, so the status email still goes out.
+	ce.send(t, "push", pushJSON("fix/x", commitJSON(sha(9), "refs "+tk.Key, "stranger@example.com", "2026-11-16T08:30:00+07:00")))
+	ce.fanout(t)
+	var change string
+	if err := ce.st.Pool().QueryRow(t.Context(), `SELECT data->'also'->0->>'change' FROM notifications n JOIN users u ON u.id = n.user_id
+		WHERE u.email = $1 AND n.ticket_id = $2 AND n.event_type = 'status' AND n.data->>'cause' = 'code_activity'`,
+		agentEmail, tk.Id).Scan(&change); err != nil || change != string(notification.ChangeCode) {
+		t.Fatalf("status notification folds %q, %v", change, err)
+	}
+
+	// Someone else's commit on a ticket in progress: the assignee hears about it, the client
+	// doesn't.
+	ce.send(t, "push", pushJSON("fix/x", commitJSON(sha(1), "refs "+tk.Key, "stranger@example.com", "2026-11-16T08:40:00+07:00")))
+	ce.fanout(t)
+	if n := count(agentEmail); n != 1 {
+		t.Fatalf("assignee code notifications = %d", n)
+	}
+	if n := count(ce.users["requester"]); n != 0 {
+		t.Fatalf("requester got %d code notifications", n)
+	}
+	var provider, kind string
+	if err := ce.st.Pool().QueryRow(t.Context(), `SELECT data->'code'->>'provider', data->'code'->>'kind' FROM notifications
+		WHERE ticket_id = $1 AND event_type = 'code'`, tk.Id).Scan(&provider, &kind); err != nil || provider != "github" || kind != "commit" {
+		t.Fatalf("stored code = %q %q, %v", provider, kind, err)
+	}
+	inbox := decode[gen.NotificationPage](t, ce.agent.do(http.MethodGet, "/notifications?filter=code", nil), http.StatusOK)
+	if len(inbox.Items) != 1 || inbox.Items[0].Code == nil || inbox.Items[0].Code.Ref != sha(1)[:7] {
+		t.Fatalf("code inbox = %+v", inbox.Items)
+	}
+
+	// The assignee's own commit never notifies them.
+	ce.send(t, "push", pushJSON("fix/x", commitJSON(sha(2), "refs "+tk.Key, agentEmail, "2026-11-16T08:50:00+07:00")))
+	ce.fanout(t)
+	if n := count(agentEmail); n != 1 {
+		t.Fatalf("own commit notified the author: %d", n)
+	}
+}

@@ -487,6 +487,9 @@ func (f formatter) notice(r claimedRow) mail.NoticeData {
 		Assignee: d.Assignee, Reason: d.Reason, SLAClock: d.SLAClock, SLAMinutesLeft: d.SLALeftMinutes,
 		Cause: string(d.Cause), Time: f.time(r.CreatedAt),
 	}
+	if c := d.Code; c != nil {
+		n.Code = &mail.CodeData{Provider: c.Provider, Kind: c.Kind, Ref: c.Ref, Branch: c.Branch, Target: c.Target, Outcome: c.Outcome}
+	}
 	if d.ReopenUntil != nil {
 		n.ReopenUntil = f.day(*d.ReopenUntil)
 	}

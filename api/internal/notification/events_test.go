@@ -15,6 +15,7 @@ func TestSettingsListOrderAndDefaults(t *testing.T) {
 		{EventPriority, webOnly, false},
 		{EventSLA, webAndEmail, true},
 		{EventUATResult, webAndEmail, false},
+		{EventCode, webOnly, false},
 	}
 	if !slices.Equal(team, want) {
 		t.Errorf("team settings\n got %v\nwant %v", team, want)

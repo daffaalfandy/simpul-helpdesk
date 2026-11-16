@@ -23,13 +23,14 @@ const (
 	ChangeWatcherRemoved ChangeKind = "watcher_removed"
 	ChangeSLAAtRisk      ChangeKind = "sla_at_risk"
 	ChangeSLABreached    ChangeKind = "sla_breached"
-	ChangeDoD            ChangeKind = "dod" // an agent gave the ticket its own Definition of Done
+	ChangeDoD            ChangeKind = "dod"  // an agent gave the ticket its own Definition of Done
+	ChangeCode           ChangeKind = "code" // a commit, pull/merge request, CI run or deploy reached the ticket
 )
 
 // ChangeKinds lists every change kind.
 var ChangeKinds = []ChangeKind{
 	ChangeCreated, ChangeMessage, ChangeStatus, ChangeAssignee, ChangePriority,
-	ChangeWatcherAdded, ChangeWatcherRemoved, ChangeSLAAtRisk, ChangeSLABreached, ChangeDoD,
+	ChangeWatcherAdded, ChangeWatcherRemoved, ChangeSLAAtRisk, ChangeSLABreached, ChangeDoD, ChangeCode,
 }
 
 // Kind tells apart notifications of one event, e.g. assigned and unassigned.
@@ -97,6 +98,18 @@ type Change struct {
 	// deadlines as of the change; the fan-out fills them in.
 	AutoApproveAt *time.Time
 	ReopenUntil   *time.Time
+	Code          *Code // code: what the code event did
+}
+
+// Code is what a code event did to the ticket, as a notification tells it. Values are the
+// gitevent and codeflow names; never the commit message.
+type Code struct {
+	Provider string `json:"provider"`
+	Kind     string `json:"kind"`
+	Ref      string `json:"ref"`
+	Branch   string `json:"branch,omitempty"`
+	Target   string `json:"target,omitempty"`
+	Outcome  string `json:"outcome"`
 }
 
 // PriorityChange is a priority's old and new value.
@@ -142,7 +155,7 @@ type Delivery struct {
 // precedence orders events when one transaction gives a user several: the first wins.
 var precedence = []Event{
 	EventSLA, EventTicketLogged, EventUATRequested, EventUATResult, EventQuestion, EventResolved, EventDoD,
-	EventAssignment, EventReply, EventComment, EventInternalNote, EventStatus, EventPriority, EventColleague,
+	EventAssignment, EventReply, EventComment, EventInternalNote, EventStatus, EventPriority, EventCode, EventColleague,
 }
 
 type candidate struct {
@@ -282,6 +295,8 @@ func (in Input) candidates(c Change) []candidate {
 		for _, s := range in.Supervisors {
 			add(&s, EventDoD, KindOverride)
 		}
+	case ChangeCode:
+		add(in.Assignee, EventCode, KindNone) // the team's event; client staff see the status it moved
 	}
 	return out
 }

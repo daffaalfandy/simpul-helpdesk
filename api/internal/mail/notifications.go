@@ -36,7 +36,19 @@ type NoticeData struct {
 	SLADue         string
 	Cause          string // why the status changed, when it wasn't a plain move by hand
 	ReopenUntil    string // a resolved ticket's reopen deadline ("19 Nov")
+	Code           *CodeData
 	Time           string
+}
+
+// CodeData is what a code event did (code activity): provider, kind and outcome names from the
+// connector, never the commit message.
+type CodeData struct {
+	Provider string
+	Kind     string
+	Ref      string
+	Branch   string
+	Target   string
+	Outcome  string
 }
 
 // UATData is the "Does it work now?" block of a test request: the answer links open the

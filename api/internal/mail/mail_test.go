@@ -131,6 +131,36 @@ func TestTeamWordingAndRelations(t *testing.T) {
 	}
 }
 
+func TestCodeActivityRenders(t *testing.T) {
+	tests := []struct {
+		code CodeData
+		want string
+	}{
+		{CodeData{Provider: "github", Kind: "pr_merged", Ref: "142", Target: "main", Outcome: "merged"}, "GitHub: PR #142 merged into main"},
+		{CodeData{Provider: "gitlab", Kind: "pr_opened", Ref: "57", Target: "release/2026.11", Outcome: "in_review"}, "GitLab: MR !57 opened → release/2026.11"},
+		{CodeData{Provider: "github", Kind: "commit", Ref: "a1f9c2e", Branch: "fix/HD-1", Outcome: "fix_committed"}, "GitHub: commit a1f9c2e on fix/HD-1 fixes this ticket"},
+		{CodeData{Provider: "github", Kind: "commit", Ref: "a1f9c2e", Branch: "fix/HD-1", Outcome: "linked"}, "GitHub: commit a1f9c2e on fix/HD-1 mentions this ticket"},
+		{CodeData{Provider: "github", Kind: "commit", Ref: "a1f9c2e", Branch: "main", Outcome: "merged"}, "GitHub: commit a1f9c2e landed on main"},
+		{CodeData{Provider: "gitlab", Kind: "commit", Ref: "a1f9c2e", Outcome: "reopened"}, "GitLab: commit a1f9c2e reopened this ticket"},
+		{CodeData{Provider: "gitlab", Kind: "pipeline", Ref: "31", Branch: "main", Outcome: "ci_passed"}, "GitLab: CI passed on main"},
+		{CodeData{Provider: "github", Kind: "deployment", Ref: "production", Outcome: "deployed"}, "GitHub: deployed to production"},
+	}
+	for _, tt := range tests {
+		code := tt.code
+		data := TicketUpdateData{
+			OrgName: "Demo Vendor", Relation: RelationAssigned, TicketKey: "HD-1", Title: "VPN",
+			Main: NoticeData{Event: "code", Code: &code}, TicketURL: "u", SettingsURL: "s",
+		}
+		msg, err := Render(TemplateTicketUpdate, "a@example.test", "A", data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(msg.Text, tt.want) || !strings.Contains(msg.Subject, "Code activity") {
+			t.Errorf("lacks %q:\n%s\n%s", tt.want, msg.Subject, msg.Text)
+		}
+	}
+}
+
 func TestDigestRenders(t *testing.T) {
 	data := DigestData{
 		OrgName: "Demo Vendor", Count: 2, SettingsURL: "s",

@@ -18,6 +18,7 @@ const (
 	EventSLA          Event = "sla"
 	EventUATResult    Event = "uat_result" // the client approved or rejected a test, or it was approved automatically
 	EventDoD          Event = "dod"        // supervisors: resolved without the DoD, or a ticket's own DoD
+	EventCode         Event = "code"       // commits, pull/merge requests, CI and deploys naming the ticket
 )
 
 // Portal events (client staff).
@@ -33,7 +34,7 @@ const (
 // Events lists every event; the database CHECK constraints hold the same set.
 var Events = []Event{
 	EventComment, EventInternalNote, EventStatus, EventAssignment, EventPriority, EventSLA, EventUATResult, EventDoD,
-	EventReply, EventQuestion, EventResolved, EventColleague, EventTicketLogged, EventUATRequested,
+	EventCode, EventReply, EventQuestion, EventResolved, EventColleague, EventTicketLogged, EventUATRequested,
 }
 
 func (e Event) Valid() bool { return slices.Contains(Events, e) }
@@ -77,9 +78,8 @@ type eventSpec struct {
 }
 
 // audienceEvents holds each audience's events in Settings order, with the defaults from the
-// Notifications artboard. Settings lists only events the build sends: code activity arrives
-// in M7. Supervisors' Definition of Done alerts are always on, like SLA breaches, and have no
-// row of their own.
+// Notifications artboard. Settings lists only events the build sends. Supervisors' Definition
+// of Done alerts are always on, like SLA breaches, and have no row of their own.
 var audienceEvents = map[Audience][]eventSpec{
 	AudienceTeam: {
 		{event: EventComment, defaults: webAndEmail},
@@ -89,6 +89,7 @@ var audienceEvents = map[Audience][]eventSpec{
 		{event: EventPriority, defaults: webOnly},
 		{event: EventSLA, defaults: webAndEmail, locked: true},
 		{event: EventUATResult, defaults: webAndEmail},
+		{event: EventCode, defaults: webOnly},
 		{event: EventDoD, defaults: webAndEmail, locked: true, hidden: true},
 	},
 	AudiencePortal: {
@@ -167,10 +168,11 @@ const (
 	FilterAssigned Filter = "assigned"
 	FilterSLA      Filter = "sla"
 	FilterReplies  Filter = "replies" // portal: replies and questions
+	FilterCode     Filter = "code"    // team: code activity
 )
 
 // Filters lists every inbox filter.
-var Filters = []Filter{FilterAll, FilterUnread, FilterComments, FilterStatus, FilterAssigned, FilterSLA, FilterReplies}
+var Filters = []Filter{FilterAll, FilterUnread, FilterComments, FilterStatus, FilterAssigned, FilterSLA, FilterReplies, FilterCode}
 
 func (f Filter) Valid() bool { return slices.Contains(Filters, f) }
 
@@ -181,6 +183,7 @@ var filterEvents = map[Filter][]Event{
 	FilterAssigned: {EventAssignment},
 	FilterSLA:      {EventSLA},
 	FilterReplies:  {EventReply, EventQuestion},
+	FilterCode:     {EventCode},
 }
 
 // FilterEvents returns the events a filter shows, or nil for every event.

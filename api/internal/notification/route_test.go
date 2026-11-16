@@ -225,6 +225,24 @@ func TestRoute(t *testing.T) {
 			want:    []got{{supervisor, EventDoD, KindOverride, 0}},
 		},
 		{
+			name:    "code activity: the assignee only, never client staff",
+			setup:   []func(*Input){by(colleague, false)},
+			changes: []Change{{AuditID: auditA, Kind: ChangeCode, Code: &Code{Provider: "github", Kind: "commit", Ref: "a1f9c2e"}}},
+			want:    []got{{agent, EventCode, KindNone, 0}},
+		},
+		{
+			name:  "code that moves the ticket: the team hears the code, the client the status",
+			setup: []func(*Input){func(in *Input) { in.Actor = nil }},
+			changes: []Change{
+				{AuditID: auditA, Kind: ChangeCode, Code: &Code{Provider: "github", Kind: "pr_merged", Ref: "142"}},
+				moveFor(ticket.StatusInProgress, ticket.StatusInUAT, ticket.CauseCodeDone),
+			},
+			want: []got{
+				{agent, EventStatus, KindNone, 1}, {requester, EventUATRequested, KindNone, 0},
+				{colleague, EventUATRequested, KindNone, 0},
+			},
+		},
+		{
 			name:    "unassigned SLA at risk: nobody (HANDOFF §13 Q7)",
 			setup:   []func(*Input){func(in *Input) { in.Assignee = nil }},
 			changes: []Change{{AuditID: auditA, Kind: ChangeSLAAtRisk}},
