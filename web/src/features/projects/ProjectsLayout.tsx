@@ -77,6 +77,7 @@ function ProjectLink({ project }: { project: Project }) {
       <span className="text-md font-extrabold">{project.name}</span>
       <span className="text-xs text-muted">{project.client.name}</span>
       <span className="mt-1.5 flex flex-wrap gap-1.5">
+        <Pill tone="code">{project.repository ? t(`code.providers.${project.repository.provider}`) : t('projects.chips.noRepo')}</Pill>
         <Pill tone="neutral">{dodSummary(t, project.dod)}</Pill>
         {project.isDefault && <Pill tone="info">{t('projects.chips.default')}</Pill>}
         {!project.active && <Pill tone="neutral">{t('projects.chips.hidden')}</Pill>}

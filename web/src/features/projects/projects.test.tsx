@@ -41,6 +41,9 @@ describe('projects', () => {
     expect(eOffice).toHaveTextContent('Default')
     expect(within(list).getByRole('link', { name: /Email/ })).not.toHaveTextContent('Default')
     expect(within(list).getAllByRole('link')).toHaveLength(3)
+    expect(eOffice).toHaveTextContent('No repo')
+    expect(screen.getByText('No repository')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Manage connection' })).toHaveAttribute('href', '/settings/integrations')
 
     const card = slaCard()
     const p1 = within(card).getByRole('row', { name: /Critical/ })

@@ -183,6 +183,28 @@ describe('agent ticket detail', () => {
     expect(await screen.findByRole('button', { name: 'Resolve without DoD…' })).toBeInTheDocument()
   })
 
+  it('shows the code that named the ticket', async () => {
+    await open()
+    const code = await screen.findByRole('region', { name: 'Code activity' })
+    expect(within(code).getByRole('link', { name: /GitHub · vendor-id\/eoffice-jambi/ })).toHaveAttribute(
+      'href',
+      'https://github.com/vendor-id/eoffice-jambi',
+    )
+    expect(within(code).getByRole('link', { name: /PR #42 · Revert SSO token TTL change/ })).toBeInTheDocument()
+    expect(within(code).getByText('In review')).toBeInTheDocument()
+    expect(within(code).getByText(/fix\/HD-24871-sso → main · opened by Adi Saputra/)).toBeInTheDocument()
+    const commits = within(code).getByRole('list', { name: 'Commits' })
+    expect(within(commits).getAllByRole('listitem')[0]).toHaveTextContent('a1f9c2e')
+    expect(within(commits).getByText('Fix HD-24871: revert SSO token TTL to 8h')).toBeInTheDocument()
+  })
+
+  it('leaves code activity out for a project without a repository and no code', async () => {
+    renderApp('/tickets/HD-24859')
+    await screen.findByRole('heading', { level: 1 })
+    await screen.findByRole('heading', { name: 'Activity log' })
+    expect(screen.queryByRole('region', { name: 'Code activity' })).not.toBeInTheDocument()
+  })
+
   it('shows not found for unknown keys', async () => {
     renderApp('/tickets/HD-1')
     expect(await screen.findByRole('heading', { name: 'Ticket not found' })).toBeInTheDocument()

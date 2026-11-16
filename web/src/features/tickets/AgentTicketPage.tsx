@@ -12,6 +12,7 @@ import { ResolveGuardDialog } from '../dod/ResolveGuardDialog'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { ActivityLog } from './ActivityLog'
 import { AgentComposer } from './AgentComposer'
+import { CodeActivityCard } from './CodeActivityCard'
 import { priorityLong } from './labels'
 import { MessageThread } from './MessageThread'
 import { ticketMessagesQueryOptions, ticketQueryOptions, useSetStatus } from './queries'
@@ -66,6 +67,7 @@ export function AgentTicketPage({ ticketKey }: { ticketKey: string }) {
         <aside className="flex min-w-0 flex-col gap-4">
           <ServiceLevelCard ticket={ticket} audience="agent" />
           {ticket.dod && <TicketDodCard ticket={ticket} dod={ticket.dod} />}
+          <CodeActivityCard ticket={ticket} />
           <TicketProperties ticket={ticket} onResolveGuard={() => setGuarding(true)} />
           <ActivityLog ticketKey={ticket.key} type={ticket.type} />
         </aside>

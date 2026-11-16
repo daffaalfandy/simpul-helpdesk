@@ -1,12 +1,13 @@
 import { useRouter } from '@tanstack/react-router'
-import { GripVertical } from 'lucide-react'
+import { GitBranch, GripVertical } from 'lucide-react'
 import { Button, GridListItem } from 'react-aria-components'
 import { useTranslation } from 'react-i18next'
 
-import type { BoardCard } from '../../api/client'
+import type { BoardCard, BoardCardCode } from '../../api/client'
 import { Avatar } from '../../components/Avatar'
 import { Pill, PriorityBadge } from '../../components/Badges'
 import { paths } from '../../lib/constants'
+import { useCodeLabels } from '../code/labels'
 import { SlaChip } from './SlaChip'
 
 /**
@@ -39,6 +40,7 @@ export function KanbanCard({ card }: { card: BoardCard }) {
       </div>
       <p className="mt-1.5 text-base leading-snug font-bold">{card.subject}</p>
       <p className="mt-1 text-sm text-muted">{card.client.name}</p>
+      {card.code && <CodeChip code={card.code} />}
       <div className="mt-2.5 flex items-center justify-between">
         <Button
           slot="drag"
@@ -65,5 +67,33 @@ export function KanbanCard({ card }: { card: BoardCard }) {
         </span>
       </div>
     </GridListItem>
+  )
+}
+
+/** The code that reached the ticket (Main mock): its latest pull/merge request, or its commits. */
+function CodeChip({ code }: { code: BoardCardCode }) {
+  const { t } = useTranslation()
+  const labels = useCodeLabels()
+  const r = code.request
+  let text: string
+  if (r) {
+    const request = labels.request(code.provider, r.number)
+    if (r.state === 'merged') {
+      text = code.deployed ? t('agent.board.code.mergedDeployed', { request }) : t('agent.board.code.merged', { request, target: r.target })
+    } else if (r.state === 'closed') {
+      text = t('agent.board.code.closed', { request })
+    } else {
+      text = t('agent.board.code.open', { request, target: r.target })
+    }
+  } else if (code.commits > 0) {
+    text = t('agent.board.code.commits', { count: code.commits, branch: code.branch })
+  } else {
+    text = t('agent.board.code.deployed')
+  }
+  return (
+    <p className="mt-2 flex items-center gap-1.5 rounded-md bg-chip-code-bg px-2 py-1.25 text-xs font-semibold text-chip-code-fg">
+      <GitBranch aria-hidden="true" className="size-(--icon-sm) shrink-0" />
+      <span className="min-w-0 truncate">{text}</span>
+    </p>
   )
 }

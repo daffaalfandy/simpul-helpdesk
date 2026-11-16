@@ -78,6 +78,11 @@ describe('board', () => {
     const openTile = screen.getByText('Open tickets').parentElement as HTMLElement
     expect(within(openTile).getByText('5')).toBeInTheDocument()
 
+    // Code that reached the ticket: its pull request in review.
+    const coded = within(column('In progress')).getByRole('row', { name: /HD-24871/ })
+    expect(within(coded).getByText('PR #42 in review → main')).toBeInTheDocument()
+    expect(within(owned).queryByText(/PR #/)).not.toBeInTheDocument()
+
     await user.click(within(column('In progress')).getByRole('row', { name: /HD-24871/ }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/tickets/HD-24871'))
   })

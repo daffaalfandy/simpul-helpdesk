@@ -106,7 +106,16 @@
         "in_uat": "Client is testing. Resolves when they approve."
       },
       "uatChip": "Client testing · day {{day}} of {{days}}",
-      "uatChipNoLimit": "Client testing · day {{day}}"
+      "uatChipNoLimit": "Client testing · day {{day}}",
+      "code": {
+        "open": "{{request}} in review → {{target}}",
+        "merged": "{{request}} merged → {{target}}",
+        "mergedDeployed": "{{request}} merged + deployed",
+        "closed": "{{request}} closed without merging",
+        "commits_one": "{{count}} commit on {{branch}}",
+        "commits_other": "{{count}} commits on {{branch}}",
+        "deployed": "Deployed to production"
+      }
     },
     "logTicket": {
       "title": "Log a ticket for a client",
@@ -1061,13 +1070,19 @@
         "asked": "{{name}} asked to test",
         "askedAuto": "{{name}} asked to test · auto-approves {{date}}",
         "later": "Asked of {{name}} when the ticket moves to In UAT",
-        "code": "Read from GitHub or GitLab"
+        "code": "Read from GitHub or GitLab",
+        "commit": "Commit {{sha}} says “{{title}}”",
+        "merged": "{{request}} merged by {{author}} · {{time}}",
+        "pipeline": "CI passed on {{branch}} · {{time}}",
+        "deployed": "Deployed to {{environment}} · {{time}}",
+        "waitingOn": "Waiting on {{request}}"
       },
       "foot": {
         "met": "Every condition is met.",
         "waiting": "It resolves when the client approves.",
         "waitingAuto": "It resolves when the client approves, or by itself on {{date}}.",
-        "askClient": "Move the ticket to In UAT when the fix is ready; the client is asked to test."
+        "askClient": "Move the ticket to In UAT when the fix is ready; the client is asked to test.",
+        "code": "It moves on by itself once the code conditions are met."
       },
       "dialog": {
         "title": "A Definition of Done for {{key}}",
@@ -1093,11 +1108,27 @@
       "placeholder": "e.g. Client confirmed by phone; UAT done on their side",
       "keep": "Keep where it is",
       "confirm": "Resolve anyway"
+    },
+    "code": {
+      "title": "Code activity",
+      "repository": "{{provider}} · {{name}}",
+      "loading": "Loading code activity…",
+      "empty": "No commits or pull requests name this ticket yet. Mention {{key}} in a commit message or branch name to link them.",
+      "request": "{{request}} · {{title}}",
+      "state": {
+        "open": "In review",
+        "merged": "Merged",
+        "closed": "Closed"
+      },
+      "openedLine": "{{branch}} → {{target}} · opened by {{author}} {{time}}",
+      "mergedLine": "{{branch}} → {{target}} · merged by {{author}} {{time}}",
+      "commits": "Commits",
+      "commitMeta": "{{author}} · {{time}}"
     }
   },
   "projects": {
     "title": "Projects",
-    "subtitle": "Each project belongs to a client and sets the service level its tickets follow.",
+    "subtitle": "Each project links a client to a repository and sets when a ticket counts as done.",
     "listLabel": "Projects",
     "newProject": "New project",
     "editProject": "Edit project",
@@ -1108,11 +1139,16 @@
     },
     "chips": {
       "default": "Default",
-      "hidden": "Hidden"
+      "hidden": "Hidden",
+      "noRepo": "No repo"
     },
     "header": {
       "default": "Service requests from this client go here.",
-      "hidden": "Hidden from the report form."
+      "hidden": "Hidden from the report form.",
+      "repository": "Repository",
+      "repositoryName": "{{provider}} · {{name}}",
+      "noRepository": "No repository",
+      "manageConnection": "Manage connection"
     },
     "dialog": {
       "createTitle": "New project",

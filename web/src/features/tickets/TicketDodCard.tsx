@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { CircleCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -11,14 +12,15 @@ import { OptionCard, OptionCardGroup } from '../../components/OptionCard'
 import { TextArea } from '../../components/TextArea'
 import { MAX_REASON_LENGTH } from '../../lib/constants'
 import { DodConditions, DodPreview } from '../dod/DodConditions'
+import { useCodeLabels } from '../code/labels'
 import { dodSummary } from '../dod/labels'
-import { useSetDod } from './queries'
+import { ticketCodeQueryOptions, useSetDod } from './queries'
 import { useTimestamp } from './time'
 
 /** The two answers to "Which Definition of Done applies" (Ticket mock). */
 type Choice = 'project' | 'ticket'
 
-/** Client items a requester answers by testing; the rest come from code (M7). */
+/** Client items a requester answers by testing; the rest come from code. */
 const CLIENT_ITEMS: ReadonlySet<TicketDodItem['item']> = new Set(['uat_approved', 'requester_confirmed'])
 
 /**
@@ -90,15 +92,34 @@ export function TicketDodCard({ ticket, dod }: { ticket: Ticket; dod: TicketDod 
 function Checklist({ ticket, dod }: { ticket: Ticket; dod: TicketDod }) {
   const { t } = useTranslation()
   const { stamp, day } = useTimestamp()
+  const labels = useCodeLabels()
+  // Shared with the Code activity card: a pull/merge request still open is what the merge waits on.
+  const { data: code } = useQuery({ ...ticketCodeQueryOptions(ticket.key), enabled: dod.hasRepository })
   if (dod.items.length === 0) return <p className="text-sm text-ink-2">{t('ticket.dod.nothing')}</p>
+  const open = code?.requests.find((r) => r.state === 'open')
 
   const how = (i: TicketDodItem): string => {
+    if (i.doneAt && i.source) {
+      const s = i.source
+      const time = stamp(i.doneAt)
+      switch (s.kind) {
+        case 'commit':
+          return t('ticket.dod.how.commit', { sha: s.ref, title: s.title })
+        case 'pr_merged':
+          return t('ticket.dod.how.merged', { request: labels.request(s.provider, s.ref), author: s.author, time })
+        case 'pipeline':
+          return t('ticket.dod.how.pipeline', { branch: s.branch, time })
+        case 'deployment':
+          return t('ticket.dod.how.deployed', { environment: s.ref, time })
+      }
+    }
     if (i.doneAt) {
       if (!CLIENT_ITEMS.has(i.item)) return t('ticket.dod.how.doneAt', { time: stamp(i.doneAt) })
       return i.doneBy
         ? t('ticket.dod.how.approvedBy', { name: i.doneBy.name, time: stamp(i.doneAt) })
         : t('ticket.dod.how.approvedAuto', { time: stamp(i.doneAt) })
     }
+    if (i.item === 'merged' && open) return t('ticket.dod.how.waitingOn', { request: labels.request(open.provider, open.number) })
     if (!CLIENT_ITEMS.has(i.item)) return t('ticket.dod.how.code')
     const name = ticket.requester.name
     if (ticket.status !== 'in_uat') return t('ticket.dod.how.later', { name })
@@ -135,6 +156,7 @@ function Footer({ ticket, dod }: { ticket: Ticket; dod: TicketDod }) {
   const { day } = useTimestamp()
   if (dod.items.length === 0) return null
   let text = t('ticket.dod.foot.askClient')
+  if (dod.pending.some((i) => !CLIENT_ITEMS.has(i))) text = t('ticket.dod.foot.code')
   if (dod.met) text = t('ticket.dod.foot.met')
   else if (ticket.status === 'in_uat') {
     const auto = ticket.uat?.autoApproveAt
@@ -166,8 +188,8 @@ function CustomDodDialog({ ticket, dod, onClose }: { ticket: Ticket; dod: Ticket
         setDod.mutate({ dod: draft, reason: reason.trim() }, { onSuccess: onClose })
       }}
     >
-      {/* A ticket's own Definition of Done can't ask for code until its project has a repository (M7). */}
-      <DodConditions dod={draft} hasRepository={false} legend={t('ticket.dod.dialog.conditions')} onChange={setDraft} />
+      {/* A ticket's own Definition of Done can ask for code only when its project reads a repository. */}
+      <DodConditions dod={draft} hasRepository={dod.hasRepository} legend={t('ticket.dod.dialog.conditions')} onChange={setDraft} />
       <DodPreview dod={draft} />
       <TextArea
         label={t('ticket.dod.dialog.reason')}

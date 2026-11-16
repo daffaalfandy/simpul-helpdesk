@@ -50,6 +50,13 @@ export const ticketActivityQueryOptions = (key: string) =>
     queryFn: () => unwrap(api.GET('/tickets/{ticketKey}/activity', { params: { path: { ticketKey: key } } })),
   })
 
+/** Commits and pull/merge requests that named the ticket (staff only). */
+export const ticketCodeQueryOptions = (key: string) =>
+  queryOptions({
+    queryKey: queryKeys.ticketCode(key),
+    queryFn: () => unwrap(api.GET('/tickets/{ticketKey}/code', { params: { path: { ticketKey: key } } })),
+  })
+
 /** Report-form choices: the requester's own client (null) or a client staff picked. */
 export const intakeQueryOptions = (clientId: string | null) =>
   queryOptions({
