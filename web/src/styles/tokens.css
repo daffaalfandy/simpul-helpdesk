@@ -159,6 +159,7 @@
   --provider-card-min-w: 320px; /* GitHub and GitLab cards wrap below this (Integrations mock) */
   --rules-card-basis: 600px;   /* commit message rules grow from this width beside the tester */
   --tester-card-basis: 360px;  /* "Try a commit message" card */
+  --rules-table-min-w: 540px;  /* the rules table scrolls sideways below this (three short columns) */
   --log-time-w: 46px;          /* time column of the recent events log */
   --log-provider-w: 64px;      /* provider column of the recent events log */
 

@@ -43,7 +43,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <div className="flex flex-col gap-0.5 text-sm">
             <span className="text-xs font-bold text-muted">{t('projects.header.repository')}</span>
             {project.repository ? (
-              <ExternalLink href={project.repository.webUrl} className="font-bold break-all text-ink">
+              <ExternalLink href={project.repository.webUrl} className="font-bold wrap-anywhere text-ink">
                 {t('projects.header.repositoryName', {
                   provider: t(`code.providers.${project.repository.provider}`),
                   name: project.repository.fullName,

@@ -186,7 +186,7 @@ export function SetupDialog({ result, created, onClose }: { result: RepositoryWi
         <CopyField label={t(`settings.integrations.setupSecret.${p}`)} value={secret} hint={t('settings.integrations.secretOnce')} />
         <Field label={t(`settings.integrations.setupEventsLabel.${p}`)} value={t(`settings.integrations.setupEvents.${p}`)} />
       </dl>
-      <p className="text-sm text-muted">{t('settings.integrations.setupReachable', { provider: t(`code.providers.${p}`) })}</p>
+      <p className="text-sm text-muted">{t(`settings.integrations.setupReachable.${p}`)}</p>
     </FormDialog>
   )
 }

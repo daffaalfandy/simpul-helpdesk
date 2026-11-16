@@ -101,7 +101,8 @@ function Checklist({ ticket, dod }: { ticket: Ticket; dod: TicketDod }) {
   const how = (i: TicketDodItem): string => {
     if (i.doneAt && i.source) {
       const s = i.source
-      const time = stamp(i.doneAt)
+      // The event's own time, as the Code activity card shows it.
+      const time = stamp(s.at)
       switch (s.kind) {
         case 'commit':
           return t('ticket.dod.how.commit', { sha: s.ref, title: s.title })

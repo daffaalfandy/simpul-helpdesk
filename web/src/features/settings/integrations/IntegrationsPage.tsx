@@ -145,9 +145,10 @@ function ProviderCard({
     <Card
       as="h3"
       title={labels.provider(provider)}
-      description={t(`settings.integrations.how.${provider}`)}
       actions={<Pill tone={statusTones[status]}>{t(`settings.integrations.providerStatus.${status}`)}</Pill>}
     >
+      {/* Below the header, so the status sits beside the provider's name (Integrations mock). */}
+      <p className="-mt-2 text-sm text-ink-2">{t(`settings.integrations.how.${provider}`)}</p>
       {repos.length === 0 ? (
         <p className="text-sm text-muted">{t('settings.integrations.noRepos', { provider: labels.provider(provider) })}</p>
       ) : (
@@ -178,7 +179,7 @@ function RepositoryRow({ repo, onAction }: { repo: Repository; onAction: (a: Act
   return (
     <li className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <ExternalLink href={repo.webUrl} className="font-bold break-all text-ink">
+        <ExternalLink href={repo.webUrl} className="font-bold wrap-anywhere text-ink">
           {name}
         </ExternalLink>
         <DeliveryStatus repo={repo} />

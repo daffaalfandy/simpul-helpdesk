@@ -16,7 +16,7 @@ export function CommitRules({ prefix, className }: { prefix: string; className?:
       description={t('settings.integrations.rules.description')}
       className={className}
     >
-      <Table caption={t('settings.integrations.rules.title')}>
+      <Table caption={t('settings.integrations.rules.title')} minWidth="min-w-(--rules-table-min-w)">
         <thead>
           <tr>
             <Th>{t('settings.integrations.rules.cols.contains')}</Th>

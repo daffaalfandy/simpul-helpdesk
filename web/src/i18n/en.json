@@ -656,7 +656,6 @@
         "github": "Let me select individual events: Pushes, Pull requests, Deployment statuses, Workflow runs, Check suites.",
         "gitlab": "Push events (all branches), Merge request events, Pipeline events, Deployment events."
       },
-      "setupReachable": "{{provider}} must be able to reach this address, so the install has to be reachable from the internet or from your own GitLab.",
       "setupDone": "Done",
       "copy": "Copy",
       "copied": "Copied",
@@ -754,6 +753,10 @@
           "other_repository": "{{what}} mentioned <key>{{key}}</key>: its project reads another repository, ignored",
           "ticket_closed": "{{what}} mentioned <key>{{key}}</key>: the ticket is closed, ignored"
         }
+      },
+      "setupReachable": {
+        "github": "GitHub must be able to reach this address, so the install has to be reachable from the internet.",
+        "gitlab": "Your GitLab must be able to reach this address."
       }
     }
   },
@@ -1120,8 +1123,8 @@
         "merged": "Merged",
         "closed": "Closed"
       },
-      "openedLine": "{{branch}} → {{target}} · opened by {{author}} {{time}}",
-      "mergedLine": "{{branch}} → {{target}} · merged by {{author}} {{time}}",
+      "openedLine": "{{branch}} → {{target}} · opened by {{author}} · {{time}}",
+      "mergedLine": "{{branch}} → {{target}} · merged by {{author}} · {{time}}",
       "commits": "Commits",
       "commitMeta": "{{author}} · {{time}}"
     }
