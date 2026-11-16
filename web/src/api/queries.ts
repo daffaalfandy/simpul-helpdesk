@@ -28,6 +28,7 @@ export const queryKeys = {
   ticket: (key: string) => ['tickets', 'detail', key] as const,
   ticketMessages: (key: string) => ['tickets', 'messages', key] as const,
   ticketActivity: (key: string) => ['tickets', 'activity', key] as const,
+  uatRequests: ['tickets', 'uat-requests'],
   clientRequesters: (clientId: string) => ['clients', clientId, 'requesters'] as const,
   clientAssignees: (clientId: string) => ['clients', clientId, 'assignees'] as const,
   ticketWatchers: (key: string) => ['tickets', 'watchers', key] as const,

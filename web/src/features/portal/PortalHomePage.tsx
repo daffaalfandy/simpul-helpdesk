@@ -1,9 +1,11 @@
-import { useSuspenseInfiniteQuery } from '@tanstack/react-query'
+import { useSuspenseInfiniteQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ChevronRight, Inbox, Plus } from 'lucide-react'
+import { Check, ChevronRight, Inbox, Plus, X } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { TicketSummary } from '../../api/client'
+import type { TicketSummary, UatAnswer, UatRequest } from '../../api/client'
+import { Alert } from '../../components/Alert'
 import { Pill } from '../../components/Badges'
 import { Button, buttonClasses } from '../../components/Button'
 import { Card } from '../../components/Card'
@@ -15,6 +17,8 @@ import { requesterStatus } from '../tickets/labels'
 import { ticketListQueryOptions } from '../tickets/queries'
 import { PORTAL_FILTERS, STATUS_TONE, statusesForPortalFilter, type PortalFilter } from '../tickets/status'
 import { useTimestamp } from '../tickets/time'
+import { uatRequestsQueryOptions } from './queries'
+import { UatAnswerDialog } from './UatAnswerDialog'
 
 /** The list behind a portal filter; shared by the route loader and the page. */
 export function portalListOptions(filter: PortalFilter) {
@@ -30,6 +34,7 @@ export function PortalHomePage({ filter, onFilterChange }: PortalHomePageProps) 
   const me = useSignedInUser()
   const list = useSuspenseInfiniteQuery(portalListOptions(filter))
   const tickets = list.data.pages.flat()
+  const { data: tests } = useSuspenseQuery(uatRequestsQueryOptions)
 
   return (
     <>
@@ -38,13 +43,16 @@ export function PortalHomePage({ filter, onFilterChange }: PortalHomePageProps) 
           <h1 className="text-3xl leading-tight font-extrabold tracking-title">
             {t('portal.hello', { name: firstName(me.name) })}
           </h1>
-          <p className="text-base text-muted">{t('portal.home.intro')}</p>
+          <p className="text-base text-muted">
+            {tests.length > 0 ? t('portal.home.waiting', { count: tests.length }) : t('portal.home.intro')}
+          </p>
         </div>
         <Link to={paths.portalNew} className={buttonClasses('primary', 'lg')}>
           <Plus aria-hidden="true" className="size-(--icon-md)" />
           {t('portal.home.report')}
         </Link>
       </div>
+      <TestRequests tests={tests} meId={me.id} />
       <Card
         as="h2"
         title={t('portal.home.myTickets')}
@@ -76,6 +84,88 @@ export function PortalHomePage({ filter, onFilterChange }: PortalHomePageProps) 
         )}
       </Card>
     </>
+  )
+}
+
+/** "Waiting for your testing (UAT)" (PortalHome mock): one navy card per test, with the answers. */
+function TestRequests({ tests, meId }: { tests: UatRequest[]; meId: string }) {
+  const { t } = useTranslation()
+  const [answering, setAnswering] = useState<{ test: UatRequest; answer: UatAnswer } | null>(null)
+  const [answered, setAnswered] = useState<{ key: string; answer: UatAnswer } | null>(null)
+  if (tests.length === 0 && !answered) return null
+  return (
+    <section aria-labelledby="uat-requests" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="uat-requests" className="text-lg font-extrabold tracking-title">
+          {t('portal.uat.title')}
+        </h2>
+        <p className="text-sm text-muted">{t('portal.uat.emailed')}</p>
+      </div>
+      {answered && (
+        <Alert tone="success">
+          {answered.answer === 'approve' ? t('portal.uat.approved', { key: answered.key }) : t('portal.uat.rejected')}
+        </Alert>
+      )}
+      {tests.length > 0 && (
+        <ul className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,var(--uat-card-min-w)),1fr))] gap-3.5">
+          {tests.map((test) => (
+            <TestCard
+              key={test.key}
+              test={test}
+              meId={meId}
+              onAnswer={(answer) => {
+                setAnswered(null)
+                setAnswering({ test, answer })
+              }}
+            />
+          ))}
+        </ul>
+      )}
+      {answering && (
+        <UatAnswerDialog
+          ticketKey={answering.test.key}
+          subject={answering.test.subject}
+          answer={answering.answer}
+          onClose={() => setAnswering(null)}
+          onAnswered={() => {
+            setAnswered({ key: answering.test.key, answer: answering.answer })
+            setAnswering(null)
+          }}
+        />
+      )}
+    </section>
+  )
+}
+
+function TestCard({ test, meId, onAnswer }: { test: UatRequest; meId: string; onAnswer: (a: UatAnswer) => void }) {
+  const { t } = useTranslation()
+  const { day } = useTimestamp()
+  return (
+    <li className="flex flex-col gap-2.5 rounded-2xl bg-ink px-5 py-4.5 text-on-primary shadow-card">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs font-bold">
+        <span className="text-on-dark-accent">{t('portal.uat.ticketProject', { key: test.key, project: test.project.name })}</span>
+        {test.autoApproveAt && <span className="text-on-dark-muted">{t('portal.uat.autoApproves', { date: day(test.autoApproveAt) })}</span>}
+      </div>
+      <Link
+        to={paths.portalTicket}
+        params={{ key: test.key }}
+        className="text-md font-extrabold text-on-primary underline underline-offset-2 hover:text-on-dark-accent"
+      >
+        {test.subject}
+      </Link>
+      {test.requester.id !== meId && (
+        <span className="text-xs text-on-dark-muted">{t('portal.uat.reportedBy', { name: test.requester.name })}</span>
+      )}
+      <p className="line-clamp-3 text-sm leading-relaxed text-on-dark-muted">{test.instructions ?? t('portal.uat.noInstructions')}</p>
+      <div className="mt-auto flex flex-wrap gap-2.5 pt-1">
+        <Button variant="success" icon={<Check aria-hidden="true" className="size-(--icon-md)" />} onPress={() => onAnswer('approve')}>
+          {t('portal.uat.approve')}
+        </Button>
+        <Button variant="danger" icon={<X aria-hidden="true" className="size-(--icon-md)" />} onPress={() => onAnswer('reject')}>
+          {t('portal.uat.reject')}
+        </Button>
+      </div>
+    </li>
   )
 }
 

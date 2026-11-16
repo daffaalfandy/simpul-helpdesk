@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { organizationQueryOptions } from '../../../api/queries'
 import { PortalHomePage, portalListOptions } from '../../../features/portal/PortalHomePage'
+import { uatRequestsQueryOptions } from '../../../features/portal/queries'
 import { DEFAULT_PORTAL_FILTER, isPortalFilter, type PortalFilter } from '../../../features/tickets/status'
 
 type PortalSearch = { filter?: PortalFilter }
@@ -15,6 +16,7 @@ export const Route = createFileRoute('/_portal/portal/')({
     Promise.all([
       queryClient.ensureInfiniteQueryData(portalListOptions(deps.filter)),
       queryClient.ensureQueryData(organizationQueryOptions),
+      queryClient.ensureQueryData(uatRequestsQueryOptions),
     ]),
   component: PortalHomeRoute,
 })

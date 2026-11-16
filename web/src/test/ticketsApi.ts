@@ -19,6 +19,8 @@ import type {
   TicketDod,
   TicketDodInput,
   TicketMessage,
+  UatAnswer,
+  UatRequest,
   TicketStatus,
   TicketSummary,
 } from '../api/client'
@@ -84,7 +86,7 @@ function file(id: string, filename: string): Attachment {
   return { id, filename, contentType: 'image/png', sizeBytes: 84_000, createdAt: '2026-11-12T01:14:00Z' }
 }
 
-function ticket(over: Partial<Ticket> & Pick<Ticket, 'id' | 'key' | 'subject'>): Ticket {
+export function ticket(over: Partial<Ticket> & Pick<Ticket, 'id' | 'key' | 'subject'>): Ticket {
   return {
     type: 'incident',
     status: 'new',
@@ -268,9 +270,34 @@ function summary(t: Ticket): TicketSummary {
   return { id, key, type, status, priority, subject, client, requester, assignee, createdAt, updatedAt, resolvedAt }
 }
 
-/** A ticket as the signed-in user gets it: client staff never see the Definition of Done. */
+/** Working days are business time; the fake just adds three real days for the reopen window. */
+const REOPEN_WINDOW_MS = 3 * 24 * HOUR_MS
+
+/**
+ * A ticket as the signed-in user gets it: client staff never see the Definition of Done, and
+ * only they answer tests and reopen.
+ */
 function asViewer(t: Ticket): Ticket {
-  return isRequester() ? { ...t, dod: null } : t
+  const requester = isRequester()
+  return {
+    ...t,
+    dod: requester ? null : t.dod,
+    uat: t.uat ? { ...t.uat, canAnswer: requester } : null,
+    reopen: t.reopen ? { ...t.reopen, canReopen: requester && t.reopen.canReopen } : null,
+  }
+}
+
+/** Marks a progress step and moves "current" along, roughly as ticket.Progress does. */
+function progressAfter(t: Ticket, status: TicketStatus): Ticket['progress'] {
+  const now = new Date().toISOString()
+  const reached = status === 'resolved' ? 'resolved' : 'in_progress'
+  const order = t.progress.map((p) => p.step)
+  const at = order.indexOf(reached)
+  return t.progress.map((p, i) => {
+    if (i < at) return { ...p, state: p.state === 'upcoming' && p.step === 'ready_for_test' ? 'skipped' : 'done', at: p.at ?? now }
+    if (i === at) return { ...p, state: status === 'resolved' ? 'done' : 'current', at: now }
+    return { ...p, state: 'upcoming', at: null }
+  })
 }
 
 let nextId = 0
@@ -353,6 +380,69 @@ function colleaguesFor(t: Ticket): Colleague[] {
 
 export const ticketsHandlers = [
   http.get(`${API}/tickets/:key/watchers`, ({ params }) => HttpResponse.json(tickets.watchers[String(params.key)] ?? [])),
+  http.get(`${API}/uat-requests`, async ({ request }) => {
+    await record(request)
+    if (!isRequester()) return problem(403, 'forbidden')
+    const me = state.me?.id ?? ''
+    const mine = tickets.tickets.filter(
+      (t) =>
+        t.status === 'in_uat' &&
+        visible(t) &&
+        (t.requester.id === me || (tickets.watchers[t.key] ?? []).some((w) => w.id === me)),
+    )
+    return HttpResponse.json(
+      mine.map(
+        (t): UatRequest => ({
+          key: t.key,
+          subject: t.subject,
+          project: t.project,
+          requester: t.requester,
+          autoApproveAt: t.uat?.autoApproveAt ?? null,
+          instructions: t.uat?.instructions ?? null,
+        }),
+      ),
+    )
+  }),
+  http.post(`${API}/tickets/:key/uat`, async ({ request, params }) => {
+    const body = (await record(request)) as { answer: UatAnswer; message?: string }
+    const t = find(params.key)
+    if (!t || !visible(t)) return problem(404, 'not_found')
+    if (!isRequester()) return problem(403, 'forbidden')
+    if (t.status !== 'in_uat') return problem(409, 'uat_not_waiting')
+    const now = new Date()
+    if (body.answer === 'approve') {
+      t.status = 'resolved'
+      t.resolvedAt = now.toISOString()
+      t.reopen = { until: new Date(now.getTime() + REOPEN_WINDOW_MS).toISOString(), canReopen: true }
+    } else {
+      if (!body.message?.trim()) return problem(400, 'invalid_message')
+      t.status = t.assignee ? 'in_progress' : 'new'
+      const me = state.me
+      tickets.messages[t.key] = [
+        ...(tickets.messages[t.key] ?? []),
+        {
+          id: newId('m'), author: ref(me?.id ?? '', me?.name ?? ''), authorJobTitle: me?.jobTitle ?? null, fromSupport: false,
+          visibility: 'public', body: body.message, attachments: [], createdAt: now.toISOString(),
+        },
+      ]
+    }
+    t.progress = progressAfter(t, t.status)
+    t.uat = null
+    return HttpResponse.json(asViewer(t))
+  }),
+  http.post(`${API}/tickets/:key/reopen`, async ({ request, params }) => {
+    await record(request)
+    const t = find(params.key)
+    if (!t || !visible(t)) return problem(404, 'not_found')
+    if (!isRequester()) return problem(403, 'forbidden')
+    if (t.status === 'closed') return problem(409, 'ticket_closed')
+    if (t.status !== 'resolved' || !t.reopen?.canReopen) return problem(409, 'reopen_not_allowed')
+    t.status = t.assignee ? 'in_progress' : 'new'
+    t.resolvedAt = null
+    t.reopen = null
+    t.progress = progressAfter(t, t.status)
+    return HttpResponse.json(asViewer(t))
+  }),
   http.get(`${API}/tickets/:key/watcher-candidates`, async ({ request, params }) => {
     await record(request)
     const t = tickets.tickets.find((x) => x.key === params.key)

@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { PROJECT_IDS, projectsApi } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
-import { state, USERS } from '../../test/server'
+import { PASSWORD, state, USERS } from '../../test/server'
 import { IDS } from '../../test/settingsApi'
-import { tickets } from '../../test/ticketsApi'
+import { ticket, tickets } from '../../test/ticketsApi'
 
 const REQUESTER = USERS['hendra@kominfo-jambi.test'] ?? null
 const AGENT = USERS['rina@demo-vendor.test'] ?? null
@@ -235,5 +235,141 @@ describe('people notified', () => {
     await user.click(within(card).getByRole('button', { name: 'Remove Dian Puspita' }))
     await waitFor(() => expect(within(card).queryByText('Dian Puspita')).not.toBeInTheDocument())
     expect(lastRequest('DELETE', '/watchers/' + tickets.requesters[IDS.jambi]?.[1]?.id)).toBeDefined()
+  })
+})
+
+const INSTRUCTIONS = 'The fix is on the e-Office test server. Create a disposition letter and check the date on the PDF.'
+const IN_A_FEW_DAYS = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+
+/** HD-24830 waits In UAT for Pak Hendra's test (PortalHome mock). */
+function addTestRequest() {
+  tickets.tickets.push(
+    ticket({
+      id: 't-24830',
+      key: 'HD-24830',
+      subject: 'Disposition letter PDF shows wrong date',
+      status: 'in_uat',
+      assignee: { id: IDS.adi, name: 'Adi Saputra' },
+      uat: { autoApproveAt: IN_A_FEW_DAYS, canAnswer: true, instructions: INSTRUCTIONS },
+      progress: [
+        { step: 'received', state: 'done', at: '2026-11-12T01:14:00Z' },
+        { step: 'assigned', state: 'done', at: '2026-11-12T01:16:00Z' },
+        { step: 'in_progress', state: 'done', at: '2026-11-12T01:52:00Z' },
+        { step: 'ready_for_test', state: 'current', at: '2026-11-12T05:40:00Z' },
+        { step: 'resolved', state: 'upcoming', at: null },
+      ],
+    }),
+  )
+}
+
+/** HD-24834 was resolved and can still be reopened. */
+function addResolved() {
+  tickets.tickets.push(
+    ticket({
+      id: 't-24834',
+      key: 'HD-24834',
+      subject: "News page still shows last month's banner",
+      status: 'resolved',
+      assignee: { id: IDS.rina, name: 'Rina Pratiwi' },
+      resolvedAt: '2026-11-15T03:00:00Z',
+      reopen: { until: IN_A_FEW_DAYS, canReopen: true },
+      progress: [
+        { step: 'received', state: 'done', at: '2026-11-14T01:14:00Z' },
+        { step: 'assigned', state: 'done', at: '2026-11-14T01:16:00Z' },
+        { step: 'in_progress', state: 'done', at: '2026-11-14T01:52:00Z' },
+        { step: 'ready_for_test', state: 'skipped', at: null },
+        { step: 'resolved', state: 'done', at: '2026-11-15T03:00:00Z' },
+      ],
+    }),
+  )
+}
+
+describe('client tests (UAT) and reopening', () => {
+  beforeEach(() => {
+    state.me = REQUESTER
+  })
+
+  it('lists the tests waiting on the requester and approves one from the home page', async () => {
+    addTestRequest()
+    const user = userEvent.setup()
+    renderApp('/portal')
+    const section = (await screen.findByRole('heading', { name: 'Waiting for your testing (UAT)' })).closest('section') as HTMLElement
+    expect(screen.getByText('1 fix is waiting for you to test.')).toBeInTheDocument()
+    const card = within(section).getByRole('listitem')
+    expect(card).toHaveTextContent('HD-24830 · e-Office')
+    expect(card).toHaveTextContent(/Auto-approves \d+ \w+/)
+    expect(card).toHaveTextContent(INSTRUCTIONS)
+    expect(within(card).getByRole('link', { name: 'Disposition letter PDF shows wrong date' })).toHaveAttribute(
+      'href',
+      '/portal/tickets/HD-24830',
+    )
+
+    await user.click(within(card).getByRole('button', { name: 'Approve, it works' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Approve the fix for HD-24830?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, approve' }))
+    expect(await screen.findByText('Thank you. HD-24830 is now resolved.')).toBeInTheDocument()
+    expect(lastRequest('POST', '/tickets/HD-24830/uat')?.body).toEqual({ answer: 'approve' })
+    await waitFor(() => expect(within(section).queryByRole('listitem')).not.toBeInTheDocument())
+  })
+
+  it('sends a fix back from the ticket page with what went wrong', async () => {
+    addTestRequest()
+    const user = userEvent.setup()
+    renderApp('/portal/tickets/HD-24830')
+    const banner = (await screen.findByRole('heading', { name: 'Your test is needed' })).closest('section') as HTMLElement
+    expect(banner).toHaveTextContent(INSTRUCTIONS)
+    expect(banner).toHaveTextContent(/If we don't hear back, it's approved automatically on \d+ \w+\./)
+    const tracker = screen.getByRole('list', { name: 'Progress' })
+    expect(within(tracker).getByText('Waiting for you')).toBeInTheDocument()
+
+    await user.click(within(banner).getByRole('button', { name: 'Still a problem' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send HD-24830 back to the team?' })
+    const send = within(dialog).getByRole('button', { name: 'Send back' })
+    expect(send).toBeDisabled()
+    await user.type(within(dialog).getByRole('textbox', { name: /What went wrong/ }), 'The date is still one day behind')
+    await user.click(send)
+    expect(await screen.findByText('Sent back to the team with what you saw.')).toBeInTheDocument()
+    expect(lastRequest('POST', '/tickets/HD-24830/uat')?.body).toEqual({
+      answer: 'reject',
+      message: 'The date is still one day behind',
+    })
+    expect(screen.queryByRole('heading', { name: 'Your test is needed' })).not.toBeInTheDocument()
+    expect(await screen.findByText('The date is still one day behind')).toBeInTheDocument()
+  })
+
+  it("opens the email button's answer after signing in", async () => {
+    addTestRequest()
+    state.me = null
+    const user = userEvent.setup()
+    const { router } = renderApp('/portal/tickets/HD-24830?answer=reject')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    await user.type(await screen.findByLabelText('Work email'), 'hendra@kominfo-jambi.test')
+    await user.type(screen.getByLabelText('Password'), PASSWORD)
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByRole('alertdialog', { name: 'Send HD-24830 back to the team?' })).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/portal/tickets/HD-24830'))
+    await waitFor(() => expect(router.state.location.search).toEqual({}))
+  })
+
+  it("says so when the email's ticket no longer waits for a test", async () => {
+    renderApp('/portal/tickets/HD-24871?answer=approve')
+    expect(
+      await screen.findByText("This ticket isn't waiting for your test any more. Someone may have answered already."),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('reopens a resolved ticket inside its window', async () => {
+    addResolved()
+    const user = userEvent.setup()
+    renderApp('/portal/tickets/HD-24834')
+    expect(await screen.findByText(/^Resolved\. You can reopen this ticket until \d+ \w+ if the problem comes back\.$/)).toBeInTheDocument()
+    expect(screen.getByText("Replying doesn't reopen the ticket. Use Reopen ticket if the problem is back.")).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reopen ticket' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Reopen HD-24834?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Reopen' }))
+    expect(await screen.findByText('HD-24834 is back with the support team.')).toBeInTheDocument()
+    expect(lastRequest('POST', '/tickets/HD-24834/reopen')).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Reopen ticket' })).not.toBeInTheDocument()
   })
 })

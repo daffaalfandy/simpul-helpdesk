@@ -220,7 +220,9 @@
       },
       "reportedBy": "Reported by {{name}}",
       "updated": "Updated {{when}}",
-      "resolvedOn": "Resolved {{when}}"
+      "resolvedOn": "Resolved {{when}}",
+      "waiting_one": "{{count}} fix is waiting for you to test.",
+      "waiting_other": "{{count}} fixes are waiting for you to test."
     },
     "new": {
       "back": "Back to my tickets",
@@ -300,7 +302,49 @@
       "add": "Add",
       "chooseColleague": "Choose a colleague.",
       "removeColleague": "Remove {{name}}",
-      "watchersError": "People notified didn't load. Refresh the page to try again."
+      "watchersError": "People notified didn't load. Refresh the page to try again.",
+      "replyResolvedHint": "Replying doesn't reopen the ticket. Use Reopen ticket if the problem is back."
+    },
+    "uat": {
+      "title": "Waiting for your testing (UAT)",
+      "emailed": "We also emailed you each request with Approve / Still a problem links.",
+      "ticketProject": "{{key}} · {{project}}",
+      "autoApproves": "Auto-approves {{date}}",
+      "noInstructions": "The fix is ready. Please check it works for you.",
+      "approve": "Approve, it works",
+      "reject": "Still a problem",
+      "approved": "Thank you. {{key}} is now resolved.",
+      "rejected": "Sent back to the team with what you saw.",
+      "reportedBy": "Reported by {{name}}",
+      "approveDialog": {
+        "title": "Approve the fix for {{key}}?",
+        "body": "“{{title}}” will be marked as resolved and the SLA closed. You can still reopen it within 3 working days.",
+        "confirm": "Yes, approve"
+      },
+      "rejectDialog": {
+        "title": "Send {{key}} back to the team?",
+        "body": "“{{title}}” goes back to the team and they are notified. Tell them what you saw so they can fix it faster.",
+        "reason": "What went wrong? (required)",
+        "placeholder": "e.g. The date is still one day behind on letters created after 16:00",
+        "confirm": "Send back"
+      },
+      "banner": {
+        "eyebrow": "Your test is needed",
+        "autoApprove": "If we don't hear back, it's approved automatically on {{date}}."
+      },
+      "trackerWaiting": "Waiting for you",
+      "gone": "This ticket isn't waiting for your test any more. Someone may have answered already."
+    },
+    "reopen": {
+      "banner": "Resolved. You can reopen this ticket until {{date}} if the problem comes back.",
+      "bannerAfterTest": "Resolved. Thank you for testing. You can reopen this ticket until {{date}} if the problem comes back.",
+      "button": "Reopen ticket",
+      "dialog": {
+        "title": "Reopen {{key}}?",
+        "body": "The ticket goes back to the support team, keeping the same priority.",
+        "confirm": "Reopen"
+      },
+      "reopened": "{{key}} is back with the support team."
     }
   },
   "footer": {
@@ -613,7 +657,9 @@
     "invalid_watcher": "Choose a colleague from your organisation.",
     "dod_unmet": "This ticket hasn't met its Definition of Done. Give a reason to resolve it anyway.",
     "invalid_dod": "Check the Definition of Done.",
-    "dod_override_not_allowed": "This project doesn't let agents change a ticket's Definition of Done."
+    "dod_override_not_allowed": "This project doesn't let agents change a ticket's Definition of Done.",
+    "uat_not_waiting": "This ticket isn't waiting for your test any more. Someone may have answered already.",
+    "reopen_not_allowed": "This ticket can no longer be reopened. Report a new issue instead."
   },
   "time": {
     "justNow": "Just now",
