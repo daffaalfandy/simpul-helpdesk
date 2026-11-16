@@ -308,3 +308,21 @@ func show(f Figures) string {
 	return fmt.Sprintf("{tickets %d, incidents %d, requests %d, breaches %d, within %v, avg %v}",
 		f.Tickets, f.Incidents, f.Requests, f.Breaches, deref(f.WithinPercent), deref(f.AvgFirstResponse))
 }
+
+func TestClockOutcome(t *testing.T) {
+	tests := []struct {
+		met, breached, done bool
+		want                Outcome
+	}{
+		{met: true, want: OutcomeMet},
+		{met: true, breached: true, want: OutcomeBreached}, // met late
+		{breached: true, want: OutcomeBreached},
+		{done: true, want: OutcomeMet}, // resolved before any reply, in time
+		{want: OutcomeRunning},
+	}
+	for _, tt := range tests {
+		if got := ClockOutcome(tt.met, tt.breached, tt.done); got != tt.want {
+			t.Errorf("ClockOutcome(met %v, breached %v, done %v) = %s, want %s", tt.met, tt.breached, tt.done, got, tt.want)
+		}
+	}
+}

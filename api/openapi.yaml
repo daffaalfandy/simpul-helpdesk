@@ -1687,6 +1687,35 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /reports/sla/excel:
+    get:
+      operationId: exportSlaReportExcel
+      summary: The monthly SLA report for every client as an Excel file (supervisors and admins)
+      description: |
+        A Summary sheet with the report's figures and a Tickets sheet with one row per ticket.
+        Times are written in the organisation's time zone, named in the headers. Error code
+        `month_in_future` (400).
+      tags: [reports]
+      parameters:
+        - $ref: "#/components/parameters/ReportMonth"
+      responses:
+        "200":
+          description: The workbook
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+            Content-Security-Policy:
+              schema: { type: string }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     sessionCookie:

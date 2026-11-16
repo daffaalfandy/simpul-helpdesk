@@ -3,6 +3,8 @@ package mail
 import (
 	"fmt"
 	htmltemplate "html/template"
+
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/palette"
 )
 
 // Relation is why someone gets a notification email, for its footer.
@@ -144,31 +146,11 @@ type PicBreachData struct {
 	TicketURL    string
 }
 
-// palette mirrors web/src/styles/tokens.css: email clients can't read CSS variables.
-var palette = map[string]htmltemplate.CSS{
-	"bg":            "#F5F8FC",
-	"surface":       "#FFFFFF",
-	"tint":          "#E8EEF7",
-	"border":        "#DFE7F2",
-	"border-subtle": "#E6EDF6",
-	"border-strong": "#CFD9E8",
-	"ink":           "#14213D",
-	"ink-2":         "#334155",
-	"muted":         "#52607A",
-	"primary":       "#1D4ED8",
-	"on-primary":    "#FFFFFF",
-	"success":       "#15803D",
-	"danger":        "#DC2626",
-	"warning-bg":    "#FDF0CF",
-	"warning-fg":    "#6E4D00",
-	"info-bg":       "#EEF4FF",
-	"info-fg":       "#1E3A8A",
-}
-
+// color names a palette colour; email clients can't read CSS variables.
 func color(name string) (htmltemplate.CSS, error) {
-	c, ok := palette[name]
-	if !ok {
-		return "", fmt.Errorf("mail: no colour %q", name)
+	c, err := palette.Hex(name)
+	if err != nil {
+		return "", fmt.Errorf("mail: %w", err)
 	}
-	return c, nil
+	return htmltemplate.CSS(c), nil
 }

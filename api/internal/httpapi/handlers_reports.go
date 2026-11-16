@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
@@ -39,6 +40,27 @@ func (s *server) GetSlaReport(ctx context.Context, req gen.GetSlaReportRequestOb
 		out.Clients[i] = gen.SlaReportClient{Id: c.ID, Name: c.Name, BelowTarget: c.BelowTarget(), Figures: apiSlaFigures(c.Figures)}
 	}
 	return out, nil
+}
+
+func (s *server) ExportSlaReportExcel(ctx context.Context, req gen.ExportSlaReportExcelRequestObject) (gen.ExportSlaReportExcelResponseObject, error) {
+	if _, err := auth.Require(ctx, auth.CapReportsView); err != nil {
+		return nil, err
+	}
+	month, err := reportMonth(req.Params.Month)
+	if err != nil {
+		return nil, err
+	}
+	f, err := s.reports.Excel(ctx, month)
+	if err != nil {
+		return nil, err
+	}
+	disposition, cache, csp := downloadHeaders(f.Filename)
+	return gen.ExportSlaReportExcel200ApplicationvndOpenxmlformatsOfficedocumentSpreadsheetmlSheetResponse{
+		Body: bytes.NewReader(f.Body), ContentLength: int64(len(f.Body)),
+		Headers: gen.ExportSlaReportExcel200ResponseHeaders{
+			ContentDisposition: &disposition, CacheControl: &cache, ContentSecurityPolicy: &csp,
+		},
+	}, nil
 }
 
 // reportMonth reads the optional month parameter; the spec's pattern has already checked it.

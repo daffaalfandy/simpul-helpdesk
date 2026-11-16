@@ -199,3 +199,25 @@ func HoursMinutes(d time.Duration) (hours, minutes int) {
 	d = max(d, 0)
 	return int(d / time.Hour), int(d % time.Hour / time.Minute)
 }
+
+// Outcome is where one SLA clock stands, for the report's ticket list.
+type Outcome string
+
+const (
+	OutcomeMet      Outcome = "met"
+	OutcomeBreached Outcome = "breached"
+	OutcomeRunning  Outcome = "running"
+)
+
+// ClockOutcome reads a clock: breached when it missed its target (met late included), met when it
+// was met or the ticket is done without a breach (a ticket resolved before any reply), else running.
+func ClockOutcome(met, breached, done bool) Outcome {
+	switch {
+	case breached:
+		return OutcomeBreached
+	case met || done:
+		return OutcomeMet
+	default:
+		return OutcomeRunning
+	}
+}

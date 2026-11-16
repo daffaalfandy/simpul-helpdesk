@@ -1316,6 +1316,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports/sla/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The monthly SLA report for every client as an Excel file (supervisors and admins)
+         * @description A Summary sheet with the report's figures and a Tickets sheet with one row per ticket.
+         *     Times are written in the organisation's time zone, named in the headers. Error code
+         *     `month_in_future` (400).
+         */
+        get: operations["exportSlaReportExcel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4594,6 +4616,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SlaReport"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    exportSlaReportExcel: {
+        parameters: {
+            query?: {
+                /** @description A month such as `2026-11`; the current month when left out. */
+                month?: components["parameters"]["ReportMonth"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The workbook */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Cache-Control"?: string;
+                    "Content-Security-Policy"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             400: components["responses"]["Problem"];

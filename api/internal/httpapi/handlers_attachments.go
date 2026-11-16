@@ -61,15 +61,21 @@ func (s *server) DownloadAttachment(ctx context.Context, req gen.DownloadAttachm
 	if err != nil {
 		return nil, err
 	}
-	disposition := mime.FormatMediaType(dispositionAttachment, map[string]string{dispositionFilenameParam: d.Filename})
-	if disposition == "" {
-		disposition = dispositionAttachment
-	}
-	cache, csp := cacheNoStore, downloadCSP
+	disposition, cache, csp := downloadHeaders(d.Filename)
 	return gen.DownloadAttachment200ApplicationoctetStreamResponse{
 		Body: d.Body, ContentLength: d.Size,
 		Headers: gen.DownloadAttachment200ResponseHeaders{
 			ContentDisposition: &disposition, CacheControl: &cache, ContentSecurityPolicy: &csp,
 		},
 	}, nil
+}
+
+// downloadHeaders are the Content-Disposition, Cache-Control and Content-Security-Policy of a
+// file sent as a download, never shown inline.
+func downloadHeaders(filename string) (disposition, cache, csp string) {
+	disposition = mime.FormatMediaType(dispositionAttachment, map[string]string{dispositionFilenameParam: filename})
+	if disposition == "" {
+		disposition = dispositionAttachment
+	}
+	return disposition, cacheNoStore, downloadCSP
 }

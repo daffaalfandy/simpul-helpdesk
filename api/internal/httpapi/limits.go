@@ -26,7 +26,7 @@ const (
 	transferTimeout        = 10 * time.Minute
 
 	contentTypeMultipart    = "multipart/form-data"
-	contentTypeOctetStream  = "application/octet-stream"
+	schemaFormatBinary      = "binary"
 	pathParamOpen           = "{"
 	pathSeparator           = "/"
 	successStatusClassFirst = "2"
@@ -84,20 +84,29 @@ func (r rawRoute) matches(segments []string) bool {
 	return true
 }
 
-// binaryResponseOps lists the operations (Go names) that answer with a file.
+// binaryResponseOps lists the operations (Go names) that answer with a file: a success
+// response whose body is a binary string, whatever its media type (attachments, exports).
 func binaryResponseOps(spec *openapi3.T) map[string]bool {
 	out := map[string]bool{}
 	for _, item := range spec.Paths.Map() {
 		for _, op := range item.Operations() {
 			for status, resp := range op.Responses.Map() {
-				if strings.HasPrefix(status, successStatusClassFirst) && resp.Value != nil &&
-					resp.Value.Content.Get(contentTypeOctetStream) != nil {
+				if strings.HasPrefix(status, successStatusClassFirst) && resp.Value != nil && sendsFile(resp.Value.Content) {
 					out[goName(op.OperationID)] = true
 				}
 			}
 		}
 	}
 	return out
+}
+
+func sendsFile(content openapi3.Content) bool {
+	for _, media := range content {
+		if media.Schema != nil && media.Schema.Value != nil && media.Schema.Value.Format == schemaFormatBinary {
+			return true
+		}
+	}
+	return false
 }
 
 // bodyLimits caps request bodies before the validator reads them. Signed-in uploads also get

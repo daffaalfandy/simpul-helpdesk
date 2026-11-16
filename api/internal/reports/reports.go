@@ -124,3 +124,46 @@ func reportTicket(r db.ListReportTicketsRow) report.Ticket {
 	}
 	return t
 }
+
+// Export is a file to download.
+type Export struct {
+	Filename string
+	Body     []byte
+}
+
+// exportData is everything a file shows.
+type exportData struct {
+	Period
+	Org       db.GetOrganizationRow
+	Generated time.Time
+	Clients   []db.ListReportClientsRow
+	Rows      []db.ListReportTicketsRow
+}
+
+// Excel returns the month for every client: a Summary sheet and a Tickets sheet.
+func (s *Service) Excel(ctx context.Context, month *report.Month) (Export, error) {
+	q := s.store.Q()
+	d, err := s.exportData(ctx, q, month)
+	if err != nil {
+		return Export{}, err
+	}
+	if d.Clients, err = q.ListReportClients(ctx); err != nil {
+		return Export{}, err
+	}
+	if d.Rows, err = s.tickets(ctx, q, d.Period, nil); err != nil {
+		return Export{}, err
+	}
+	return buildExcel(d)
+}
+
+func (s *Service) exportData(ctx context.Context, q *db.Queries, month *report.Month) (exportData, error) {
+	p, err := s.period(ctx, q, month)
+	if err != nil {
+		return exportData{}, err
+	}
+	org, err := q.GetOrganization(ctx)
+	if err != nil {
+		return exportData{}, err
+	}
+	return exportData{Period: p, Org: org, Generated: s.now()}, nil
+}

@@ -1,9 +1,13 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
+
+	"github.com/xuri/excelize/v2"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
@@ -138,4 +142,72 @@ func TestSLAReportAccessAndMonths(t *testing.T) {
 	jakarta, _ := time.LoadLocation("Asia/Jakarta")
 	next := report.MonthOf(time.Now(), jakarta).Next().String()
 	expectProblem(t, te.supervisor.do(http.MethodGet, "/reports/sla?month="+next, nil), http.StatusBadRequest, apperr.CodeMonthInFuture)
+}
+
+func TestSLAReportExcel(t *testing.T) {
+	te := newTicketEnv(t)
+	jakarta, _ := time.LoadLocation("Asia/Jakarta")
+	formula := te.requester.report(t, incident(te.projectA, `=HYPERLINK("http://evil.test","Click")`))
+	te.reportedAt(t, formula.Key, time.Date(2026, time.October, 15, 9, 0, 0, 0, jakarta))
+	te.answeredAfter(t, formula.Key, 16*time.Minute)
+
+	if rec := te.agent.do(http.MethodGet, "/reports/sla/excel", nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("agent: status %d, want 403", rec.Code)
+	}
+	rec := te.supervisor.do(http.MethodGet, "/reports/sla/excel?month=2026-10", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	h := rec.Header()
+	if got := h.Get("Content-Type"); got != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+		t.Errorf("Content-Type = %q", got)
+	}
+	if got := h.Get("Content-Disposition"); got != `attachment; filename=sla-report-2026-10.xlsx` {
+		t.Errorf("Content-Disposition = %q", got)
+	}
+	if h.Get("Cache-Control") != "no-store" {
+		t.Errorf("Cache-Control = %q", h.Get("Cache-Control"))
+	}
+
+	f, err := excelize.OpenReader(bytes.NewReader(rec.Body.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if got := f.GetSheetList(); !slices.Equal(got, []string{"Summary", "Tickets"}) {
+		t.Fatalf("sheets = %v", got)
+	}
+	cell := func(sheet, ref string) string {
+		t.Helper()
+		v, err := f.GetCellValue(sheet, ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	if got := cell("Summary", "A2"); got != "SLA report · October 2026" {
+		t.Errorf("heading = %q", got)
+	}
+	if cell("Summary", "A9") != "Client" || cell("Summary", "A10") != requesterClient || cell("Summary", "G10") != "100.0%" {
+		t.Errorf("client row = %q, %q, %q", cell("Summary", "A9"), cell("Summary", "A10"), cell("Summary", "G10"))
+	}
+	if got := cell("Tickets", "I1"); got != "Reported (Asia/Jakarta)" {
+		t.Errorf("reported header = %q", got)
+	}
+	if got := cell("Tickets", "A2"); got != formula.Key {
+		t.Errorf("first ticket = %q, want %s", got, formula.Key)
+	}
+	if got := cell("Tickets", "I2"); got != "2026-10-15 09:00" {
+		t.Errorf("reported = %q, want local time", got)
+	}
+	if got := cell("Tickets", "K2"); got != "16" {
+		t.Errorf("time to first response = %q, want 16", got)
+	}
+	// A subject that looks like a formula is stored as text.
+	if got, _ := f.GetCellFormula("Tickets", "G2"); got != "" {
+		t.Errorf("subject became a formula: %q", got)
+	}
+	if got := cell("Tickets", "G2"); got != formula.Subject {
+		t.Errorf("subject = %q", got)
+	}
 }

@@ -1,0 +1,85 @@
+{{- /* Copy for the SLA report's Excel file and PDF. Data shapes are in internal/reports/copy.go. */ -}}
+
+{{define "file.stem"}}sla-report-{{.}}{{end}}
+
+{{define "month.1"}}January{{end}}
+{{define "month.2"}}February{{end}}
+{{define "month.3"}}March{{end}}
+{{define "month.4"}}April{{end}}
+{{define "month.5"}}May{{end}}
+{{define "month.6"}}June{{end}}
+{{define "month.7"}}July{{end}}
+{{define "month.8"}}August{{end}}
+{{define "month.9"}}September{{end}}
+{{define "month.10"}}October{{end}}
+{{define "month.11"}}November{{end}}
+{{define "month.12"}}December{{end}}
+{{define "report.month"}}{{.Name}} {{.Year}}{{if .ToDate}} (to date){{end}}{{end}}
+
+{{define "report.title"}}SLA report{{end}}
+{{define "report.heading"}}SLA report · {{.}}{{end}}
+{{define "report.generated"}}Generated {{.At}} ({{.Zone}}){{end}}
+{{define "report.target"}}Contract target: {{.}}% of tickets within SLA{{end}}
+{{define "report.contract"}}{{if .No}}Contract {{.No}}{{end}}{{if and .No .Start}} · {{end}}{{if .Start}}{{.Start}} to {{.End}}{{end}}{{end}}
+{{define "report.byProject"}}By project{{end}}
+{{define "report.tickets"}}Tickets{{end}}
+{{define "report.noTickets"}}No tickets reported in {{.}}.{{end}}
+{{define "report.page"}}Page {{.Page}} of {{.Pages}}{{end}}
+{{define "report.waiting.all"}}Time spent waiting on the client is excluded from SLA.{{end}}
+{{define "report.waiting.some"}}Time spent waiting on the client is excluded from SLA on the projects that pause the clock for it.{{end}}
+{{define "report.waiting.none"}}The SLA clock keeps running while a ticket waits on the client.{{end}}
+{{define "report.firstResponseNote"}}Average first response covers tickets reported in the portal; tickets the team logs are answered when logged.{{end}}
+
+{{define "kpi.tickets"}}Tickets{{end}}
+{{define "kpi.split"}}{{.Incidents}} incidents · {{.Requests}} requests{{end}}
+{{define "kpi.within"}}Within SLA{{end}}
+{{define "kpi.withinSub"}}target {{.}}%{{end}}
+{{define "kpi.breaches"}}SLA breaches{{end}}
+{{define "kpi.breachesSub"}}tickets that missed a target{{end}}
+{{define "kpi.belowTarget"}}Clients below target{{end}}
+{{define "kpi.avgFirstResponse"}}Avg first response{{end}}
+{{define "kpi.avgFirstResponseSub"}}portal reports{{end}}
+
+{{define "value.percent"}}{{.}}%{{end}}
+{{define "value.hours"}}{{.}}h{{end}}
+{{define "value.minutes"}}{{.}}m{{end}}
+{{define "value.noTickets"}}No tickets{{end}}
+{{define "value.notSet"}}Not set{{end}}
+{{define "value.open"}}Open{{end}}
+{{define "value.yes"}}Yes{{end}}
+{{define "value.no"}}No{{end}}
+{{define "value.outcome"}}{{if eq . "met"}}Met{{else if eq . "breached"}}Breached{{else}}Running{{end}}{{end}}
+{{define "value.type"}}{{if eq . "incident"}}Incident{{else}}Service request{{end}}{{end}}
+{{define "value.channel"}}{{if eq . "portal"}}Portal{{else if eq . "phone"}}Phone{{else if eq . "email"}}Email{{else if eq . "whatsapp"}}WhatsApp{{else if eq . "in_person"}}In person{{else}}{{.}}{{end}}{{end}}
+{{define "value.status"}}{{if eq . "new"}}New{{else if eq . "assigned"}}Assigned{{else if eq . "in_progress"}}In progress{{else if eq . "waiting_on_client"}}Waiting on client{{else if eq . "in_uat"}}In UAT{{else if eq . "resolved"}}Resolved{{else if eq . "closed"}}Closed{{else}}{{.}}{{end}}{{end}}
+
+{{define "sheet.summary"}}Summary{{end}}
+{{define "sheet.tickets"}}Tickets{{end}}
+
+{{define "col.client"}}Client{{end}}
+{{define "col.project"}}Project{{end}}
+{{define "col.contract"}}Contract no.{{end}}
+{{define "col.tickets"}}Tickets{{end}}
+{{define "col.incidents"}}Incidents{{end}}
+{{define "col.requests"}}Requests{{end}}
+{{define "col.split"}}Incidents / Requests{{end}}
+{{define "col.avgFirstResponse"}}Avg first response{{end}}
+{{define "col.avgFirstResponseMinutes"}}Avg first response (min){{end}}
+{{define "col.within"}}Within SLA{{end}}
+{{define "col.breaches"}}Breaches{{end}}
+{{define "col.belowTarget"}}Below target{{end}}
+{{define "col.key"}}Ticket{{end}}
+{{define "col.type"}}Type{{end}}
+{{define "col.priority"}}Priority{{end}}
+{{define "col.channel"}}Received via{{end}}
+{{define "col.subject"}}Subject{{end}}
+{{define "col.status"}}Status{{end}}
+{{define "col.reported"}}Reported{{end}}
+{{define "col.reportedAt"}}Reported ({{.}}){{end}}
+{{define "col.firstResponse"}}First response{{end}}
+{{define "col.firstResponseAt"}}First response ({{.}}){{end}}
+{{define "col.timeToFirstResponse"}}Time to first response (min){{end}}
+{{define "col.resolved"}}Resolved{{end}}
+{{define "col.resolvedAt"}}Resolved ({{.}}){{end}}
+{{define "col.firstResponseSla"}}First response SLA{{end}}
+{{define "col.resolutionSla"}}Resolution SLA{{end}}
