@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
@@ -46,6 +47,19 @@ const (
 var Branches = []Branch{BranchMain, BranchDevelop, BranchRelease, BranchStaging}
 
 func (b Branch) Valid() bool { return slices.Contains(Branches, b) }
+
+// branchGlobSuffix ends a branch that stands for every branch under its folder (release/*).
+const branchGlobSuffix = "/*"
+
+// Matches reports whether a branch counts as b: the same name, or any branch under the folder
+// of a glob such as release/* (release/2026.11, release/v2/hotfix).
+func (b Branch) Matches(name string) bool {
+	if folder, ok := strings.CutSuffix(string(b), branchGlobSuffix); ok {
+		rest, under := strings.CutPrefix(name, folder+"/")
+		return under && rest != ""
+	}
+	return name == string(b)
+}
 
 // Auto-approve choices on the project's UAT condition, in working days (Projects mock).
 const (

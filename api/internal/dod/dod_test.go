@@ -284,3 +284,28 @@ func TestParseEffective(t *testing.T) {
 		t.Error("a broken config parsed")
 	}
 }
+
+func TestBranchMatches(t *testing.T) {
+	tests := []struct {
+		branch Branch
+		name   string
+		want   bool
+	}{
+		{BranchMain, "main", true},
+		{BranchMain, "main2", false},
+		{BranchMain, "feature/main", false},
+		{BranchDevelop, "develop", true},
+		{BranchStaging, "staging", true},
+		{BranchRelease, "release/2026.11", true},
+		{BranchRelease, "release/v2/hotfix", true},
+		{BranchRelease, "release/", false},
+		{BranchRelease, "release", false},
+		{BranchRelease, "releases/1", false},
+		{BranchRelease, "hotfix/release/1", false},
+	}
+	for _, tt := range tests {
+		if got := tt.branch.Matches(tt.name); got != tt.want {
+			t.Errorf("%s.Matches(%q) = %v, want %v", tt.branch, tt.name, got, tt.want)
+		}
+	}
+}
