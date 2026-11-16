@@ -110,6 +110,39 @@ func (q *Queries) InsertCodeLink(ctx context.Context, arg InsertCodeLinkParams) 
 	return err
 }
 
+const insertSeedCodeLink = `-- name: InsertSeedCodeLink :exec
+INSERT INTO code_event_links (code_event_id, ticket_id, ticket_key, outcome, items, status_from, status_to, at)
+VALUES ($1, $2, $3, $4, $5::text[], $6,
+        $7, $8)
+ON CONFLICT DO NOTHING
+`
+
+type InsertSeedCodeLinkParams struct {
+	CodeEventID uuid.UUID
+	TicketID    *uuid.UUID
+	TicketKey   string
+	Outcome     string
+	Items       []string
+	StatusFrom  *string
+	StatusTo    *string
+	At          time.Time
+}
+
+// Seed only: what a code event did, at an explicit time.
+func (q *Queries) InsertSeedCodeLink(ctx context.Context, arg InsertSeedCodeLinkParams) error {
+	_, err := q.db.Exec(ctx, insertSeedCodeLink,
+		arg.CodeEventID,
+		arg.TicketID,
+		arg.TicketKey,
+		arg.Outcome,
+		arg.Items,
+		arg.StatusFrom,
+		arg.StatusTo,
+		arg.At,
+	)
+	return err
+}
+
 const listCodeLog = `-- name: ListCodeLog :many
 SELECT l.id, l.at, l.ticket_key, (l.ticket_id IS NOT NULL)::boolean AS ticket_found, l.outcome, l.items,
        l.status_from, l.status_to, e.kind, e.sha, e.number, e.title, e.branch, e.target, e.url,

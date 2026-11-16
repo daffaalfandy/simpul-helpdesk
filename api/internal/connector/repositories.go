@@ -384,7 +384,12 @@ func statusOf(lastDelivery, lastErrorAt *time.Time) Status {
 // newSecret is a webhook secret: 128 random bits, typeable and safe in any settings form.
 func newSecret() string { return rand.Text() }
 
-func (s *Service) seal(id uuid.UUID, secret string) []byte { return s.box.Seal([]byte(secret), id[:]) }
+func (s *Service) seal(id uuid.UUID, secret string) []byte { return Seal(s.box, id, secret) }
+
+// Seal encrypts a repository's webhook secret, bound to the repository's id.
+func Seal(box *secretbox.Box, id uuid.UUID, secret string) []byte {
+	return box.Seal([]byte(secret), id[:])
+}
 
 // open reads a repository's webhook secret.
 func (s *Service) open(id uuid.UUID, sealed []byte) ([]byte, error) { return s.box.Open(sealed, id[:]) }

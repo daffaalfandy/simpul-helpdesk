@@ -98,6 +98,11 @@ const (
 	CauseCodeReopened    Cause = "code_reopened"     // a commit said the problem is back
 )
 
+// FromCode reports whether code activity (GitHub/GitLab) moved the ticket.
+func (c Cause) FromCode() bool {
+	return c == CauseCodeActivity || c == CauseCodeDone || c == CauseCodeReopened
+}
+
 // Causes lists every cause.
 var Causes = []Cause{
 	CauseAssignment, CauseRequesterReply, CauseUATApproved, CauseUATRejected, CauseUATAutoApproved,

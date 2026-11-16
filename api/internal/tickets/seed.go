@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
@@ -35,11 +37,22 @@ type SeedTicket struct {
 	CreatedAt     time.Time
 	Steps         []SeedStep
 	Messages      []SeedMessage
+	Code          []SeedCode
+}
+
+// SeedCode is what a stored code event did to the ticket: the link, its activity-log line and the
+// Definition of Done items it met. Status moves it caused are SeedSteps with a code cause.
+type SeedCode struct {
+	At       time.Time
+	Event    CodeEvent
+	Outcome  codeflow.Outcome
+	Items    []dod.Item
+	From, To ticket.Status // set when it moved the ticket
 }
 
 // SeedStep is a change after creation: an assignee change, a status change, or both. A move
 // with CauseUATApproved is the client approving the test, which meets the client items of the
-// project's Definition of Done.
+// project's Definition of Done. A move with a code cause is written by a git actor.
 type SeedStep struct {
 	At       time.Time
 	Actor    Ref
@@ -61,6 +74,7 @@ type seedEntry struct {
 	actor  Ref
 	action string
 	data   map[string]any
+	git    bool // code activity: a git actor, the member when ID is set
 }
 
 // InsertSeed writes the ticket, its messages and its audit history. It reports false and
@@ -165,6 +179,13 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 				data: map[string]any{dataMessageID: msgID}})
 		}
 	}
+	for _, c := range t.Code {
+		code, err := seedCode(ctx, q, id, params.Key, c)
+		if err != nil {
+			return false, err
+		}
+		entries = append(entries, code...)
+	}
 	for _, st := range approvals {
 		items, err := seedClientItems(ctx, q, id, t.ProjectID, st)
 		if err != nil {
@@ -175,20 +196,78 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 				data: map[string]any{dataItems: items}})
 		}
 	}
+	// The activity log reads entries by time, then by id (insertion order): at the same time, the
+	// code event comes before the move it caused, as ApplyCode writes them.
+	slices.SortStableFunc(entries, func(a, b seedEntry) int {
+		if c := a.at.Compare(b.at); c != 0 {
+			return c
+		}
+		return seedRank(a) - seedRank(b)
+	})
 	for _, e := range entries {
 		data, err := json.Marshal(e.data)
 		if err != nil {
 			return false, err
 		}
-		actorID, actorName, target := e.actor.ID, e.actor.Name, TargetTicket
+		kind, actorID, actorName, target := audit.ActorUser, &e.actor.ID, e.actor.Name, TargetTicket
+		if e.git {
+			kind = audit.ActorGit
+			if e.actor.ID == uuid.Nil {
+				actorID = nil
+			}
+		}
 		if err := q.InsertAuditAt(ctx, db.InsertAuditAtParams{
-			At: e.at, ActorKind: audit.ActorUser, ActorUserID: &actorID, ActorName: &actorName,
+			At: e.at, ActorKind: kind, ActorUserID: actorID, ActorName: &actorName,
 			Action: e.action, TargetType: &target, TargetID: &id, Data: data,
 		}); err != nil {
 			return false, err
 		}
 	}
 	return true, nil
+}
+
+func seedRank(e seedEntry) int {
+	if e.action == ActionCodeLinked {
+		return 0
+	}
+	return 1
+}
+
+// seedCode writes what a code event did to the ticket, as ApplyCode would, at its own time.
+func seedCode(ctx context.Context, q *db.Queries, ticketID uuid.UUID, key string, c SeedCode) ([]seedEntry, error) {
+	items := make([]string, len(c.Items))
+	for i, it := range c.Items {
+		items[i] = string(it)
+		if err := q.InsertSeedDoDItem(ctx, db.InsertSeedDoDItemParams{
+			TicketID: ticketID, Item: string(it), DoneAt: c.At, DoneBy: c.Event.AuthorID, CodeEventID: &c.Event.ID,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	link := db.InsertSeedCodeLinkParams{
+		CodeEventID: c.Event.ID, TicketID: &ticketID, TicketKey: key, Outcome: string(c.Outcome), Items: items, At: c.At,
+	}
+	if c.To != "" {
+		from, to := string(c.From), string(c.To)
+		link.StatusFrom, link.StatusTo = &from, &to
+	}
+	if err := q.InsertSeedCodeLink(ctx, link); err != nil {
+		return nil, err
+	}
+	actor := Ref{Name: c.Event.AuthorName}
+	if c.Event.AuthorID != nil {
+		actor.ID = *c.Event.AuthorID
+	}
+	e := c.Event
+	out := []seedEntry{{at: c.At, actor: actor, git: true, action: ActionCodeLinked, data: map[string]any{
+		dataCodeEvent: e.ID, dataProvider: e.Provider, dataCodeKind: e.Kind, dataCodeRef: e.Ref,
+		dataBranch: e.Branch, dataTarget: e.Target, dataOutcome: c.Outcome, dataItems: items,
+	}}}
+	if len(items) > 0 {
+		out = append(out, seedEntry{at: c.At, actor: actor, git: true, action: ActionDoDItemsDone,
+			data: map[string]any{dataItems: items, dataCodeEvent: e.ID}})
+	}
+	return out, nil
 }
 
 // seedClientItems meets the client items of the project's Definition of Done for an approval.
@@ -214,7 +293,7 @@ func statusEntry(at time.Time, actor Ref, from, to ticket.Status, cause ticket.C
 	if cause != "" {
 		data[dataCause] = cause
 	}
-	return seedEntry{at: at, actor: actor, action: ActionStatusChanged, data: data}
+	return seedEntry{at: at, actor: actor, action: ActionStatusChanged, data: data, git: cause.FromCode()}
 }
 
 func refDataPtr(r *Ref) any {

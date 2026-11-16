@@ -69,7 +69,7 @@ WHERE t.id = @id
 FOR UPDATE OF t;
 
 -- name: InsertSeedDoDItem :exec
--- Seed only: an item met at an explicit time.
-INSERT INTO ticket_dod_items (ticket_id, item, done_at, done_by)
-VALUES (@ticket_id, @item, @done_at, sqlc.narg(done_by))
+-- Seed only: an item met at an explicit time, by a code event or not.
+INSERT INTO ticket_dod_items (ticket_id, item, done_at, done_by, code_event_id)
+VALUES (@ticket_id, @item, @done_at, sqlc.narg(done_by), sqlc.narg(code_event_id))
 ON CONFLICT (ticket_id, item) DO NOTHING;

@@ -33,13 +33,23 @@ type project struct {
 	dod                       dod.Config
 }
 
-// uatDoD is a client test approved automatically after days working days. Code conditions
-// (Projects mock: e-Office merges into main, SIPD into release/*) need repositories, from M7.
+// uatDoD is a client test approved automatically after days working days.
 func uatDoD(days int) dod.Config {
 	c := dod.None()
 	c.UAT = dod.UAT{Enabled: true, AutoApproveWorkingDays: days}
 	return c
 }
+
+// mergedDoD adds a merge into branch to c (Projects mock: e-Office merges into main, SIPD into
+// release/*). The project reads code from a demo repository.
+func mergedDoD(c dod.Config, branch dod.Branch) dod.Config {
+	c.Merged = dod.Merged{Enabled: true, Branch: branch}
+	return c
+}
+
+// ciDoD and deployedDoD add a CI run or a production deployment to c.
+func ciDoD(c dod.Config) dod.Config       { c.CIPassed = true; return c }
+func deployedDoD(c dod.Config) dod.Config { c.DeployedProduction = true; return c }
 
 // confirmDoD is support work with no code: the requester confirms the fix.
 func confirmDoD() dod.Config {
@@ -65,13 +75,13 @@ func fastSLA() sla.ProjectSLA {
 }
 
 var demoProjects = []project{
-	{RequesterClient, projectEOffice, "Letters, dispositions, archives", fastSLA(), uatDoD(dod.AutoApproveThreeDays)},
+	{RequesterClient, projectEOffice, "Letters, dispositions, archives", fastSLA(), mergedDoD(uatDoD(dod.AutoApproveThreeDays), dod.BranchMain)},
 	{RequesterClient, projectWebsite, "Public website", sla.DefaultProjectSLA(), dod.None()},
 	{RequesterClient, projectEmail, "Mailboxes and accounts", sla.DefaultProjectSLA(), dod.None()},
 	{clientBatam, projectNetwork, "Internet, Wi-Fi, remote access", sla.DefaultProjectSLA(), confirmDoD()},
-	{clientBatam, projectFinanceApps, "Budgeting and finance systems", sla.DefaultProjectSLA(), uatDoD(dod.AutoApproveFiveDays)},
-	{clientRiau, projectSIPD, "Regional budgeting and finance (SIPD)", sla.DefaultProjectSLA(), dod.None()},
-	{clientBintan, projectBintanWeb, "Public website", sla.DefaultProjectSLA(), dod.None()},
+	{clientBatam, projectFinanceApps, "Budgeting and finance systems", sla.DefaultProjectSLA(), mergedDoD(uatDoD(dod.AutoApproveFiveDays), dod.BranchRelease)},
+	{clientRiau, projectSIPD, "Regional budgeting and finance (SIPD)", sla.DefaultProjectSLA(), ciDoD(mergedDoD(dod.None(), dod.BranchRelease))},
+	{clientBintan, projectBintanWeb, "Public website", sla.DefaultProjectSLA(), deployedDoD(mergedDoD(dod.None(), dod.BranchMain))},
 	{clientPANRB, projectGeneral, "Day-to-day IT support", sla.DefaultProjectSLA(), confirmDoD()},
 }
 

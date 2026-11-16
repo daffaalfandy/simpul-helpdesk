@@ -290,6 +290,21 @@ func (q *Queries) LockProjectsForLink(ctx context.Context, arg LockProjectsForLi
 	return items, nil
 }
 
+const markSeedRepositoryDelivered = `-- name: MarkSeedRepositoryDelivered :exec
+UPDATE repositories SET last_delivery_at = $1 WHERE id = $2
+`
+
+type MarkSeedRepositoryDeliveredParams struct {
+	At *time.Time
+	ID uuid.UUID
+}
+
+// Seed only: the demo repositories have sent webhooks.
+func (q *Queries) MarkSeedRepositoryDelivered(ctx context.Context, arg MarkSeedRepositoryDeliveredParams) error {
+	_, err := q.db.Exec(ctx, markSeedRepositoryDelivered, arg.At, arg.ID)
+	return err
+}
+
 const repositoryHasEvents = `-- name: RepositoryHasEvents :one
 SELECT EXISTS (SELECT 1 FROM code_events WHERE repository_id = $1)
 `

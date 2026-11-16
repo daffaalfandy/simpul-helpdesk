@@ -1,6 +1,7 @@
 package seed_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/holidaypreset"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/secretbox"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/seed"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
@@ -23,12 +25,21 @@ func TestMain(m *testing.M) { os.Exit(testdb.Main(m)) }
 
 var cheapParams = auth.Params{Memory: 64, Time: 1, Threads: 1, SaltLen: 16, KeyLen: 32}
 
+func testBox(t *testing.T) *secretbox.Box {
+	t.Helper()
+	b, err := secretbox.New(bytes.Repeat([]byte{1}, secretbox.KeyBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 func TestSeedIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	st := testdb.New(t)
 	h := auth.NewHasher(cheapParams, 1)
 	for range 2 {
-		if err := seed.Run(ctx, config.EnvDev, st, h, io.Discard); err != nil {
+		if err := seed.Run(ctx, config.EnvDev, st, h, testBox(t), io.Discard); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -77,16 +88,26 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"in UAT":                       count(`SELECT count(*) FROM tickets WHERE status = 'in_uat'`),
 		"items met by the requester":   count(`SELECT count(*) FROM ticket_dod_items i JOIN tickets t ON t.id = i.ticket_id WHERE i.done_by = t.requester_id`),
 		"UAT requests to client staff": count(`SELECT count(*) FROM notifications WHERE event_type = 'uat_requested'`),
+		"repositories":                 count(`SELECT count(*) FROM repositories WHERE last_delivery_at IS NOT NULL`),
+		"projects reading code":        count(`SELECT count(*) FROM projects WHERE repository_id IS NOT NULL`),
+		"code events":                  count(`SELECT count(*) FROM code_events`),
+		"code links":                   count(`SELECT count(*) FROM code_event_links`),
+		"unknown keys":                 count(`SELECT count(*) FROM code_event_links WHERE outcome = 'unknown_ticket'`),
+		"items met by code":            count(`SELECT count(*) FROM ticket_dod_items WHERE code_event_id IS NOT NULL`),
+		"moves by code":                count(`SELECT count(*) FROM audit_log WHERE actor_kind = 'git' AND data->>'cause' = 'code_done'`),
+		"code notifications":           count(`SELECT count(*) FROM notifications WHERE event_type = 'code'`),
 	}
 	want := map[string]int{
 		"users": 11, "clients": 8, "agent links": 7,
 		"holidays": presetDays, "invited": 4, "catalog items": 5,
 		"projects": 8, "tickets on projects": 12, "requests on default": 4, "project targets": 32, "default projects": 5, "e-Office P1 fix": 2,
-		"tickets": 12, "messages": 10, "internal notes": 1, "ticket history": 12, "next number": 24891,
-		"resolved today": 1, "assigned, not started": 1,
-		"watchers": 1, "notifications": 42, "emails pending": 0, "internal notes to client staff": 0,
-		"projects asking for UAT": 2, "projects asking to confirm": 2, "in UAT": 1, "items met by the requester": 1,
-		"UAT requests to client staff": 2,
+		"tickets": 12, "messages": 12, "internal notes": 1, "ticket history": 12, "next number": 24891,
+		"resolved today": 2, "assigned, not started": 1,
+		"watchers": 1, "notifications": 56, "emails pending": 0, "internal notes to client staff": 0,
+		"projects asking for UAT": 2, "projects asking to confirm": 2, "in UAT": 2, "items met by the requester": 1,
+		"UAT requests to client staff": 3,
+		"repositories":                 3, "projects reading code": 4, "code events": 14, "code links": 14, "unknown keys": 1,
+		"items met by code": 8, "moves by code": 3, "code notifications": 4,
 	}
 	for k, w := range want {
 		if got[k] != w {
@@ -113,7 +134,7 @@ func TestSeedIsIdempotent(t *testing.T) {
 }
 
 func TestSeedRefusesOutsideDev(t *testing.T) {
-	err := seed.Run(context.Background(), config.EnvProd, testdb.New(t), auth.NewHasher(cheapParams, 1), io.Discard)
+	err := seed.Run(context.Background(), config.EnvProd, testdb.New(t), auth.NewHasher(cheapParams, 1), testBox(t), io.Discard)
 	if !errors.Is(err, seed.ErrNotDev) {
 		t.Fatalf("err = %v, want ErrNotDev", err)
 	}

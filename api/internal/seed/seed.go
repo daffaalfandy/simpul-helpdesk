@@ -16,6 +16,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/holidaypreset"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/secretbox"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
@@ -35,6 +36,8 @@ const (
 	// RequesterClient is the client the demo requester belongs to.
 	RequesterClient = "Dinas Kominfo Jambi"
 
+	emailAdmin  = "admin@demo-vendor.test"
+	emailDewi   = "dewi@demo-vendor.test"
 	emailRina   = "rina@demo-vendor.test"
 	emailAdi    = "adi@demo-vendor.test"
 	emailYoga   = "yoga@demo-vendor.test"
@@ -82,8 +85,8 @@ type person struct {
 }
 
 var people = []person{
-	{"admin@demo-vendor.test", "Demo Admin", auth.RoleAdmin, "", "", false},
-	{"dewi@demo-vendor.test", "Dewi Wulandari", auth.RoleSupervisor, "", "Team lead", false},
+	{emailAdmin, "Demo Admin", auth.RoleAdmin, "", "", false},
+	{emailDewi, "Dewi Wulandari", auth.RoleSupervisor, "", "Team lead", false},
 	{emailRina, "Rina Pratiwi", auth.RoleAgent, "", "L2", false},
 	{emailAdi, "Adi Saputra", auth.RoleAgent, "", "L2", false},
 	{emailYoga, "Yoga Hidayat", auth.RoleAgent, "", "L1", false},
@@ -111,8 +114,9 @@ var catalogItems = []catalogItem{
 }
 
 // Run upserts the demo organisation, clients, projects, users, agent assignments, holidays,
-// catalogue, tickets and their notifications. It is safe to run repeatedly.
-func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, out io.Writer) error {
+// catalogue, repositories, tickets with their code activity, and notifications. It is safe to
+// run repeatedly. box seals the demo repositories' webhook secret.
+func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, box *secretbox.Box, out io.Writer) error {
 	if env != config.EnvDev {
 		return ErrNotDev
 	}
@@ -180,7 +184,14 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		}
 		now := time.Now()
 		r := refs{clients: clientIDs, users: userIDs, projects: projectIDs, items: items}
-		if err := seedTickets(ctx, tx.Q, now, r); err != nil {
+		repos, err := seedRepositories(ctx, tx.Q, box, now, r)
+		if err != nil {
+			return err
+		}
+		if err := seedTickets(ctx, tx.Q, now, r, repos); err != nil {
+			return err
+		}
+		if err := seedUnknownKey(ctx, tx.Q, repos, r, now); err != nil {
 			return err
 		}
 		return seedNotifications(ctx, tx.Q, now, r)
@@ -200,6 +211,7 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 	}
 	_ = tw.Flush()
 	fmt.Fprintf(out, "\nPassword for every user: %s\n", DevPassword)
+	fmt.Fprintf(out, "Webhook secret for every demo repository: %s\n", DevWebhookSecret)
 	return nil
 }
 

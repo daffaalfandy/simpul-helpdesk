@@ -93,3 +93,10 @@ LIMIT @row_limit;
 
 -- name: TicketKeysExist :many
 SELECT key FROM tickets WHERE key = ANY(@keys::text[]);
+
+-- name: InsertSeedCodeLink :exec
+-- Seed only: what a code event did, at an explicit time.
+INSERT INTO code_event_links (code_event_id, ticket_id, ticket_key, outcome, items, status_from, status_to, at)
+VALUES (@code_event_id, sqlc.narg(ticket_id), @ticket_key, @outcome, @items::text[], sqlc.narg(status_from),
+        sqlc.narg(status_to), @at)
+ON CONFLICT DO NOTHING;

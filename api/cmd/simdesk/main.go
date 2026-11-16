@@ -354,7 +354,11 @@ func runSeed(ctx context.Context) error {
 		return err
 	}
 	defer a.close()
-	return seed.Run(ctx, a.cfg.Env, a.store, a.hasher, os.Stdout)
+	box, err := secretbox.New(a.cfg.EncryptionKey)
+	if err != nil {
+		return err
+	}
+	return seed.Run(ctx, a.cfg.Env, a.store, a.hasher, box, os.Stdout)
 }
 
 const userCreateUsage = "usage: simdesk user create --email E --name N [--role admin] [--client NAME] [--job-title T] [--password-stdin]"

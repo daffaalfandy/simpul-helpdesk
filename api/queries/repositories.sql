@@ -58,3 +58,7 @@ DELETE FROM repositories WHERE id = @id;
 
 -- name: RepositoryHasEvents :one
 SELECT EXISTS (SELECT 1 FROM code_events WHERE repository_id = @id);
+
+-- name: MarkSeedRepositoryDelivered :exec
+-- Seed only: the demo repositories have sent webhooks.
+UPDATE repositories SET last_delivery_at = @at WHERE id = @id;
