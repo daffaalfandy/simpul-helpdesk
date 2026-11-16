@@ -100,7 +100,12 @@
       },
       "created": "{{key}} created. The requester gets an email copy.",
       "createdAssigned": "{{key}} created and assigned to you. The requester gets an email copy.",
-      "openTicket": "Open {{key}}"
+      "openTicket": "Open {{key}}",
+      "columnNote": {
+        "in_uat": "Client is testing. Resolves when they approve."
+      },
+      "uatChip": "Client testing · day {{day}} of {{days}}",
+      "uatChipNoLimit": "Client testing · day {{day}}"
     },
     "logTicket": {
       "title": "Log a ticket for a client",
@@ -189,7 +194,9 @@
       "in_uat": "In UAT",
       "resolved": "Resolved"
     },
-    "movedPaused": "{{key}} moved to {{column}} · SLA clock paused."
+    "movedPaused": "{{key}} moved to {{column}} · SLA clock paused.",
+    "movedUat": "{{key}} moved to In UAT · client asked to test",
+    "movedSkipped": "{{key}} moved to Resolved · reason saved to the audit log"
   },
   "portal": {
     "support": "{{org}} Support",
@@ -587,7 +594,7 @@
     "invalid_requester": "Choose a requester of this client.",
     "invalid_channel": "Choose how the request arrived.",
     "invalid_assignee": "This person can't take this client's tickets.",
-    "reason_required": "Say why the priority changes.",
+    "reason_required": "Give a reason.",
     "invalid_status_change": "This status change isn't allowed.",
     "ticket_closed": "This ticket is closed and can't be changed.",
     "status_changed": "Someone else changed this ticket's status just now. Showing the latest.",
@@ -603,7 +610,10 @@
     "notification_locked": "This notification is always on.",
     "notification_event_unknown": "This notification isn't in your settings.",
     "invalid_email_frequency": "Choose when emails go out.",
-    "invalid_watcher": "Choose a colleague from your organisation."
+    "invalid_watcher": "Choose a colleague from your organisation.",
+    "dod_unmet": "This ticket hasn't met its Definition of Done. Give a reason to resolve it anyway.",
+    "invalid_dod": "Check the Definition of Done.",
+    "dod_override_not_allowed": "This project doesn't let agents change a ticket's Definition of Done."
   },
   "time": {
     "justNow": "Just now",
@@ -788,7 +798,60 @@
     },
     "openTickets_one": "{{count}} open ticket",
     "openTickets_other": "{{count}} open tickets",
-    "assigneeOption": "{{title}} · {{open}}"
+    "assigneeOption": "{{title}} · {{open}}",
+    "dod": {
+      "title": "Definition of Done",
+      "progress": "{{done}} of {{total}} done",
+      "which": "Which Definition of Done applies",
+      "project": "Project default",
+      "custom": "Custom for this ticket",
+      "customNew": "Set a different one, with a reason",
+      "reason": "Reason: {{reason}}",
+      "change": "Change",
+      "checklist": "Checklist",
+      "done": "Done",
+      "notDone": "Not done yet",
+      "nothing": "Nothing automatic: an agent resolves this ticket by hand.",
+      "how": {
+        "approvedBy": "Approved by {{name}} · {{time}}",
+        "approvedAuto": "Approved automatically · {{time}}",
+        "doneAt": "Done · {{time}}",
+        "asked": "{{name}} asked to test",
+        "askedAuto": "{{name}} asked to test · auto-approves {{date}}",
+        "later": "Asked of {{name}} when the ticket moves to In UAT",
+        "code": "Read from GitHub or GitLab"
+      },
+      "foot": {
+        "met": "Every condition is met.",
+        "waiting": "It resolves when the client approves.",
+        "waitingAuto": "It resolves when the client approves, or by itself on {{date}}.",
+        "askClient": "Move the ticket to In UAT when the fix is ready; the client is asked to test."
+      },
+      "dialog": {
+        "title": "A Definition of Done for {{key}}",
+        "subtitle": "Replaces the project's for this ticket only, e.g. a P1 hotfix that skips UAT.",
+        "conditions": "Conditions",
+        "reason": "Reason (required, saved to the audit log)",
+        "reasonPlaceholder": "e.g. P1 outage, hotfix approved by the client PIC by phone",
+        "save": "Use for this ticket"
+      },
+      "reset": {
+        "title": "Use the project's Definition of Done again?",
+        "body": "{{key}} follows {{project}}'s Definition of Done from now on.",
+        "confirm": "Use the project's"
+      }
+    },
+    "resolveGuard": {
+      "button": "Resolve without DoD…",
+      "title": "Resolve {{key}} without meeting its Definition of Done?",
+      "body": "This ticket's project needs {{items}} before it resolves. Moving it now skips those steps and notifies the supervisor.",
+      "bodyCustom": "This ticket's Definition of Done needs {{items}} before it resolves. Moving it now skips those steps and notifies the supervisor.",
+      "bodyUnknown": "This ticket hasn't met its Definition of Done. Moving it now skips the rest and notifies the supervisor.",
+      "reason": "Reason (required, saved to the audit log)",
+      "placeholder": "e.g. Client confirmed by phone; UAT done on their side",
+      "keep": "Keep where it is",
+      "confirm": "Resolve anyway"
+    }
   },
   "projects": {
     "title": "Projects",
@@ -1197,6 +1260,14 @@
       "confirm": "Requester confirms",
       "none": "Resolved by hand",
       "separator": " + "
+    },
+    "check": {
+      "fix_committed": "Fix committed",
+      "merged": "PR merged into {{branch}}",
+      "ci_passed": "CI passed on {{branch}}",
+      "deployed": "Deployed to production",
+      "uat_approved": "UAT approved by client",
+      "requester_confirmed": "Requester confirmed it's fixed"
     }
   }
 }

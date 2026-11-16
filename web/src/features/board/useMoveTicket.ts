@@ -7,7 +7,8 @@ import { unwrap } from '../../api/unwrap'
 import type { BoardSearch } from './boardSearch'
 import { moveCard } from './columns'
 
-export type Move = { card: BoardCard; column: BoardColumnId; status: TicketStatus }
+/** A drop on the board; reason resolves a ticket whose Definition of Done isn't met. */
+export type Move = { card: BoardCard; column: BoardColumnId; status: TicketStatus; reason?: string }
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)'
 
@@ -34,11 +35,11 @@ export function useMoveTicket(search: BoardSearch) {
   const invalidate = useInvalidate()
   const boardKey = queryKeys.board(search)
   return useMutation({
-    mutationFn: ({ card, status }: Move) =>
+    mutationFn: ({ card, status, reason }: Move) =>
       unwrap(
         api.PUT('/tickets/{ticketKey}/status', {
           params: { path: { ticketKey: card.key } },
-          body: { status, from: card.status },
+          body: { status, from: card.status, reason },
         }),
       ),
     onMutate: async ({ card, column, status }: Move) => {

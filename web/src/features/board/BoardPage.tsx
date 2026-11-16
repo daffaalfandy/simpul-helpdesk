@@ -2,9 +2,10 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
-import type { BoardCard, BoardColumnId, Ticket } from '../../api/client'
+import { ApiError, ErrorCode, type BoardCard, type BoardColumnId, type Ticket } from '../../api/client'
 import { clientsQueryOptions, useOrgTimeZone } from '../../api/queries'
 import { Alert } from '../../components/Alert'
 import { Button } from '../../components/Button'
@@ -14,6 +15,7 @@ import { SearchField } from '../../components/SearchField'
 import { BOARD_REFRESH_MS, paths, SEARCH_DEBOUNCE_MS } from '../../lib/constants'
 import { formatToday } from '../../lib/dates'
 import { dayPart, firstName } from '../../lib/text'
+import { ResolveGuardDialog } from '../dod/ResolveGuardDialog'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import {
   BOARD_VIEWS,
@@ -36,7 +38,7 @@ type BoardPageProps = { search: BoardSearch; onSearchChange: (next: BoardSearch)
 /** What the last action did, shown above the board until the next one (the mock's toast). */
 type Notice =
   | { kind: 'created'; ticket: Ticket }
-  | { kind: 'moved'; key: string; column: BoardColumnId; paused: boolean }
+  | { kind: 'moved'; key: string; column: BoardColumnId; paused: boolean; skipped: boolean }
   | { kind: 'error'; error: unknown }
 
 /** Agent home (Main mock): stats, filters, search and the kanban board. */
@@ -54,21 +56,35 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
   const timeZone = useOrgTimeZone()
   const [logging, setLogging] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
+  // A drop into Resolved whose Definition of Done isn't met waits for a reason (Main mock).
+  const [guard, setGuard] = useState<BoardCard | null>(null)
 
-  const moveTo = (card: BoardCard, column: BoardColumnId) => {
+  const moveTo = (card: BoardCard, column: BoardColumnId, reason?: string) => {
     setDragging(null)
     setNotice(null)
+    const status = dropStatus(column, card)
+    if (status === 'resolved' && reason === undefined && card.dodPending.length > 0) {
+      setGuard(card)
+      return
+    }
     move.mutate(
-      { card, column, status: dropStatus(column, card) },
+      { card, column, status, reason },
       {
-        onSuccess: (ticket) =>
+        onSuccess: (ticket) => {
+          setGuard(null)
           setNotice({
             kind: 'moved',
             key: card.key,
             column,
             paused: ticket.sla.resolutionClock?.phase === 'paused',
-          }),
-        onError: (error) => setNotice({ kind: 'error', error }),
+            skipped: reason !== undefined,
+          })
+        },
+        onError: (error) => {
+          // The board was stale: the ticket's Definition of Done isn't met after all.
+          if (error instanceof ApiError && error.code === ErrorCode.DodUnmet && reason === undefined) setGuard(card)
+          else if (reason === undefined) setNotice({ kind: 'error', error })
+        },
       },
     )
   }
@@ -106,14 +122,7 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
           </span>
         </Alert>
       )}
-      {notice?.kind === 'moved' && (
-        <Alert tone="success">
-          {t(notice.paused ? 'board.movedPaused' : 'board.moved', {
-            key: notice.key,
-            column: t(`board.moveTarget.${notice.column}`),
-          })}
-        </Alert>
-      )}
+      {notice?.kind === 'moved' && <Alert tone="success">{movedText(t, notice)}</Alert>}
       {notice?.kind === 'error' && <ErrorAlert error={notice.error} />}
       <StatTiles stats={board.stats} />
       <SlaBanner
@@ -137,6 +146,19 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
         onDraggingChange={setDragging}
         onMove={moveTo}
       />
+      {guard && (
+        <ResolveGuardDialog
+          ticketKey={guard.key}
+          pending={guard.dodPending}
+          isPending={move.isPending}
+          error={<ErrorAlert error={move.error} />}
+          onCancel={() => {
+            setGuard(null)
+            move.reset()
+          }}
+          onConfirm={(reason) => moveTo(guard, 'resolved', reason)}
+        />
+      )}
       {logging && (
         <LogTicketDialog
           onClose={() => setLogging(false)}
@@ -148,6 +170,13 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
       )}
     </>
   )
+}
+
+/** The toast after a move: what happened, and what it set off (Main mock). */
+function movedText(t: TFunction, n: Extract<Notice, { kind: 'moved' }>): string {
+  if (n.skipped) return t('board.movedSkipped', { key: n.key })
+  if (n.column === 'in_uat') return t('board.movedUat', { key: n.key })
+  return t(n.paused ? 'board.movedPaused' : 'board.moved', { key: n.key, column: t(`board.moveTarget.${n.column}`) })
 }
 
 /** The search box asks the API once typing pauses, not on every key. */

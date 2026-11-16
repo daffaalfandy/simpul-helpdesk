@@ -112,6 +112,77 @@ describe('agent ticket detail', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
   })
 
+  it("shows the ticket's Definition of Done with what is still pending", async () => {
+    await open()
+    const card = screen.getByRole('region', { name: 'Definition of Done' })
+    expect(card).toHaveTextContent('0 of 1 done')
+    const which = within(card).getByRole('radiogroup', { name: 'Which Definition of Done applies' })
+    expect(within(which).getByRole('radio', { name: /Project default/ })).toBeChecked()
+    const item = within(within(card).getByRole('list', { name: 'Checklist' })).getByRole('listitem')
+    expect(item).toHaveTextContent('UAT approved by client')
+    expect(item).toHaveTextContent('Asked of Hendra Gunawan when the ticket moves to In UAT')
+    expect(within(item).getByRole('img', { name: 'Not done yet' })).toBeInTheDocument()
+    expect(card).toHaveTextContent('Move the ticket to In UAT when the fix is ready; the client is asked to test.')
+  })
+
+  it('guards resolving with the Definition of Done unmet', async () => {
+    const user = await open()
+    await user.click(screen.getByRole('button', { name: /Status$/ }))
+    await user.click(await screen.findByRole('option', { name: /^Resolved/ }))
+    const guard = await screen.findByRole('alertdialog', { name: 'Resolve HD-24871 without meeting its Definition of Done?' })
+    expect(guard).toHaveTextContent("This ticket's project needs the client's UAT approval before it resolves.")
+    expect(within(guard).getByRole('button', { name: 'Resolve anyway' })).toBeDisabled()
+    await user.click(within(guard).getByRole('button', { name: 'Keep where it is' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(lastRequest('PUT', '/tickets/HD-24871/status')).toBeUndefined()
+
+    // The header button opens the same guard.
+    await user.click(screen.getByRole('button', { name: 'Resolve without DoD…' }))
+    const again = await screen.findByRole('alertdialog')
+    await user.type(within(again).getByRole('textbox', { name: /Reason/ }), 'Client confirmed by phone')
+    await user.click(within(again).getByRole('button', { name: 'Resolve anyway' }))
+    await waitFor(() =>
+      expect(lastRequest('PUT', '/tickets/HD-24871/status')?.body).toEqual({
+        status: 'resolved',
+        from: 'in_progress',
+        reason: 'Client confirmed by phone',
+      }),
+    )
+    expect(
+      await screen.findByText('Resolved by Rina Pratiwi without meeting the Definition of Done: Client confirmed by phone'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Resolve without DoD…' })).not.toBeInTheDocument()
+  })
+
+  it('gives the ticket its own Definition of Done with a reason, and returns to the project one', async () => {
+    const user = await open()
+    const card = screen.getByRole('region', { name: 'Definition of Done' })
+    await user.click(within(card).getByRole('radio', { name: /Custom for this ticket/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'A Definition of Done for HD-24871' })
+    await user.click(within(dialog).getByRole('checkbox', { name: /UAT approved by the client/ }))
+    expect(dialog).toHaveTextContent('Done means: nothing automatic. An agent resolves each ticket by hand.')
+    await user.click(within(dialog).getByRole('button', { name: 'Use for this ticket' }))
+    expect(within(dialog).getByText('Give a reason.')).toBeInTheDocument()
+    await user.type(within(dialog).getByRole('textbox', { name: /Reason/ }), 'P1 hotfix, no UAT')
+    await user.click(within(dialog).getByRole('button', { name: 'Use for this ticket' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const body = lastRequest('PUT', '/tickets/HD-24871/dod')?.body as { dod: { uat: { enabled: boolean } }; reason: string }
+    expect(body.dod.uat.enabled).toBe(false)
+    expect(body.reason).toBe('P1 hotfix, no UAT')
+    const updated = screen.getByRole('region', { name: 'Definition of Done' })
+    expect(within(updated).getByRole('radio', { name: /Custom for this ticket/ })).toBeChecked()
+    expect(updated).toHaveTextContent('Reason: P1 hotfix, no UAT')
+    expect(updated).toHaveTextContent('Nothing automatic: an agent resolves this ticket by hand.')
+    expect(screen.queryByRole('button', { name: 'Resolve without DoD…' })).not.toBeInTheDocument()
+
+    await user.click(within(updated).getByRole('radio', { name: /Project default/ }))
+    const reset = await screen.findByRole('alertdialog', { name: "Use the project's Definition of Done again?" })
+    await user.click(within(reset).getByRole('button', { name: "Use the project's" }))
+    await waitFor(() => expect(lastRequest('PUT', '/tickets/HD-24871/dod')?.body).toEqual({ dod: null }))
+    expect(await screen.findByRole('button', { name: 'Resolve without DoD…' })).toBeInTheDocument()
+  })
+
   it('shows not found for unknown keys', async () => {
     renderApp('/tickets/HD-1')
     expect(await screen.findByRole('heading', { name: 'Ticket not found' })).toBeInTheDocument()

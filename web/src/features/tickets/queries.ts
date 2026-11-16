@@ -7,6 +7,7 @@ import type {
   TicketAssigneeFilter,
   TicketInput,
   TicketMessageInput,
+  TicketDodInput,
   TicketStatus,
 } from '../../api/client'
 import { api } from '../../api/client'
@@ -103,9 +104,12 @@ function useTicketAction<T>(key: string, call: (input: T) => Promise<Ticket>) {
   })
 }
 
-/** Sends the status the page showed, so a move someone else made first isn't undone. */
+/**
+ * Sends the status the page showed, so a move someone else made first isn't undone. Resolving
+ * with the Definition of Done unmet carries the reason.
+ */
 export function useSetStatus(key: string) {
-  return useTicketAction(key, (move: { status: TicketStatus; from: TicketStatus }) =>
+  return useTicketAction(key, (move: { status: TicketStatus; from: TicketStatus; reason?: string }) =>
     unwrap(api.PUT('/tickets/{ticketKey}/status', { params: { path: { ticketKey: key } }, body: move })),
   )
 }
@@ -165,4 +169,11 @@ export function useRemoveWatcher(key: string) {
       unwrap(api.DELETE('/tickets/{ticketKey}/watchers/{userId}', { params: { path: { ticketKey: key, userId } } })),
     onSettled: () => invalidate(queryKeys.ticketWatchers(key), queryKeys.watcherCandidatesFor(key)),
   })
+}
+
+/** Gives the ticket its own Definition of Done with a reason, or returns it to the project's (null). */
+export function useSetDod(key: string) {
+  return useTicketAction(key, (input: TicketDodInput) =>
+    unwrap(api.PUT('/tickets/{ticketKey}/dod', { params: { path: { ticketKey: key } }, body: input })),
+  )
 }

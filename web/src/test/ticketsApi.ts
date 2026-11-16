@@ -8,11 +8,16 @@ import type {
   AttachmentPolicy,
   Board,
   BoardCard,
+  BoardCardUat,
   CatalogItem,
+  DodConfig,
+  DodItem,
   Intake,
   Requester,
   Ticket,
   TicketActivity,
+  TicketDod,
+  TicketDodInput,
   TicketMessage,
   TicketStatus,
   TicketSummary,
@@ -20,7 +25,7 @@ import type {
 import { BOARD_COLUMNS } from '../features/board/columns'
 import { allowedMoves, columnOf } from './lifecycle'
 import { state } from './server'
-import { defaultTargets, PROJECT_IDS, projectsApi } from './projectsApi'
+import { defaultTargets, PROJECT_IDS, projectsApi, uatDod } from './projectsApi'
 import { IDS, settings } from './settingsApi'
 
 const API = '*/api/v1'
@@ -45,6 +50,30 @@ export const TICKET_IDS = {
 export const policy: AttachmentPolicy = { maxBytes: MAX_BYTES, maxPerMessage: 2, extensions: ['.pdf', '.png', '.txt'] }
 
 const ref = (id: string, name: string) => ({ id, name })
+
+/** The client items a configuration asks for, as the API's dod.Required (no code until M7). */
+function requiredItems(c: DodConfig): DodItem[] {
+  const out: DodItem[] = []
+  if (c.uat.enabled) out.push('uat_approved')
+  if (c.requesterConfirms) out.push('requester_confirmed')
+  return out
+}
+
+/** A ticket's Definition of Done as staff see it, with nothing met yet. */
+export function ticketDod(project: DodConfig, own?: { config: DodConfig; reason: string }): TicketDod {
+  const config = own?.config ?? project
+  const items = requiredItems(config)
+  return {
+    source: own ? 'ticket' : 'project',
+    config,
+    projectConfig: project,
+    overrideReason: own?.reason ?? null,
+    items: items.map((item) => ({ item, doneAt: null, doneBy: null })),
+    met: items.length === 0,
+    pending: items,
+    canOverride: true,
+  }
+}
 const rina = ref(IDS.rina, 'Rina Pratiwi')
 const adi = ref(IDS.adi, 'Adi Saputra')
 const hendra = ref(TICKET_IDS.hendra, 'Hendra Gunawan')
@@ -121,6 +150,7 @@ function fixtures() {
         pauseOnUat: true, firstResponseClock: null, resolutionClock: null,
       },
       allowedStatuses: ['assigned', 'waiting_on_client', 'in_uat', 'resolved'],
+      dod: ticketDod(uatDod),
       progress: [
         { step: 'received', state: 'done', at: '2026-11-12T01:14:00Z' },
         { step: 'assigned', state: 'done', at: '2026-11-12T01:16:00Z' },
@@ -189,7 +219,9 @@ function fixtures() {
     'HD-24915': { clock: 'resolution', phase: 'breached', remainingMs: -12 * MINUTE_MS, dayMs: WORKING_DAY_MS },
     'HD-24920': { clock: 'resolution', phase: 'met', remainingMs: 2 * HOUR_MS, dayMs: WORKING_DAY_MS },
   }
-  return { tickets, messages, activity, catalogItems, requesters, assignees, watchers, cardSla }
+  /** Which day of the client's test each In UAT card is on. */
+  const cardUat: Record<string, BoardCardUat> = { 'HD-24915': { day: 2, days: 3 } }
+  return { tickets, messages, activity, catalogItems, requesters, assignees, watchers, cardSla, cardUat }
 }
 
 type Recorded = { method: string; path: string; search: string; body: unknown }
@@ -236,6 +268,11 @@ function summary(t: Ticket): TicketSummary {
   return { id, key, type, status, priority, subject, client, requester, assignee, createdAt, updatedAt, resolvedAt }
 }
 
+/** A ticket as the signed-in user gets it: client staff never see the Definition of Done. */
+function asViewer(t: Ticket): Ticket {
+  return isRequester() ? { ...t, dod: null } : t
+}
+
 let nextId = 0
 const newId = (prefix: string) => `${prefix}-${++nextId}`
 
@@ -262,7 +299,7 @@ function boardCard(t: Ticket): BoardCard {
     allowedStatuses: allowedMoves(t),
     sla: tickets.cardSla[key] ?? null,
     dodPending: t.dod?.pending ?? [],
-    uat: null,
+    uat: tickets.cardUat[key] ?? null,
   }
 }
 
@@ -407,7 +444,7 @@ export const ticketsHandlers = [
   }),
   http.get(`${API}/tickets/:key`, ({ params }) => {
     const t = find(params.key)
-    return t ? HttpResponse.json(t) : problem(404, 'not_found')
+    return t ? HttpResponse.json(asViewer(t)) : problem(404, 'not_found')
   }),
   http.get(`${API}/tickets/:key/messages`, ({ params }) => {
     const t = find(params.key)
@@ -434,11 +471,13 @@ export const ticketsHandlers = [
     return HttpResponse.json(m, { status: 201 })
   }),
   http.put(`${API}/tickets/:key/status`, async ({ request, params }) => {
-    const body = (await record(request)) as { status: TicketStatus; from?: TicketStatus }
+    const body = (await record(request)) as { status: TicketStatus; from?: TicketStatus; reason?: string }
     const t = find(params.key)
     if (!t) return problem(404, 'not_found')
     if (body.from !== undefined && body.from !== t.status) return problem(409, 'status_changed')
     if (body.status !== t.status && !allowedMoves(t).includes(body.status)) return problem(409, 'invalid_status_change')
+    const skipped = body.status === 'resolved' && t.dod != null && !t.dod.met
+    if (skipped && !body.reason) return problem(409, 'dod_unmet')
     const { status } = body
     const from = t.status
     t.status = status
@@ -446,7 +485,27 @@ export const ticketsHandlers = [
     t.allowedStatuses = allowedMoves(t)
     tickets.activity[t.key] = [
       ...(tickets.activity[t.key] ?? []),
-      { id: newId('e'), at: new Date().toISOString(), actorName: state.me?.name ?? null, action: 'status_changed', from, to: status, reason: null, cause: null, channel: null },
+      {
+        id: newId('e'), at: new Date().toISOString(), actorName: state.me?.name ?? null, action: 'status_changed', from, to: status,
+        reason: skipped ? (body.reason ?? null) : null, cause: skipped ? 'dod_skipped' : null, channel: null,
+      },
+    ]
+    return HttpResponse.json(t)
+  }),
+  http.put(`${API}/tickets/:key/dod`, async ({ request, params }) => {
+    const body = (await record(request)) as TicketDodInput
+    const t = find(params.key)
+    if (!t?.dod) return problem(404, 'not_found')
+    if (!t.dod.canOverride) return problem(403, 'dod_override_not_allowed')
+    if (body.dod && !body.reason?.trim()) return problem(400, 'reason_required')
+    t.dod = body.dod ? ticketDod(t.dod.projectConfig, { config: body.dod, reason: body.reason ?? '' }) : ticketDod(t.dod.projectConfig)
+    tickets.activity[t.key] = [
+      ...(tickets.activity[t.key] ?? []),
+      {
+        id: newId('e'), at: new Date().toISOString(), actorName: state.me?.name ?? null, action: 'dod_changed',
+        from: body.dod ? 'project' : 'ticket', to: body.dod ? 'ticket' : 'project', reason: body.reason ?? null, cause: null,
+        channel: null,
+      },
     ]
     return HttpResponse.json(t)
   }),

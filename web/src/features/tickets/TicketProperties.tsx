@@ -18,8 +18,19 @@ const PRIORITIES: readonly Priority[] = ['P1', 'P2', 'P3', 'P4']
 /** Dropdown id for "nobody"; sent to the API as null. */
 const UNASSIGNED = 'unassigned'
 
+/** A move to resolved that needs the guard: the Definition of Done isn't met (staff only see it). */
+export function needsResolveGuard(ticket: Ticket): boolean {
+  return ticket.dod != null && !ticket.dod.met
+}
+
+type TicketPropertiesProps = {
+  ticket: Ticket
+  /** Opens the guard instead of resolving a ticket whose Definition of Done isn't met. */
+  onResolveGuard: () => void
+}
+
 /** Status, assignee and priority (with a reason), plus the ticket's read-only details. */
-export function TicketProperties({ ticket }: { ticket: Ticket }) {
+export function TicketProperties({ ticket, onResolveGuard }: TicketPropertiesProps) {
   const { t } = useTranslation()
   const names = usePriorityNames()
   const setStatus = useSetStatus(ticket.key)
@@ -76,7 +87,11 @@ export function TicketProperties({ ticket }: { ticket: Ticket }) {
         label={t('ticket.fields.status')}
         options={statusOptions}
         value={ticket.status}
-        onChange={(s) => s !== ticket.status && setStatus.mutate({ status: s, from: ticket.status })}
+        onChange={(s) => {
+          if (s === ticket.status) return
+          if (s === 'resolved' && needsResolveGuard(ticket)) onResolveGuard()
+          else setStatus.mutate({ status: s, from: ticket.status })
+        }}
         isDisabled={locked || setStatus.isPending}
       />
       <ErrorAlert error={setStatus.error} />

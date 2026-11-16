@@ -126,6 +126,39 @@ describe('board', () => {
     expect(keysIn('New')).toEqual(['HD-24910'])
   })
 
+  it('asks for a reason before resolving a card whose Definition of Done is unmet', async () => {
+    const user = userEvent.setup()
+    renderApp('/board')
+    await screen.findByRole('region', { name: 'Ticket board' })
+    await keyboardMove(user, 'HD-24871', 'Resolved today')
+    const guard = await screen.findByRole('alertdialog', { name: 'Resolve HD-24871 without meeting its Definition of Done?' })
+    await user.click(within(guard).getByRole('button', { name: 'Keep where it is' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(lastRequest('PUT', '/tickets/HD-24871/status')).toBeUndefined()
+    expect(keysIn('In progress')).toEqual(['HD-24871'])
+
+    await keyboardMove(user, 'HD-24871', 'Resolved today')
+    const again = await screen.findByRole('alertdialog')
+    await user.type(within(again).getByRole('textbox', { name: /Reason/ }), 'Client confirmed by phone')
+    await user.click(within(again).getByRole('button', { name: 'Resolve anyway' }))
+    expect(await screen.findByText('HD-24871 moved to Resolved · reason saved to the audit log')).toBeInTheDocument()
+    expect(lastRequest('PUT', '/tickets/HD-24871/status')?.body).toEqual({
+      status: 'resolved',
+      from: 'in_progress',
+      reason: 'Client confirmed by phone',
+    })
+    expect(keysIn('Resolved today')).toContain('HD-24871')
+  })
+
+  it("shows which day of the client's test an In UAT card is on", async () => {
+    renderApp('/board')
+    await screen.findByRole('region', { name: 'Ticket board' })
+    const uat = screen.getByRole('region', { name: /^In UAT/ })
+    expect(within(uat).getByText('Client is testing. Resolves when they approve.')).toBeInTheDocument()
+    const card = within(column('In UAT')).getByRole('row', { name: /HD-24915/ })
+    expect(within(card).getByText('Client testing · day 2 of 3')).toBeInTheDocument()
+  })
+
   it('keeps an owned ticket assigned when it goes back to New', async () => {
     const user = userEvent.setup()
     renderApp('/board')

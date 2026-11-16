@@ -111,6 +111,10 @@ type ConfirmDialogProps = {
   isPending?: boolean
   /** Asks for a required reason; confirm stays disabled until it is filled. */
   reasonLabel?: string
+  reasonPlaceholder?: string
+  reasonMaxLength?: number
+  /** The button that leaves without changing anything; "Cancel" unless the action says better. */
+  cancelLabel?: ReactNode
   error?: ReactNode
 }
 
@@ -125,6 +129,9 @@ export function ConfirmDialog({
   onConfirm,
   isPending,
   reasonLabel,
+  reasonPlaceholder,
+  reasonMaxLength,
+  cancelLabel,
   error,
 }: ConfirmDialogProps) {
   const { t } = useTranslation()
@@ -153,12 +160,19 @@ export function ConfirmDialog({
               </Heading>
               {children && <div className="text-base text-ink-2">{children}</div>}
               {reasonLabel !== undefined && (
-                <TextArea label={reasonLabel} value={reason} onChange={setReason} isRequired />
+                <TextArea
+                  label={reasonLabel}
+                  value={reason}
+                  onChange={setReason}
+                  placeholder={reasonPlaceholder}
+                  maxLength={reasonMaxLength}
+                  isRequired
+                />
               )}
               {error}
               <div className="flex flex-wrap justify-end gap-3">
                 <Button variant="outline" onPress={close}>
-                  {t('common.cancel')}
+                  {cancelLabel ?? t('common.cancel')}
                 </Button>
                 <Button
                   variant={button}

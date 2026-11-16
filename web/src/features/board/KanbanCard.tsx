@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { BoardCard } from '../../api/client'
 import { Avatar } from '../../components/Avatar'
-import { PriorityBadge } from '../../components/Badges'
+import { Pill, PriorityBadge } from '../../components/Badges'
 import { paths } from '../../lib/constants'
 import { SlaChip } from './SlaChip'
 
@@ -47,8 +47,15 @@ export function KanbanCard({ card }: { card: BoardCard }) {
         >
           <GripVertical aria-hidden="true" className="size-(--icon-md)" />
         </Button>
-        <span className="flex items-center gap-2">
-          {card.sla && <SlaChip sla={card.sla} />}
+        <span className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+          {card.uat && (
+            <Pill tone="paused">
+              {card.uat.days != null
+                ? t('agent.board.uatChip', { day: card.uat.day, days: card.uat.days })
+                : t('agent.board.uatChipNoLimit', { day: card.uat.day })}
+            </Pill>
+          )}
+          {card.sla && !(card.uat && card.sla.phase === 'paused') && <SlaChip sla={card.sla} />}
           <Avatar
             name={card.assignee?.name}
             seed={card.assignee?.id}
