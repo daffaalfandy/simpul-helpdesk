@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/secretbox"
 )
 
 const (
@@ -32,6 +34,7 @@ const (
 	VarMailFromName   = "MAIL_FROM_NAME"
 	VarDocsEnabled    = "DOCS_ENABLED"
 	VarStorageDir     = "STORAGE_DIR"
+	VarEncryptionKey  = "ENCRYPTION_KEY"
 )
 
 // Defaults used when a variable is unset.
@@ -45,6 +48,9 @@ const (
 	// DefaultDevStorageDir is relative to the working directory; production needs an
 	// absolute STORAGE_DIR on persistent, backed-up disk.
 	DefaultDevStorageDir = "data/storage"
+	// DefaultDevEncryptionKey is a public key for development only ("simdesk-dev-only-key-do-not-use!").
+	// Production needs its own ENCRYPTION_KEY.
+	DefaultDevEncryptionKey = "c2ltZGVzay1kZXYtb25seS1rZXktZG8tbm90LXVzZSE="
 )
 
 const listSeparator = ","
@@ -63,6 +69,7 @@ type Config struct {
 	MailFromName   string
 	DocsEnabled    bool
 	StorageDir     string
+	EncryptionKey  []byte // secretbox key for secrets stored in the database
 }
 
 func (c Config) IsDev() bool { return c.Env == EnvDev }
@@ -114,6 +121,20 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("%s is required", VarStorageDir))
 	case !c.IsDev() && !filepath.IsAbs(c.StorageDir):
 		errs = append(errs, fmt.Errorf("%s must be an absolute path, got %q", VarStorageDir, c.StorageDir))
+	}
+	rawKey := os.Getenv(VarEncryptionKey)
+	switch {
+	case strings.TrimSpace(rawKey) == "" && c.IsDev():
+		rawKey = DefaultDevEncryptionKey
+	case strings.TrimSpace(rawKey) == "":
+		errs = append(errs, fmt.Errorf("%s is required: 32 random bytes, base64 (openssl rand -base64 32)", VarEncryptionKey))
+	case !c.IsDev() && strings.TrimSpace(rawKey) == DefaultDevEncryptionKey:
+		errs = append(errs, fmt.Errorf("%s is the public development key; generate your own", VarEncryptionKey))
+	}
+	if rawKey != "" {
+		if c.EncryptionKey, err = secretbox.ParseKey(rawKey); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", VarEncryptionKey, err))
+		}
 	}
 	return c, errors.Join(errs...)
 }

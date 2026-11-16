@@ -11,7 +11,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
@@ -141,13 +140,15 @@ func (s *Service) SetDoD(ctx context.Context, p *auth.Principal, key string, cfg
 		if reason == "" || len([]rune(reason)) > MaxReasonLen {
 			return Ticket{}, apperr.Invalid(apperr.CodeReasonRequired, "Give a reason", "")
 		}
-		if err := dod.Validate(*cfg, projects.RepositoriesLinked); err != nil {
-			return Ticket{}, apperr.Invalid(apperr.CodeInvalidDoD, "Check the Definition of Done", err.Error())
-		}
 	}
 	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		if !canOverrideDoD(p, row.AllowTicketOverride) {
 			return errDoDOverrideNotAllowed()
+		}
+		if cfg != nil {
+			if err := dod.Validate(*cfg, row.HasRepository); err != nil {
+				return apperr.Invalid(apperr.CodeInvalidDoD, "Check the Definition of Done", err.Error())
+			}
 		}
 		sd, err := parseDoD(row.DodConfig, row.DodOverride)
 		if err != nil {

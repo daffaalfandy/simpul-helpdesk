@@ -29,6 +29,7 @@ tags:
   - name: catalog
   - name: projects
   - name: notifications
+  - name: integrations
 
 paths:
   /organization:
@@ -792,6 +793,114 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /integrations:
+    get:
+      operationId: getIntegrations
+      summary: Connected repositories and their projects (admin only)
+      description: |
+        The GitHub/GitLab connector is read-only: each repository sends webhooks with its own
+        secret, and commits, pull/merge requests, CI runs and deployments that name a ticket move it
+        by its project's Definition of Done.
+      tags: [integrations]
+      responses:
+        "200":
+          description: Repositories, newest problems first in each status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Integrations" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /repositories:
+    post:
+      operationId: createRepository
+      summary: Connect a repository (admin only)
+      description: |
+        Returns the webhook secret once; it is stored encrypted and never shown again (make a new
+        one instead). Linking a project moves it from any other repository. Error codes are
+        `invalid_repository_url`, `repository_taken` (409) and `invalid_project`.
+      tags: [integrations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RepositoryCreate" }
+      responses:
+        "201":
+          description: Connected; set the webhook up with the secret
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryWithSecret" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /repositories/{repositoryId}:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryId"
+    patch:
+      operationId: updateRepository
+      summary: Change which projects read code from a repository (admin only)
+      description: |
+        A project whose Definition of Done asks for merge, CI or deploy can't lose its repository
+        (`repository_in_use`, 409): turn those conditions off first, or link it to another
+        repository.
+      tags: [integrations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RepositoryUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Repository" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteRepository
+      summary: Disconnect a repository (admin only)
+      description: |
+        Its webhooks are refused from then on. A repository with code events is hidden, so tickets
+        keep their code activity; one without is deleted. Same `repository_in_use` rule as PATCH.
+      tags: [integrations]
+      responses:
+        "204":
+          description: Disconnected
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /repositories/{repositoryId}/secret:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryId"
+    post:
+      operationId: rotateRepositorySecret
+      summary: Make a new webhook secret (admin only)
+      description: The old secret stops working at once; paste the new one into the webhook settings.
+      tags: [integrations]
+      responses:
+        "200":
+          description: The new secret, shown once
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryWithSecret" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /uat-requests:
     get:
       operationId: listUatRequests
@@ -1486,6 +1595,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    RepositoryId:
+      name: repositoryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     UserId:
       name: userId
       in: path
@@ -1626,6 +1740,109 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+
+    GitProvider:
+      type: string
+      enum: [github, gitlab]
+
+    RepositoryRef:
+      type: object
+      required: [id, provider, fullName, webUrl]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        fullName: { type: string, example: vendor-id/eoffice-jambi }
+        webUrl: { type: string, example: "https://github.com/vendor-id/eoffice-jambi" }
+
+    RepositoryStatus:
+      type: string
+      description: |
+        `waiting`: no verified delivery yet. `connected`: the latest delivery was accepted.
+        `failing`: the latest delivery was refused (see `lastError`).
+      enum: [waiting, connected, failing]
+
+    RepositoryError:
+      type: string
+      description: |
+        Why the latest delivery was refused: `bad_signature` (missing or wrong secret),
+        `repository_mismatch` (the webhook belongs to another repository), `malformed` (unreadable
+        payload), `too_large`.
+      enum: [bad_signature, repository_mismatch, malformed, too_large]
+
+    LinkedProject:
+      type: object
+      required: [id, name, client]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        client: { $ref: "#/components/schemas/Ref" }
+
+    Repository:
+      type: object
+      required: [id, provider, host, fullName, webUrl, webhookUrl, status, lastDeliveryAt, lastError, lastErrorAt,
+                 projects]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        host: { type: string, example: gitlab.vendor.co.id }
+        fullName: { type: string, example: gov/sipd-connector }
+        webUrl: { type: string }
+        webhookUrl:
+          type: string
+          description: Where the provider sends webhooks, built from the App URL.
+        status: { $ref: "#/components/schemas/RepositoryStatus" }
+        lastDeliveryAt: { type: string, format: date-time, nullable: true }
+        lastError:
+          allOf: [{ $ref: "#/components/schemas/RepositoryError" }]
+          nullable: true
+        lastErrorAt: { type: string, format: date-time, nullable: true }
+        projects:
+          type: array
+          items: { $ref: "#/components/schemas/LinkedProject" }
+
+    RepositoryWithSecret:
+      type: object
+      required: [repository, secret]
+      properties:
+        repository: { $ref: "#/components/schemas/Repository" }
+        secret:
+          type: string
+          description: The webhook secret (GitHub) or secret token (GitLab). Shown only now.
+
+    RepositoryCreate:
+      type: object
+      required: [provider, url, projectIds]
+      properties:
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        url:
+          type: string
+          maxLength: 600
+          description: The repository's web address, e.g. https://github.com/vendor-id/eoffice-jambi.
+        projectIds:
+          type: array
+          maxItems: 200
+          items: { type: string, format: uuid }
+
+    RepositoryUpdate:
+      type: object
+      required: [projectIds]
+      properties:
+        projectIds:
+          type: array
+          maxItems: 200
+          items: { type: string, format: uuid }
+
+    Integrations:
+      type: object
+      required: [repositories, ticketPrefix]
+      properties:
+        repositories:
+          type: array
+          items: { $ref: "#/components/schemas/Repository" }
+        ticketPrefix:
+          type: string
+          description: The prefix new ticket keys get, for the commit message examples.
+          example: HD
 
     Priority:
       type: string
@@ -1797,7 +2014,7 @@ components:
     Project:
       type: object
       required: [id, client, name, description, isDefault, active, sla, dod, allowTicketOverride, hasRepository,
-                 openTicketCount, createdAt, updatedAt]
+                 repository, openTicketCount, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         client: { $ref: "#/components/schemas/Ref" }
@@ -1820,7 +2037,11 @@ components:
           description: Agents may set a different Definition of Done on one ticket, with a reason.
         hasRepository:
           type: boolean
-          description: Whether merge, CI and deploy conditions can be read; false until a repository is linked.
+          description: Whether merge, CI and deploy conditions can be read, i.e. a repository is linked.
+        repository:
+          allOf: [{ $ref: "#/components/schemas/RepositoryRef" }]
+          nullable: true
+          description: Where code conditions are read from.
         openTicketCount:
           type: integer
           description: Tickets not yet resolved or closed.

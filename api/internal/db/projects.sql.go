@@ -145,9 +145,12 @@ SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_def
        p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.dod_config, p.allow_ticket_override,
        p.created_at, p.updated_at,
        (SELECT count(*) FROM tickets t
-        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
+        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count,
+       r.id AS repository_id, r.provider AS repository_provider, r.full_name AS repository_full_name,
+       r.web_url AS repository_web_url
 FROM projects p
 JOIN clients c ON c.id = p.client_id
+LEFT JOIN repositories r ON r.id = p.repository_id
 WHERE p.id = $1
   AND ($2::uuid IS NULL OR EXISTS (
         SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = $2::uuid))
@@ -176,6 +179,10 @@ type GetProjectRow struct {
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
 	OpenTicketCount             int32
+	RepositoryID                *uuid.UUID
+	RepositoryProvider          *string
+	RepositoryFullName          *string
+	RepositoryWebUrl            *string
 }
 
 func (q *Queries) GetProject(ctx context.Context, arg GetProjectParams) (GetProjectRow, error) {
@@ -199,6 +206,10 @@ func (q *Queries) GetProject(ctx context.Context, arg GetProjectParams) (GetProj
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OpenTicketCount,
+		&i.RepositoryID,
+		&i.RepositoryProvider,
+		&i.RepositoryFullName,
+		&i.RepositoryWebUrl,
 	)
 	return i, err
 }
@@ -223,7 +234,7 @@ func (q *Queries) GetProjectByName(ctx context.Context, arg GetProjectByNamePara
 const getProjectForUpdate = `-- name: GetProjectForUpdate :one
 SELECT id, client_id, name, description, is_default, active,
        sla_pause_on_waiting_client, sla_pause_on_uat, sla_at_risk_percent,
-       sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach, dod_config, allow_ticket_override
+       sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach, dod_config, allow_ticket_override, repository_id
 FROM projects WHERE id = $1 FOR UPDATE
 `
 
@@ -241,6 +252,7 @@ type GetProjectForUpdateRow struct {
 	SlaNotifyPicOnP1Breach      bool
 	DodConfig                   []byte
 	AllowTicketOverride         bool
+	RepositoryID                *uuid.UUID
 }
 
 func (q *Queries) GetProjectForUpdate(ctx context.Context, id uuid.UUID) (GetProjectForUpdateRow, error) {
@@ -260,6 +272,7 @@ func (q *Queries) GetProjectForUpdate(ctx context.Context, id uuid.UUID) (GetPro
 		&i.SlaNotifyPicOnP1Breach,
 		&i.DodConfig,
 		&i.AllowTicketOverride,
+		&i.RepositoryID,
 	)
 	return i, err
 }
@@ -352,9 +365,12 @@ SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_def
        p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.dod_config, p.allow_ticket_override,
        p.created_at, p.updated_at,
        (SELECT count(*) FROM tickets t
-        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
+        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count,
+       r.id AS repository_id, r.provider AS repository_provider, r.full_name AS repository_full_name,
+       r.web_url AS repository_web_url
 FROM projects p
 JOIN clients c ON c.id = p.client_id
+LEFT JOIN repositories r ON r.id = p.repository_id
 WHERE ($1::uuid IS NULL OR p.client_id = $1::uuid)
   AND ($2::uuid IS NULL OR EXISTS (
         SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = $2::uuid))
@@ -384,6 +400,10 @@ type ListProjectsRow struct {
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
 	OpenTicketCount             int32
+	RepositoryID                *uuid.UUID
+	RepositoryProvider          *string
+	RepositoryFullName          *string
+	RepositoryWebUrl            *string
 }
 
 // client_id NULL lists every client's projects; agent_id NULL skips the agent scope.
@@ -414,6 +434,10 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]L
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.OpenTicketCount,
+			&i.RepositoryID,
+			&i.RepositoryProvider,
+			&i.RepositoryFullName,
+			&i.RepositoryWebUrl,
 		); err != nil {
 			return nil, err
 		}

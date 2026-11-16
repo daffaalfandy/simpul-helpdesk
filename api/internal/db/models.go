@@ -75,6 +75,37 @@ type ClientAgent struct {
 	CreatedAt time.Time
 }
 
+type CodeEvent struct {
+	ID           uuid.UUID
+	RepositoryID uuid.UUID
+	Kind         string
+	ExternalID   string
+	Sha          string
+	Number       *int64
+	Title        string
+	Branch       string
+	Target       string
+	Url          string
+	AuthorName   string
+	AuthorLogin  string
+	AuthorUserID *uuid.UUID
+	DeliveryID   *uuid.UUID
+	OccurredAt   time.Time
+	CreatedAt    time.Time
+}
+
+type CodeEventLink struct {
+	ID          uuid.UUID
+	CodeEventID uuid.UUID
+	TicketID    *uuid.UUID
+	TicketKey   string
+	Outcome     string
+	Items       []string
+	StatusFrom  *string
+	StatusTo    *string
+	At          time.Time
+}
+
 type Holiday struct {
 	ID        uuid.UUID
 	Date      calendar.Date
@@ -163,6 +194,7 @@ type Project struct {
 	UpdatedAt                   time.Time
 	DodConfig                   []byte
 	AllowTicketOverride         bool
+	RepositoryID                *uuid.UUID
 }
 
 type ProjectSlaTarget struct {
@@ -176,6 +208,23 @@ type ProjectSlaTarget struct {
 	DeliverUnit        string
 	Calendar           string
 	UpdatedAt          time.Time
+}
+
+type Repository struct {
+	ID             uuid.UUID
+	Provider       string
+	Host           string
+	FullName       string
+	WebUrl         string
+	ExternalID     *string
+	WebhookSecret  []byte
+	Hidden         bool
+	LastDeliveryAt *time.Time
+	LastError      *string
+	LastErrorAt    *time.Time
+	CreatedBy      uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type Session struct {
@@ -215,10 +264,11 @@ type Ticket struct {
 }
 
 type TicketDodItem struct {
-	TicketID uuid.UUID
-	Item     string
-	DoneAt   time.Time
-	DoneBy   *uuid.UUID
+	TicketID    uuid.UUID
+	Item        string
+	DoneAt      time.Time
+	DoneBy      *uuid.UUID
+	CodeEventID *uuid.UUID
 }
 
 type TicketDodOverride struct {
@@ -282,4 +332,14 @@ type User struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	EmailFrequency    string
+}
+
+type WebhookDelivery struct {
+	ID           uuid.UUID
+	RepositoryID uuid.UUID
+	DeliveryID   string
+	EventName    string
+	Payload      []byte
+	ReceivedAt   time.Time
+	ProcessedAt  *time.Time
 }

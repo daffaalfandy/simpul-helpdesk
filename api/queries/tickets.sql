@@ -66,7 +66,8 @@ WHERE t.key = @key
 -- Locks the ticket only; the project's Definition of Done and the override are read as they are.
 SELECT t.id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
        a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
-       p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason
+       p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason,
+       (p.repository_id IS NOT NULL)::boolean AS has_repository
 FROM tickets t
 LEFT JOIN users a ON a.id = t.assignee_id
 JOIN projects p ON p.id = t.project_id

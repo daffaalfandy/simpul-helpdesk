@@ -564,6 +564,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Connected repositories and their projects (admin only)
+         * @description The GitHub/GitLab connector is read-only: each repository sends webhooks with its own
+         *     secret, and commits, pull/merge requests, CI runs and deployments that name a ticket move it
+         *     by its project's Definition of Done.
+         */
+        get: operations["getIntegrations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Connect a repository (admin only)
+         * @description Returns the webhook secret once; it is stored encrypted and never shown again (make a new
+         *     one instead). Linking a project moves it from any other repository. Error codes are
+         *     `invalid_repository_url`, `repository_taken` (409) and `invalid_project`.
+         */
+        post: operations["createRepository"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repositories/{repositoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repositoryId: components["parameters"]["RepositoryId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect a repository (admin only)
+         * @description Its webhooks are refused from then on. A repository with code events is hidden, so tickets
+         *     keep their code activity; one without is deleted. Same `repository_in_use` rule as PATCH.
+         */
+        delete: operations["deleteRepository"];
+        options?: never;
+        head?: never;
+        /**
+         * Change which projects read code from a repository (admin only)
+         * @description A project whose Definition of Done asks for merge, CI or deploy can't lose its repository
+         *     (`repository_in_use`, 409): turn those conditions off first, or link it to another
+         *     repository.
+         */
+        patch: operations["updateRepository"];
+        trace?: never;
+    };
+    "/repositories/{repositoryId}/secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repositoryId: components["parameters"]["RepositoryId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a new webhook secret (admin only)
+         * @description The old secret stops working at once; paste the new one into the webhook settings.
+         */
+        post: operations["rotateRepositorySecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/uat-requests": {
         parameters: {
             query?: never;
@@ -1195,6 +1290,77 @@ export interface components {
             name: string;
         };
         /** @enum {string} */
+        GitProvider: "github" | "gitlab";
+        RepositoryRef: {
+            /** Format: uuid */
+            id: string;
+            provider: components["schemas"]["GitProvider"];
+            /** @example vendor-id/eoffice-jambi */
+            fullName: string;
+            /** @example https://github.com/vendor-id/eoffice-jambi */
+            webUrl: string;
+        };
+        /**
+         * @description `waiting`: no verified delivery yet. `connected`: the latest delivery was accepted.
+         *     `failing`: the latest delivery was refused (see `lastError`).
+         * @enum {string}
+         */
+        RepositoryStatus: "waiting" | "connected" | "failing";
+        /**
+         * @description Why the latest delivery was refused: `bad_signature` (missing or wrong secret),
+         *     `repository_mismatch` (the webhook belongs to another repository), `malformed` (unreadable
+         *     payload), `too_large`.
+         * @enum {string}
+         */
+        RepositoryError: "bad_signature" | "repository_mismatch" | "malformed" | "too_large";
+        LinkedProject: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            client: components["schemas"]["Ref"];
+        };
+        Repository: {
+            /** Format: uuid */
+            id: string;
+            provider: components["schemas"]["GitProvider"];
+            /** @example gitlab.vendor.co.id */
+            host: string;
+            /** @example gov/sipd-connector */
+            fullName: string;
+            webUrl: string;
+            /** @description Where the provider sends webhooks, built from the App URL. */
+            webhookUrl: string;
+            status: components["schemas"]["RepositoryStatus"];
+            /** Format: date-time */
+            lastDeliveryAt: string | null;
+            lastError: components["schemas"]["RepositoryError"] | null;
+            /** Format: date-time */
+            lastErrorAt: string | null;
+            projects: components["schemas"]["LinkedProject"][];
+        };
+        RepositoryWithSecret: {
+            repository: components["schemas"]["Repository"];
+            /** @description The webhook secret (GitHub) or secret token (GitLab). Shown only now. */
+            secret: string;
+        };
+        RepositoryCreate: {
+            provider: components["schemas"]["GitProvider"];
+            /** @description The repository's web address, e.g. https://github.com/vendor-id/eoffice-jambi. */
+            url: string;
+            projectIds: string[];
+        };
+        RepositoryUpdate: {
+            projectIds: string[];
+        };
+        Integrations: {
+            repositories: components["schemas"]["Repository"][];
+            /**
+             * @description The prefix new ticket keys get, for the commit message examples.
+             * @example HD
+             */
+            ticketPrefix: string;
+        };
+        /** @enum {string} */
         Priority: "P1" | "P2" | "P3" | "P4";
         /**
          * @description `business_hours` counts working minutes only; `always` runs 24/7.
@@ -1334,8 +1500,10 @@ export interface components {
             dod: components["schemas"]["DodConfig"];
             /** @description Agents may set a different Definition of Done on one ticket, with a reason. */
             allowTicketOverride: boolean;
-            /** @description Whether merge, CI and deploy conditions can be read; false until a repository is linked. */
+            /** @description Whether merge, CI and deploy conditions can be read, i.e. a repository is linked. */
             hasRepository: boolean;
+            /** @description Where code conditions are read from. */
+            repository: components["schemas"]["RepositoryRef"] | null;
             /** @description Tickets not yet resolved or closed. */
             openTicketCount: number;
             /** Format: date-time */
@@ -2055,6 +2223,7 @@ export interface components {
         AttachmentId: string;
         ProjectId: string;
         CatalogItemId: string;
+        RepositoryId: string;
         UserId: string;
         NotificationId: string;
     };
@@ -3060,6 +3229,141 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getIntegrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repositories, newest problems first in each status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Integrations"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepositoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Connected; set the webhook up with the secret */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryWithSecret"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repositoryId: components["parameters"]["RepositoryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repositoryId: components["parameters"]["RepositoryId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepositoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Repository"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    rotateRepositorySecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repositoryId: components["parameters"]["RepositoryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new secret, shown once */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryWithSecret"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

@@ -5,9 +5,12 @@ SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_def
        p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.dod_config, p.allow_ticket_override,
        p.created_at, p.updated_at,
        (SELECT count(*) FROM tickets t
-        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
+        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count,
+       r.id AS repository_id, r.provider AS repository_provider, r.full_name AS repository_full_name,
+       r.web_url AS repository_web_url
 FROM projects p
 JOIN clients c ON c.id = p.client_id
+LEFT JOIN repositories r ON r.id = p.repository_id
 WHERE (sqlc.narg(client_id)::uuid IS NULL OR p.client_id = sqlc.narg(client_id)::uuid)
   AND (sqlc.narg(agent_id)::uuid IS NULL OR EXISTS (
         SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = sqlc.narg(agent_id)::uuid))
@@ -19,9 +22,12 @@ SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_def
        p.sla_notify_supervisor_on_breach, p.sla_notify_pic_on_p1_breach, p.dod_config, p.allow_ticket_override,
        p.created_at, p.updated_at,
        (SELECT count(*) FROM tickets t
-        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count
+        WHERE t.project_id = p.id AND t.status NOT IN ('resolved', 'closed'))::int AS open_ticket_count,
+       r.id AS repository_id, r.provider AS repository_provider, r.full_name AS repository_full_name,
+       r.web_url AS repository_web_url
 FROM projects p
 JOIN clients c ON c.id = p.client_id
+LEFT JOIN repositories r ON r.id = p.repository_id
 WHERE p.id = @id
   AND (sqlc.narg(agent_id)::uuid IS NULL OR EXISTS (
         SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = sqlc.narg(agent_id)::uuid));
@@ -29,7 +35,7 @@ WHERE p.id = @id
 -- name: GetProjectForUpdate :one
 SELECT id, client_id, name, description, is_default, active,
        sla_pause_on_waiting_client, sla_pause_on_uat, sla_at_risk_percent,
-       sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach, dod_config, allow_ticket_override
+       sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach, dod_config, allow_ticket_override, repository_id
 FROM projects WHERE id = @id FOR UPDATE;
 
 -- name: ListProjectSlaTargets :many

@@ -81,13 +81,24 @@ type Project struct {
 	DoD         dod.Config
 	// AllowTicketOverride lets agents set a different Definition of Done on one ticket.
 	AllowTicketOverride bool
-	// HasRepository says whether code conditions can be read; repositories arrive in M7.
-	HasRepository bool
+	// Repository is where code conditions are read from; nil without one.
+	Repository *RepositoryRef
 	// OpenTicketCount counts tickets not yet resolved or closed.
 	OpenTicketCount int
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
+
+// RepositoryRef names the repository a project reads code from (GitHub/GitLab connector).
+type RepositoryRef struct {
+	ID       uuid.UUID
+	Provider string // github | gitlab
+	FullName string
+	WebURL   string
+}
+
+// HasRepository says whether the project's code conditions can be read.
+func (p Project) HasRepository() bool { return p.Repository != nil }
 
 // CreateInput adds a project. A client's first project becomes its default.
 type CreateInput struct {
@@ -336,7 +347,7 @@ func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, id uuid.UUID
 		if err != nil {
 			return notFound(err)
 		}
-		if err := dod.Validate(in.Config, RepositoriesLinked); err != nil {
+		if err := dod.Validate(in.Config, old.RepositoryID != nil); err != nil {
 			return apperr.Invalid(apperr.CodeInvalidDoD, "Check the Definition of Done", err.Error())
 		}
 		prev, err := dod.Parse(old.DodConfig)
@@ -361,10 +372,6 @@ func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, id uuid.UUID
 	}
 	return get(ctx, s.store.Q(), id, nil)
 }
-
-// RepositoriesLinked is false until the GitHub/GitLab connector links repositories to projects
-// (M7): code conditions of a project's or a ticket's Definition of Done need one.
-const RepositoriesLinked = false
 
 func makeDefault(ctx context.Context, q *db.Queries, actor audit.Actor, id, clientID uuid.UUID) error {
 	previous, err := q.ListProjects(ctx, db.ListProjectsParams{ClientID: &clientID})
@@ -505,9 +512,27 @@ func fromRow(r db.GetProjectRow, targets []sla.ProjectTarget) (Project, error) {
 			NotifySupervisorOnBreach: r.SlaNotifySupervisorOnBreach,
 			NotifyPicOnP1Breach:      r.SlaNotifyPicOnP1Breach,
 		}},
-		DoD: cfg, AllowTicketOverride: r.AllowTicketOverride, HasRepository: RepositoriesLinked,
+		DoD: cfg, AllowTicketOverride: r.AllowTicketOverride, Repository: repositoryRef(r),
 		OpenTicketCount: int(r.OpenTicketCount), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}, nil
+}
+
+// repositoryRef is the project's repository, if it has one.
+func repositoryRef(r db.GetProjectRow) *RepositoryRef {
+	if r.RepositoryID == nil {
+		return nil
+	}
+	return &RepositoryRef{
+		ID: *r.RepositoryID, Provider: deref(r.RepositoryProvider), FullName: deref(r.RepositoryFullName),
+		WebURL: deref(r.RepositoryWebUrl),
+	}
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // normalize trims the name and description and checks their length; a blank description is unset.

@@ -71,6 +71,9 @@ const (
 	CodeNotificationLocked        = "notification_locked"
 	CodeNotificationEventUnknown  = "notification_event_unknown"
 	CodeInvalidEmailFrequency     = "invalid_email_frequency"
+	CodeInvalidRepositoryURL      = "invalid_repository_url"
+	CodeRepositoryTaken           = "repository_taken"
+	CodeRepositoryInUse           = "repository_in_use"
 )
 
 // Error is a domain error with a stable machine-readable code.

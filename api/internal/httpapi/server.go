@@ -24,6 +24,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/catalog"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notifications"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
@@ -44,6 +45,7 @@ type Deps struct {
 	Priorities    *priorities.Service
 	Tickets       *tickets.Service
 	Notifications *notifications.Service
+	Connector     *connector.Service
 	Logger        *slog.Logger
 	WebUI         fs.FS // built SPA; may be empty in development
 }
@@ -59,6 +61,7 @@ type server struct {
 	priorities    *priorities.Service
 	tickets       *tickets.Service
 	notifications *notifications.Service
+	connector     *connector.Service
 	log           *slog.Logger
 	cookieName    string
 }
@@ -72,7 +75,8 @@ func New(d Deps) (http.Handler, error) {
 	}
 	s := &server{
 		cfg: d.Config, store: d.Store, auth: d.Auth, clients: d.Clients, sla: d.SLA, catalog: d.Catalog,
-		projects: d.Projects, priorities: d.Priorities, tickets: d.Tickets, notifications: d.Notifications, log: d.Logger,
+		projects: d.Projects, priorities: d.Priorities, tickets: d.Tickets, notifications: d.Notifications,
+		connector: d.Connector, log: d.Logger,
 		cookieName: cookieName(d.Config.CookieSecure),
 	}
 	streamed := streamedRoutes(spec)

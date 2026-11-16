@@ -159,7 +159,7 @@ func TestProjectDoD(t *testing.T) {
 	// Saving the same again writes no audit entry.
 	decode[gen.Project](t, sup.do(http.MethodPut, path, gen.ProjectDodInput{Dod: next, AllowTicketOverride: false}), http.StatusOK)
 
-	// Code conditions need a repository; repositories arrive with the connector.
+	// Code conditions need a repository.
 	code := next
 	code.Merged.Enabled = true
 	expectProblem(t, sup.do(http.MethodPut, path, gen.ProjectDodInput{Dod: code, AllowTicketOverride: true}), http.StatusBadRequest, apperr.CodeInvalidDoD)

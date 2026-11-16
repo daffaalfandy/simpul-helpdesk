@@ -28,11 +28,13 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/catalog"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notifications"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/secretbox"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/seed"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/storage"
@@ -147,6 +149,7 @@ type app struct {
 	priorities    *priorities.Service
 	tickets       *tickets.Service
 	notifications *notifications.Service
+	connector     *connector.Service
 	files         storage.Store
 }
 
@@ -174,6 +177,12 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	}
 	files, err := storage.NewFS(cfg.StorageDir)
 	if err != nil {
+		st.Close()
+		return nil, err
+	}
+	box, err := secretbox.New(cfg.EncryptionKey)
+	if err != nil {
+		_ = files.Close()
 		st.Close()
 		return nil, err
 	}
@@ -223,6 +232,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 		priorities:    priorities.NewService(st),
 		tickets:       ticketSvc,
 		notifications: notifications.NewService(st),
+		connector:     connector.NewService(st, box, cfg.AppURL),
 	}, nil
 }
 
@@ -248,7 +258,7 @@ func runServe(ctx context.Context, args []string) error {
 	handler, err := httpapi.New(httpapi.Deps{
 		Config: a.cfg, Store: a.store, Auth: a.auth, Clients: a.clients, SLA: a.sla, Catalog: a.catalog,
 		Projects: a.projects, Priorities: a.priorities, Tickets: a.tickets, Notifications: a.notifications,
-		Logger: a.log, WebUI: webui.FS(),
+		Connector: a.connector, Logger: a.log, WebUI: webui.FS(),
 	})
 	if err != nil {
 		return err
