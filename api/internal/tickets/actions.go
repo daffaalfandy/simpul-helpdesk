@@ -19,8 +19,13 @@ import (
 
 // SetStatus moves a ticket by hand. Moving to the current status changes nothing. With
 // expected set, the move only happens while the ticket still has that status, so a stale board
-// card can't undo someone else's move.
-func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, key string, to ticket.Status, expected *ticket.Status) (Ticket, error) {
+// card can't undo someone else's move. Resolving a ticket whose Definition of Done isn't met
+// needs a reason, which goes to the audit log and the supervisors (HANDOFF §3).
+func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, key string, to ticket.Status, expected *ticket.Status, reason string) (Ticket, error) {
+	reason = strings.TrimSpace(reason)
+	if len([]rune(reason)) > MaxReasonLen {
+		return Ticket{}, apperr.Invalid(apperr.CodeReasonRequired, "Give a shorter reason", "")
+	}
 	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		from := ticket.Status(row.Status)
 		if expected != nil && *expected != from {
@@ -32,7 +37,14 @@ func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, key string, 
 		if err := ticket.CheckManualMove(from, to, row.AssigneeID != nil); err != nil {
 			return moveError(err)
 		}
-		return s.writeStatus(ctx, tx, cs, p.AuditActor(), from, to, "")
+		move := statusMove{from: from, to: to}
+		if to == ticket.StatusResolved {
+			var err error
+			if move.cause, move.reason, err = checkResolve(ctx, tx.Q, row, reason); err != nil {
+				return err
+			}
+		}
+		return s.writeStatus(ctx, tx, cs, p.AuditActor(), move)
 	})
 	if err != nil {
 		return Ticket{}, err
@@ -99,7 +111,7 @@ func (s *Service) SetPriority(ctx context.Context, p *auth.Principal, key string
 	case !priority.Valid():
 		return Ticket{}, apperr.InvalidRequest("priority")
 	case reason == "" || len([]rune(reason)) > MaxReasonLen:
-		return Ticket{}, apperr.Invalid(apperr.CodeReasonRequired, "Say why the priority changes", "")
+		return Ticket{}, apperr.Invalid(apperr.CodeReasonRequired, "Give a reason", "")
 	}
 	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		from := sla.Priority(row.Priority)
@@ -156,18 +168,39 @@ func lockTicket(ctx context.Context, q *db.Queries, a access, key string) (db.Ge
 	return row, notFound(err)
 }
 
-// writeStatus stores a status change and its audit entry. cause is empty for manual moves.
-func (s *Service) writeStatus(ctx context.Context, tx store.Tx, cs *changeSet, actor audit.Actor, from, to ticket.Status, cause ticket.Cause) error {
+// statusMove is one status change: cause is empty for a plain move by hand; reason is a staff
+// reason for the audit log; messageID names the message that came with it (a rejected test).
+type statusMove struct {
+	from, to  ticket.Status
+	cause     ticket.Cause
+	reason    string
+	messageID *uuid.UUID
+}
+
+// writeStatus stores a status change and its audit entry. A done ticket that opens again
+// forgets the client's answer, so the next resolution asks again.
+func (s *Service) writeStatus(ctx context.Context, tx store.Tx, cs *changeSet, actor audit.Actor, m statusMove) error {
 	if err := tx.Q.UpdateTicketStatus(ctx, db.UpdateTicketStatusParams{
-		ID: cs.ticketID, Status: string(to), Resolved: ticket.MarksResolved(to),
+		ID: cs.ticketID, Status: string(m.to), Resolved: ticket.MarksResolved(m.to), Closed: m.to == ticket.StatusClosed,
 	}); err != nil {
 		return err
 	}
-	data := map[string]any{dataStatus: audit.Change{From: from, To: to}}
-	if cause != "" {
-		data[dataCause] = cause
+	data := map[string]any{dataStatus: audit.Change{From: m.from, To: m.to}}
+	if m.cause != "" {
+		data[dataCause] = m.cause
 	}
-	return cs.write(ctx, tx.Q, actor.Entry(ActionStatusChanged, TargetTicket, &cs.ticketID, data))
+	if m.messageID != nil {
+		data[dataMessageID] = *m.messageID
+	}
+	e := actor.Entry(ActionStatusChanged, TargetTicket, &cs.ticketID, data)
+	e.Reason = m.reason
+	if err := cs.write(ctx, tx.Q, e); err != nil {
+		return err
+	}
+	if ticket.MarksResolved(m.from) && !ticket.MarksResolved(m.to) {
+		return clearClientItems(ctx, tx.Q, cs, actor)
+	}
+	return nil
 }
 
 func sameID(a, b *uuid.UUID) bool {

@@ -686,6 +686,7 @@ export interface paths {
         /**
          * Move the ticket (staff)
          * @description Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409). With `from`, a ticket whose status is no longer `from` is left alone and the call fails with `status_changed` (409).
+         *     Resolving a ticket whose Definition of Done isn't met needs a `reason` (`dod_unmet`, 409); it goes to the audit log and the supervisors, never to the client.
          */
         put: operations["setTicketStatus"];
         post?: never;
@@ -711,6 +712,31 @@ export interface paths {
          * @description Error codes are `invalid_assignee` and `ticket_closed` (409).
          */
         put: operations["setTicketAssignee"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/dod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Give the ticket its own Definition of Done, or return it to the project's (staff)
+         * @description Agents may when the project allows it (`dod_override_not_allowed`, 403); supervisors and
+         *     admins always may. A ticket's own Definition of Done needs a reason (`reason_required`),
+         *     which goes to the audit log. `null` returns the ticket to the project's.
+         */
+        put: operations["setTicketDod"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1542,12 +1568,52 @@ export interface components {
          * @description `sla_at_risk` and `sla_breached` name the clock (first_response or resolution) in `to`.
          * @enum {string}
          */
-        TicketActivityAction: "created" | "status_changed" | "assignee_changed" | "priority_changed" | "reply_added" | "note_added" | "first_responded" | "sla_at_risk" | "sla_breached";
+        TicketActivityAction: "created" | "status_changed" | "assignee_changed" | "priority_changed" | "reply_added" | "note_added" | "first_responded" | "sla_at_risk" | "sla_breached" | "dod_changed";
         /**
-         * @description Why the system changed the status on its own.
+         * @description Why the status changed when it wasn't a plain move by hand: the system moved it
+         *     (assignment, requester_reply, uat_auto_approved, auto_closed), the client answered
+         *     (uat_approved, uat_rejected, reopened), or an agent resolved with the Definition of Done
+         *     unmet (dod_skipped, with the reason).
          * @enum {string}
          */
-        TicketStatusCause: "assignment" | "requester_reply";
+        TicketStatusCause: "assignment" | "requester_reply" | "uat_approved" | "uat_rejected" | "uat_auto_approved" | "reopened" | "auto_closed" | "dod_skipped";
+        /**
+         * @description `fix_committed` is shown with code conditions but never required.
+         * @enum {string}
+         */
+        DodItem: "fix_committed" | "merged" | "ci_passed" | "deployed" | "uat_approved" | "requester_confirmed";
+        /**
+         * @description `project` follows the project's Definition of Done; `ticket` has its own.
+         * @enum {string}
+         */
+        DodSource: "project" | "ticket";
+        TicketDodItem: {
+            item: components["schemas"]["DodItem"];
+            /** Format: date-time */
+            doneAt: string | null;
+            /** @description Null when not done yet, or when the system met it. */
+            doneBy: components["schemas"]["Ref"] | null;
+        };
+        TicketDod: {
+            source: components["schemas"]["DodSource"];
+            /** @description The Definition of Done the ticket follows. */
+            config: components["schemas"]["DodConfig"];
+            /** @description The project's Definition of Done. */
+            projectConfig: components["schemas"]["DodConfig"];
+            overrideReason: string | null;
+            /** @description The checklist, in order. */
+            items: components["schemas"]["TicketDodItem"][];
+            met: boolean;
+            /** @description Required items not met yet. */
+            pending: components["schemas"]["DodItem"][];
+            /** @description The viewer may set or reset the ticket's own Definition of Done. */
+            canOverride: boolean;
+        };
+        TicketDodInput: {
+            /** @description null returns the ticket to the project's Definition of Done. */
+            dod: components["schemas"]["DodConfig"] | null;
+            reason?: string;
+        };
         /**
          * @description The targets for the current priority, from the project's SLA when the ticket was opened,
          *     and the live clocks (null until the SLA engine has run for the ticket, within a minute).
@@ -1651,6 +1717,8 @@ export interface components {
             assignee: components["schemas"]["Ref"] | null;
             /** @description The statuses the viewer may move this ticket to. */
             allowedStatuses: components["schemas"]["TicketStatus"][];
+            /** @description What an open ticket's Definition of Done still needs; resolving before then needs a reason. */
+            dodPending: components["schemas"]["DodItem"][];
         };
         BoardColumn: {
             id: components["schemas"]["BoardColumnId"];
@@ -1731,6 +1799,8 @@ export interface components {
             progress: components["schemas"]["TicketProgress"][];
             /** @description Manual status changes open to the user; empty for requesters. */
             allowedStatuses: components["schemas"]["TicketStatus"][];
+            /** @description Staff only; null for requesters. */
+            dod: components["schemas"]["TicketDod"] | null;
         };
         TicketInput: {
             type: components["schemas"]["TicketType"];
@@ -1784,6 +1854,8 @@ export interface components {
         TicketStatusInput: {
             status: components["schemas"]["TicketStatus"];
             from?: components["schemas"]["TicketStatus"];
+            /** @description Needed to resolve a ticket whose Definition of Done isn't met. */
+            reason?: string;
         };
         TicketAssigneeInput: {
             /**
@@ -3077,6 +3149,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TicketAssigneeInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setTicketDod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketDodInput"];
             };
         };
         responses: {

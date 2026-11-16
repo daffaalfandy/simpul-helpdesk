@@ -12,6 +12,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/slaengine"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
@@ -39,6 +40,9 @@ type BoardCard struct {
 	Assignee        *Ref
 	AllowedStatuses []ticket.Status
 	SLA             *CardSLA // nil until the SLA engine has run for the ticket
+	// DoDPending is what an open ticket's Definition of Done still needs; resolving before then
+	// needs a reason. Empty for done tickets.
+	DoDPending []dod.Item
 }
 
 // CardSLA is the clock a card shows: an open ticket's first response until it is sent, then
@@ -148,11 +152,20 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 		col := &board.Columns[i]
 		col.Total = int(r.ColumnTotal)
 		status := ticket.Status(r.Status)
+		pending := []dod.Item{}
+		if status.IsOpen() {
+			sd, err := parseDoD(r.DodConfig, r.DodOverride)
+			if err != nil {
+				return Board{}, fmt.Errorf("board: %s: %w", r.Key, err)
+			}
+			pending = pendingFor(sd, r.DodDone)
+		}
 		col.Cards = append(col.Cards, BoardCard{
 			ID: r.ID, Key: r.Key, Type: ticket.Type(r.Type), Status: status, Priority: sla.Priority(r.Priority),
 			Subject: r.Subject, Client: Ref{r.ClientID, r.ClientName}, Assignee: optionalRef(r.AssigneeID, r.AssigneeName),
 			AllowedStatuses: ticket.AllowedMoves(status, r.AssigneeID != nil),
 			SLA:             cardSLA(r, status, schedules, now),
+			DoDPending:      pending,
 		})
 	}
 	return board, nil

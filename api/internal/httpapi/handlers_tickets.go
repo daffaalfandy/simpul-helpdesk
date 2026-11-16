@@ -152,7 +152,11 @@ func (s *server) SetTicketStatus(ctx context.Context, req gen.SetTicketStatusReq
 	if err != nil {
 		return nil, err
 	}
-	t, err := s.tickets.SetStatus(ctx, p, req.TicketKey, ticket.Status(req.Body.Status), (*ticket.Status)(req.Body.From))
+	reason := ""
+	if req.Body.Reason != nil {
+		reason = *req.Body.Reason
+	}
+	t, err := s.tickets.SetStatus(ctx, p, req.TicketKey, ticket.Status(req.Body.Status), (*ticket.Status)(req.Body.From), reason)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +263,10 @@ func apiTicket(t tickets.Ticket) gen.Ticket {
 	}
 	for i, st := range t.AllowedStatuses {
 		out.AllowedStatuses[i] = gen.TicketStatus(st)
+	}
+	if t.DoD != nil {
+		d := apiTicketDod(*t.DoD)
+		out.Dod = &d
 	}
 	return out
 }

@@ -26,6 +26,7 @@ const (
 	ActivityFirstResponded  ActivityAction = "first_responded"
 	ActivitySLAAtRisk       ActivityAction = "sla_at_risk"  // To names the clock
 	ActivitySLABreached     ActivityAction = "sla_breached" // To names the clock
+	ActivityDoDChanged      ActivityAction = "dod_changed"  // From and To name the source (project or ticket)
 )
 
 // ActivityEntry is one line of a ticket's activity log. From and To hold statuses,
@@ -109,6 +110,11 @@ func activityFromRow(r db.ListAuditByTargetRow) (ActivityEntry, bool) {
 			e.Action = ActivitySLABreached
 		}
 		e.To = decode[string](data, dataClock)
+	case ActionDoDChanged:
+		e.Action = ActivityDoDChanged
+		if c := decode[change[string]](data, dataDoDSource); c != nil {
+			e.From, e.To = &c.From, &c.To
+		}
 	default:
 		return e, false
 	}

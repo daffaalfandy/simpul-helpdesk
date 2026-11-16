@@ -129,6 +129,9 @@ const listBoardCards = `-- name: ListBoardCards :many
 WITH board AS (
   SELECT t.id, t.key, t.type, t.status, t.priority, t.subject, t.status_changed_at,
          t.client_id, c.name AS client_name, t.assignee_id, a.name AS assignee_name,
+         p.dod_config, o.config AS dod_override,
+         coalesce((SELECT array_agg(i.item ORDER BY i.item) FROM ticket_dod_items i WHERE i.ticket_id = t.id),
+                  '{}')::text[] AS dod_done,
          ($2::text[])[array_position($3::text[], t.status)]::text AS column_id,
          s.ticket_id AS sla_ticket_id,
          s.first_response_budget_ms, s.first_response_calendar, s.first_response_elapsed_ms,
@@ -139,8 +142,10 @@ WITH board AS (
          s.resolution_breached_at, s.resolution_met_at
   FROM tickets t
   JOIN clients c ON c.id = t.client_id
+  JOIN projects p ON p.id = t.project_id
   LEFT JOIN users a ON a.id = t.assignee_id
   LEFT JOIN ticket_sla s ON s.ticket_id = t.id
+  LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
   WHERE t.status = ANY($3::text[])
     AND (NOT $4::boolean
          OR (t.status = ANY($5::text[])
@@ -159,12 +164,13 @@ WITH board AS (
          OR t.subject ILIKE $10::text
          OR c.name ILIKE $10::text)
 ), ranked AS (
-  SELECT board.id, board.key, board.type, board.status, board.priority, board.subject, board.status_changed_at, board.client_id, board.client_name, board.assignee_id, board.assignee_name, board.column_id, board.sla_ticket_id, board.first_response_budget_ms, board.first_response_calendar, board.first_response_elapsed_ms, board.first_response_running_since, board.first_response_due_at, board.first_response_at_risk_flagged_at, board.first_response_breached_at, board.first_response_met_at, board.resolution_budget_ms, board.resolution_calendar, board.resolution_elapsed_ms, board.resolution_running_since, board.resolution_due_at, board.resolution_at_risk_flagged_at, board.resolution_breached_at, board.resolution_met_at,
+  SELECT board.id, board.key, board.type, board.status, board.priority, board.subject, board.status_changed_at, board.client_id, board.client_name, board.assignee_id, board.assignee_name, board.dod_config, board.dod_override, board.dod_done, board.column_id, board.sla_ticket_id, board.first_response_budget_ms, board.first_response_calendar, board.first_response_elapsed_ms, board.first_response_running_since, board.first_response_due_at, board.first_response_at_risk_flagged_at, board.first_response_breached_at, board.first_response_met_at, board.resolution_budget_ms, board.resolution_calendar, board.resolution_elapsed_ms, board.resolution_running_since, board.resolution_due_at, board.resolution_at_risk_flagged_at, board.resolution_breached_at, board.resolution_met_at,
          row_number() OVER (PARTITION BY column_id ORDER BY priority, status_changed_at, id) AS position,
          count(*) OVER (PARTITION BY column_id) AS column_total
   FROM board
 )
 SELECT id, key, type, status, priority, subject, client_id, client_name, assignee_id, assignee_name,
+       status_changed_at, dod_config, dod_override, dod_done,
        column_id, column_total::bigint AS column_total, sla_ticket_id,
        first_response_budget_ms, first_response_calendar, first_response_elapsed_ms,
        first_response_running_since, first_response_due_at, first_response_at_risk_flagged_at,
@@ -202,6 +208,10 @@ type ListBoardCardsRow struct {
 	ClientName                   string
 	AssigneeID                   *uuid.UUID
 	AssigneeName                 *string
+	StatusChangedAt              time.Time
+	DodConfig                    []byte
+	DodOverride                  []byte
+	DodDone                      []string
 	ColumnID                     string
 	ColumnTotal                  int64
 	SlaTicketID                  *uuid.UUID
@@ -261,6 +271,10 @@ func (q *Queries) ListBoardCards(ctx context.Context, arg ListBoardCardsParams) 
 			&i.ClientName,
 			&i.AssigneeID,
 			&i.AssigneeName,
+			&i.StatusChangedAt,
+			&i.DodConfig,
+			&i.DodOverride,
+			&i.DodDone,
 			&i.ColumnID,
 			&i.ColumnTotal,
 			&i.SlaTicketID,

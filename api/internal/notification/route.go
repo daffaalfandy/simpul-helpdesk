@@ -143,6 +143,9 @@ func Route(in Input) (deliveries []Delivery, dropped int) {
 			dropped++
 			continue
 		}
+		if !r.Staff {
+			c.change.Reason = "" // staff reasons (a priority change, resolving without the DoD) stay with the team
+		}
 		if _, seen := byUser[c.user]; !seen {
 			order = append(order, c.user)
 		}

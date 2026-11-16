@@ -159,6 +159,16 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, key string) (Ticke
 	t.Progress = ticket.Progress(t.Status, t.CreatedAt, history)
 	if a.staff {
 		t.AllowedStatuses = ticket.AllowedMoves(t.Status, t.Assignee != nil)
+		sd, err := parseDoD(r.DodConfig, r.DodOverride)
+		if err != nil {
+			return Ticket{}, err
+		}
+		items, err := q.ListTicketDoDItems(ctx, r.ID)
+		if err != nil {
+			return Ticket{}, err
+		}
+		d := ticketDoD(sd, r.DodOverrideReason, items, !t.Status.Locked() && canOverrideDoD(p, r.AllowTicketOverride))
+		t.DoD = &d
 	}
 	return t, nil
 }

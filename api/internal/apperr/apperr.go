@@ -60,6 +60,8 @@ const (
 	CodeInvalidStatusChange       = "invalid_status_change"
 	CodeTicketClosed              = "ticket_closed"
 	CodeStatusChanged             = "status_changed"
+	CodeDoDUnmet                  = "dod_unmet"
+	CodeDoDOverrideNotAllowed     = "dod_override_not_allowed"
 	CodeEmailTaken                = "email_taken"
 	CodeCatalogItemNameTaken      = "catalog_item_name_taken"
 	CodeCatalogItemInUse          = "catalog_item_in_use"

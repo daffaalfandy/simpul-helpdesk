@@ -34,8 +34,24 @@ export function activityText(t: TFunction, names: PriorityNames, entry: TicketAc
       return t('ticket.activity.created', { actor, channel: t(`ticket.channel.${entry.channel ?? 'portal'}`) })
     case 'status_changed': {
       const values = { actor, from: status(entry.from), to: status(entry.to) }
-      if (entry.cause === 'assignment') return t('ticket.activity.statusByAssignment', values)
-      if (entry.cause === 'requester_reply') return t('ticket.activity.statusByReply', values)
+      switch (entry.cause) {
+        case 'assignment':
+          return t('ticket.activity.statusByAssignment', values)
+        case 'requester_reply':
+          return t('ticket.activity.statusByReply', values)
+        case 'uat_approved':
+          return t('ticket.activity.statusByUatApproved', values)
+        case 'uat_rejected':
+          return t('ticket.activity.statusByUatRejected', values)
+        case 'uat_auto_approved':
+          return t('ticket.activity.statusByUatAutoApproved', values)
+        case 'reopened':
+          return t('ticket.activity.statusByReopen', values)
+        case 'auto_closed':
+          return t('ticket.activity.statusByAutoClose', values)
+        case 'dod_skipped':
+          return t('ticket.activity.statusByDoDSkipped', { actor, reason: entry.reason ?? '' })
+      }
       return t('ticket.activity.statusChanged', values)
     }
     case 'assignee_changed':
@@ -55,6 +71,10 @@ export function activityText(t: TFunction, names: PriorityNames, entry: TicketAc
       return t('ticket.activity.noteAdded', { actor })
     case 'first_responded':
       return t('ticket.activity.firstResponded')
+    case 'dod_changed':
+      return entry.to === 'ticket'
+        ? t('ticket.activity.dodChangedTicket', { actor, reason: entry.reason ?? '' })
+        : t('ticket.activity.dodChangedProject', { actor })
     case 'sla_at_risk':
     case 'sla_breached': {
       const clock = t(entry.to === 'first_response' ? 'ticket.activity.slaClock.first_response' : 'ticket.activity.slaClock.resolution')

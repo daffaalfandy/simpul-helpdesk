@@ -979,7 +979,9 @@ paths:
     put:
       operationId: setTicketStatus
       summary: Move the ticket (staff)
-      description: Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409). With `from`, a ticket whose status is no longer `from` is left alone and the call fails with `status_changed` (409).
+      description: |
+        Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409). With `from`, a ticket whose status is no longer `from` is left alone and the call fails with `status_changed` (409).
+        Resolving a ticket whose Definition of Done isn't met needs a `reason` (`dod_unmet`, 409); it goes to the audit log and the supervisors, never to the client.
       tags: [tickets]
       requestBody:
         required: true
@@ -1012,6 +1014,35 @@ paths:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/TicketAssigneeInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/dod:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    put:
+      operationId: setTicketDod
+      summary: Give the ticket its own Definition of Done, or return it to the project's (staff)
+      description: |
+        Agents may when the project allows it (`dod_override_not_allowed`, 403); supervisors and
+        admins always may. A ticket's own Definition of Done needs a reason (`reason_required`),
+        which goes to the audit log. `null` returns the ticket to the project's.
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketDodInput" }
       responses:
         "200":
           description: Updated
@@ -2107,12 +2138,73 @@ components:
       type: string
       description: "`sla_at_risk` and `sla_breached` name the clock (first_response or resolution) in `to`."
       enum: [created, status_changed, assignee_changed, priority_changed, reply_added, note_added, first_responded,
-             sla_at_risk, sla_breached]
+             sla_at_risk, sla_breached, dod_changed]
 
     TicketStatusCause:
       type: string
-      description: Why the system changed the status on its own.
-      enum: [assignment, requester_reply]
+      description: |
+        Why the status changed when it wasn't a plain move by hand: the system moved it
+        (assignment, requester_reply, uat_auto_approved, auto_closed), the client answered
+        (uat_approved, uat_rejected, reopened), or an agent resolved with the Definition of Done
+        unmet (dod_skipped, with the reason).
+      enum: [assignment, requester_reply, uat_approved, uat_rejected, uat_auto_approved, reopened, auto_closed,
+             dod_skipped]
+
+    DodItem:
+      type: string
+      description: "`fix_committed` is shown with code conditions but never required."
+      enum: [fix_committed, merged, ci_passed, deployed, uat_approved, requester_confirmed]
+
+    DodSource:
+      type: string
+      description: "`project` follows the project's Definition of Done; `ticket` has its own."
+      enum: [project, ticket]
+
+    TicketDodItem:
+      type: object
+      required: [item, doneAt, doneBy]
+      properties:
+        item: { $ref: "#/components/schemas/DodItem" }
+        doneAt: { type: string, format: date-time, nullable: true }
+        doneBy:
+          allOf: [{ $ref: "#/components/schemas/Ref" }]
+          nullable: true
+          description: Null when not done yet, or when the system met it.
+
+    TicketDod:
+      type: object
+      required: [source, config, projectConfig, overrideReason, items, met, pending, canOverride]
+      properties:
+        source: { $ref: "#/components/schemas/DodSource" }
+        config:
+          description: The Definition of Done the ticket follows.
+          allOf: [{ $ref: "#/components/schemas/DodConfig" }]
+        projectConfig:
+          description: The project's Definition of Done.
+          allOf: [{ $ref: "#/components/schemas/DodConfig" }]
+        overrideReason: { type: string, nullable: true }
+        items:
+          type: array
+          description: The checklist, in order.
+          items: { $ref: "#/components/schemas/TicketDodItem" }
+        met: { type: boolean }
+        pending:
+          type: array
+          description: Required items not met yet.
+          items: { $ref: "#/components/schemas/DodItem" }
+        canOverride:
+          type: boolean
+          description: The viewer may set or reset the ticket's own Definition of Done.
+
+    TicketDodInput:
+      type: object
+      required: [dod]
+      properties:
+        dod:
+          allOf: [{ $ref: "#/components/schemas/DodConfig" }]
+          nullable: true
+          description: null returns the ticket to the project's Definition of Done.
+        reason: { type: string, maxLength: 500 }
 
     TicketSla:
       type: object
@@ -2200,7 +2292,7 @@ components:
 
     BoardCard:
       type: object
-      required: [id, key, type, status, priority, subject, client, assignee, allowedStatuses, sla]
+      required: [id, key, type, status, priority, subject, client, assignee, allowedStatuses, sla, dodPending]
       properties:
         sla:
           allOf: [{ $ref: "#/components/schemas/BoardCardSla" }]
@@ -2220,6 +2312,10 @@ components:
           type: array
           description: The statuses the viewer may move this ticket to.
           items: { $ref: "#/components/schemas/TicketStatus" }
+        dodPending:
+          type: array
+          description: What an open ticket's Definition of Done still needs; resolving before then needs a reason.
+          items: { $ref: "#/components/schemas/DodItem" }
 
     BoardColumn:
       type: object
@@ -2285,7 +2381,8 @@ components:
       type: object
       required: [id, key, type, status, priority, subject, client, requester, assignee, createdAt, updatedAt,
                  resolvedAt, channel, description, requesterJobTitle, project, catalogItem, createdBy,
-                 loggedByStaff, attachments, sla, slaTargets, firstResponseAt, closedAt, progress, allowedStatuses]
+                 loggedByStaff, attachments, sla, slaTargets, firstResponseAt, closedAt, progress, allowedStatuses,
+                 dod]
       properties:
         id: { type: string, format: uuid }
         key: { type: string, example: HD-24871 }
@@ -2331,6 +2428,10 @@ components:
           type: array
           description: Manual status changes open to the user; empty for requesters.
           items: { $ref: "#/components/schemas/TicketStatus" }
+        dod:
+          allOf: [{ $ref: "#/components/schemas/TicketDod" }]
+          nullable: true
+          description: Staff only; null for requesters.
 
     TicketInput:
       type: object
@@ -2401,6 +2502,10 @@ components:
       properties:
         status: { $ref: "#/components/schemas/TicketStatus" }
         from: { $ref: "#/components/schemas/TicketStatus" }
+        reason:
+          type: string
+          maxLength: 500
+          description: Needed to resolve a ticket whose Definition of Done isn't met.
 
     TicketAssigneeInput:
       type: object

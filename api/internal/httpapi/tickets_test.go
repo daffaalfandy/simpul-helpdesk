@@ -178,6 +178,7 @@ var scopedOps = map[string]struct{ otherRequester, otherAgent int }{
 	"setTicketStatus":             {http.StatusForbidden, http.StatusNotFound},
 	"setTicketAssignee":           {http.StatusForbidden, http.StatusNotFound},
 	"setTicketPriority":           {http.StatusForbidden, http.StatusNotFound},
+	"setTicketDod":                {http.StatusForbidden, http.StatusNotFound},
 	"listTicketActivity":          {http.StatusForbidden, http.StatusNotFound},
 	"downloadAttachment":          {http.StatusNotFound, http.StatusNotFound},
 	"listTicketWatchers":          {http.StatusNotFound, http.StatusNotFound},
@@ -208,6 +209,9 @@ func TestTicketScope(t *testing.T) {
 		},
 		"setTicketPriority": func(s session) *httptest.ResponseRecorder {
 			return s.do(http.MethodPut, path+"/priority", gen.TicketPriorityInput{Priority: gen.PriorityP1, Reason: "x"})
+		},
+		"setTicketDod": func(s session) *httptest.ResponseRecorder {
+			return s.do(http.MethodPut, path+"/dod", gen.TicketDodInput{})
 		},
 		"listTicketActivity": func(s session) *httptest.ResponseRecorder { return s.do(http.MethodGet, path+"/activity", nil) },
 		"downloadAttachment": func(s session) *httptest.ResponseRecorder {

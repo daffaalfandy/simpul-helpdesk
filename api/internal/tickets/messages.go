@@ -100,7 +100,7 @@ func (s *Service) recordMessage(ctx context.Context, tx store.Tx, cs *changeSet,
 		}))
 	}
 	if to, changed := ticket.StatusAfterRequesterReply(from); changed {
-		return s.writeStatus(ctx, tx, cs, actor, from, to, ticket.CauseRequesterReply)
+		return s.writeStatus(ctx, tx, cs, actor, statusMove{from: from, to: to, cause: ticket.CauseRequesterReply})
 	}
 	return nil
 }

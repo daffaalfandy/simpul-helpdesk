@@ -117,6 +117,8 @@ type Ticket struct {
 	Progress          []ticket.ProgressStep
 	// AllowedStatuses are the manual status changes open to the viewer; empty for requesters.
 	AllowedStatuses []ticket.Status
+	// DoD is the ticket's Definition of Done; nil for requesters, who never see it.
+	DoD *TicketDoD
 }
 
 // Message is one entry of a ticket's conversation.

@@ -93,6 +93,7 @@ function ticket(over: Partial<Ticket> & Pick<Ticket, 'id' | 'key' | 'subject'>):
       { step: 'resolved', state: 'upcoming', at: null },
     ],
     allowedStatuses: ['in_progress', 'waiting_on_client', 'resolved'],
+    dod: null,
     ...over,
   }
 }
@@ -258,6 +259,7 @@ function boardCard(t: Ticket): BoardCard {
     assignee,
     allowedStatuses: allowedMoves(t),
     sla: tickets.cardSla[key] ?? null,
+    dodPending: t.dod?.pending ?? [],
   }
 }
 

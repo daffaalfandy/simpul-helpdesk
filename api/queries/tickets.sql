@@ -45,7 +45,9 @@ SELECT t.id, t.key, t.type, t.status, t.priority, t.channel, t.subject, t.descri
        t.assignee_id, a.name AS assignee_name,
        t.created_by, cb.name AS created_by_name, cb.role AS created_by_role,
        t.project_id, p.name AS project_name,
-       t.catalog_item_id, ci.name AS catalog_item_name
+       t.catalog_item_id, ci.name AS catalog_item_name,
+       t.status_changed_at, p.dod_config, p.allow_ticket_override,
+       o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 JOIN clients c ON c.id = t.client_id
 JOIN users r ON r.id = t.requester_id
@@ -53,6 +55,7 @@ JOIN users cb ON cb.id = t.created_by
 LEFT JOIN users a ON a.id = t.assignee_id
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN catalog_items ci ON ci.id = t.catalog_item_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.key = @key
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
@@ -60,10 +63,14 @@ WHERE t.key = @key
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid));
 
 -- name: GetTicketForUpdate :one
+-- Locks the ticket only; the project's Definition of Done and the override are read as they are.
 SELECT t.id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
-       a.name AS assignee_name, t.first_response_at
+       a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
+       p.dod_config, p.allow_ticket_override, o.config AS dod_override
 FROM tickets t
 LEFT JOIN users a ON a.id = t.assignee_id
+JOIN projects p ON p.id = t.project_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.key = @key
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
@@ -73,9 +80,11 @@ FOR UPDATE OF t;
 
 -- name: UpdateTicketStatus :exec
 -- resolved keeps the first resolve time; leaving resolved clears it (tickets_resolved_at).
+-- closed is set exactly while the ticket is closed (tickets_closed_at).
 UPDATE tickets
 SET status = @status,
-    resolved_at = CASE WHEN @resolved::boolean THEN coalesce(resolved_at, now()) END
+    resolved_at = CASE WHEN @resolved::boolean THEN coalesce(resolved_at, now()) END,
+    closed_at = CASE WHEN @closed::boolean THEN coalesce(closed_at, now()) END
 WHERE id = @id;
 
 -- name: UpdateTicketAssignee :exec

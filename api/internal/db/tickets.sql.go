@@ -104,7 +104,9 @@ SELECT t.id, t.key, t.type, t.status, t.priority, t.channel, t.subject, t.descri
        t.assignee_id, a.name AS assignee_name,
        t.created_by, cb.name AS created_by_name, cb.role AS created_by_role,
        t.project_id, p.name AS project_name,
-       t.catalog_item_id, ci.name AS catalog_item_name
+       t.catalog_item_id, ci.name AS catalog_item_name,
+       t.status_changed_at, p.dod_config, p.allow_ticket_override,
+       o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 JOIN clients c ON c.id = t.client_id
 JOIN users r ON r.id = t.requester_id
@@ -112,6 +114,7 @@ JOIN users cb ON cb.id = t.created_by
 LEFT JOIN users a ON a.id = t.assignee_id
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN catalog_items ci ON ci.id = t.catalog_item_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.key = $1
   AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
   AND ($3::uuid IS NULL
@@ -126,34 +129,39 @@ type GetTicketParams struct {
 }
 
 type GetTicketRow struct {
-	ID                uuid.UUID
-	Key               string
-	Type              string
-	Status            string
-	Priority          string
-	Channel           string
-	Subject           string
-	Description       string
-	SlaSnapshot       []byte
-	FirstResponseAt   *time.Time
-	ResolvedAt        *time.Time
-	ClosedAt          *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	ClientID          uuid.UUID
-	ClientName        string
-	RequesterID       uuid.UUID
-	RequesterName     string
-	RequesterJobTitle *string
-	AssigneeID        *uuid.UUID
-	AssigneeName      *string
-	CreatedBy         uuid.UUID
-	CreatedByName     string
-	CreatedByRole     string
-	ProjectID         uuid.UUID
-	ProjectName       string
-	CatalogItemID     *uuid.UUID
-	CatalogItemName   *string
+	ID                  uuid.UUID
+	Key                 string
+	Type                string
+	Status              string
+	Priority            string
+	Channel             string
+	Subject             string
+	Description         string
+	SlaSnapshot         []byte
+	FirstResponseAt     *time.Time
+	ResolvedAt          *time.Time
+	ClosedAt            *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	ClientID            uuid.UUID
+	ClientName          string
+	RequesterID         uuid.UUID
+	RequesterName       string
+	RequesterJobTitle   *string
+	AssigneeID          *uuid.UUID
+	AssigneeName        *string
+	CreatedBy           uuid.UUID
+	CreatedByName       string
+	CreatedByRole       string
+	ProjectID           uuid.UUID
+	ProjectName         string
+	CatalogItemID       *uuid.UUID
+	CatalogItemName     *string
+	StatusChangedAt     time.Time
+	DodConfig           []byte
+	AllowTicketOverride bool
+	DodOverride         []byte
+	DodOverrideReason   *string
 }
 
 func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicketRow, error) {
@@ -188,15 +196,23 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 		&i.ProjectName,
 		&i.CatalogItemID,
 		&i.CatalogItemName,
+		&i.StatusChangedAt,
+		&i.DodConfig,
+		&i.AllowTicketOverride,
+		&i.DodOverride,
+		&i.DodOverrideReason,
 	)
 	return i, err
 }
 
 const getTicketForUpdate = `-- name: GetTicketForUpdate :one
 SELECT t.id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
-       a.name AS assignee_name, t.first_response_at
+       a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
+       p.dod_config, p.allow_ticket_override, o.config AS dod_override
 FROM tickets t
 LEFT JOIN users a ON a.id = t.assignee_id
+JOIN projects p ON p.id = t.project_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.key = $1
   AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
   AND ($3::uuid IS NULL
@@ -212,18 +228,24 @@ type GetTicketForUpdateParams struct {
 }
 
 type GetTicketForUpdateRow struct {
-	ID              uuid.UUID
-	Key             string
-	Type            string
-	Status          string
-	Priority        string
-	ClientID        uuid.UUID
-	RequesterID     uuid.UUID
-	AssigneeID      *uuid.UUID
-	AssigneeName    *string
-	FirstResponseAt *time.Time
+	ID                  uuid.UUID
+	Key                 string
+	Type                string
+	Status              string
+	Priority            string
+	ClientID            uuid.UUID
+	RequesterID         uuid.UUID
+	AssigneeID          *uuid.UUID
+	AssigneeName        *string
+	FirstResponseAt     *time.Time
+	ResolvedAt          *time.Time
+	StatusChangedAt     time.Time
+	DodConfig           []byte
+	AllowTicketOverride bool
+	DodOverride         []byte
 }
 
+// Locks the ticket only; the project's Definition of Done and the override are read as they are.
 func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdateParams) (GetTicketForUpdateRow, error) {
 	row := q.db.QueryRow(ctx, getTicketForUpdate, arg.Key, arg.ScopeClientID, arg.ScopeAgentID)
 	var i GetTicketForUpdateRow
@@ -238,6 +260,11 @@ func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdate
 		&i.AssigneeID,
 		&i.AssigneeName,
 		&i.FirstResponseAt,
+		&i.ResolvedAt,
+		&i.StatusChangedAt,
+		&i.DodConfig,
+		&i.AllowTicketOverride,
+		&i.DodOverride,
 	)
 	return i, err
 }
@@ -572,18 +599,26 @@ func (q *Queries) UpdateTicketPriority(ctx context.Context, arg UpdateTicketPrio
 const updateTicketStatus = `-- name: UpdateTicketStatus :exec
 UPDATE tickets
 SET status = $1,
-    resolved_at = CASE WHEN $2::boolean THEN coalesce(resolved_at, now()) END
-WHERE id = $3
+    resolved_at = CASE WHEN $2::boolean THEN coalesce(resolved_at, now()) END,
+    closed_at = CASE WHEN $3::boolean THEN coalesce(closed_at, now()) END
+WHERE id = $4
 `
 
 type UpdateTicketStatusParams struct {
 	Status   string
 	Resolved bool
+	Closed   bool
 	ID       uuid.UUID
 }
 
 // resolved keeps the first resolve time; leaving resolved clears it (tickets_resolved_at).
+// closed is set exactly while the ticket is closed (tickets_closed_at).
 func (q *Queries) UpdateTicketStatus(ctx context.Context, arg UpdateTicketStatusParams) error {
-	_, err := q.db.Exec(ctx, updateTicketStatus, arg.Status, arg.Resolved, arg.ID)
+	_, err := q.db.Exec(ctx, updateTicketStatus,
+		arg.Status,
+		arg.Resolved,
+		arg.Closed,
+		arg.ID,
+	)
 	return err
 }

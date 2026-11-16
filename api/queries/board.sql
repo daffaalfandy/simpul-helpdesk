@@ -9,6 +9,9 @@
 WITH board AS (
   SELECT t.id, t.key, t.type, t.status, t.priority, t.subject, t.status_changed_at,
          t.client_id, c.name AS client_name, t.assignee_id, a.name AS assignee_name,
+         p.dod_config, o.config AS dod_override,
+         coalesce((SELECT array_agg(i.item ORDER BY i.item) FROM ticket_dod_items i WHERE i.ticket_id = t.id),
+                  '{}')::text[] AS dod_done,
          (@columns::text[])[array_position(@statuses::text[], t.status)]::text AS column_id,
          s.ticket_id AS sla_ticket_id,
          s.first_response_budget_ms, s.first_response_calendar, s.first_response_elapsed_ms,
@@ -19,8 +22,10 @@ WITH board AS (
          s.resolution_breached_at, s.resolution_met_at
   FROM tickets t
   JOIN clients c ON c.id = t.client_id
+  JOIN projects p ON p.id = t.project_id
   LEFT JOIN users a ON a.id = t.assignee_id
   LEFT JOIN ticket_sla s ON s.ticket_id = t.id
+  LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
   WHERE t.status = ANY(@statuses::text[])
     AND (NOT @sla_at_risk::boolean
          OR (t.status = ANY(@open_statuses::text[])
@@ -45,6 +50,7 @@ WITH board AS (
   FROM board
 )
 SELECT id, key, type, status, priority, subject, client_id, client_name, assignee_id, assignee_name,
+       status_changed_at, dod_config, dod_override, dod_done,
        column_id, column_total::bigint AS column_total, sla_ticket_id,
        first_response_budget_ms, first_response_calendar, first_response_elapsed_ms,
        first_response_running_since, first_response_due_at, first_response_at_risk_flagged_at,
