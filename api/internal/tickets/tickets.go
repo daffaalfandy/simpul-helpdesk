@@ -119,6 +119,10 @@ type Ticket struct {
 	AllowedStatuses []ticket.Status
 	// DoD is the ticket's Definition of Done; nil for requesters, who never see it.
 	DoD *TicketDoD
+	// UAT is set while the ticket waits In UAT for the client's test.
+	UAT *TicketUAT
+	// Reopen is set while the ticket is resolved.
+	Reopen *TicketReopen
 }
 
 // Message is one entry of a ticket's conversation.

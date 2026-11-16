@@ -6,6 +6,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
@@ -69,4 +70,73 @@ func apiDodItems(items []dod.Item) []gen.DodItem {
 		out[i] = gen.DodItem(it)
 	}
 	return out
+}
+
+// AnswerTicketUat is for client staff; the service scopes the ticket to their client.
+func (s *server) AnswerTicketUat(ctx context.Context, req gen.AnswerTicketUatRequestObject) (gen.AnswerTicketUatResponseObject, error) {
+	p, err := auth.Require(ctx, auth.CapPortal)
+	if err != nil {
+		return nil, err
+	}
+	message := ""
+	if req.Body.Message != nil {
+		message = *req.Body.Message
+	}
+	t, err := s.tickets.AnswerUAT(ctx, p, req.TicketKey, ticket.UATAnswer(req.Body.Answer), message)
+	if err != nil {
+		return nil, err
+	}
+	return gen.AnswerTicketUat200JSONResponse(apiTicket(t)), nil
+}
+
+func (s *server) ReopenTicket(ctx context.Context, req gen.ReopenTicketRequestObject) (gen.ReopenTicketResponseObject, error) {
+	p, err := auth.Require(ctx, auth.CapPortal)
+	if err != nil {
+		return nil, err
+	}
+	t, err := s.tickets.Reopen(ctx, p, req.TicketKey)
+	if err != nil {
+		return nil, err
+	}
+	return gen.ReopenTicket200JSONResponse(apiTicket(t)), nil
+}
+
+func (s *server) ListUatRequests(ctx context.Context, _ gen.ListUatRequestsRequestObject) (gen.ListUatRequestsResponseObject, error) {
+	p, err := auth.Require(ctx, auth.CapPortal)
+	if err != nil {
+		return nil, err
+	}
+	list, err := s.tickets.UATRequests(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	out := make(gen.ListUatRequests200JSONResponse, len(list))
+	for i, r := range list {
+		out[i] = gen.UatRequest{
+			Key: r.Key, Subject: r.Subject, Project: apiRef(r.Project), Requester: apiRef(r.Requester),
+			AutoApproveAt: r.AutoApproveAt, Instructions: r.Instructions,
+		}
+	}
+	return out, nil
+}
+
+func apiTicketUat(u *tickets.TicketUAT) *gen.TicketUat {
+	if u == nil {
+		return nil
+	}
+	return &gen.TicketUat{AutoApproveAt: u.AutoApproveAt, CanAnswer: u.CanAnswer, Instructions: u.Instructions}
+}
+
+func apiTicketReopen(r *tickets.TicketReopen) *gen.TicketReopen {
+	if r == nil {
+		return nil
+	}
+	return &gen.TicketReopen{Until: r.Until, CanReopen: r.CanReopen}
+}
+
+func apiCardUat(u *tickets.CardUAT) *gen.BoardCardUat {
+	if u == nil {
+		return nil
+	}
+	return &gen.BoardCardUat{Day: u.Day, Days: u.Days}
 }

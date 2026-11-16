@@ -71,7 +71,7 @@ func (s *Service) WatcherCandidates(ctx context.Context, p *auth.Principal, key,
 // someone already there changes nothing.
 func (s *Service) AddWatcher(ctx context.Context, p *auth.Principal, key string, userID uuid.UUID) ([]Colleague, error) {
 	var ticketID uuid.UUID
-	err := s.watcherAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
+	err := s.clientAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		ticketID = row.ID
 		if userID == row.RequesterID {
 			return errInvalidWatcher()
@@ -101,7 +101,7 @@ func (s *Service) AddWatcher(ctx context.Context, p *auth.Principal, key string,
 
 // RemoveWatcher takes a colleague off the ticket's "People notified".
 func (s *Service) RemoveWatcher(ctx context.Context, p *auth.Principal, key string, userID uuid.UUID) error {
-	return s.watcherAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
+	return s.clientAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		n, err := tx.Q.RemoveTicketWatcher(ctx, db.RemoveTicketWatcherParams{TicketID: row.ID, UserID: userID})
 		if err != nil {
 			return err
@@ -115,9 +115,10 @@ func (s *Service) RemoveWatcher(ctx context.Context, p *auth.Principal, key stri
 	})
 }
 
-// watcherAction is agentAction for client staff: it locks a ticket of their client that is
-// still open to changes, runs fn, and queues notifications for what fn changed.
-func (s *Service) watcherAction(ctx context.Context, p *auth.Principal, key string,
+// clientAction is agentAction for client staff (watchers, test answers, reopen): it locks a
+// ticket of their client that is still open to changes, runs fn, and queues notifications for
+// what fn changed.
+func (s *Service) clientAction(ctx context.Context, p *auth.Principal, key string,
 	fn func(store.Tx, db.GetTicketForUpdateRow, *changeSet) error) error {
 	a, err := clientAccess(p)
 	if err != nil {

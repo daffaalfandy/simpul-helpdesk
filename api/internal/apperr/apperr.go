@@ -62,6 +62,8 @@ const (
 	CodeStatusChanged             = "status_changed"
 	CodeDoDUnmet                  = "dod_unmet"
 	CodeDoDOverrideNotAllowed     = "dod_override_not_allowed"
+	CodeUATNotWaiting             = "uat_not_waiting"
+	CodeReopenNotAllowed          = "reopen_not_allowed"
 	CodeEmailTaken                = "email_taken"
 	CodeCatalogItemNameTaken      = "catalog_item_name_taken"
 	CodeCatalogItemInUse          = "catalog_item_in_use"

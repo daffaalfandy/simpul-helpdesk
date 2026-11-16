@@ -94,6 +94,8 @@ function ticket(over: Partial<Ticket> & Pick<Ticket, 'id' | 'key' | 'subject'>):
     ],
     allowedStatuses: ['in_progress', 'waiting_on_client', 'resolved'],
     dod: null,
+    uat: null,
+    reopen: null,
     ...over,
   }
 }
@@ -260,6 +262,7 @@ function boardCard(t: Ticket): BoardCard {
     allowedStatuses: allowedMoves(t),
     sla: tickets.cardSla[key] ?? null,
     dodPending: t.dod?.pending ?? [],
+    uat: null,
   }
 }
 

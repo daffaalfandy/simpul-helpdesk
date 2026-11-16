@@ -268,6 +268,7 @@ func apiTicket(t tickets.Ticket) gen.Ticket {
 		d := apiTicketDod(*t.DoD)
 		out.Dod = &d
 	}
+	out.Uat, out.Reopen = apiTicketUat(t.UAT), apiTicketReopen(t.Reopen)
 	return out
 }
 

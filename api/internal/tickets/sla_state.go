@@ -147,15 +147,11 @@ func storedClocks(r db.TicketSla) (fr, res slaengine.Stored) {
 }
 
 // clocksFor reads a ticket's clocks now; nil until the ticket has been replayed.
-func (s *Service) clocksFor(ctx context.Context, q *db.Queries, ticketID uuid.UUID, status ticket.Status) (*SLAClocks, error) {
+func (s *Service) clocksFor(ctx context.Context, q *db.Queries, ticketID uuid.UUID, status ticket.Status, schedules sla.Schedules) (*SLAClocks, error) {
 	row, err := q.GetTicketSLA(ctx, ticketID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	schedules, err := s.sla.Schedules(ctx)
 	if err != nil {
 		return nil, err
 	}

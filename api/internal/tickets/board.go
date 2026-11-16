@@ -43,6 +43,14 @@ type BoardCard struct {
 	// DoDPending is what an open ticket's Definition of Done still needs; resolving before then
 	// needs a reason. Empty for done tickets.
 	DoDPending []dod.Item
+	UAT        *CardUAT // set while the client tests
+}
+
+// CardUAT is how far into the client's test a ticket is: day Day of Days working days, or of
+// no limit when Days is nil.
+type CardUAT struct {
+	Day  int
+	Days *int
 }
 
 // CardSLA is the clock a card shows: an open ticket's first response until it is sent, then
@@ -153,12 +161,16 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 		col.Total = int(r.ColumnTotal)
 		status := ticket.Status(r.Status)
 		pending := []dod.Item{}
+		var uat *CardUAT
 		if status.IsOpen() {
 			sd, err := parseDoD(r.DodConfig, r.DodOverride)
 			if err != nil {
 				return Board{}, fmt.Errorf("board: %s: %w", r.Key, err)
 			}
 			pending = pendingFor(sd, r.DodDone)
+			if status == ticket.StatusInUAT {
+				uat = cardUAT(sd, r.StatusChangedAt, schedules, now)
+			}
 		}
 		col.Cards = append(col.Cards, BoardCard{
 			ID: r.ID, Key: r.Key, Type: ticket.Type(r.Type), Status: status, Priority: sla.Priority(r.Priority),
@@ -166,6 +178,7 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 			AllowedStatuses: ticket.AllowedMoves(status, r.AssigneeID != nil),
 			SLA:             cardSLA(r, status, schedules, now),
 			DoDPending:      pending,
+			UAT:             uat,
 		})
 	}
 	return board, nil
@@ -202,6 +215,15 @@ func (s *Service) boardStats(ctx context.Context, q *db.Queries, a access, weekS
 		}
 	}
 	return stats, nil
+}
+
+func cardUAT(sd storedDoD, enteredAt time.Time, s sla.Schedules, now time.Time) *CardUAT {
+	eff, _ := sd.effective()
+	days, ok := dod.AutoApproveDays(eff)
+	if !ok {
+		return &CardUAT{Day: dod.UATDay(enteredAt, now, s, dod.AutoApproveNever)}
+	}
+	return &CardUAT{Day: dod.UATDay(enteredAt, now, s, days), Days: &days}
 }
 
 // cardSLA picks the clock a card shows and reads it now.

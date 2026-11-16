@@ -792,6 +792,24 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /uat-requests:
+    get:
+      operationId: listUatRequests
+      summary: Tests waiting on the signed-in requester (client staff)
+      description: Their client's tickets In UAT that they reported or follow, oldest first.
+      tags: [tickets]
+      responses:
+        "200":
+          description: The waiting tests
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UatRequest" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /board:
     get:
       operationId: getBoard
@@ -1100,6 +1118,58 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/uat:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    post:
+      operationId: answerTicketUat
+      summary: Approve or reject the fix while the ticket waits In UAT (client staff)
+      description: |
+        Any requester of the ticket's client may answer. Approval resolves the ticket; a rejection
+        needs a `message` (`invalid_message`), posted as a public reply, and hands the ticket back to
+        the team. A ticket no longer In UAT fails with `uat_not_waiting` (409).
+      tags: [tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UatAnswerInput" }
+      responses:
+        "200":
+          description: Answered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /tickets/{ticketKey}/reopen:
+    parameters:
+      - $ref: "#/components/parameters/TicketKey"
+    post:
+      operationId: reopenTicket
+      summary: Reopen a resolved ticket while its reopen window lasts (client staff)
+      description: |
+        Any requester of the ticket's client may reopen it, within 3 working days of its
+        resolution; it goes back to the team with the same priority. Otherwise
+        `reopen_not_allowed`, or `ticket_closed` once closed (409).
+      tags: [tickets]
+      responses:
+        "200":
+          description: Reopened
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
   /tickets/{ticketKey}/watchers:
@@ -1983,6 +2053,75 @@ components:
       properties:
         emailFrequency: { $ref: "#/components/schemas/EmailFrequency" }
 
+    UatAnswer:
+      type: string
+      enum: [approve, reject]
+
+    UatAnswerInput:
+      type: object
+      required: [answer]
+      properties:
+        answer: { $ref: "#/components/schemas/UatAnswer" }
+        message:
+          type: string
+          maxLength: 20000
+          description: What went wrong; needed to reject.
+
+    TicketUat:
+      type: object
+      required: [autoApproveAt, canAnswer, instructions]
+      properties:
+        autoApproveAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the fix is approved without an answer; null when it waits however long it takes.
+        canAnswer:
+          type: boolean
+          description: The viewer may approve or reject.
+        instructions:
+          type: string
+          nullable: true
+          description: The team's latest public reply, which says what to test.
+
+    TicketReopen:
+      type: object
+      required: [until, canReopen]
+      properties:
+        until:
+          type: string
+          format: date-time
+          description: The ticket can be reopened until then, and closes after it.
+        canReopen:
+          type: boolean
+          description: The viewer may reopen the ticket now.
+
+    BoardCardUat:
+      type: object
+      required: [day, days]
+      properties:
+        day:
+          type: integer
+          description: The working day of the client's test, from 1.
+        days:
+          type: integer
+          nullable: true
+          description: Working days before the fix is approved automatically; null when there is no limit.
+
+    UatRequest:
+      type: object
+      required: [key, subject, project, requester, autoApproveAt, instructions]
+      properties:
+        key: { type: string, example: HD-24830 }
+        subject: { type: string }
+        project: { $ref: "#/components/schemas/Ref" }
+        requester: { $ref: "#/components/schemas/Ref" }
+        autoApproveAt: { type: string, format: date-time, nullable: true }
+        instructions:
+          type: string
+          nullable: true
+          description: The team's latest public reply, which says what to test.
+
     Colleague:
       type: object
       required: [id, name, jobTitle]
@@ -2292,7 +2431,7 @@ components:
 
     BoardCard:
       type: object
-      required: [id, key, type, status, priority, subject, client, assignee, allowedStatuses, sla, dodPending]
+      required: [id, key, type, status, priority, subject, client, assignee, allowedStatuses, sla, dodPending, uat]
       properties:
         sla:
           allOf: [{ $ref: "#/components/schemas/BoardCardSla" }]
@@ -2316,6 +2455,10 @@ components:
           type: array
           description: What an open ticket's Definition of Done still needs; resolving before then needs a reason.
           items: { $ref: "#/components/schemas/DodItem" }
+        uat:
+          allOf: [{ $ref: "#/components/schemas/BoardCardUat" }]
+          nullable: true
+          description: Set while the client tests.
 
     BoardColumn:
       type: object
@@ -2382,7 +2525,7 @@ components:
       required: [id, key, type, status, priority, subject, client, requester, assignee, createdAt, updatedAt,
                  resolvedAt, channel, description, requesterJobTitle, project, catalogItem, createdBy,
                  loggedByStaff, attachments, sla, slaTargets, firstResponseAt, closedAt, progress, allowedStatuses,
-                 dod]
+                 dod, uat, reopen]
       properties:
         id: { type: string, format: uuid }
         key: { type: string, example: HD-24871 }
@@ -2432,6 +2575,14 @@ components:
           allOf: [{ $ref: "#/components/schemas/TicketDod" }]
           nullable: true
           description: Staff only; null for requesters.
+        uat:
+          allOf: [{ $ref: "#/components/schemas/TicketUat" }]
+          nullable: true
+          description: Set while the ticket waits In UAT for the client's test.
+        reopen:
+          allOf: [{ $ref: "#/components/schemas/TicketReopen" }]
+          nullable: true
+          description: Set while the ticket is resolved.
 
     TicketInput:
       type: object

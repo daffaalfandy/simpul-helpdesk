@@ -18,6 +18,7 @@ function card(key: string, over: Partial<BoardCard> = {}): BoardCard {
     allowedStatuses: [],
     sla: null,
     dodPending: [],
+    uat: null,
     ...over,
   }
 }

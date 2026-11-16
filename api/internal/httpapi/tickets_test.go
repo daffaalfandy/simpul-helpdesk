@@ -179,6 +179,8 @@ var scopedOps = map[string]struct{ otherRequester, otherAgent int }{
 	"setTicketAssignee":           {http.StatusForbidden, http.StatusNotFound},
 	"setTicketPriority":           {http.StatusForbidden, http.StatusNotFound},
 	"setTicketDod":                {http.StatusForbidden, http.StatusNotFound},
+	"answerTicketUat":             {http.StatusNotFound, http.StatusForbidden},
+	"reopenTicket":                {http.StatusNotFound, http.StatusForbidden},
 	"listTicketActivity":          {http.StatusForbidden, http.StatusNotFound},
 	"downloadAttachment":          {http.StatusNotFound, http.StatusNotFound},
 	"listTicketWatchers":          {http.StatusNotFound, http.StatusNotFound},
@@ -213,6 +215,10 @@ func TestTicketScope(t *testing.T) {
 		"setTicketDod": func(s session) *httptest.ResponseRecorder {
 			return s.do(http.MethodPut, path+"/dod", gen.TicketDodInput{})
 		},
+		"answerTicketUat": func(s session) *httptest.ResponseRecorder {
+			return s.do(http.MethodPost, path+"/uat", gen.UatAnswerInput{Answer: gen.UatAnswerApprove})
+		},
+		"reopenTicket":       func(s session) *httptest.ResponseRecorder { return s.do(http.MethodPost, path+"/reopen", nil) },
 		"listTicketActivity": func(s session) *httptest.ResponseRecorder { return s.do(http.MethodGet, path+"/activity", nil) },
 		"downloadAttachment": func(s session) *httptest.ResponseRecorder {
 			return s.do(http.MethodGet, "/attachments/"+file.Id.String(), nil)

@@ -139,7 +139,14 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, key string) (Ticke
 	if t.SLA, err = snap.Effective(t.Priority, t.Type); err != nil {
 		return Ticket{}, err
 	}
-	if t.SLAClocks, err = s.clocksFor(ctx, q, r.ID, t.Status); err != nil {
+	schedules, err := s.sla.Schedules(ctx)
+	if err != nil {
+		return Ticket{}, err
+	}
+	if t.SLAClocks, err = s.clocksFor(ctx, q, r.ID, t.Status, schedules); err != nil {
+		return Ticket{}, err
+	}
+	if err := s.clientState(ctx, q, &t, r, !a.staff, schedules); err != nil {
 		return Ticket{}, err
 	}
 	files, err := q.ListTicketAttachments(ctx, db.ListTicketAttachmentsParams{TicketID: &r.ID, Visibility: a.visibility})

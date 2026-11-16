@@ -564,6 +564,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uat-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tests waiting on the signed-in requester (client staff)
+         * @description Their client's tickets In UAT that they reported or follow, oldest first.
+         */
+        get: operations["listUatRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/board": {
         parameters: {
             query?: never;
@@ -781,6 +801,56 @@ export interface paths {
         get: operations["listTicketActivity"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/uat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve or reject the fix while the ticket waits In UAT (client staff)
+         * @description Any requester of the ticket's client may answer. Approval resolves the ticket; a rejection
+         *     needs a `message` (`invalid_message`), posted as a public reply, and hands the ticket back to
+         *     the team. A ticket no longer In UAT fails with `uat_not_waiting` (409).
+         */
+        post: operations["answerTicketUat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tickets/{ticketKey}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen a resolved ticket while its reopen window lasts (client staff)
+         * @description Any requester of the ticket's client may reopen it, within 3 working days of its
+         *     resolution; it goes back to the team with the same priority. Otherwise
+         *     `reopen_not_allowed`, or `ticket_closed` once closed (409).
+         */
+        post: operations["reopenTicket"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1443,6 +1513,50 @@ export interface components {
         EmailFrequencyInput: {
             emailFrequency: components["schemas"]["EmailFrequency"];
         };
+        /** @enum {string} */
+        UatAnswer: "approve" | "reject";
+        UatAnswerInput: {
+            answer: components["schemas"]["UatAnswer"];
+            /** @description What went wrong; needed to reject. */
+            message?: string;
+        };
+        TicketUat: {
+            /**
+             * Format: date-time
+             * @description When the fix is approved without an answer; null when it waits however long it takes.
+             */
+            autoApproveAt: string | null;
+            /** @description The viewer may approve or reject. */
+            canAnswer: boolean;
+            /** @description The team's latest public reply, which says what to test. */
+            instructions: string | null;
+        };
+        TicketReopen: {
+            /**
+             * Format: date-time
+             * @description The ticket can be reopened until then, and closes after it.
+             */
+            until: string;
+            /** @description The viewer may reopen the ticket now. */
+            canReopen: boolean;
+        };
+        BoardCardUat: {
+            /** @description The working day of the client's test, from 1. */
+            day: number;
+            /** @description Working days before the fix is approved automatically; null when there is no limit. */
+            days: number | null;
+        };
+        UatRequest: {
+            /** @example HD-24830 */
+            key: string;
+            subject: string;
+            project: components["schemas"]["Ref"];
+            requester: components["schemas"]["Ref"];
+            /** Format: date-time */
+            autoApproveAt: string | null;
+            /** @description The team's latest public reply, which says what to test. */
+            instructions: string | null;
+        };
         Colleague: {
             /** Format: uuid */
             id: string;
@@ -1719,6 +1833,8 @@ export interface components {
             allowedStatuses: components["schemas"]["TicketStatus"][];
             /** @description What an open ticket's Definition of Done still needs; resolving before then needs a reason. */
             dodPending: components["schemas"]["DodItem"][];
+            /** @description Set while the client tests. */
+            uat: components["schemas"]["BoardCardUat"] | null;
         };
         BoardColumn: {
             id: components["schemas"]["BoardColumnId"];
@@ -1801,6 +1917,10 @@ export interface components {
             allowedStatuses: components["schemas"]["TicketStatus"][];
             /** @description Staff only; null for requesters. */
             dod: components["schemas"]["TicketDod"] | null;
+            /** @description Set while the ticket waits In UAT for the client's test. */
+            uat: components["schemas"]["TicketUat"] | null;
+            /** @description Set while the ticket is resolved. */
+            reopen: components["schemas"]["TicketReopen"] | null;
         };
         TicketInput: {
             type: components["schemas"]["TicketType"];
@@ -2925,6 +3045,29 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listUatRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The waiting tests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UatRequest"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     getBoard: {
         parameters: {
             query?: {
@@ -3259,6 +3402,67 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    answerTicketUat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UatAnswerInput"];
+            };
+        };
+        responses: {
+            /** @description Answered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    reopenTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A ticket key such as HD-24871 (case-insensitive). */
+                ticketKey: components["parameters"]["TicketKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reopened */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
