@@ -51,7 +51,16 @@ type DodConditionsProps = {
 export function DodConditions({ dod, hasRepository, onChange, legend }: DodConditionsProps) {
   const { t } = useTranslation()
   const set = (next: Partial<DodConfig>) => onChange({ ...dod, ...next })
-  const codeHint = (hint: string) => (hasRepository ? hint : `${hint} ${t('dod.needsRepo')}.`)
+  // Without a repository the code conditions say why they are off, on a line of their own.
+  const codeHint = (hint: string) =>
+    hasRepository ? (
+      hint
+    ) : (
+      <>
+        {hint}
+        <span className="block font-semibold">{t('dod.needsRepo')}</span>
+      </>
+    )
 
   return (
     <fieldset className="flex flex-col gap-2">
@@ -117,7 +126,7 @@ export function DodConditions({ dod, hasRepository, onChange, legend }: DodCondi
 type ConditionRowProps = {
   on: boolean
   label: string
-  hint: string
+  hint: ReactNode
   isDisabled?: boolean
   onToggle: (on: boolean) => void
   /** The condition's setting (branch, auto-approve), kept while the condition is off. */
