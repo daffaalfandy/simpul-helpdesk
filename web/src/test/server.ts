@@ -5,6 +5,7 @@ import type { Me, Organization, Problem } from '../api/client'
 import { integrationsHandlers, resetIntegrations } from './integrationsApi'
 import { notificationsHandlers, resetNotifications } from './notificationsApi'
 import { projectsHandlers, resetProjects } from './projectsApi'
+import { reportsHandlers, resetReports } from './reportsApi'
 import { resetSettings, settingsHandlers } from './settingsApi'
 import { resetTickets, ticketsHandlers } from './ticketsApi'
 
@@ -25,6 +26,13 @@ export const USERS: Record<string, Me> = {
     email: 'admin@demo-vendor.test',
     name: 'Demo Admin',
     role: 'admin',
+  },
+  'dewi@demo-vendor.test': {
+    id: '01a1cedf-0000-7000-8000-000000000004',
+    email: 'dewi@demo-vendor.test',
+    name: 'Dewi Wulandari',
+    role: 'supervisor',
+    jobTitle: 'Team lead',
   },
   'hendra@kominfo-jambi.test': {
     id: '01a1cedf-0000-7000-8000-000000000003',
@@ -52,6 +60,7 @@ export function resetApi() {
   resetProjects()
   resetNotifications()
   resetIntegrations()
+  resetReports()
 }
 
 export function problem(status: number, code: string, headers?: Record<string, string>) {
@@ -93,4 +102,5 @@ export const server = setupServer(
   ...projectsHandlers,
   ...notificationsHandlers,
   ...integrationsHandlers,
+  ...reportsHandlers,
 )

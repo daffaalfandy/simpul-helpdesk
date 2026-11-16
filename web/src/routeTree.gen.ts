@@ -22,6 +22,8 @@ import { Route as AgentReportsRouteImport } from './routes/_agent/reports'
 import { Route as AgentSettingsRouteImport } from './routes/_agent/settings'
 import { Route as AgentProjectsIndexRouteImport } from './routes/_agent/projects/index'
 import { Route as AgentProjectsProjectIdRouteImport } from './routes/_agent/projects/$projectId'
+import { Route as AgentReportsIndexRouteImport } from './routes/_agent/reports/index'
+import { Route as AgentReportsSlaRouteImport } from './routes/_agent/reports/sla'
 import { Route as AgentSettingsIndexRouteImport } from './routes/_agent/settings/index'
 import { Route as AgentSettingsCatalogRouteImport } from './routes/_agent/settings/catalog'
 import { Route as AgentSettingsClientsRouteImport } from './routes/_agent/settings/clients'
@@ -98,6 +100,16 @@ const AgentProjectsProjectIdRoute = AgentProjectsProjectIdRouteImport.update({
   path: '/$projectId',
   getParentRoute: () => AgentProjectsRoute,
 } as any)
+const AgentReportsIndexRoute = AgentReportsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AgentReportsRoute,
+} as any)
+const AgentReportsSlaRoute = AgentReportsSlaRouteImport.update({
+  id: '/sla',
+  path: '/sla',
+  getParentRoute: () => AgentReportsRoute,
+} as any)
 const AgentSettingsIndexRoute = AgentSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -169,9 +181,10 @@ export interface FileRoutesByFullPath {
   '/board': typeof AgentBoardRoute
   '/notifications': typeof AgentNotificationsRoute
   '/projects': typeof AgentProjectsRouteWithChildren
-  '/reports': typeof AgentReportsRoute
+  '/reports': typeof AgentReportsRouteWithChildren
   '/settings': typeof AgentSettingsRouteWithChildren
   '/projects/$projectId': typeof AgentProjectsProjectIdRoute
+  '/reports/sla': typeof AgentReportsSlaRoute
   '/settings/catalog': typeof AgentSettingsCatalogRoute
   '/settings/clients': typeof AgentSettingsClientsRoute
   '/settings/general': typeof AgentSettingsGeneralRoute
@@ -182,6 +195,7 @@ export interface FileRoutesByFullPath {
   '/portal/new': typeof PortalPortalNewRoute
   '/portal/notifications': typeof PortalPortalNotificationsRoute
   '/projects/': typeof AgentProjectsIndexRoute
+  '/reports/': typeof AgentReportsIndexRoute
   '/settings/': typeof AgentSettingsIndexRoute
   '/portal/': typeof PortalPortalIndexRoute
   '/portal/tickets/$key': typeof PortalPortalTicketsKeyRoute
@@ -193,8 +207,8 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/board': typeof AgentBoardRoute
   '/notifications': typeof AgentNotificationsRoute
-  '/reports': typeof AgentReportsRoute
   '/projects/$projectId': typeof AgentProjectsProjectIdRoute
+  '/reports/sla': typeof AgentReportsSlaRoute
   '/settings/catalog': typeof AgentSettingsCatalogRoute
   '/settings/clients': typeof AgentSettingsClientsRoute
   '/settings/general': typeof AgentSettingsGeneralRoute
@@ -205,6 +219,7 @@ export interface FileRoutesByTo {
   '/portal/new': typeof PortalPortalNewRoute
   '/portal/notifications': typeof PortalPortalNotificationsRoute
   '/projects': typeof AgentProjectsIndexRoute
+  '/reports': typeof AgentReportsIndexRoute
   '/settings': typeof AgentSettingsIndexRoute
   '/portal': typeof PortalPortalIndexRoute
   '/portal/tickets/$key': typeof PortalPortalTicketsKeyRoute
@@ -220,9 +235,10 @@ export interface FileRoutesById {
   '/_agent/board': typeof AgentBoardRoute
   '/_agent/notifications': typeof AgentNotificationsRoute
   '/_agent/projects': typeof AgentProjectsRouteWithChildren
-  '/_agent/reports': typeof AgentReportsRoute
+  '/_agent/reports': typeof AgentReportsRouteWithChildren
   '/_agent/settings': typeof AgentSettingsRouteWithChildren
   '/_agent/projects/$projectId': typeof AgentProjectsProjectIdRoute
+  '/_agent/reports/sla': typeof AgentReportsSlaRoute
   '/_agent/settings/catalog': typeof AgentSettingsCatalogRoute
   '/_agent/settings/clients': typeof AgentSettingsClientsRoute
   '/_agent/settings/general': typeof AgentSettingsGeneralRoute
@@ -233,6 +249,7 @@ export interface FileRoutesById {
   '/_portal/portal/new': typeof PortalPortalNewRoute
   '/_portal/portal/notifications': typeof PortalPortalNotificationsRoute
   '/_agent/projects/': typeof AgentProjectsIndexRoute
+  '/_agent/reports/': typeof AgentReportsIndexRoute
   '/_agent/settings/': typeof AgentSettingsIndexRoute
   '/_portal/portal/': typeof PortalPortalIndexRoute
   '/_portal/portal/tickets/$key': typeof PortalPortalTicketsKeyRoute
@@ -250,6 +267,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/settings'
     | '/projects/$projectId'
+    | '/reports/sla'
     | '/settings/catalog'
     | '/settings/clients'
     | '/settings/general'
@@ -260,6 +278,7 @@ export interface FileRouteTypes {
     | '/portal/new'
     | '/portal/notifications'
     | '/projects/'
+    | '/reports/'
     | '/settings/'
     | '/portal/'
     | '/portal/tickets/$key'
@@ -271,8 +290,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/board'
     | '/notifications'
-    | '/reports'
     | '/projects/$projectId'
+    | '/reports/sla'
     | '/settings/catalog'
     | '/settings/clients'
     | '/settings/general'
@@ -283,6 +302,7 @@ export interface FileRouteTypes {
     | '/portal/new'
     | '/portal/notifications'
     | '/projects'
+    | '/reports'
     | '/settings'
     | '/portal'
     | '/portal/tickets/$key'
@@ -300,6 +320,7 @@ export interface FileRouteTypes {
     | '/_agent/reports'
     | '/_agent/settings'
     | '/_agent/projects/$projectId'
+    | '/_agent/reports/sla'
     | '/_agent/settings/catalog'
     | '/_agent/settings/clients'
     | '/_agent/settings/general'
@@ -310,6 +331,7 @@ export interface FileRouteTypes {
     | '/_portal/portal/new'
     | '/_portal/portal/notifications'
     | '/_agent/projects/'
+    | '/_agent/reports/'
     | '/_agent/settings/'
     | '/_portal/portal/'
     | '/_portal/portal/tickets/$key'
@@ -417,6 +439,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentProjectsProjectIdRouteImport
       parentRoute: typeof AgentProjectsRoute
     }
+    '/_agent/reports/': {
+      id: '/_agent/reports/'
+      path: '/'
+      fullPath: '/reports/'
+      preLoaderRoute: typeof AgentReportsIndexRouteImport
+      parentRoute: typeof AgentReportsRoute
+    }
+    '/_agent/reports/sla': {
+      id: '/_agent/reports/sla'
+      path: '/sla'
+      fullPath: '/reports/sla'
+      preLoaderRoute: typeof AgentReportsSlaRouteImport
+      parentRoute: typeof AgentReportsRoute
+    }
     '/_agent/settings/': {
       id: '/_agent/settings/'
       path: '/'
@@ -518,6 +554,20 @@ const AgentProjectsRouteWithChildren = AgentProjectsRoute._addFileChildren(
   AgentProjectsRouteChildren,
 )
 
+interface AgentReportsRouteChildren {
+  AgentReportsSlaRoute: typeof AgentReportsSlaRoute
+  AgentReportsIndexRoute: typeof AgentReportsIndexRoute
+}
+
+const AgentReportsRouteChildren: AgentReportsRouteChildren = {
+  AgentReportsSlaRoute: AgentReportsSlaRoute,
+  AgentReportsIndexRoute: AgentReportsIndexRoute,
+}
+
+const AgentReportsRouteWithChildren = AgentReportsRoute._addFileChildren(
+  AgentReportsRouteChildren,
+)
+
 interface AgentSettingsRouteChildren {
   AgentSettingsCatalogRoute: typeof AgentSettingsCatalogRoute
   AgentSettingsClientsRoute: typeof AgentSettingsClientsRoute
@@ -546,7 +596,7 @@ interface AgentRouteChildren {
   AgentBoardRoute: typeof AgentBoardRoute
   AgentNotificationsRoute: typeof AgentNotificationsRoute
   AgentProjectsRoute: typeof AgentProjectsRouteWithChildren
-  AgentReportsRoute: typeof AgentReportsRoute
+  AgentReportsRoute: typeof AgentReportsRouteWithChildren
   AgentSettingsRoute: typeof AgentSettingsRouteWithChildren
   AgentTicketsKeyRoute: typeof AgentTicketsKeyRoute
 }
@@ -555,7 +605,7 @@ const AgentRouteChildren: AgentRouteChildren = {
   AgentBoardRoute: AgentBoardRoute,
   AgentNotificationsRoute: AgentNotificationsRoute,
   AgentProjectsRoute: AgentProjectsRouteWithChildren,
-  AgentReportsRoute: AgentReportsRoute,
+  AgentReportsRoute: AgentReportsRouteWithChildren,
   AgentSettingsRoute: AgentSettingsRouteWithChildren,
   AgentTicketsKeyRoute: AgentTicketsKeyRoute,
 }

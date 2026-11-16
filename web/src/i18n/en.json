@@ -861,7 +861,8 @@
     "invalid_dod": "Check the Definition of Done.",
     "dod_override_not_allowed": "This project doesn't let agents change a ticket's Definition of Done.",
     "uat_not_waiting": "This ticket isn't waiting for your test any more. Someone may have answered already.",
-    "reopen_not_allowed": "This ticket can no longer be reopened. Report a new issue instead."
+    "reopen_not_allowed": "This ticket can no longer be reopened. Report a new issue instead.",
+    "month_in_future": "That month hasn't started yet."
   },
   "time": {
     "justNow": "Just now",
@@ -1579,6 +1580,61 @@
       "pr_closed": "{{request}} closed without merging",
       "pipeline": "CI passed on {{branch}}",
       "deployment": "deployed to {{environment}}"
+    }
+  },
+  "reports": {
+    "title": "SLA report",
+    "subtitle": "Monthly evidence for each client contract. Attach it to your service report and invoice.",
+    "month": {
+      "label": "Month",
+      "earlier": "Earlier month",
+      "toDate": "{{month}} (to date)"
+    },
+    "downloadExcel": "Download Excel",
+    "downloadPdf": "PDF",
+    "downloadPdfFor": "Download PDF for {{client}}",
+    "kpi": {
+      "tickets": "Tickets",
+      "ticketsSub_one": "from {{count}} client",
+      "ticketsSub_other": "from {{count}} clients",
+      "within": "Within SLA",
+      "withinSub": "target {{target}}%",
+      "breaches": "SLA breaches",
+      "breachesSub": "tickets that missed a target",
+      "belowTarget": "Clients below target",
+      "belowTargetSub": "review with the account manager",
+      "allOnTarget": "all on target",
+      "noTicketsSub": "no tickets this month"
+    },
+    "percent": "{{value}}%",
+    "noTickets": "No tickets",
+    "byClient": "By client · {{month}}",
+    "target": "Contract target: {{target}}% of tickets within SLA",
+    "table": {
+      "caption": "SLA by client",
+      "client": "Client",
+      "tickets": "Tickets",
+      "split": "Incidents / Requests",
+      "splitValue": "{{incidents}} / {{requests}}",
+      "avgFirstResponse": "Avg first response",
+      "within": "Within SLA",
+      "breaches": "Breaches",
+      "report": "Client report"
+    },
+    "withinValue": "{{value}}% within SLA, target {{target}}%",
+    "belowTarget": "Below target",
+    "footnote": {
+      "tick": "The dark mark on each bar is the {{target}}% target.",
+      "waiting": {
+        "all": "Time spent waiting on the client is excluded from SLA.",
+        "some": "Time spent waiting on the client is excluded from SLA on the projects that pause the clock for it.",
+        "none": "The SLA clock keeps running while a ticket waits on the client."
+      },
+      "firstResponse": "Average first response covers tickets reported in the portal; tickets the team logs are answered when logged."
+    },
+    "empty": {
+      "title": "No clients yet",
+      "body": "Clients appear here once they are added in Settings › Clients."
     }
   }
 }

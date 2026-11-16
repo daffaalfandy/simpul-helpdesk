@@ -42,6 +42,7 @@ export const queryKeys = {
   codeEvents: ['integrations', 'events'],
   commitTest: (message: string) => ['integrations', 'commit-test', message] as const,
   ticketCode: (key: string) => ['tickets', 'code', key] as const,
+  slaReport: (month: string | undefined) => ['reports', 'sla', month ?? 'current'] as const,
 } as const
 
 /** Invalidates queries by key prefix. */
