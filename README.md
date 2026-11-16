@@ -8,7 +8,7 @@
 - Notifications in the app and by email, chosen per event by each user
 - Monthly SLA reports per client
 
-> **Status:** early development. Done: sign-in, users and roles; clients and the business-hours calendar; tickets with replies, internal notes and attachments; projects with their own SLA targets and global priority names; the kanban board with filters, search and drag-and-drop status changes; notifications in the app and by email (per-event switches, grouped emails and summaries, colleagues under "People notified"); live SLA clocks with pauses, at-risk and breach alerts; a Definition of Done per project (or per ticket, with a reason) that guards resolving, client UAT approval in the portal and from email, and the 3-working-day reopen window with auto-close. Next: the GitHub/GitLab connector.
+> **Status:** early development. Done: sign-in, users and roles; clients and the business-hours calendar; tickets with replies, internal notes and attachments; projects with their own SLA targets and global priority names; the kanban board with filters, search and drag-and-drop status changes; notifications in the app and by email (per-event switches, grouped emails and summaries, colleagues under "People notified"); live SLA clocks with pauses, at-risk and breach alerts; a Definition of Done per project (or per ticket, with a reason) that guards resolving, client UAT approval in the portal and from email, and the 3-working-day reopen window with auto-close; the read-only GitHub/GitLab connector (repository webhooks with their own secret; commits, pull/merge requests, CI runs and production deploys that name a ticket link it, tick its Definition of Done and move it on; code activity on tickets, the board and in notifications). Next: the SLA report and exports.
 
 ## Stack
 
@@ -35,8 +35,11 @@ make dev       # API on :8080, web on :5173
 ## Self-hosting
 
 A production image and guide are coming. Uploaded attachments live on local disk in
-`STORAGE_DIR` (an absolute path; back it up with the database). To create the first admin on a
-fresh install:
+`STORAGE_DIR` (an absolute path; back it up with the database). `ENCRYPTION_KEY` (32 random
+bytes, base64: `openssl rand -base64 32`) encrypts secrets kept in the database, such as webhook
+secrets; keep it with your backups. The GitHub/GitLab connector works through webhooks, so
+GitHub or your GitLab must be able to reach the install's address. To create the first admin on
+a fresh install:
 
 ```sh
 simdesk migrate
