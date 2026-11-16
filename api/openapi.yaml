@@ -1716,6 +1716,38 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /reports/sla/clients/{clientId}/pdf:
+    parameters:
+      - $ref: "#/components/parameters/ClientId"
+    get:
+      operationId: exportSlaReportPdf
+      summary: One client's monthly SLA report as a PDF (supervisors and admins)
+      description: |
+        The client's figures, a row per project and every ticket of the month, to send to that
+        client; it never shows another client's numbers. A plain export, not signed. Error code
+        `month_in_future` (400).
+      tags: [reports]
+      parameters:
+        - $ref: "#/components/parameters/ReportMonth"
+      responses:
+        "200":
+          description: The PDF
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+            Content-Security-Policy:
+              schema: { type: string }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     sessionCookie:

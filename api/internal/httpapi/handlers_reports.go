@@ -63,6 +63,27 @@ func (s *server) ExportSlaReportExcel(ctx context.Context, req gen.ExportSlaRepo
 	}, nil
 }
 
+func (s *server) ExportSlaReportPdf(ctx context.Context, req gen.ExportSlaReportPdfRequestObject) (gen.ExportSlaReportPdfResponseObject, error) {
+	if _, err := auth.Require(ctx, auth.CapReportsView); err != nil {
+		return nil, err
+	}
+	month, err := reportMonth(req.Params.Month)
+	if err != nil {
+		return nil, err
+	}
+	f, err := s.reports.ClientPDF(ctx, req.ClientId, month)
+	if err != nil {
+		return nil, err
+	}
+	disposition, cache, csp := downloadHeaders(f.Filename)
+	return gen.ExportSlaReportPdf200ApplicationpdfResponse{
+		Body: bytes.NewReader(f.Body), ContentLength: int64(len(f.Body)),
+		Headers: gen.ExportSlaReportPdf200ResponseHeaders{
+			ContentDisposition: &disposition, CacheControl: &cache, ContentSecurityPolicy: &csp,
+		},
+	}, nil
+}
+
 // reportMonth reads the optional month parameter; the spec's pattern has already checked it.
 func reportMonth(param *gen.ReportMonth) (*report.Month, error) {
 	if param == nil {

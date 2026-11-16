@@ -167,3 +167,24 @@ func (s *Service) exportData(ctx context.Context, q *db.Queries, month *report.M
 	}
 	return exportData{Period: p, Org: org, Generated: s.now()}, nil
 }
+
+// ClientPDF returns one client's month: the figures, a row per project and every ticket. It
+// never shows another client's numbers.
+func (s *Service) ClientPDF(ctx context.Context, clientID uuid.UUID, month *report.Month) (Export, error) {
+	q := s.store.Q()
+	d, err := s.exportData(ctx, q, month)
+	if err != nil {
+		return Export{}, err
+	}
+	client, err := q.GetReportClient(ctx, clientID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Export{}, apperr.NotFound()
+	}
+	if err != nil {
+		return Export{}, err
+	}
+	if d.Rows, err = s.tickets(ctx, q, d.Period, &clientID); err != nil {
+		return Export{}, err
+	}
+	return buildPDF(d, db.ListReportClientsRow(client))
+}

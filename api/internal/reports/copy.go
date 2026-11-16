@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/report"
 )
@@ -54,6 +55,7 @@ const (
 	labelType                = "value.type"
 	labelChannel             = "value.channel"
 	labelStatus              = "value.status"
+	labelCreator             = "report.creator"
 	labelSheetSummary        = "sheet.summary"
 	labelSheetTickets        = "sheet.tickets"
 	labelColClient           = "col.client"
@@ -93,6 +95,9 @@ type (
 		ToDate bool
 	}
 	generatedArgs struct{ At, Zone string }
+	contractArgs  struct{ No, Start, End string }
+	splitArgs     struct{ Incidents, Requests int }
+	pageArgs      struct{ Page, Pages int }
 )
 
 const (
@@ -124,6 +129,14 @@ func (c *copywriter) month(p Period) string {
 	return c.text(labelMonth, monthArgs{
 		Name: c.text(labelMonthPrefix+strconv.Itoa(int(p.Month.Month)), nil), Year: p.Month.Year, ToDate: p.ToDate,
 	})
+}
+
+// percent writes a share like the web app: one decimal at most, "95.3%", "100%".
+func (c *copywriter) percent(v *float64) string {
+	if v == nil {
+		return c.text(labelNoTicketsValue, nil)
+	}
+	return c.text(labelPercent, formatPercent(*v))
 }
 
 // formatPercent writes a share like the web app: one decimal at most, "95.3", "100".
@@ -159,4 +172,44 @@ func (c *copywriter) fileName(m report.Month, client, ext string) string {
 		name += fileStemJoin + client
 	}
 	return name + ext
+}
+
+// span writes a time on the clock in hours and minutes, like the web app: "16m", "5h", "1h 20m".
+func (c *copywriter) span(d *time.Duration) string {
+	if d == nil {
+		return c.text(labelNotSet, nil)
+	}
+	h, m := report.HoursMinutes(*d)
+	if h == 0 {
+		return c.text(labelMinutes, m)
+	}
+	if m == 0 {
+		return c.text(labelHours, h)
+	}
+	return c.text(labelHours, h) + " " + c.text(labelMinutes, m)
+}
+
+// slug keeps ASCII letters and digits of name, lower-cased, joined by hyphens.
+func slug(name string) string {
+	var b strings.Builder
+	pending := false
+	for _, r := range strings.ToLower(name) {
+		if r < unicode.MaxASCII && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			if pending && b.Len() > 0 {
+				b.WriteRune(slugSeparator)
+			}
+			b.WriteRune(r)
+			pending = false
+			continue
+		}
+		pending = true
+	}
+	return b.String()
+}
+
+func localTime(t *time.Time, loc *time.Location) string {
+	if t == nil {
+		return ""
+	}
+	return t.In(loc).Format(dateTimeLayout)
 }

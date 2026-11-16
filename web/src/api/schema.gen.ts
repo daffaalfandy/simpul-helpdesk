@@ -1338,6 +1338,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports/sla/clients/{clientId}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One client's monthly SLA report as a PDF (supervisors and admins)
+         * @description The client's figures, a row per project and every ticket of the month, to send to that
+         *     client; it never shows another client's numbers. A plain export, not signed. Error code
+         *     `month_in_future` (400).
+         */
+        get: operations["exportSlaReportPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4651,6 +4675,39 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    exportSlaReportPdf: {
+        parameters: {
+            query?: {
+                /** @description A month such as `2026-11`; the current month when left out. */
+                month?: components["parameters"]["ReportMonth"];
+            };
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Cache-Control"?: string;
+                    "Content-Security-Policy"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

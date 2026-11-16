@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
@@ -210,4 +211,36 @@ func TestSLAReportExcel(t *testing.T) {
 	if got := cell("Tickets", "G2"); got != formula.Subject {
 		t.Errorf("subject = %q", got)
 	}
+}
+
+func TestSLAReportPDF(t *testing.T) {
+	te := newTicketEnv(t)
+	jakarta, _ := time.LoadLocation("Asia/Jakarta")
+	tk := te.requester.report(t, incident(te.projectA, "Printer offline"))
+	te.reportedAt(t, tk.Key, time.Date(2026, time.October, 15, 9, 0, 0, 0, jakarta))
+
+	path := "/reports/sla/clients/" + te.clientA.String() + "/pdf?month=2026-10"
+	for name, s := range map[string]session{"agent": te.agent, "requester": te.requester} {
+		if rec := s.do(http.MethodGet, path, nil); rec.Code != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403", name, rec.Code)
+		}
+	}
+	rec := te.supervisor.do(http.MethodGet, path, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/pdf" {
+		t.Errorf("Content-Type = %q", got)
+	}
+	if got := rec.Header().Get("Content-Disposition"); got != "attachment; filename=sla-report-2026-10-dinas-kominfo-jambi.pdf" {
+		t.Errorf("Content-Disposition = %q", got)
+	}
+	if !bytes.HasPrefix(rec.Body.Bytes(), []byte("%PDF-")) {
+		t.Errorf("body is not a PDF")
+	}
+	// A client without tickets still gets its report.
+	if rec := te.admin.do(http.MethodGet, "/reports/sla/clients/"+te.clientB.String()+"/pdf?month=2026-10", nil); rec.Code != http.StatusOK {
+		t.Errorf("client without tickets: status %d", rec.Code)
+	}
+	expectProblem(t, te.supervisor.do(http.MethodGet, "/reports/sla/clients/"+uuid.NewString()+"/pdf", nil), http.StatusNotFound, apperr.CodeNotFound)
 }

@@ -2542,6 +2542,12 @@ type GetSlaReportParams struct {
 	Month *ReportMonth `form:"month,omitempty" json:"month,omitempty"`
 }
 
+// ExportSlaReportPdfParams defines parameters for ExportSlaReportPdf.
+type ExportSlaReportPdfParams struct {
+	// Month A month such as `2026-11`; the current month when left out.
+	Month *ReportMonth `form:"month,omitempty" json:"month,omitempty"`
+}
+
 // ExportSlaReportExcelParams defines parameters for ExportSlaReportExcel.
 type ExportSlaReportExcelParams struct {
 	// Month A month such as `2026-11`; the current month when left out.
@@ -2825,6 +2831,9 @@ type ServerInterface interface {
 	// GetSlaReport The monthly SLA report for every client (supervisors and admins)
 	// (GET /reports/sla)
 	GetSlaReport(w http.ResponseWriter, r *http.Request, params GetSlaReportParams)
+	// ExportSlaReportPdf One client's monthly SLA report as a PDF (supervisors and admins)
+	// (GET /reports/sla/clients/{clientId}/pdf)
+	ExportSlaReportPdf(w http.ResponseWriter, r *http.Request, clientId ClientId, params ExportSlaReportPdfParams)
 	// ExportSlaReportExcel The monthly SLA report for every client as an Excel file (supervisors and admins)
 	// (GET /reports/sla/excel)
 	ExportSlaReportExcel(w http.ResponseWriter, r *http.Request, params ExportSlaReportExcelParams)
@@ -3209,6 +3218,12 @@ func (_ Unimplemented) UpdateProjectSla(w http.ResponseWriter, r *http.Request, 
 // GetSlaReport The monthly SLA report for every client (supervisors and admins)
 // (GET /reports/sla)
 func (_ Unimplemented) GetSlaReport(w http.ResponseWriter, r *http.Request, params GetSlaReportParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ExportSlaReportPdf One client's monthly SLA report as a PDF (supervisors and admins)
+// (GET /reports/sla/clients/{clientId}/pdf)
+func (_ Unimplemented) ExportSlaReportPdf(w http.ResponseWriter, r *http.Request, clientId ClientId, params ExportSlaReportPdfParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4479,6 +4494,48 @@ func (siw *ServerInterfaceWrapper) GetSlaReport(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ExportSlaReportPdf operation middleware
+func (siw *ServerInterfaceWrapper) ExportSlaReportPdf(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "clientId" -------------
+	var clientId ClientId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "clientId", chi.URLParam(r, "clientId"), &clientId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clientId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExportSlaReportPdfParams
+
+	// ------------- Optional query parameter "month" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "month", r.URL.Query(), &params.Month, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "month"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "month", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportSlaReportPdf(w, r, clientId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ExportSlaReportExcel operation middleware
 func (siw *ServerInterfaceWrapper) ExportSlaReportExcel(w http.ResponseWriter, r *http.Request) {
 
@@ -5663,6 +5720,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/reports/sla/excel", wrapper.ExportSlaReportExcel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/reports/sla/clients/{clientId}/pdf", wrapper.ExportSlaReportPdf)
 	})
 
 	return r
@@ -9682,6 +9742,126 @@ func (response GetSlaReportdefaultApplicationProblemPlusJSONResponse) VisitGetSl
 	return err
 }
 
+type ExportSlaReportPdfRequestObject struct {
+	ClientId ClientId `json:"clientId"`
+	Params   ExportSlaReportPdfParams
+}
+
+type ExportSlaReportPdfResponseObject interface {
+	VisitExportSlaReportPdfResponse(w http.ResponseWriter) error
+}
+
+type ExportSlaReportPdf200ResponseHeaders struct {
+	CacheControl          *string
+	ContentDisposition    *string
+	ContentSecurityPolicy *string
+}
+
+type ExportSlaReportPdf200ApplicationpdfResponse struct {
+	Body          io.Reader
+	Headers       ExportSlaReportPdf200ResponseHeaders
+	ContentLength int64
+}
+
+func (response ExportSlaReportPdf200ApplicationpdfResponse) VisitExportSlaReportPdfResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/pdf")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.ContentSecurityPolicy != nil {
+		w.Header().Set("Content-Security-Policy", fmt.Sprint(*response.Headers.ContentSecurityPolicy))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportSlaReportPdf400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ExportSlaReportPdf400ApplicationProblemPlusJSONResponse) VisitExportSlaReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportSlaReportPdf401ApplicationProblemPlusJSONResponse Problem
+
+func (response ExportSlaReportPdf401ApplicationProblemPlusJSONResponse) VisitExportSlaReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportSlaReportPdf403ApplicationProblemPlusJSONResponse Problem
+
+func (response ExportSlaReportPdf403ApplicationProblemPlusJSONResponse) VisitExportSlaReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportSlaReportPdf404ApplicationProblemPlusJSONResponse Problem
+
+func (response ExportSlaReportPdf404ApplicationProblemPlusJSONResponse) VisitExportSlaReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportSlaReportPdfdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ExportSlaReportPdfdefaultApplicationProblemPlusJSONResponse) VisitExportSlaReportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ExportSlaReportExcelRequestObject struct {
 	Params ExportSlaReportExcelParams
 }
@@ -12214,6 +12394,9 @@ type StrictServerInterface interface {
 	// GetSlaReport The monthly SLA report for every client (supervisors and admins)
 	// (GET /reports/sla)
 	GetSlaReport(ctx context.Context, request GetSlaReportRequestObject) (GetSlaReportResponseObject, error)
+	// ExportSlaReportPdf One client's monthly SLA report as a PDF (supervisors and admins)
+	// (GET /reports/sla/clients/{clientId}/pdf)
+	ExportSlaReportPdf(ctx context.Context, request ExportSlaReportPdfRequestObject) (ExportSlaReportPdfResponseObject, error)
 	// ExportSlaReportExcel The monthly SLA report for every client as an Excel file (supervisors and admins)
 	// (GET /reports/sla/excel)
 	ExportSlaReportExcel(ctx context.Context, request ExportSlaReportExcelRequestObject) (ExportSlaReportExcelResponseObject, error)
@@ -13751,6 +13934,33 @@ func (sh *strictHandler) GetSlaReport(w http.ResponseWriter, r *http.Request, pa
 	}
 }
 
+// ExportSlaReportPdf operation middleware
+func (sh *strictHandler) ExportSlaReportPdf(w http.ResponseWriter, r *http.Request, clientId ClientId, params ExportSlaReportPdfParams) {
+	var request ExportSlaReportPdfRequestObject
+
+	request.ClientId = clientId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportSlaReportPdf(ctx, request.(ExportSlaReportPdfRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportSlaReportPdf")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportSlaReportPdfResponseObject); ok {
+		if err := validResponse.VisitExportSlaReportPdfResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ExportSlaReportExcel operation middleware
 func (sh *strictHandler) ExportSlaReportExcel(w http.ResponseWriter, r *http.Request, params ExportSlaReportExcelParams) {
 	var request ExportSlaReportExcelRequestObject
@@ -14735,58 +14945,60 @@ var swaggerSpec = []string{
 	"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",
-	"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",
-	"5/8TAAD//w==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
