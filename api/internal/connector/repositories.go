@@ -107,14 +107,15 @@ type CreateInput struct {
 }
 
 type Service struct {
-	store  *store.Store
-	box    *secretbox.Box
-	appURL *url.URL
-	jobs   tickets.JobInserter
+	store   *store.Store
+	box     *secretbox.Box
+	appURL  *url.URL
+	jobs    tickets.JobInserter
+	tickets *tickets.Service
 }
 
-func NewService(st *store.Store, box *secretbox.Box, appURL *url.URL, jobs tickets.JobInserter) *Service {
-	return &Service{store: st, box: box, appURL: appURL, jobs: jobs}
+func NewService(st *store.Store, box *secretbox.Box, appURL *url.URL, jobs tickets.JobInserter, ticketSvc *tickets.Service) *Service {
+	return &Service{store: st, box: box, appURL: appURL, jobs: jobs, tickets: ticketSvc}
 }
 
 // Overview lists the connected repositories with their projects.

@@ -113,21 +113,28 @@ func (q *Queries) InsertSeedDoDItem(ctx context.Context, arg InsertSeedDoDItemPa
 }
 
 const insertTicketDoDItems = `-- name: InsertTicketDoDItems :many
-INSERT INTO ticket_dod_items (ticket_id, item, done_by)
-SELECT $1, unnest($2::text[]), $3::uuid
+INSERT INTO ticket_dod_items (ticket_id, item, done_by, code_event_id)
+SELECT $1, unnest($2::text[]), $3::uuid, $4::uuid
 ON CONFLICT (ticket_id, item) DO NOTHING
 RETURNING item
 `
 
 type InsertTicketDoDItemsParams struct {
-	TicketID uuid.UUID
-	Items    []string
-	DoneBy   *uuid.UUID
+	TicketID    uuid.UUID
+	Items       []string
+	DoneBy      *uuid.UUID
+	CodeEventID *uuid.UUID
 }
 
-// Returns the items newly met; items already met keep their first time and person.
+// Returns the items newly met; items already met keep their first time and person. A code
+// item names the code event that met it.
 func (q *Queries) InsertTicketDoDItems(ctx context.Context, arg InsertTicketDoDItemsParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, insertTicketDoDItems, arg.TicketID, arg.Items, arg.DoneBy)
+	rows, err := q.db.Query(ctx, insertTicketDoDItems,
+		arg.TicketID,
+		arg.Items,
+		arg.DoneBy,
+		arg.CodeEventID,
+	)
 	if err != nil {
 		return nil, err
 	}

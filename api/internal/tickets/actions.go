@@ -71,37 +71,44 @@ func (s *Service) SetAssignee(ctx context.Context, p *auth.Principal, key string
 			}
 			to = &ref
 		}
-		from := ticket.Status(row.Status)
-		status := ticket.StatusAfterAssignment(from, assigneeID != nil)
-		if err := tx.Q.UpdateTicketAssignee(ctx, db.UpdateTicketAssigneeParams{
-			ID: row.ID, AssigneeID: assigneeID, Status: string(status),
-		}); err != nil {
-			return err
-		}
-		var old, next any
+		var from *clients.Ref
 		if row.AssigneeID != nil && row.AssigneeName != nil {
-			old = refData(*row.AssigneeID, *row.AssigneeName)
+			from = &clients.Ref{ID: *row.AssigneeID, Name: *row.AssigneeName}
 		}
-		if to != nil {
-			next = refData(to.ID, to.Name)
-		}
-		actor := p.AuditActor()
-		if err := cs.write(ctx, tx.Q, actor.Entry(ActionAssigneeChanged, TargetTicket, &row.ID, map[string]any{
-			dataAssignee: audit.Change{From: old, To: next},
-		})); err != nil {
-			return err
-		}
-		if status == from {
-			return nil
-		}
-		return cs.write(ctx, tx.Q, actor.Entry(ActionStatusChanged, TargetTicket, &row.ID, map[string]any{
-			dataStatus: audit.Change{From: from, To: status}, dataCause: ticket.CauseAssignment,
-		}))
+		return writeAssignee(ctx, tx.Q, cs, p.AuditActor(), ticket.Status(row.Status), from, to)
 	})
 	if err != nil {
 		return Ticket{}, err
 	}
 	return s.Get(ctx, p, key)
+}
+
+// writeAssignee stores a new assignee (nil to unassign) and its audit entries. Assigning a new
+// ticket makes it assigned and unassigning an assigned ticket makes it new again.
+func writeAssignee(ctx context.Context, q *db.Queries, cs *changeSet, actor audit.Actor, cur ticket.Status, from, to *clients.Ref) error {
+	var toID *uuid.UUID
+	var old, next any
+	if from != nil {
+		old = refData(from.ID, from.Name)
+	}
+	if to != nil {
+		toID, next = &to.ID, refData(to.ID, to.Name)
+	}
+	status := ticket.StatusAfterAssignment(cur, to != nil)
+	if err := q.UpdateTicketAssignee(ctx, db.UpdateTicketAssigneeParams{ID: cs.ticketID, AssigneeID: toID, Status: string(status)}); err != nil {
+		return err
+	}
+	if err := cs.write(ctx, q, actor.Entry(ActionAssigneeChanged, TargetTicket, &cs.ticketID, map[string]any{
+		dataAssignee: audit.Change{From: old, To: next},
+	})); err != nil {
+		return err
+	}
+	if status == cur {
+		return nil
+	}
+	return cs.write(ctx, q, actor.Entry(ActionStatusChanged, TargetTicket, &cs.ticketID, map[string]any{
+		dataStatus: audit.Change{From: cur, To: status}, dataCause: ticket.CauseAssignment,
+	}))
 }
 
 // SetPriority changes the priority. Agents must say why (HANDOFF §3); the reason goes to the

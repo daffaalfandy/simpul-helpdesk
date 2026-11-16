@@ -1890,11 +1890,31 @@ export interface components {
         TicketProgressStep: "received" | "assigned" | "in_progress" | "ready_for_test" | "resolved";
         /** @enum {string} */
         TicketProgressState: "done" | "current" | "upcoming" | "skipped";
+        /** @enum {string} */
+        CodeEventKind: "commit" | "pr_opened" | "pr_merged" | "pr_closed" | "pipeline" | "deployment";
+        /**
+         * @description What a code event did to a ticket: linked it, showed a pull/merge request in review,
+         *     ticked a Definition of Done item, or reopened it. `ticket_closed`, `unknown_ticket` and
+         *     `other_repository` (the ticket's project reads another repository) were ignored.
+         * @enum {string}
+         */
+        CodeOutcome: "linked" | "in_review" | "fix_committed" | "merged" | "ci_passed" | "deployed" | "reopened" | "ticket_closed" | "unknown_ticket" | "other_repository";
+        TicketActivityCode: {
+            provider: components["schemas"]["GitProvider"];
+            kind: components["schemas"]["CodeEventKind"];
+            /** @description A short commit sha, a request or run number, or the environment deployed to. */
+            ref: string;
+            branch: string;
+            /** @description The branch a pull/merge request merges into. */
+            target: string;
+            outcome: components["schemas"]["CodeOutcome"];
+            items: components["schemas"]["DodItem"][];
+        };
         /**
          * @description `sla_at_risk` and `sla_breached` name the clock (first_response or resolution) in `to`.
          * @enum {string}
          */
-        TicketActivityAction: "created" | "status_changed" | "assignee_changed" | "priority_changed" | "reply_added" | "note_added" | "first_responded" | "sla_at_risk" | "sla_breached" | "dod_changed";
+        TicketActivityAction: "created" | "status_changed" | "assignee_changed" | "priority_changed" | "reply_added" | "note_added" | "first_responded" | "sla_at_risk" | "sla_breached" | "dod_changed" | "code_linked";
         /**
          * @description Why the status changed when it wasn't a plain move by hand: the system moved it
          *     (assignment, requester_reply, uat_auto_approved, auto_closed), the client answered
@@ -2220,6 +2240,8 @@ export interface components {
             cause: components["schemas"]["TicketStatusCause"] | null;
             /** @description Set on created. */
             channel: components["schemas"]["TicketChannel"] | null;
+            /** @description Set on code_linked. */
+            code: components["schemas"]["TicketActivityCode"] | null;
         };
     };
     responses: {

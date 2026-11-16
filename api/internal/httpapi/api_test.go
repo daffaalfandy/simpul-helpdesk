@@ -115,7 +115,7 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	connectorSvc := connector.NewService(st, box, u, late)
+	connectorSvc := connector.NewService(st, box, u, late, ticketSvc)
 	process := connector.NewProcessWorker(connectorSvc, log)
 	river.AddWorker(workers, process)
 	jobs, err := river.NewClient(riverpgxv5.New(st.Pool()), &river.Config{Workers: workers})

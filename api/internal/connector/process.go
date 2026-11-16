@@ -33,10 +33,11 @@ func (w *ProcessWorker) Work(ctx context.Context, job *river.Job[ProcessArgs]) e
 
 // storedEvent is a code event as recorded, with the tickets its text names.
 type storedEvent struct {
-	ID       uuid.UUID
-	Event    gitevent.Event
-	Refs     []commitmsg.Ref
-	AuthorID *uuid.UUID // the staff member who wrote it, matched by email
+	ID         uuid.UUID
+	Event      gitevent.Event
+	Refs       []commitmsg.Ref
+	AuthorID   *uuid.UUID // the staff member who wrote it, matched by email
+	AuthorName string     // their name, else the provider's login or name
 }
 
 func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid.UUID) error {
@@ -69,13 +70,18 @@ func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid
 		if err != nil {
 			return err
 		}
-		id, err := q.UpsertCodeEvent(ctx, codeEventParams(d.RepositoryID, deliveryID, e, author))
+		var authorID *uuid.UUID
+		name := authorName(e.Author.Login, e.Author.Name, nil)
+		if author != nil {
+			authorID, name = &author.ID, author.Name
+		}
+		id, err := q.UpsertCodeEvent(ctx, codeEventParams(d.RepositoryID, deliveryID, e, authorID))
 		if err != nil {
 			return err
 		}
-		events = append(events, storedEvent{ID: id, Event: e, Refs: refs, AuthorID: author})
+		events = append(events, storedEvent{ID: id, Event: e, Refs: refs, AuthorID: authorID, AuthorName: name})
 	}
-	if err := s.apply(ctx, d.RepositoryID, events); err != nil {
+	if err := s.apply(ctx, gitevent.Provider(d.Provider), d.RepositoryID, events); err != nil {
 		return err
 	}
 	return q.MarkDeliveryProcessed(ctx, deliveryID)
@@ -99,7 +105,7 @@ func refsOf(p *commitmsg.Parser, e gitevent.Event) []commitmsg.Ref {
 	return nil
 }
 
-func (s *Service) staffByEmail(ctx context.Context, q *db.Queries, email string) (*uuid.UUID, error) {
+func (s *Service) staffByEmail(ctx context.Context, q *db.Queries, email string) (*db.FindStaffByEmailRow, error) {
 	if email == "" {
 		return nil, nil
 	}
@@ -110,7 +116,19 @@ func (s *Service) staffByEmail(ctx context.Context, q *db.Queries, email string)
 	if err != nil {
 		return nil, err
 	}
-	return &u.ID, nil
+	return &u, nil
+}
+
+// authorName is how the activity log names an event's author: the staff member when known,
+// else the provider's login, else the name in the commit.
+func authorName(login, name string, member *string) string {
+	switch {
+	case member != nil:
+		return *member
+	case login != "":
+		return login
+	}
+	return name
 }
 
 func codeEventParams(repoID, deliveryID uuid.UUID, e gitevent.Event, author *uuid.UUID) db.UpsertCodeEventParams {
@@ -124,6 +142,3 @@ func codeEventParams(repoID, deliveryID uuid.UUID, e gitevent.Event, author *uui
 		AuthorLogin: e.Author.Login, AuthorUserID: author, DeliveryID: &deliveryID, OccurredAt: e.OccurredAt,
 	}
 }
-
-// apply applies the delivery's events to the tickets they reach (the next step).
-func (s *Service) apply(_ context.Context, _ uuid.UUID, _ []storedEvent) error { return nil }

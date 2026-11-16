@@ -205,7 +205,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	river.AddWorker(workers, notifications.NewPicEmailWorker(notifyMailer))
 	ticketSvc := tickets.NewService(st, files, slaSvc, late)
 	river.AddWorker(workers, tickets.NewLifecycleScanner(ticketSvc, log))
-	connectorSvc := connector.NewService(st, box, cfg.AppURL, late)
+	connectorSvc := connector.NewService(st, box, cfg.AppURL, late, ticketSvc)
 	river.AddWorker(workers, connector.NewProcessWorker(connectorSvc, log))
 	river.AddWorker(workers, connector.NewPurgeWorker(st))
 	riverCfg := &river.Config{Workers: workers, Logger: log.With("component", "jobs")}

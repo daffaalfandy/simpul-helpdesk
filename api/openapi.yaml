@@ -2559,11 +2559,42 @@ components:
       type: string
       enum: [done, current, upcoming, skipped]
 
+    CodeEventKind:
+      type: string
+      enum: [commit, pr_opened, pr_merged, pr_closed, pipeline, deployment]
+
+    CodeOutcome:
+      type: string
+      description: |
+        What a code event did to a ticket: linked it, showed a pull/merge request in review,
+        ticked a Definition of Done item, or reopened it. `ticket_closed`, `unknown_ticket` and
+        `other_repository` (the ticket's project reads another repository) were ignored.
+      enum: [linked, in_review, fix_committed, merged, ci_passed, deployed, reopened, ticket_closed, unknown_ticket,
+             other_repository]
+
+    TicketActivityCode:
+      type: object
+      required: [provider, kind, ref, branch, target, outcome, items]
+      properties:
+        provider: { $ref: "#/components/schemas/GitProvider" }
+        kind: { $ref: "#/components/schemas/CodeEventKind" }
+        ref:
+          type: string
+          description: A short commit sha, a request or run number, or the environment deployed to.
+        branch: { type: string }
+        target:
+          type: string
+          description: The branch a pull/merge request merges into.
+        outcome: { $ref: "#/components/schemas/CodeOutcome" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DodItem" }
+
     TicketActivityAction:
       type: string
       description: "`sla_at_risk` and `sla_breached` name the clock (first_response or resolution) in `to`."
       enum: [created, status_changed, assignee_changed, priority_changed, reply_added, note_added, first_responded,
-             sla_at_risk, sla_breached, dod_changed]
+             sla_at_risk, sla_breached, dod_changed, code_linked]
 
     TicketStatusCause:
       type: string
@@ -2965,7 +2996,7 @@ components:
 
     TicketActivity:
       type: object
-      required: [id, at, actorName, action, from, to, reason, cause, channel]
+      required: [id, at, actorName, action, from, to, reason, cause, channel, code]
       description: |
         One activity-log line. `from`/`to` hold statuses (status_changed), priorities
         (priority_changed) or assignee names (assignee_changed; null = unassigned).
@@ -2987,3 +3018,7 @@ components:
           allOf: [{ $ref: "#/components/schemas/TicketChannel" }]
           nullable: true
           description: Set on created.
+        code:
+          allOf: [{ $ref: "#/components/schemas/TicketActivityCode" }]
+          nullable: true
+          description: Set on code_linked.

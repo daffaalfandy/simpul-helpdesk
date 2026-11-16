@@ -8,7 +8,10 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
@@ -27,6 +30,7 @@ const (
 	ActivitySLAAtRisk       ActivityAction = "sla_at_risk"  // To names the clock
 	ActivitySLABreached     ActivityAction = "sla_breached" // To names the clock
 	ActivityDoDChanged      ActivityAction = "dod_changed"  // From and To name the source (project or ticket)
+	ActivityCodeLinked      ActivityAction = "code_linked"  // Code says which event and what it did
 )
 
 // ActivityEntry is one line of a ticket's activity log. From and To hold statuses,
@@ -41,6 +45,18 @@ type ActivityEntry struct {
 	Reason    *string
 	Cause     *ticket.Cause
 	Channel   *ticket.Channel
+	Code      *ActivityCode
+}
+
+// ActivityCode is what a code event did to the ticket.
+type ActivityCode struct {
+	Provider gitevent.Provider
+	Kind     gitevent.Kind
+	Ref      string
+	Branch   string
+	Target   string
+	Outcome  codeflow.Outcome
+	Items    []dod.Item
 }
 
 // refJSON is the stored form of refData.
@@ -110,6 +126,17 @@ func activityFromRow(r db.ListAuditByTargetRow) (ActivityEntry, bool) {
 			e.Action = ActivitySLABreached
 		}
 		e.To = decode[string](data, dataClock)
+	case ActionCodeLinked:
+		e.Action = ActivityCodeLinked
+		e.Code = &ActivityCode{
+			Provider: deref(decode[gitevent.Provider](data, dataProvider)), Kind: deref(decode[gitevent.Kind](data, dataCodeKind)),
+			Ref: deref(decode[string](data, dataCodeRef)), Branch: deref(decode[string](data, dataBranch)),
+			Target: deref(decode[string](data, dataTarget)), Outcome: deref(decode[codeflow.Outcome](data, dataOutcome)),
+			Items: deref(decode[[]dod.Item](data, dataItems)),
+		}
+		if e.Code.Items == nil {
+			e.Code.Items = []dod.Item{}
+		}
 	case ActionDoDChanged:
 		e.Action = ActivityDoDChanged
 		if c := decode[change[string]](data, dataDoDSource); c != nil {

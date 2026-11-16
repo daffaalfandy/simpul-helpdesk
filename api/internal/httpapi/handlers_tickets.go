@@ -210,6 +210,16 @@ func (s *server) ListTicketActivity(ctx context.Context, req gen.ListTicketActiv
 			c := gen.TicketChannel(*e.Channel)
 			a.Channel = &c
 		}
+		if e.Code != nil {
+			items := make([]gen.DodItem, len(e.Code.Items))
+			for j, it := range e.Code.Items {
+				items[j] = gen.DodItem(it)
+			}
+			a.Code = &gen.TicketActivityCode{
+				Provider: gen.GitProvider(e.Code.Provider), Kind: gen.CodeEventKind(e.Code.Kind), Ref: e.Code.Ref,
+				Branch: e.Code.Branch, Target: e.Code.Target, Outcome: gen.CodeOutcome(e.Code.Outcome), Items: items,
+			}
+		}
 		out[i] = a
 	}
 	return out, nil

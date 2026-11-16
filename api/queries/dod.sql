@@ -6,9 +6,10 @@ WHERE i.ticket_id = @ticket_id
 ORDER BY i.done_at, i.item;
 
 -- name: InsertTicketDoDItems :many
--- Returns the items newly met; items already met keep their first time and person.
-INSERT INTO ticket_dod_items (ticket_id, item, done_by)
-SELECT @ticket_id, unnest(@items::text[]), sqlc.narg(done_by)::uuid
+-- Returns the items newly met; items already met keep their first time and person. A code
+-- item names the code event that met it.
+INSERT INTO ticket_dod_items (ticket_id, item, done_by, code_event_id)
+SELECT @ticket_id, unnest(@items::text[]), sqlc.narg(done_by)::uuid, sqlc.narg(code_event_id)::uuid
 ON CONFLICT (ticket_id, item) DO NOTHING
 RETURNING item;
 

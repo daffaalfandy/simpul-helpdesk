@@ -5,10 +5,12 @@ import "github.com/google/uuid"
 // ActorNameCLI names the actor for changes made from the command line.
 const ActorNameCLI = "cli"
 
-// Actor is who made a change: a signed-in user, or the system (CLI, jobs).
+// Actor is who made a change: a signed-in user, the system (CLI, jobs), or code activity from
+// GitHub/GitLab.
 type Actor struct {
 	UserID *uuid.UUID
 	Name   string
+	git    bool
 }
 
 func UserActor(id uuid.UUID, name string) Actor { return Actor{UserID: &id, Name: name} }
@@ -16,9 +18,18 @@ func UserActor(id uuid.UUID, name string) Actor { return Actor{UserID: &id, Name
 // SystemActor is a non-user actor such as the CLI.
 func SystemActor(name string) Actor { return Actor{Name: name} }
 
+// GitActor is code activity: a commit, pull/merge request, CI run or deployment. userID is the
+// staff member who wrote the code when their email is known, so they aren't notified of it.
+func GitActor(userID *uuid.UUID, name string) Actor {
+	return Actor{UserID: userID, Name: name, git: true}
+}
+
 func (a Actor) Entry(action, targetType string, targetID *uuid.UUID, data map[string]any) Entry {
 	kind := ActorSystem
-	if a.UserID != nil {
+	switch {
+	case a.git:
+		kind = ActorGit
+	case a.UserID != nil:
 		kind = ActorUser
 	}
 	return Entry{

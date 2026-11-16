@@ -5,7 +5,10 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
@@ -56,7 +59,7 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		"TicketActivityAction": strs(tickets.ActivityCreated, tickets.ActivityStatusChanged,
 			tickets.ActivityAssigneeChanged, tickets.ActivityPriorityChanged, tickets.ActivityReplyAdded,
 			tickets.ActivityNoteAdded, tickets.ActivityFirstResponded, tickets.ActivitySLAAtRisk, tickets.ActivitySLABreached,
-			tickets.ActivityDoDChanged),
+			tickets.ActivityDoDChanged, tickets.ActivityCodeLinked),
 		"NotificationEvent":  strs(notification.Events...),
 		"NotificationKind":   strs(notification.Kinds...),
 		"NotificationFilter": strs(notification.Filters...),
@@ -69,6 +72,12 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		"SlaCalendar":        strs(sla.CalendarBusinessHours, sla.CalendarAlways),
 		"DurationUnit":       strs(sla.Units...),
 		"DodBranch":          strs(dod.Branches...),
+		"GitProvider":        strs(gitevent.Providers...),
+		"CodeEventKind":      strs(gitevent.Kinds...),
+		"CodeOutcome":        strs(codeflow.Outcomes...),
+		"RepositoryStatus":   strs(connector.StatusWaiting, connector.StatusConnected, connector.StatusFailing),
+		"RepositoryError": strs(connector.ErrorBadSignature, connector.ErrorRepositoryMismatch, connector.ErrorMalformed,
+			connector.ErrorTooLarge),
 		"AutoApproveDays": func() []string {
 			out := make([]string, len(dod.AutoApproveDayOptions))
 			for i, d := range dod.AutoApproveDayOptions {
@@ -113,6 +122,8 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		{"PriorityLevel", "description", priorities.MaxDescriptionLen, 0},
 		{"BoardColumn", "cards", 0, tickets.BoardColumnLimit},
 		{"Board", "columns", 0, len(ticket.Columns)},
+		{"RepositoryCreate", "projectIds", 0, connector.MaxLinkedProjects},
+		{"RepositoryUpdate", "projectIds", 0, connector.MaxLinkedProjects},
 	}
 	for _, l := range limits {
 		prop := schemas[l.schema].Value.Properties[l.field].Value
