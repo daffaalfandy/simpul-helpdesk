@@ -71,3 +71,9 @@ JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.id = @id
 FOR UPDATE OF t;
+
+-- name: InsertSeedDoDItem :exec
+-- Seed only: an item met at an explicit time.
+INSERT INTO ticket_dod_items (ticket_id, item, done_at, done_by)
+VALUES (@ticket_id, @item, @done_at, sqlc.narg(done_by))
+ON CONFLICT (ticket_id, item) DO NOTHING;

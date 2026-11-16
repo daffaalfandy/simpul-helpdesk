@@ -109,6 +109,30 @@ func (q *Queries) GetTicketForLifecycle(ctx context.Context, id uuid.UUID) (GetT
 	return i, err
 }
 
+const insertSeedDoDItem = `-- name: InsertSeedDoDItem :exec
+INSERT INTO ticket_dod_items (ticket_id, item, done_at, done_by)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (ticket_id, item) DO NOTHING
+`
+
+type InsertSeedDoDItemParams struct {
+	TicketID uuid.UUID
+	Item     string
+	DoneAt   time.Time
+	DoneBy   *uuid.UUID
+}
+
+// Seed only: an item met at an explicit time.
+func (q *Queries) InsertSeedDoDItem(ctx context.Context, arg InsertSeedDoDItemParams) error {
+	_, err := q.db.Exec(ctx, insertSeedDoDItem,
+		arg.TicketID,
+		arg.Item,
+		arg.DoneAt,
+		arg.DoneBy,
+	)
+	return err
+}
+
 const insertTicketDoDItems = `-- name: InsertTicketDoDItems :many
 INSERT INTO ticket_dod_items (ticket_id, item, done_by)
 SELECT $1, unnest($2::text[]), $3::uuid

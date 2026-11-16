@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
@@ -35,12 +38,15 @@ type SeedTicket struct {
 	Messages      []SeedMessage
 }
 
-// SeedStep is a change after creation: an assignee change, a status change, or both.
+// SeedStep is a change after creation: an assignee change, a status change, or both. A move
+// with CauseUATApproved is the client approving the test, which meets the client items of the
+// project's Definition of Done.
 type SeedStep struct {
 	At       time.Time
 	Actor    Ref
 	Assignee *Ref          // assign to this person
 	Status   ticket.Status // move to this status
+	Cause    ticket.Cause  // why the status moved, when it wasn't by hand
 }
 
 type SeedMessage struct {
@@ -64,6 +70,7 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 	status, assignee := ticket.StatusNew, (*Ref)(nil)
 	statusChangedAt := t.CreatedAt
 	var resolvedAt *time.Time
+	var approvals []SeedStep
 	entries := []seedEntry{}
 	for _, st := range t.Steps {
 		if st.Assignee != nil {
@@ -77,8 +84,11 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 			}
 		}
 		if st.Status != "" && st.Status != status {
-			entries = append(entries, statusEntry(st.At, st.Actor, status, st.Status, ""))
+			entries = append(entries, statusEntry(st.At, st.Actor, status, st.Status, st.Cause))
 			status, statusChangedAt = st.Status, st.At
+			if st.Cause == ticket.CauseUATApproved {
+				approvals = append(approvals, st)
+			}
 			if ticket.MarksResolved(status) {
 				at := st.At
 				resolvedAt = &at
@@ -156,6 +166,16 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 				data: map[string]any{dataMessageID: msgID}})
 		}
 	}
+	for _, st := range approvals {
+		items, err := seedClientItems(ctx, q, id, t.ProjectID, st)
+		if err != nil {
+			return false, err
+		}
+		if len(items) > 0 {
+			entries = append(entries, seedEntry{at: st.At, actor: st.Actor, action: ActionDoDItemsDone,
+				data: map[string]any{dataItems: items}})
+		}
+	}
 	for _, e := range entries {
 		data, err := json.Marshal(e.data)
 		if err != nil {
@@ -170,6 +190,27 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 		}
 	}
 	return true, nil
+}
+
+// seedClientItems meets the client items of the project's Definition of Done for an approval.
+func seedClientItems(ctx context.Context, q *db.Queries, ticketID, projectID uuid.UUID, st SeedStep) ([]string, error) {
+	p, err := projects.Load(ctx, q, projectID)
+	if err != nil {
+		return nil, err
+	}
+	var items []string
+	for _, it := range dod.Required(p.DoD) {
+		if !slices.Contains(dod.ClientItems, it) {
+			continue
+		}
+		if err := q.InsertSeedDoDItem(ctx, db.InsertSeedDoDItemParams{
+			TicketID: ticketID, Item: string(it), DoneAt: st.At, DoneBy: &st.Actor.ID,
+		}); err != nil {
+			return nil, err
+		}
+		items = append(items, string(it))
+	}
+	return items, nil
 }
 
 func statusEntry(at time.Time, actor Ref, from, to ticket.Status, cause ticket.Cause) seedEntry {

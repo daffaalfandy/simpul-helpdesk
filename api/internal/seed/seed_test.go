@@ -4,14 +4,19 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"testing"
+
+	"github.com/riverqueue/river"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/holidaypreset"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/seed"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
 func TestMain(m *testing.M) { os.Exit(testdb.Main(m)) }
@@ -67,6 +72,11 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"emails pending":        count(`SELECT count(*) FROM notifications WHERE email AND emailed_at IS NULL`),
 		"internal notes to client staff": count(`SELECT count(*) FROM notifications n JOIN users u ON u.id = n.user_id
 			WHERE n.event_type = 'internal_note' AND u.role = 'requester'`),
+		"projects asking for UAT":      count(`SELECT count(*) FROM projects WHERE (dod_config->'uat'->>'enabled')::boolean`),
+		"projects asking to confirm":   count(`SELECT count(*) FROM projects WHERE (dod_config->>'requester_confirms')::boolean`),
+		"in UAT":                       count(`SELECT count(*) FROM tickets WHERE status = 'in_uat'`),
+		"items met by the requester":   count(`SELECT count(*) FROM ticket_dod_items i JOIN tickets t ON t.id = i.ticket_id WHERE i.done_by = t.requester_id`),
+		"UAT requests to client staff": count(`SELECT count(*) FROM notifications WHERE event_type = 'uat_requested'`),
 	}
 	want := map[string]int{
 		"users": 11, "clients": 8, "agent links": 7,
@@ -75,6 +85,8 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"tickets": 12, "messages": 10, "internal notes": 1, "ticket history": 12, "next number": 24891,
 		"resolved today": 1, "assigned, not started": 1,
 		"watchers": 1, "notifications": 42, "emails pending": 0, "internal notes to client staff": 0,
+		"projects asking for UAT": 2, "projects asking to confirm": 2, "in UAT": 1, "items met by the requester": 1,
+		"UAT requests to client staff": 2,
 	}
 	for k, w := range want {
 		if got[k] != w {
@@ -88,6 +100,15 @@ func TestSeedIsIdempotent(t *testing.T) {
 	org, err := st.Q().GetOrganization(ctx)
 	if err != nil || org.Name != seed.OrgName {
 		t.Fatalf("org = %+v err %v", org, err)
+	}
+
+	// No client deadline has passed yet: the demo's tests and reopen windows are all open.
+	scan := tickets.NewLifecycleScanner(tickets.NewService(st, nil, sla.NewService(st, nil), nil), slog.New(slog.DiscardHandler))
+	if err := scan.Work(ctx, &river.Job[tickets.LifecycleScanArgs]{}); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(`SELECT count(*) FROM audit_log WHERE actor_name = '` + tickets.ActorNameLifecycle + `'`); n != 0 {
+		t.Errorf("the lifecycle scan moved %d demo tickets", n)
 	}
 }
 

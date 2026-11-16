@@ -46,6 +46,7 @@ type demoStep struct {
 	actor    string
 	assignee string        // email; empty keeps the assignee
 	status   ticket.Status // empty keeps the status
+	cause    ticket.Cause  // why the status moved, when it wasn't by hand
 }
 
 type demoMessage struct {
@@ -76,7 +77,8 @@ const (
 )
 
 // demoTickets are the mock's example tickets (HANDOFF §16 and the board mock), by number.
-// Code activity arrives with M7.
+// Code activity arrives with M7. Resolved tickets stay inside their reopen window when the seed
+// runs: resolved under 2 days ago is always under 3 working days.
 var demoTickets = []demoTicket{
 	{
 		number: 24826, typ: ticket.TypeIncident, priority: sla.P2, channel: ticket.ChannelPortal,
@@ -84,7 +86,7 @@ var demoTickets = []demoTicket{
 		subject:     "SIPD export to Excel times out",
 		description: "Exporting the monthly budget realisation to Excel stops with a timeout after about a minute. Smaller exports still work.",
 		age:         2 * minutesPerDay,
-		steps:       []demoStep{{15, emailYoga, emailYoga, ""}, {40, emailYoga, "", ticket.StatusInProgress}},
+		steps:       []demoStep{{15, emailYoga, emailYoga, "", ""}, {40, emailYoga, "", ticket.StatusInProgress, ""}},
 		messages: []demoMessage{
 			{12, emailYoga, false, "Hi Bu Sri, we can reproduce the timeout on exports over 5,000 rows. We're working on it."},
 		},
@@ -96,8 +98,8 @@ var demoTickets = []demoTicket{
 		description: "Disposition letters printed to PDF after 17:00 show tomorrow's date.",
 		age:         40 * minutesPerHour,
 		steps: []demoStep{
-			{10, emailRina, emailAdi, ""}, {30, emailAdi, "", ticket.StatusInProgress},
-			{15 * minutesPerHour, emailAdi, "", ticket.StatusInUAT},
+			{10, emailRina, emailAdi, "", ""}, {30, emailAdi, "", ticket.StatusInProgress, ""},
+			{15 * minutesPerHour, emailAdi, "", ticket.StatusInUAT, ""},
 		},
 		messages: []demoMessage{
 			{25, emailAdi, false, "Thanks Pak Hendra. The PDF uses the server's UTC date; we're switching it to WIB."},
@@ -109,10 +111,10 @@ var demoTickets = []demoTicket{
 		client: RequesterClient, requester: emailDian, creator: emailRina, what: projectWebsite,
 		subject:     "News page still shows last month's banner",
 		description: "Bu Dian called: the news page shows the old event banner although the new one was uploaded yesterday.",
-		age:         3 * minutesPerDay,
+		age:         2 * minutesPerDay,
 		steps: []demoStep{
-			{5, emailRina, emailRina, ""}, {20, emailRina, "", ticket.StatusInProgress},
-			{200, emailRina, "", ticket.StatusResolved},
+			{5, emailRina, emailRina, "", ""}, {20, emailRina, "", ticket.StatusInProgress, ""},
+			{200, emailRina, "", ticket.StatusResolved, ""},
 		},
 		messages: []demoMessage{
 			{18, emailRina, false, "We cleared the website cache and the new banner shows now. Please refresh the page."},
@@ -125,8 +127,9 @@ var demoTickets = []demoTicket{
 		description: "Since this morning the finance team can't open the Finance folder on the shared drive. Other folders still work.",
 		endsToday:   true,
 		steps: []demoStep{
-			{10, emailYoga, emailYoga, ""}, {25, emailYoga, "", ticket.StatusInProgress},
-			{120, emailYoga, "", ticket.StatusResolved},
+			{10, emailYoga, emailYoga, "", ""}, {25, emailYoga, "", ticket.StatusInProgress, ""},
+			{110, emailYoga, "", ticket.StatusInUAT, ""},
+			{120, emailSri, "", ticket.StatusResolved, ticket.CauseUATApproved},
 		},
 		messages: []demoMessage{
 			{110, emailYoga, false, "Permissions are back as they were before the weekend. Please check you can open the Finance folder."},
@@ -138,7 +141,7 @@ var demoTickets = []demoTicket{
 		subject:     "Printer driver for new laptops",
 		description: "Pak Arif called: the 12 new laptops in the planning division can't print to the shared printer and need its driver.",
 		age:         2 * minutesPerDay,
-		steps:       []demoStep{{5, emailRina, emailRina, ""}},
+		steps:       []demoStep{{5, emailRina, emailRina, "", ""}},
 	},
 	{
 		number: 24855, typ: ticket.TypeRequest, priority: sla.P2, channel: ticket.ChannelEmail,
@@ -147,8 +150,8 @@ var demoTickets = []demoTicket{
 		description: "Bu Maya emailed: the browser warns that the website's SSL certificate expires in 5 days.",
 		age:         minutesPerDay,
 		steps: []demoStep{
-			{20, emailYoga, emailYoga, ""}, {40, emailYoga, "", ticket.StatusInProgress},
-			{65, emailYoga, "", ticket.StatusWaitingOnClient},
+			{20, emailYoga, emailYoga, "", ""}, {40, emailYoga, "", ticket.StatusInProgress, ""},
+			{65, emailYoga, "", ticket.StatusWaitingOnClient, ""},
 		},
 		messages: []demoMessage{
 			{60, emailYoga, false, "Hi Bu Maya, the certificate renews through your domain registrar. Could you add us as the technical contact there?"},
@@ -161,8 +164,8 @@ var demoTickets = []demoTicket{
 		description: "Our new finance officer starts next week and needs VPN access to the budgeting system.",
 		age:         minutesPerDay,
 		steps: []demoStep{
-			{30, emailRina, emailAdi, ""}, {60, emailAdi, "", ticket.StatusInProgress},
-			{90, emailAdi, "", ticket.StatusWaitingOnClient},
+			{30, emailRina, emailAdi, "", ""}, {60, emailAdi, "", ticket.StatusInProgress, ""},
+			{90, emailAdi, "", ticket.StatusWaitingOnClient, ""},
 		},
 		messages: []demoMessage{
 			{85, emailAdi, false, "Could you send the officer's name, work email and the date access should start?"},
@@ -174,7 +177,7 @@ var demoTickets = []demoTicket{
 		subject:     "Mailbox full for Head of Office",
 		description: "Bu Dian sent a WhatsApp message: the Head of Office's mailbox is full and new mail bounces.",
 		age:         5 * minutesPerHour,
-		steps:       []demoStep{{5, emailRina, emailRina, ""}, {15, emailRina, "", ticket.StatusInProgress}},
+		steps:       []demoStep{{5, emailRina, emailRina, "", ""}, {15, emailRina, "", ticket.StatusInProgress, ""}},
 		messages: []demoMessage{
 			{14, emailRina, false, "Hi Bu Dian, the mailbox is at its size limit. We're archiving last year's mail to free space."},
 		},
@@ -192,7 +195,7 @@ var demoTickets = []demoTicket{
 		subject:     "e-Office login fails for all staff after this morning's update",
 		description: "Since 08:00 nobody can sign in to e-Office. The page says \"Session expired\" right after the password is entered. Every department is affected.",
 		age:         3 * minutesPerHour,
-		steps:       []demoStep{{2, emailRina, emailRina, ""}, {38, emailRina, "", ticket.StatusInProgress}},
+		steps:       []demoStep{{2, emailRina, emailRina, "", ""}, {38, emailRina, "", ticket.StatusInProgress, ""}},
 		messages: []demoMessage{
 			{8, emailRina, false, "Thanks Pak Hendra, we're on it. The problem started with this morning's single sign-on update. Next update within 30 minutes."},
 			{17, emailRina, true, "Matches last night's SSO patch: the token lifetime dropped to 5 minutes. Adi is preparing a revert."},
@@ -262,7 +265,7 @@ func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs) erro
 			t.ProjectID, t.CatalogItemID = r.defaultProject(d.client), &item
 		}
 		for _, st := range d.steps {
-			step := tickets.SeedStep{At: at(st.after), Actor: r.user(st.actor), Status: st.status}
+			step := tickets.SeedStep{At: at(st.after), Actor: r.user(st.actor), Status: st.status, Cause: st.cause}
 			if st.assignee != "" {
 				a := r.user(st.assignee)
 				step.Assignee = &a
