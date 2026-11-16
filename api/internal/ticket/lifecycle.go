@@ -3,6 +3,9 @@ package ticket
 import (
 	"errors"
 	"slices"
+	"time"
+
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 )
 
 var (
@@ -11,10 +14,13 @@ var (
 	ErrTicketClosed    = errors.New("the ticket is closed")
 	ErrNeedsAssignee   = errors.New("assign someone first")
 	ErrNeedsNoAssignee = errors.New("unassign the ticket first")
+	ErrNotInUAT        = errors.New("the ticket is not waiting for a test")
+	ErrNotReopenable   = errors.New("the ticket can no longer be reopened")
 )
 
-// manualMoves are an agent's hand moves (HANDOFF §6). Closed is system-only; UAT and requester
-// reopen arrive in M6. CheckManualMove adds the assignee rules for new and assigned.
+// manualMoves are an agent's hand moves (HANDOFF §6). Closed is system-only; the client's
+// answers and reopen have their own checks below. CheckManualMove adds the assignee rules for
+// new and assigned.
 var manualMoves = map[Status][]Status{
 	StatusNew:             {StatusInProgress, StatusWaitingOnClient, StatusResolved},
 	StatusAssigned:        {StatusInProgress, StatusWaitingOnClient, StatusResolved},
@@ -77,3 +83,65 @@ func StatusAfterRequesterReply(cur Status) (Status, bool) {
 
 // MarksResolved reports whether a ticket in status s counts as resolved.
 func MarksResolved(s Status) bool { return slices.Contains(DoneStatuses, s) }
+
+// ReopenWorkingDays is how long the client can reopen a resolved ticket; then it closes.
+const ReopenWorkingDays = 3
+
+// ReopenUntil is the end of the reopen window for a ticket resolved at resolvedAt. The ticket
+// can be reopened up to and including that instant and closes after it.
+func ReopenUntil(resolvedAt time.Time, s sla.Schedules) time.Time {
+	return s.AddWorkingDays(resolvedAt, ReopenWorkingDays)
+}
+
+// UATAnswer is the client's answer to a test. Values match the UatAnswer enum in the API.
+type UATAnswer string
+
+const (
+	UATApprove UATAnswer = "approve" // it works
+	UATReject  UATAnswer = "reject"  // still a problem
+)
+
+func (a UATAnswer) Valid() bool { return a == UATApprove || a == UATReject }
+
+// CheckUATAnswer reports whether the client can answer a test on a ticket in status s.
+func CheckUATAnswer(s Status) error {
+	switch {
+	case s.Locked():
+		return ErrTicketClosed
+	case s != StatusInUAT:
+		return ErrNotInUAT
+	}
+	return nil
+}
+
+// CheckReopen reports whether the client can reopen a ticket in status s whose reopen window
+// ends at until.
+func CheckReopen(s Status, until, now time.Time) error {
+	switch {
+	case s.Locked():
+		return ErrTicketClosed
+	case s != StatusResolved || now.After(until):
+		return ErrNotReopenable
+	}
+	return nil
+}
+
+// StatusAfterUATAnswer is where the client's answer takes the ticket: approval resolves it
+// (HANDOFF §6), a rejection hands it back to its assignee, or to the New queue without one.
+func StatusAfterUATAnswer(a UATAnswer, hasAssignee bool) Status {
+	if a == UATApprove {
+		return StatusResolved
+	}
+	return backToWork(hasAssignee)
+}
+
+// StatusAfterReopen is where a reopened ticket goes: back to its assignee with the same
+// priority, or to the New queue without one, so someone picks it up.
+func StatusAfterReopen(hasAssignee bool) Status { return backToWork(hasAssignee) }
+
+func backToWork(hasAssignee bool) Status {
+	if hasAssignee {
+		return StatusInProgress
+	}
+	return StatusNew
+}

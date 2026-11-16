@@ -80,10 +80,23 @@ const (
 
 func (v Visibility) Valid() bool { return v == VisibilityPublic || v == VisibilityInternal }
 
-// Cause explains a status change the system made on its own.
+// Cause explains why a status changed when it wasn't a plain move by hand: the system moved
+// it, the client answered, or an agent skipped the Definition of Done.
 type Cause string
 
 const (
-	CauseAssignment     Cause = "assignment"      // assigning or unassigning moved new ↔ assigned
-	CauseRequesterReply Cause = "requester_reply" // the requester answered while we waited on them
+	CauseAssignment      Cause = "assignment"        // assigning or unassigning moved new ↔ assigned
+	CauseRequesterReply  Cause = "requester_reply"   // the requester answered while we waited on them
+	CauseUATApproved     Cause = "uat_approved"      // the client approved the test
+	CauseUATRejected     Cause = "uat_rejected"      // the client sent the fix back
+	CauseUATAutoApproved Cause = "uat_auto_approved" // the client didn't answer in time
+	CauseReopened        Cause = "reopened"          // the client reopened a resolved ticket
+	CauseAutoClosed      Cause = "auto_closed"       // the reopen window ended
+	CauseDoDSkipped      Cause = "dod_skipped"       // an agent resolved with the Definition of Done unmet
 )
+
+// Causes lists every cause.
+var Causes = []Cause{
+	CauseAssignment, CauseRequesterReply, CauseUATApproved, CauseUATRejected, CauseUATAutoApproved,
+	CauseReopened, CauseAutoClosed, CauseDoDSkipped,
+}

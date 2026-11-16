@@ -4,6 +4,10 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
+
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 )
 
 // Shorthand for the expected-move table.
@@ -119,5 +123,83 @@ func TestOpenAndDoneStatuses(t *testing.T) {
 	}
 	if !ChannelPhone.AgentLoggable() || ChannelPortal.AgentLoggable() || Channel("fax").AgentLoggable() {
 		t.Error("AgentLoggable")
+	}
+}
+
+func TestCheckUATAnswer(t *testing.T) {
+	for _, s := range Statuses {
+		var want error
+		switch s {
+		case ua:
+		case cl:
+			want = ErrTicketClosed
+		default:
+			want = ErrNotInUAT
+		}
+		if err := CheckUATAnswer(s); !errors.Is(err, want) {
+			t.Errorf("CheckUATAnswer(%s) = %v, want %v", s, err, want)
+		}
+	}
+}
+
+func TestCheckReopen(t *testing.T) {
+	until := time.Date(2026, time.November, 19, 15, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name string
+		s    Status
+		now  time.Time
+		want error
+	}{
+		{"inside the window", rs, until.Add(-time.Hour), nil},
+		{"at the last instant", rs, until, nil},
+		{"after the window", rs, until.Add(time.Second), ErrNotReopenable},
+		{"not resolved", ip, until.Add(-time.Hour), ErrNotReopenable},
+		{"closed", cl, until.Add(-time.Hour), ErrTicketClosed},
+	}
+	for _, tt := range tests {
+		if err := CheckReopen(tt.s, until, tt.now); !errors.Is(err, tt.want) {
+			t.Errorf("%s: CheckReopen = %v, want %v", tt.name, err, tt.want)
+		}
+	}
+}
+
+func TestReopenUntil(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	weekdays := []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday}
+	window := calendar.Window{Open: 8 * time.Hour, Close: 17 * time.Hour}
+	b, err := calendar.NewBusinessHours(calendar.Config{Location: loc, Week: calendar.UniformWeek(weekdays, window)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := sla.Schedules{Business: b, Always: calendar.Always{}, WorkingDay: window.Length()}
+	resolved := time.Date(2026, time.November, 13, 16, 0, 0, 0, loc) // Friday
+	if got, want := ReopenUntil(resolved, s), time.Date(2026, time.November, 18, 16, 0, 0, 0, loc); !got.Equal(want) {
+		t.Fatalf("ReopenUntil = %v, want %v", got, want)
+	}
+}
+
+func TestStatusAfterClientAnswers(t *testing.T) {
+	tests := []struct {
+		name string
+		got  Status
+		want Status
+	}{
+		{"approve", StatusAfterUATAnswer(UATApprove, true), rs},
+		{"approve without an assignee", StatusAfterUATAnswer(UATApprove, false), rs},
+		{"reject", StatusAfterUATAnswer(UATReject, true), ip},
+		{"reject without an assignee", StatusAfterUATAnswer(UATReject, false), nw},
+		{"reopen", StatusAfterReopen(true), ip},
+		{"reopen without an assignee", StatusAfterReopen(false), nw},
+	}
+	for _, tt := range tests {
+		if tt.got != tt.want {
+			t.Errorf("%s = %s, want %s", tt.name, tt.got, tt.want)
+		}
+	}
+	if !UATApprove.Valid() || !UATReject.Valid() || UATAnswer("maybe").Valid() {
+		t.Error("UATAnswer.Valid")
 	}
 }

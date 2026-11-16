@@ -123,3 +123,17 @@ func (s Schedules) For(k CalendarKind) calendar.Schedule {
 	}
 	return s.Business
 }
+
+// AddWorkingDays is the instant n working days of business time after from, measured like a
+// working-day SLA target: n full business-hours windows, skipping closed days and holidays.
+func (s Schedules) AddWorkingDays(from time.Time, n int) time.Time {
+	return s.Business.Add(from, time.Duration(n)*s.WorkingDay)
+}
+
+// WorkingDaysBetween counts the whole working days of business time from a to b.
+func (s Schedules) WorkingDaysBetween(a, b time.Time) int {
+	if s.WorkingDay <= 0 || !b.After(a) {
+		return 0
+	}
+	return int(s.Business.Between(a, b) / s.WorkingDay)
+}
