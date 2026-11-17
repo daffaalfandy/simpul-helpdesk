@@ -19,15 +19,18 @@ const (
 )
 
 // Entry is one audit record. Write it in the same transaction as the change it describes.
+// OrganizationID is the organization the change happened in; nil for install-wide changes
+// (accounts, sign-ins, new organizations).
 type Entry struct {
-	ActorKind   string
-	ActorUserID *uuid.UUID
-	ActorName   string
-	Action      string
-	TargetType  string
-	TargetID    *uuid.UUID
-	Data        map[string]any
-	Reason      string
+	OrganizationID *uuid.UUID
+	ActorKind      string
+	ActorUserID    *uuid.UUID
+	ActorName      string
+	Action         string
+	TargetType     string
+	TargetID       *uuid.UUID
+	Data           map[string]any
+	Reason         string
 }
 
 // Write inserts the entry, filling IP and request ID from the context.
@@ -54,15 +57,16 @@ func Insert(ctx context.Context, q *db.Queries, e Entry) (uuid.UUID, error) {
 	}
 	info := reqinfo.From(ctx)
 	params := db.InsertAuditParams{
-		ActorKind:   e.ActorKind,
-		ActorUserID: e.ActorUserID,
-		ActorName:   nonEmpty(e.ActorName),
-		Action:      e.Action,
-		TargetType:  nonEmpty(e.TargetType),
-		TargetID:    e.TargetID,
-		Data:        data,
-		Reason:      nonEmpty(e.Reason),
-		RequestID:   nonEmpty(info.RequestID),
+		OrganizationID: e.OrganizationID,
+		ActorKind:      e.ActorKind,
+		ActorUserID:    e.ActorUserID,
+		ActorName:      nonEmpty(e.ActorName),
+		Action:         e.Action,
+		TargetType:     nonEmpty(e.TargetType),
+		TargetID:       e.TargetID,
+		Data:           data,
+		Reason:         nonEmpty(e.Reason),
+		RequestID:      nonEmpty(info.RequestID),
 	}
 	if info.IP.IsValid() {
 		ip := info.IP

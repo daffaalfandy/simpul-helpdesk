@@ -71,7 +71,7 @@ func (s *Service) Requesters(ctx context.Context, p *auth.Principal, clientID uu
 		statuses = allRequesterStatuses
 	}
 	q := s.store.Q()
-	if _, err := get(ctx, q, clientID, AgentScope(p)); err != nil {
+	if _, err := get(ctx, q, p.OrganizationID, clientID, AgentScope(p)); err != nil {
 		return nil, err
 	}
 	rows, err := q.ListClientRequesters(ctx, db.ListClientRequestersParams{
@@ -98,7 +98,7 @@ func (s *Service) InviteRequester(ctx context.Context, p *auth.Principal, client
 	}
 	out := Requester{Name: in.Name, Email: in.Email, JobTitle: in.JobTitle, Status: auth.UserStatusInvited}
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		if _, err := get(ctx, tx.Q, clientID, AgentScope(p)); err != nil {
+		if _, err := get(ctx, tx.Q, p.OrganizationID, clientID, AgentScope(p)); err != nil {
 			return err
 		}
 		id, err := tx.Q.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
@@ -140,7 +140,7 @@ func (s *Service) Assignees(ctx context.Context, p *auth.Principal, clientID uui
 			scope = nil
 		}
 	}
-	if _, err := get(ctx, q, clientID, scope); err != nil {
+	if _, err := get(ctx, q, p.OrganizationID, clientID, scope); err != nil {
 		return nil, err
 	}
 	rows, err := q.ListAssignableUsers(ctx, db.ListAssignableUsersParams{

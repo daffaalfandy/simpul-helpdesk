@@ -8,10 +8,12 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const completeSetup = `-- name: CompleteSetup :exec
-UPDATE organization SET setup_completed_at = coalesce(setup_completed_at, now()) WHERE id
+UPDATE install SET setup_completed_at = coalesce(setup_completed_at, now()) WHERE id
 `
 
 // The first admin exists: first-run setup closes for good.
@@ -20,27 +22,62 @@ func (q *Queries) CompleteSetup(ctx context.Context) error {
 	return err
 }
 
-const getOrganization = `-- name: GetOrganization :one
-SELECT name, ticket_prefix, timezone, footer_note, logo_key, logo_content_type, logo_updated_at, setup_completed_at
-FROM organization
-WHERE id
+const countOrganizations = `-- name: CountOrganizations :one
+SELECT count(*)::int FROM organizations
 `
 
-type GetOrganizationRow struct {
-	Name             string
-	TicketPrefix     string
-	Timezone         string
-	FooterNote       *string
-	LogoKey          *string
-	LogoContentType  *string
-	LogoUpdatedAt    *time.Time
-	SetupCompletedAt *time.Time
+func (q *Queries) CountOrganizations(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, countOrganizations)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
-func (q *Queries) GetOrganization(ctx context.Context) (GetOrganizationRow, error) {
-	row := q.db.QueryRow(ctx, getOrganization)
-	var i GetOrganizationRow
+const createOrganization = `-- name: CreateOrganization :one
+INSERT INTO organizations (name, ticket_prefix, timezone)
+VALUES ($1, $2, $3)
+RETURNING id
+`
+
+type CreateOrganizationParams struct {
+	Name         string
+	TicketPrefix string
+	Timezone     string
+}
+
+func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, createOrganization, arg.Name, arg.TicketPrefix, arg.Timezone)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getFirstOrganization = `-- name: GetFirstOrganization :one
+SELECT id, name, ticket_prefix, timezone, footer_note, logo_key, logo_content_type, logo_updated_at, created_at
+FROM organizations
+ORDER BY created_at, id
+LIMIT 1
+`
+
+type GetFirstOrganizationRow struct {
+	ID              uuid.UUID
+	Name            string
+	TicketPrefix    string
+	Timezone        string
+	FooterNote      *string
+	LogoKey         *string
+	LogoContentType *string
+	LogoUpdatedAt   *time.Time
+	CreatedAt       time.Time
+}
+
+// The organization made first: the one a single-organization install shows on its sign-in page,
+// and the owner of logo links in emails sent before organizations existed.
+func (q *Queries) GetFirstOrganization(ctx context.Context) (GetFirstOrganizationRow, error) {
+	row := q.db.QueryRow(ctx, getFirstOrganization)
+	var i GetFirstOrganizationRow
 	err := row.Scan(
+		&i.ID,
 		&i.Name,
 		&i.TicketPrefix,
 		&i.Timezone,
@@ -48,60 +85,181 @@ func (q *Queries) GetOrganization(ctx context.Context) (GetOrganizationRow, erro
 		&i.LogoKey,
 		&i.LogoContentType,
 		&i.LogoUpdatedAt,
-		&i.SetupCompletedAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }
 
+const getInstall = `-- name: GetInstall :one
+SELECT setup_completed_at FROM install WHERE id
+`
+
+func (q *Queries) GetInstall(ctx context.Context) (*time.Time, error) {
+	row := q.db.QueryRow(ctx, getInstall)
+	var setup_completed_at *time.Time
+	err := row.Scan(&setup_completed_at)
+	return setup_completed_at, err
+}
+
+const getOrganization = `-- name: GetOrganization :one
+SELECT id, name, ticket_prefix, timezone, footer_note, logo_key, logo_content_type, logo_updated_at, created_at
+FROM organizations
+WHERE id = $1
+`
+
+type GetOrganizationRow struct {
+	ID              uuid.UUID
+	Name            string
+	TicketPrefix    string
+	Timezone        string
+	FooterNote      *string
+	LogoKey         *string
+	LogoContentType *string
+	LogoUpdatedAt   *time.Time
+	CreatedAt       time.Time
+}
+
+func (q *Queries) GetOrganization(ctx context.Context, id uuid.UUID) (GetOrganizationRow, error) {
+	row := q.db.QueryRow(ctx, getOrganization, id)
+	var i GetOrganizationRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.TicketPrefix,
+		&i.Timezone,
+		&i.FooterNote,
+		&i.LogoKey,
+		&i.LogoContentType,
+		&i.LogoUpdatedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getOrganizationByPrefix = `-- name: GetOrganizationByPrefix :one
+SELECT id FROM organizations WHERE ticket_prefix = upper($1)
+`
+
+// The CLI names an organization by its ticket prefix, which is unique.
+func (q *Queries) GetOrganizationByPrefix(ctx context.Context, ticketPrefix interface{}) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getOrganizationByPrefix, ticketPrefix)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertDefaultBusinessHours = `-- name: InsertDefaultBusinessHours :exec
+INSERT INTO business_hours (organization_id, weekday, open_minute, close_minute)
+SELECT $1, d, 480, 1020 FROM generate_series(1, 5) AS d
+`
+
+// Monday to Friday, 08:00–17:00.
+func (q *Queries) InsertDefaultBusinessHours(ctx context.Context, organizationID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, insertDefaultBusinessHours, organizationID)
+	return err
+}
+
+const insertDefaultPriorities = `-- name: InsertDefaultPriorities :exec
+INSERT INTO priorities (organization_id, code, name, description) VALUES
+  ($1, 'P1', 'Critical', 'A public service or the whole office is down'),
+  ($1, 'P2', 'High', 'A team or department cannot work'),
+  ($1, 'P3', 'Standard', 'One person is slowed down, with a workaround'),
+  ($1, 'P4', 'Low', 'Minor issue or question, no rush')
+`
+
+// Every organization starts with the four priorities and these names (owner, 13 Nov).
+func (q *Queries) InsertDefaultPriorities(ctx context.Context, organizationID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, insertDefaultPriorities, organizationID)
+	return err
+}
+
+const listOrganizationIDs = `-- name: ListOrganizationIDs :many
+SELECT id FROM organizations ORDER BY created_at, id
+`
+
+// For jobs that run organization by organization.
+func (q *Queries) ListOrganizationIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listOrganizationIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setOrganizationLogo = `-- name: SetOrganizationLogo :exec
-UPDATE organization
+UPDATE organizations
 SET logo_key = $1, logo_content_type = $2,
     logo_updated_at = $3
-WHERE id
+WHERE id = $4
 `
 
 type SetOrganizationLogoParams struct {
 	LogoKey         *string
 	LogoContentType *string
 	LogoUpdatedAt   *time.Time
+	ID              uuid.UUID
 }
 
 // A NULL key removes the logo.
 func (q *Queries) SetOrganizationLogo(ctx context.Context, arg SetOrganizationLogoParams) error {
-	_, err := q.db.Exec(ctx, setOrganizationLogo, arg.LogoKey, arg.LogoContentType, arg.LogoUpdatedAt)
+	_, err := q.db.Exec(ctx, setOrganizationLogo,
+		arg.LogoKey,
+		arg.LogoContentType,
+		arg.LogoUpdatedAt,
+		arg.ID,
+	)
 	return err
 }
 
 const updateOrganizationProfile = `-- name: UpdateOrganizationProfile :exec
-UPDATE organization
+UPDATE organizations
 SET name = $1, footer_note = $2
-WHERE id
+WHERE id = $3
 `
 
 type UpdateOrganizationProfileParams struct {
 	Name       string
 	FooterNote *string
+	ID         uuid.UUID
 }
 
 // Seed only: the demo organisation's name and footer.
 func (q *Queries) UpdateOrganizationProfile(ctx context.Context, arg UpdateOrganizationProfileParams) error {
-	_, err := q.db.Exec(ctx, updateOrganizationProfile, arg.Name, arg.FooterNote)
+	_, err := q.db.Exec(ctx, updateOrganizationProfile, arg.Name, arg.FooterNote, arg.ID)
 	return err
 }
 
 const updateOrganizationSettings = `-- name: UpdateOrganizationSettings :exec
-UPDATE organization
+UPDATE organizations
 SET name = $1, ticket_prefix = $2, timezone = $3
-WHERE id
+WHERE id = $4
 `
 
 type UpdateOrganizationSettingsParams struct {
 	Name         string
 	TicketPrefix string
 	Timezone     string
+	ID           uuid.UUID
 }
 
 func (q *Queries) UpdateOrganizationSettings(ctx context.Context, arg UpdateOrganizationSettingsParams) error {
-	_, err := q.db.Exec(ctx, updateOrganizationSettings, arg.Name, arg.TicketPrefix, arg.Timezone)
+	_, err := q.db.Exec(ctx, updateOrganizationSettings,
+		arg.Name,
+		arg.TicketPrefix,
+		arg.Timezone,
+		arg.ID,
+	)
 	return err
 }

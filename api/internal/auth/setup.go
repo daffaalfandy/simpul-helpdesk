@@ -2,8 +2,12 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
@@ -62,14 +66,14 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 	var p *Principal
 	var sess NewSession
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		if err := tx.Q.LockOrganization(ctx); err != nil {
+		if err := tx.Q.LockInstall(ctx); err != nil {
 			return err
 		}
-		org, err := tx.Q.GetOrganization(ctx)
+		done, err := tx.Q.GetInstall(ctx)
 		if err != nil {
 			return err
 		}
-		if org.SetupCompletedAt != nil {
+		if done != nil {
 			return apperr.Conflict(apperr.CodeSetupClosed, "This install is already set up", "Sign in instead.")
 		}
 		id, err := tx.Q.CreateUser(ctx, db.CreateUserParams{Email: in.Email, Name: in.Name, PasswordHash: &hash, Role: string(RoleAdmin)})
@@ -79,9 +83,8 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 		if err != nil {
 			return err
 		}
-		if err := tx.Q.UpdateOrganizationSettings(ctx, db.UpdateOrganizationSettingsParams{
-			Name: in.OrganizationName, TicketPrefix: org.TicketPrefix, Timezone: org.Timezone,
-		}); err != nil {
+		orgID, err := setupOrganization(ctx, tx, in.OrganizationName)
+		if err != nil {
 			return err
 		}
 		if err := tx.Q.CompleteSetup(ctx); err != nil {
@@ -91,8 +94,9 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 		created, completed := system, system
 		created.Action, created.TargetType, created.TargetID = ActionUserCreated, TargetUser, &id
 		created.Data = map[string]any{auditDataRole: RoleAdmin}
-		completed.Action, completed.TargetType = ActionSetupCompleted, organization.TargetOrganization
-		completed.Data = map[string]any{auditDataName: audit.Change{From: org.Name, To: in.OrganizationName}}
+		completed.OrganizationID = &orgID
+		completed.Action, completed.TargetType, completed.TargetID = ActionSetupCompleted, organization.TargetOrganization, &orgID
+		completed.Data = map[string]any{auditDataName: in.OrganizationName}
 		for _, e := range []audit.Entry{created, completed} {
 			if err := audit.Write(ctx, tx.Q, e); err != nil {
 				return err
@@ -103,6 +107,7 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 			return err
 		}
 		p = principalOf(user)
+		p.OrganizationID = orgID
 		sess, err = s.startSession(ctx, tx, p, info)
 		return err
 	})
@@ -115,4 +120,21 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 		return nil, NewSession{}, err
 	}
 	return p, sess, nil
+}
+
+// setupOrganization names the install's organization: the one an upgraded install already has,
+// or a new one with the defaults.
+func setupOrganization(ctx context.Context, tx store.Tx, name string) (uuid.UUID, error) {
+	first, err := tx.Q.GetFirstOrganization(ctx)
+	if err == nil {
+		return first.ID, tx.Q.UpdateOrganizationSettings(ctx, db.UpdateOrganizationSettingsParams{
+			ID: first.ID, Name: name, TicketPrefix: first.TicketPrefix, Timezone: first.Timezone,
+		})
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, err
+	}
+	return organization.CreateTx(ctx, tx, organization.Input{
+		Name: name, TicketPrefix: organization.DefaultTicketPrefix, Timezone: organization.DefaultTimezone,
+	})
 }

@@ -31,7 +31,7 @@ func TestStatusChangedAtBackfillAndTrigger(t *testing.T) {
 		client).Scan(&requester); err != nil {
 		t.Fatal(err)
 	}
-	project := testdb.Project(t, st, client, "e-Office", true)
+	project := testdb.LegacyProject(t, st, client, "e-Office", true)
 
 	created := time.Date(2026, 11, 2, 1, 0, 0, 0, time.UTC)
 	moved := created.Add(3 * time.Hour)

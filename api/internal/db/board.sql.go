@@ -33,18 +33,20 @@ SELECT count(*) FILTER (WHERE t.status = ANY($1::text[]))::bigint AS open_ticket
 FROM tickets t
 LEFT JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE (t.status = ANY($1::text[]) OR t.resolved_at >= least($2::timestamptz, $3::timestamptz))
-  AND ($5::uuid IS NULL
+  AND t.organization_id = $5
+  AND ($6::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
-       OR t.assignee_id = $5::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid)
+       OR t.assignee_id = $6::uuid)
 `
 
 type CountBoardStatsParams struct {
-	OpenStatuses  []string
-	WeekStart     time.Time
-	MonthStart    time.Time
-	PortalChannel string
-	ScopeAgentID  *uuid.UUID
+	OpenStatuses   []string
+	WeekStart      time.Time
+	MonthStart     time.Time
+	PortalChannel  string
+	OrganizationID uuid.UUID
+	ScopeAgentID   *uuid.UUID
 }
 
 type CountBoardStatsRow struct {
@@ -70,6 +72,7 @@ func (q *Queries) CountBoardStats(ctx context.Context, arg CountBoardStatsParams
 		arg.WeekStart,
 		arg.MonthStart,
 		arg.PortalChannel,
+		arg.OrganizationID,
 		arg.ScopeAgentID,
 	)
 	var i CountBoardStatsRow
@@ -92,10 +95,11 @@ FROM tickets t
 JOIN clients c ON c.id = t.client_id
 JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE t.status = ANY($1::text[])
-  AND ($2::uuid IS NULL
+  AND t.organization_id = $2
+  AND ($3::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $2::uuid)
-       OR t.assignee_id = $2::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
+       OR t.assignee_id = $3::uuid)
   AND ((s.first_response_met_at IS NULL
         AND (s.first_response_at_risk_flagged_at IS NOT NULL OR s.first_response_breached_at IS NOT NULL))
     OR (s.resolution_met_at IS NULL
@@ -108,8 +112,9 @@ LIMIT 1
 `
 
 type GetOldestSLAProblemParams struct {
-	OpenStatuses []string
-	ScopeAgentID *uuid.UUID
+	OpenStatuses   []string
+	OrganizationID uuid.UUID
+	ScopeAgentID   *uuid.UUID
 }
 
 type GetOldestSLAProblemRow struct {
@@ -120,7 +125,7 @@ type GetOldestSLAProblemRow struct {
 // The open ticket in scope whose flagged, unmet clock fell due (or turns due) first: the
 // board banner names it.
 func (q *Queries) GetOldestSLAProblem(ctx context.Context, arg GetOldestSLAProblemParams) (GetOldestSLAProblemRow, error) {
-	row := q.db.QueryRow(ctx, getOldestSLAProblem, arg.OpenStatuses, arg.ScopeAgentID)
+	row := q.db.QueryRow(ctx, getOldestSLAProblem, arg.OpenStatuses, arg.OrganizationID, arg.ScopeAgentID)
 	var i GetOldestSLAProblemRow
 	err := row.Scan(&i.Key, &i.ClientName)
 	return i, err
@@ -155,17 +160,18 @@ WITH board AS (
                    AND (s.first_response_at_risk_flagged_at IS NOT NULL OR s.first_response_breached_at IS NOT NULL))
                OR (s.resolution_met_at IS NULL
                    AND (s.resolution_at_risk_flagged_at IS NOT NULL OR s.resolution_breached_at IS NOT NULL)))))
-    AND ($6::uuid IS NULL
+    AND t.organization_id = $6
+    AND ($7::uuid IS NULL
          OR EXISTS (SELECT 1 FROM client_agents ca
-                    WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid)
-         OR t.assignee_id = $6::uuid)
-    AND (t.resolved_at IS NULL OR t.resolved_at >= $7::timestamptz)
-    AND ($8::uuid IS NULL OR t.assignee_id = $8::uuid)
-    AND (NOT $9::boolean OR t.assignee_id IS NULL)
-    AND ($10::text IS NULL
-         OR t.key = $11::text
-         OR t.subject ILIKE $10::text
-         OR c.name ILIKE $10::text)
+                    WHERE ca.client_id = t.client_id AND ca.user_id = $7::uuid)
+         OR t.assignee_id = $7::uuid)
+    AND (t.resolved_at IS NULL OR t.resolved_at >= $8::timestamptz)
+    AND ($9::uuid IS NULL OR t.assignee_id = $9::uuid)
+    AND (NOT $10::boolean OR t.assignee_id IS NULL)
+    AND ($11::text IS NULL
+         OR t.key = $12::text
+         OR t.subject ILIKE $11::text
+         OR c.name ILIKE $11::text)
 ), ranked AS (
   SELECT board.id, board.key, board.type, board.status, board.priority, board.subject, board.status_changed_at, board.client_id, board.client_name, board.assignee_id, board.assignee_name, board.dod_config, board.dod_override, board.dod_done, board.column_id, board.sla_ticket_id, board.first_response_budget_ms, board.first_response_calendar, board.first_response_elapsed_ms, board.first_response_running_since, board.first_response_due_at, board.first_response_at_risk_flagged_at, board.first_response_breached_at, board.first_response_met_at, board.resolution_budget_ms, board.resolution_calendar, board.resolution_elapsed_ms, board.resolution_running_since, board.resolution_due_at, board.resolution_at_risk_flagged_at, board.resolution_breached_at, board.resolution_met_at,
          row_number() OVER (PARTITION BY column_id ORDER BY priority, status_changed_at, id) AS position,
@@ -187,17 +193,18 @@ ORDER BY column_id, position
 `
 
 type ListBoardCardsParams struct {
-	ColumnLimit   int64
-	Columns       []string
-	Statuses      []string
-	SlaAtRisk     bool
-	OpenStatuses  []string
-	ScopeAgentID  *uuid.UUID
-	ResolvedSince time.Time
-	AssigneeID    *uuid.UUID
-	Unassigned    bool
-	SearchPattern *string
-	SearchKey     *string
+	ColumnLimit    int64
+	Columns        []string
+	Statuses       []string
+	SlaAtRisk      bool
+	OpenStatuses   []string
+	OrganizationID uuid.UUID
+	ScopeAgentID   *uuid.UUID
+	ResolvedSince  time.Time
+	AssigneeID     *uuid.UUID
+	Unassigned     bool
+	SearchPattern  *string
+	SearchKey      *string
 }
 
 type ListBoardCardsRow struct {
@@ -249,6 +256,7 @@ func (q *Queries) ListBoardCards(ctx context.Context, arg ListBoardCardsParams) 
 		arg.Statuses,
 		arg.SlaAtRisk,
 		arg.OpenStatuses,
+		arg.OrganizationID,
 		arg.ScopeAgentID,
 		arg.ResolvedSince,
 		arg.AssigneeID,

@@ -12,6 +12,7 @@ import (
 // requesters get their client's tickets and public messages, and agents their clients' tickets
 // plus any ticket assigned to them (they keep it after being unlinked; owner, 17 Nov).
 type access struct {
+	org           uuid.UUID  // the organization the request works in; every query filters on it
 	scopeClientID *uuid.UUID // requesters: their client
 	scopeAgentID  *uuid.UUID // agents: clients they are assigned to, and tickets assigned to them
 	visibility    *string    // requesters: public messages only
@@ -25,17 +26,19 @@ func accessFor(p *auth.Principal) (access, error) {
 	switch {
 	case p == nil:
 		return access{}, apperr.Unauthenticated()
+	case p.OrganizationID == uuid.Nil:
+		return access{}, apperr.OrganizationRequired()
 	case auth.Can(p.Role, auth.CapPortal):
 		if p.ClientID == nil {
 			return access{}, apperr.Forbidden()
 		}
 		client := *p.ClientID
-		return access{scopeClientID: &client, visibility: &publicOnly}, nil
+		return access{org: p.OrganizationID, scopeClientID: &client, visibility: &publicOnly}, nil
 	case auth.Can(p.Role, auth.CapClientsViewAll):
-		return access{staff: true}, nil
+		return access{org: p.OrganizationID, staff: true}, nil
 	case auth.Can(p.Role, auth.CapAgentApp):
 		agent := p.UserID
-		return access{scopeAgentID: &agent, staff: true}, nil
+		return access{org: p.OrganizationID, scopeAgentID: &agent, staff: true}, nil
 	}
 	return access{}, apperr.Forbidden()
 }
@@ -67,9 +70,10 @@ func clientAccess(p *auth.Principal) (access, error) {
 // Scope is a user's ticket scope for queries outside this package (the notification inbox).
 // It is accessFor's rule: those queries take the same scope_client_id and scope_agent_id.
 type Scope struct {
-	ClientID *uuid.UUID
-	AgentID  *uuid.UUID
-	Staff    bool
+	OrganizationID uuid.UUID
+	ClientID       *uuid.UUID
+	AgentID        *uuid.UUID
+	Staff          bool
 }
 
 // ScopeFor returns p's ticket scope.
@@ -78,5 +82,5 @@ func ScopeFor(p *auth.Principal) (Scope, error) {
 	if err != nil {
 		return Scope{}, err
 	}
-	return Scope{ClientID: a.scopeClientID, AgentID: a.scopeAgentID, Staff: a.staff}, nil
+	return Scope{OrganizationID: a.org, ClientID: a.scopeClientID, AgentID: a.scopeAgentID, Staff: a.staff}, nil
 }

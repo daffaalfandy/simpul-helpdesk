@@ -11,6 +11,16 @@ type Actor struct {
 	UserID *uuid.UUID
 	Name   string
 	git    bool
+	// org is the organization the actor works in; its entries carry it.
+	org *uuid.UUID
+}
+
+// In returns the actor working in the organization, so its entries name it.
+func (a Actor) In(orgID uuid.UUID) Actor {
+	if orgID != uuid.Nil {
+		a.org = &orgID
+	}
+	return a
 }
 
 func UserActor(id uuid.UUID, name string) Actor { return Actor{UserID: &id, Name: name} }
@@ -33,7 +43,7 @@ func (a Actor) Entry(action, targetType string, targetID *uuid.UUID, data map[st
 		kind = ActorUser
 	}
 	return Entry{
-		ActorKind: kind, ActorUserID: a.UserID, ActorName: a.Name,
+		OrganizationID: a.org, ActorKind: kind, ActorUserID: a.UserID, ActorName: a.Name,
 		Action: action, TargetType: targetType, TargetID: targetID, Data: data,
 	}
 }

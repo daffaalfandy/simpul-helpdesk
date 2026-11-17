@@ -10,7 +10,7 @@ import (
 
 // ListClients lists the clients the user may see.
 func (s *server) ListClients(ctx context.Context, _ gen.ListClientsRequestObject) (gen.ListClientsResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapAgentApp)
+	p, err := requireOrg(ctx, auth.CapAgentApp)
 	if err != nil {
 		return nil, err
 	}
@@ -26,11 +26,11 @@ func (s *server) ListClients(ctx context.Context, _ gen.ListClientsRequestObject
 }
 
 func (s *server) CreateClient(ctx context.Context, req gen.CreateClientRequestObject) (gen.CreateClientResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	c, err := s.clients.Create(ctx, p.AuditActor(), clientInput(*req.Body))
+	c, err := s.clients.Create(ctx, p.AuditActor(), p.OrganizationID, clientInput(*req.Body))
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (s *server) CreateClient(ctx context.Context, req gen.CreateClientRequestOb
 }
 
 func (s *server) GetClient(ctx context.Context, req gen.GetClientRequestObject) (gen.GetClientResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapAgentApp)
+	p, err := requireOrg(ctx, auth.CapAgentApp)
 	if err != nil {
 		return nil, err
 	}
@@ -50,11 +50,11 @@ func (s *server) GetClient(ctx context.Context, req gen.GetClientRequestObject) 
 }
 
 func (s *server) UpdateClient(ctx context.Context, req gen.UpdateClientRequestObject) (gen.UpdateClientResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	c, err := s.clients.Update(ctx, p.AuditActor(), req.ClientId, clientInput(*req.Body))
+	c, err := s.clients.Update(ctx, p.AuditActor(), p.OrganizationID, req.ClientId, clientInput(*req.Body))
 	if err != nil {
 		return nil, err
 	}
@@ -62,22 +62,22 @@ func (s *server) UpdateClient(ctx context.Context, req gen.UpdateClientRequestOb
 }
 
 func (s *server) DeleteClient(ctx context.Context, req gen.DeleteClientRequestObject) (gen.DeleteClientResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.clients.Delete(ctx, p.AuditActor(), req.ClientId); err != nil {
+	if err := s.clients.Delete(ctx, p.AuditActor(), p.OrganizationID, req.ClientId); err != nil {
 		return nil, err
 	}
 	return gen.DeleteClient204Response{}, nil
 }
 
 func (s *server) SetClientAgents(ctx context.Context, req gen.SetClientAgentsRequestObject) (gen.SetClientAgentsResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	c, err := s.clients.SetAgents(ctx, p.AuditActor(), req.ClientId, req.Body.UserIds)
+	c, err := s.clients.SetAgents(ctx, p.AuditActor(), p.OrganizationID, req.ClientId, req.Body.UserIds)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func apiClient(c clients.Client) gen.Client {
 }
 
 func (s *server) ListClientRequesters(ctx context.Context, req gen.ListClientRequestersRequestObject) (gen.ListClientRequestersResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapAgentApp)
+	p, err := requireOrg(ctx, auth.CapAgentApp)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (s *server) ListClientRequesters(ctx context.Context, req gen.ListClientReq
 
 // CreateClientRequester invites a requester to a client (administrators).
 func (s *server) CreateClientRequester(ctx context.Context, req gen.CreateClientRequesterRequestObject) (gen.CreateClientRequesterResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapUsersManage)
+	p, err := requireOrg(ctx, auth.CapUsersManage)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (s *server) CreateClientRequester(ctx context.Context, req gen.CreateClient
 }
 
 func (s *server) ListClientAssignees(ctx context.Context, req gen.ListClientAssigneesRequestObject) (gen.ListClientAssigneesResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapAgentApp)
+	p, err := requireOrg(ctx, auth.CapAgentApp)
 	if err != nil {
 		return nil, err
 	}

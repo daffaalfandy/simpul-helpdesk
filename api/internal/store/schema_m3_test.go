@@ -49,11 +49,11 @@ func newTicketFixture(t *testing.T) *ticketFixture {
 			t.Fatal(err)
 		}
 	}
-	scan(&f.client, `INSERT INTO clients (name) VALUES ('C') RETURNING id`)
+	scan(&f.client, `INSERT INTO clients (organization_id, name) VALUES ((SELECT id FROM organizations), 'C') RETURNING id`)
 	scan(&f.requester, `INSERT INTO users (email, name, role, client_id) VALUES ('r@c.test', 'R', 'requester', $1) RETURNING id`, f.client)
 	scan(&f.agent, `INSERT INTO users (email, name, role) VALUES ('a@v.test', 'A', 'agent') RETURNING id`)
 	f.project = testdb.Project(t, st, f.client, "e-Office", true)
-	scan(&f.catalogItem, `INSERT INTO catalog_items (name) VALUES ('VPN') RETURNING id`)
+	scan(&f.catalogItem, `INSERT INTO catalog_items (organization_id, name) VALUES ((SELECT id FROM organizations), 'VPN') RETURNING id`)
 	return f
 }
 
@@ -88,10 +88,10 @@ func (f *ticketFixture) insert(ctx context.Context, tk ticket) (uuid.UUID, error
 	}
 	var id uuid.UUID
 	err := f.pool.QueryRow(ctx, `
-		INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id,
+		INSERT INTO tickets (organization_id, number, key, type, status, priority, channel, client_id, requester_id,
 		                     assignee_id, created_by, project_id, catalog_item_id, subject, description,
 		                     sla_snapshot, resolved_at, closed_at)
-		VALUES ($1, $2, $3, $4, 'P3', 'portal', $5, $6, $7, $6, $8, $9, 'S', 'D', '{}',
+		VALUES ((SELECT organization_id FROM clients WHERE id = $5), $1, $2, $3, $4, 'P3', 'portal', $5, $6, $7, $6, $8, $9, 'S', 'D', '{}',
 		        CASE WHEN $10 THEN now() END, CASE WHEN $11 THEN now() END)
 		RETURNING id`,
 		tk.number, tk.key, tk.typ, tk.status, *tk.client, f.requester, tk.assignee, *tk.project, tk.catalogItem,
@@ -177,7 +177,7 @@ func TestTicketsBlockDeletingWhatTheyUse(t *testing.T) {
 	f := newTicketFixture(t)
 	// A client with tickets but no users, so only the tickets block the delete.
 	var bare uuid.UUID
-	if err := f.pool.QueryRow(ctx, `INSERT INTO clients (name) VALUES ('Bare') RETURNING id`).Scan(&bare); err != nil {
+	if err := f.pool.QueryRow(ctx, `INSERT INTO clients (organization_id, name) VALUES ((SELECT id FROM organizations), 'Bare') RETURNING id`).Scan(&bare); err != nil {
 		t.Fatal(err)
 	}
 	bareProject := testdb.Project(t, f.st, bare, "Bare project", true)
@@ -255,7 +255,7 @@ func TestAttachmentLinks(t *testing.T) {
 func TestCatalogNamesAreCaseInsensitive(t *testing.T) {
 	ctx := context.Background()
 	f := newTicketFixture(t)
-	_, err := f.pool.Exec(ctx, `INSERT INTO catalog_items (name) VALUES ('vpn')`)
+	_, err := f.pool.Exec(ctx, `INSERT INTO catalog_items (organization_id, name) VALUES ((SELECT id FROM organizations), 'vpn')`)
 	if !store.IsViolation(err, store.SQLStateUniqueViolation, constraintCatalogItemName) {
 		t.Errorf("catalogue item: err = %v", err)
 	}

@@ -76,7 +76,7 @@ var demoProjects = []project{
 
 // seedProjects upserts the demo projects, their SLAs and Definitions of Done and returns IDs by client and name.
 // Each client's first project is made its default, so a re-run restores the demo defaults.
-func seedProjects(ctx context.Context, q *db.Queries, clientIDs map[string]uuid.UUID) (map[string]map[string]uuid.UUID, error) {
+func seedProjects(ctx context.Context, q *db.Queries, org uuid.UUID, clientIDs map[string]uuid.UUID) (map[string]map[string]uuid.UUID, error) {
 	out := make(map[string]map[string]uuid.UUID)
 	for _, p := range demoProjects {
 		clientID := clientIDs[p.client]
@@ -84,7 +84,7 @@ func seedProjects(ctx context.Context, q *db.Queries, clientIDs map[string]uuid.
 		desc := p.description
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
-			if id, err = q.CreateProject(ctx, db.CreateProjectParams{ClientID: clientID, Name: p.name, Description: &desc, Active: true}); err != nil {
+			if id, err = q.CreateProject(ctx, db.CreateProjectParams{OrganizationID: org, ClientID: clientID, Name: p.name, Description: &desc, Active: true}); err != nil {
 				return nil, fmt.Errorf("project %s: %w", p.name, err)
 			}
 		case err != nil:

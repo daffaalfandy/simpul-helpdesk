@@ -7,6 +7,7 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -29,22 +30,27 @@ func (q *queued) InsertTx(_ context.Context, _ pgx.Tx, args river.JobArgs, _ *ri
 	return &rivertype.JobInsertResult{}, nil
 }
 
-func newService(t *testing.T) *sla.Service { return sla.NewService(testdb.New(t), &queued{}) }
+// newService returns the service and the template's organization.
+func newService(t *testing.T) (*sla.Service, uuid.UUID) {
+	st := testdb.New(t)
+	return sla.NewService(st, &queued{}), testdb.Organization(t, st)
+}
 
 // Every calendar edit queues a recompute of open tickets' clocks.
 func TestCalendarEditsQueueRecompute(t *testing.T) {
 	ctx := context.Background()
 	jobs := &queued{}
-	svc := sla.NewService(testdb.New(t), jobs)
+	st := testdb.New(t)
+	svc, org := sla.NewService(st, jobs), testdb.Organization(t, st)
 	day, _ := calendar.ParseDate("2026-12-01")
-	h, err := svc.CreateHoliday(ctx, actor, day, "Office closed")
+	h, err := svc.CreateHoliday(ctx, actor, org, day, "Office closed")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.DeleteHoliday(ctx, actor, h.ID); err != nil {
+	if err := svc.DeleteHoliday(ctx, actor, org, h.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.UpdateBusinessHours(ctx, actor, sla.HoursInput{
+	if _, err := svc.UpdateBusinessHours(ctx, actor, org, sla.HoursInput{
 		Weekdays: []time.Weekday{time.Monday}, Opens: 8 * time.Hour, Closes: 16 * time.Hour,
 	}); err != nil {
 		t.Fatal(err)
@@ -56,18 +62,18 @@ func TestCalendarEditsQueueRecompute(t *testing.T) {
 
 func TestSchedulesUseStoredHoursAndHolidays(t *testing.T) {
 	ctx := context.Background()
-	svc := newService(t)
+	svc, org := newService(t)
 	wed, _ := calendar.ParseDate("2026-11-18")
-	if _, err := svc.CreateHoliday(ctx, actor, wed, "Test holiday"); err != nil {
+	if _, err := svc.CreateHoliday(ctx, actor, org, wed, "Test holiday"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.UpdateBusinessHours(ctx, actor, sla.HoursInput{
+	if _, err := svc.UpdateBusinessHours(ctx, actor, org, sla.HoursInput{
 		Weekdays: []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday},
 		Opens:    7*time.Hour + 30*time.Minute, Closes: 16 * time.Hour,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	s, err := svc.Schedules(ctx)
+	s, err := svc.Schedules(ctx, org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,21 +90,21 @@ func TestSchedulesUseStoredHoursAndHolidays(t *testing.T) {
 
 func TestPresetLoadIsIdempotentAndKeepsEdits(t *testing.T) {
 	ctx := context.Background()
-	svc := newService(t)
+	svc, org := newService(t)
 	idulFitri, _ := calendar.ParseDate("2027-03-10")
-	if _, err := svc.CreateHoliday(ctx, actor, idulFitri, "Lebaran (kantor)"); err != nil {
+	if _, err := svc.CreateHoliday(ctx, actor, org, idulFitri, "Lebaran (kantor)"); err != nil {
 		t.Fatal(err)
 	}
-	first, err := svc.LoadHolidayPreset(ctx, actor, 2027)
+	first, err := svc.LoadHolidayPreset(ctx, actor, org, 2027)
 	if err != nil || first.Added == 0 || first.Skipped != 1 {
 		t.Fatalf("first load = %+v, err %v", first, err)
 	}
-	second, err := svc.LoadHolidayPreset(ctx, actor, 2027)
+	second, err := svc.LoadHolidayPreset(ctx, actor, org, 2027)
 	if err != nil || second.Added != 0 || second.Skipped != first.Added+first.Skipped {
 		t.Fatalf("second load = %+v, err %v", second, err)
 	}
 	year := 2027
-	holidays, err := svc.ListHolidays(ctx, &year)
+	holidays, err := svc.ListHolidays(ctx, org, &year)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +113,7 @@ func TestPresetLoadIsIdempotentAndKeepsEdits(t *testing.T) {
 			t.Fatalf("admin's name was overwritten: %q", h.Name)
 		}
 	}
-	presets, err := svc.HolidayPresets(ctx)
+	presets, err := svc.HolidayPresets(ctx, org)
 	if err != nil {
 		t.Fatal(err)
 	}

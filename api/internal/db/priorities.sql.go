@@ -7,10 +7,12 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const listPriorityLevels = `-- name: ListPriorityLevels :many
-SELECT code, name, description FROM priorities ORDER BY code
+SELECT code, name, description FROM priorities WHERE organization_id = $1 ORDER BY code
 `
 
 type ListPriorityLevelsRow struct {
@@ -19,8 +21,8 @@ type ListPriorityLevelsRow struct {
 	Description string
 }
 
-func (q *Queries) ListPriorityLevels(ctx context.Context) ([]ListPriorityLevelsRow, error) {
-	rows, err := q.db.Query(ctx, listPriorityLevels)
+func (q *Queries) ListPriorityLevels(ctx context.Context, organizationID uuid.UUID) ([]ListPriorityLevelsRow, error) {
+	rows, err := q.db.Query(ctx, listPriorityLevels, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +42,7 @@ func (q *Queries) ListPriorityLevels(ctx context.Context) ([]ListPriorityLevelsR
 }
 
 const listPriorityLevelsForUpdate = `-- name: ListPriorityLevelsForUpdate :many
-SELECT code, name, description FROM priorities ORDER BY code FOR UPDATE
+SELECT code, name, description FROM priorities WHERE organization_id = $1 ORDER BY code FOR UPDATE
 `
 
 type ListPriorityLevelsForUpdateRow struct {
@@ -49,8 +51,8 @@ type ListPriorityLevelsForUpdateRow struct {
 	Description string
 }
 
-func (q *Queries) ListPriorityLevelsForUpdate(ctx context.Context) ([]ListPriorityLevelsForUpdateRow, error) {
-	rows, err := q.db.Query(ctx, listPriorityLevelsForUpdate)
+func (q *Queries) ListPriorityLevelsForUpdate(ctx context.Context, organizationID uuid.UUID) ([]ListPriorityLevelsForUpdateRow, error) {
+	rows, err := q.db.Query(ctx, listPriorityLevelsForUpdate, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,16 +72,23 @@ func (q *Queries) ListPriorityLevelsForUpdate(ctx context.Context) ([]ListPriori
 }
 
 const updatePriorityLevel = `-- name: UpdatePriorityLevel :exec
-UPDATE priorities SET name = $1, description = $2 WHERE code = $3
+UPDATE priorities SET name = $1, description = $2
+WHERE organization_id = $3 AND code = $4
 `
 
 type UpdatePriorityLevelParams struct {
-	Name        string
-	Description string
-	Code        string
+	Name           string
+	Description    string
+	OrganizationID uuid.UUID
+	Code           string
 }
 
 func (q *Queries) UpdatePriorityLevel(ctx context.Context, arg UpdatePriorityLevelParams) error {
-	_, err := q.db.Exec(ctx, updatePriorityLevel, arg.Name, arg.Description, arg.Code)
+	_, err := q.db.Exec(ctx, updatePriorityLevel,
+		arg.Name,
+		arg.Description,
+		arg.OrganizationID,
+		arg.Code,
+	)
 	return err
 }

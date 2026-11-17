@@ -11,14 +11,15 @@ import (
 )
 
 func (s *server) GetSlaReport(ctx context.Context, req gen.GetSlaReportRequestObject) (gen.GetSlaReportResponseObject, error) {
-	if _, err := auth.Require(ctx, auth.CapReportsView); err != nil {
+	p, err := requireOrg(ctx, auth.CapReportsView)
+	if err != nil {
 		return nil, err
 	}
 	month, err := reportMonth(req.Params.Month)
 	if err != nil {
 		return nil, err
 	}
-	r, err := s.reports.SLA(ctx, month)
+	r, err := s.reports.SLA(ctx, p.OrganizationID, month)
 	if err != nil {
 		return nil, err
 	}
@@ -43,14 +44,15 @@ func (s *server) GetSlaReport(ctx context.Context, req gen.GetSlaReportRequestOb
 }
 
 func (s *server) ExportSlaReportExcel(ctx context.Context, req gen.ExportSlaReportExcelRequestObject) (gen.ExportSlaReportExcelResponseObject, error) {
-	if _, err := auth.Require(ctx, auth.CapReportsView); err != nil {
+	p, err := requireOrg(ctx, auth.CapReportsView)
+	if err != nil {
 		return nil, err
 	}
 	month, err := reportMonth(req.Params.Month)
 	if err != nil {
 		return nil, err
 	}
-	f, err := s.reports.Excel(ctx, month)
+	f, err := s.reports.Excel(ctx, p.OrganizationID, month)
 	if err != nil {
 		return nil, err
 	}
@@ -64,14 +66,15 @@ func (s *server) ExportSlaReportExcel(ctx context.Context, req gen.ExportSlaRepo
 }
 
 func (s *server) ExportSlaReportPdf(ctx context.Context, req gen.ExportSlaReportPdfRequestObject) (gen.ExportSlaReportPdfResponseObject, error) {
-	if _, err := auth.Require(ctx, auth.CapReportsView); err != nil {
+	p, err := requireOrg(ctx, auth.CapReportsView)
+	if err != nil {
 		return nil, err
 	}
 	month, err := reportMonth(req.Params.Month)
 	if err != nil {
 		return nil, err
 	}
-	f, err := s.reports.ClientPDF(ctx, req.ClientId, month)
+	f, err := s.reports.ClientPDF(ctx, p.OrganizationID, req.ClientId, month)
 	if err != nil {
 		return nil, err
 	}

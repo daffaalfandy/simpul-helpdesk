@@ -3,7 +3,7 @@
 SELECT t.id, t.key, p.repository_id
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
-WHERE t.key = ANY(@keys::text[]);
+WHERE t.organization_id = @organization_id AND t.key = ANY(@keys::text[]);
 
 -- name: InsertCodeLink :exec
 -- An ignored key is logged once per event (code_event_links_ignored_key).
@@ -12,7 +12,7 @@ VALUES (@code_event_id, sqlc.narg(ticket_id), @ticket_key, @outcome)
 ON CONFLICT DO NOTHING;
 
 -- name: GetTicketForCode :one
-SELECT t.id, t.key, t.status, p.repository_id
+SELECT t.id, t.organization_id, t.key, t.status, p.repository_id
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 WHERE t.id = @id
@@ -52,11 +52,12 @@ SELECT l.id, l.at, l.ticket_key, (l.ticket_id IS NOT NULL)::boolean AS ticket_fo
 FROM code_event_links l
 JOIN code_events e ON e.id = l.code_event_id
 JOIN repositories r ON r.id = e.repository_id
+WHERE r.organization_id = @organization_id
 ORDER BY l.at DESC, l.id DESC
 LIMIT @row_limit;
 
 -- name: TicketKeysExist :many
-SELECT key FROM tickets WHERE key = ANY(@keys::text[]);
+SELECT key FROM tickets WHERE organization_id = @organization_id AND key = ANY(@keys::text[]);
 
 -- name: InsertSeedCodeLink :exec
 -- Seed only: a commit linked at an explicit time.

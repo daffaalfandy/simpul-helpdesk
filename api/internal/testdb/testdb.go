@@ -13,11 +13,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
@@ -108,7 +111,36 @@ func buildTemplate(ctx context.Context) error {
 		return err
 	}
 	defer pool.Close()
-	return store.MigrateUp(ctx, pool, io.Discard)
+	if err := store.MigrateUp(ctx, pool, io.Discard); err != nil {
+		return err
+	}
+	return addOrganization(ctx, db.New(pool))
+}
+
+// addOrganization gives the template one organization, as an install has after first-run
+// setup: the product's name, the default prefix and time zone, and the default priorities and
+// business hours. Tests of a fresh install remove it.
+func addOrganization(ctx context.Context, q *db.Queries) error {
+	id, err := q.CreateOrganization(ctx, db.CreateOrganizationParams{
+		Name: organization.ProductName, TicketPrefix: organization.DefaultTicketPrefix, Timezone: organization.DefaultTimezone,
+	})
+	if err != nil {
+		return err
+	}
+	if err := q.InsertDefaultPriorities(ctx, id); err != nil {
+		return err
+	}
+	return q.InsertDefaultBusinessHours(ctx, id)
+}
+
+// Organization returns the id of the template's organization.
+func Organization(tb testing.TB, st *store.Store) uuid.UUID {
+	tb.Helper()
+	org, err := st.Q().GetFirstOrganization(context.Background())
+	if err != nil {
+		tb.Fatalf("testdb: organization: %v", err)
+	}
+	return org.ID
 }
 
 // NewEmpty returns a Store on a new database with no migrations applied, dropped when the test

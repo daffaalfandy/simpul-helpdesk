@@ -117,14 +117,14 @@ func NewService(st *store.Store, box *secretbox.Box, appURL *url.URL, jobs ticke
 	return &Service{store: st, box: box, appURL: appURL, jobs: jobs, tickets: ticketSvc}
 }
 
-// Overview lists the connected repositories with their projects.
-func (s *Service) Overview(ctx context.Context) (Overview, error) {
+// Overview lists the organization's connected repositories with their projects.
+func (s *Service) Overview(ctx context.Context, orgID uuid.UUID) (Overview, error) {
 	q := s.store.Q()
-	org, err := q.GetOrganization(ctx)
+	org, err := q.GetOrganization(ctx, orgID)
 	if err != nil {
 		return Overview{}, err
 	}
-	repos, err := s.list(ctx, q)
+	repos, err := s.list(ctx, q, orgID)
 	if err != nil {
 		return Overview{}, err
 	}
@@ -133,7 +133,7 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 
 // Create connects a repository and returns it with its webhook secret, shown this once. A
 // repository removed earlier is connected again, with a new secret.
-func (s *Service) Create(ctx context.Context, actor audit.Actor, createdBy uuid.UUID, in CreateInput) (Repository, string, error) {
+func (s *Service) Create(ctx context.Context, actor audit.Actor, orgID, createdBy uuid.UUID, in CreateInput) (Repository, string, error) {
 	loc, err := ParseLocation(in.Provider, in.URL)
 	if err != nil {
 		return Repository{}, "", apperr.Invalid(apperr.CodeInvalidRepositoryURL, "Check the repository address", err.Error())
@@ -142,7 +142,7 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, createdBy uuid.
 	var id uuid.UUID
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
 		existing, err := tx.Q.GetRepositoryByName(ctx, db.GetRepositoryByNameParams{
-			Provider: string(in.Provider), Host: loc.Host, FullName: loc.FullName,
+			OrganizationID: orgID, Provider: string(in.Provider), Host: loc.Host, FullName: loc.FullName,
 		})
 		switch {
 		case err == nil && !existing.Hidden:
@@ -159,7 +159,7 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, createdBy uuid.
 				return err
 			}
 			if err := tx.Q.InsertRepository(ctx, db.InsertRepositoryParams{
-				ID: id, Provider: string(in.Provider), Host: loc.Host, FullName: loc.FullName, WebUrl: loc.WebURL,
+				ID: id, OrganizationID: orgID, Provider: string(in.Provider), Host: loc.Host, FullName: loc.FullName, WebUrl: loc.WebURL,
 				WebhookSecret: s.seal(id, secret), CreatedBy: createdBy,
 			}); err != nil {
 				return err
@@ -167,7 +167,7 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, createdBy uuid.
 		default:
 			return err
 		}
-		if _, err := link(ctx, tx.Q, id, in.ProjectIDs); err != nil {
+		if _, err := link(ctx, tx.Q, orgID, id, in.ProjectIDs); err != nil {
 			return err
 		}
 		return audit.Write(ctx, tx.Q, actor.Entry(ActionRepositoryCreated, TargetRepository, &id, map[string]any{
@@ -177,17 +177,17 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, createdBy uuid.
 	if err != nil {
 		return Repository{}, "", repositoryError(err)
 	}
-	r, err := s.get(ctx, id)
+	r, err := s.get(ctx, orgID, id)
 	return r, secret, err
 }
 
 // SetProjects replaces the projects that read code from a repository.
-func (s *Service) SetProjects(ctx context.Context, actor audit.Actor, id uuid.UUID, projectIDs []uuid.UUID) (Repository, error) {
+func (s *Service) SetProjects(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID, projectIDs []uuid.UUID) (Repository, error) {
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		if _, err := lockVisible(ctx, tx.Q, id); err != nil {
+		if _, err := lockVisible(ctx, tx.Q, orgID, id); err != nil {
 			return err
 		}
-		before, err := link(ctx, tx.Q, id, projectIDs)
+		before, err := link(ctx, tx.Q, orgID, id, projectIDs)
 		if err != nil || sameIDs(before, projectIDs) {
 			return err
 		}
@@ -198,15 +198,15 @@ func (s *Service) SetProjects(ctx context.Context, actor audit.Actor, id uuid.UU
 	if err != nil {
 		return Repository{}, repositoryError(err)
 	}
-	return s.get(ctx, id)
+	return s.get(ctx, orgID, id)
 }
 
 // RotateSecret gives a repository a new webhook secret, shown this once. The old one stops
 // working at once.
-func (s *Service) RotateSecret(ctx context.Context, actor audit.Actor, id uuid.UUID) (Repository, string, error) {
+func (s *Service) RotateSecret(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID) (Repository, string, error) {
 	secret := newSecret()
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		if _, err := lockVisible(ctx, tx.Q, id); err != nil {
+		if _, err := lockVisible(ctx, tx.Q, orgID, id); err != nil {
 			return err
 		}
 		if err := tx.Q.SetRepositorySecret(ctx, db.SetRepositorySecretParams{ID: id, WebhookSecret: s.seal(id, secret)}); err != nil {
@@ -217,18 +217,18 @@ func (s *Service) RotateSecret(ctx context.Context, actor audit.Actor, id uuid.U
 	if err != nil {
 		return Repository{}, "", repositoryError(err)
 	}
-	r, err := s.get(ctx, id)
+	r, err := s.get(ctx, orgID, id)
 	return r, secret, err
 }
 
 // Remove disconnects a repository: its projects lose it and its webhooks are refused. One with
 // code events is hidden, so tickets keep their code activity; one without is deleted.
-func (s *Service) Remove(ctx context.Context, actor audit.Actor, id uuid.UUID) error {
+func (s *Service) Remove(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID) error {
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		if _, err := lockVisible(ctx, tx.Q, id); err != nil {
+		if _, err := lockVisible(ctx, tx.Q, orgID, id); err != nil {
 			return err
 		}
-		before, err := link(ctx, tx.Q, id, nil)
+		before, err := link(ctx, tx.Q, orgID, id, nil)
 		if err != nil {
 			return err
 		}
@@ -253,12 +253,12 @@ func (s *Service) Remove(ctx context.Context, actor audit.Actor, id uuid.UUID) e
 
 // link makes exactly projectIDs read commits from the repository and returns the ones that did
 // before. Projects linked elsewhere move here.
-func link(ctx context.Context, q *db.Queries, repoID uuid.UUID, projectIDs []uuid.UUID) ([]uuid.UUID, error) {
+func link(ctx context.Context, q *db.Queries, orgID, repoID uuid.UUID, projectIDs []uuid.UUID) ([]uuid.UUID, error) {
 	if len(projectIDs) > MaxLinkedProjects {
 		return nil, apperr.InvalidRequest("too many projects")
 	}
 	projectIDs = uniqueIDs(projectIDs)
-	rows, err := q.LockProjectsForLink(ctx, db.LockProjectsForLinkParams{Ids: projectIDs, RepositoryID: &repoID})
+	rows, err := q.LockProjectsForLink(ctx, db.LockProjectsForLinkParams{OrganizationID: orgID, Ids: projectIDs, RepositoryID: &repoID})
 	if err != nil {
 		return nil, err
 	}
@@ -293,16 +293,16 @@ func link(ctx context.Context, q *db.Queries, repoID uuid.UUID, projectIDs []uui
 	return before, nil
 }
 
-func lockVisible(ctx context.Context, q *db.Queries, id uuid.UUID) (db.GetRepositoryForUpdateRow, error) {
-	r, err := q.GetRepositoryForUpdate(ctx, id)
+func lockVisible(ctx context.Context, q *db.Queries, orgID, id uuid.UUID) (db.GetRepositoryForUpdateRow, error) {
+	r, err := q.GetRepositoryForUpdate(ctx, db.GetRepositoryForUpdateParams{ID: id, OrganizationID: orgID})
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && r.Hidden) {
 		return r, apperr.NotFound()
 	}
 	return r, err
 }
 
-func (s *Service) get(ctx context.Context, id uuid.UUID) (Repository, error) {
-	repos, err := s.list(ctx, s.store.Q())
+func (s *Service) get(ctx context.Context, orgID, id uuid.UUID) (Repository, error) {
+	repos, err := s.list(ctx, s.store.Q(), orgID)
 	if err != nil {
 		return Repository{}, err
 	}
@@ -314,12 +314,12 @@ func (s *Service) get(ctx context.Context, id uuid.UUID) (Repository, error) {
 	return Repository{}, apperr.NotFound()
 }
 
-func (s *Service) list(ctx context.Context, q *db.Queries) ([]Repository, error) {
-	rows, err := q.ListRepositories(ctx)
+func (s *Service) list(ctx context.Context, q *db.Queries, orgID uuid.UUID) ([]Repository, error) {
+	rows, err := q.ListRepositories(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
-	linked, err := q.ListLinkedProjects(ctx)
+	linked, err := q.ListLinkedProjects(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}

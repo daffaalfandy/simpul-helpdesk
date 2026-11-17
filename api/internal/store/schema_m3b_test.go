@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 )
@@ -20,7 +21,7 @@ const (
 
 func newClient(t *testing.T, st *store.Store, name string) uuid.UUID {
 	t.Helper()
-	id, err := st.Q().UpsertClient(context.Background(), name)
+	id, err := st.Q().UpsertClient(context.Background(), db.UpsertClientParams{OrganizationID: testdb.Organization(t, st), Name: name})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +30,7 @@ func newClient(t *testing.T, st *store.Store, name string) uuid.UUID {
 
 func TestPrioritiesAreSeeded(t *testing.T) {
 	st := testdb.New(t)
-	rows, err := st.Q().ListPriorityLevels(context.Background())
+	rows, err := st.Q().ListPriorityLevels(context.Background(), testdb.Organization(t, st))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +51,7 @@ func TestProjectNeedsEveryPriority(t *testing.T) {
 	pool := st.Pool()
 	client := newClient(t, st, "Kominfo")
 
-	_, err := pool.Exec(ctx, `INSERT INTO projects (client_id, name, is_default) VALUES ($1, 'Empty', true)`, client)
+	_, err := pool.Exec(ctx, `INSERT INTO projects (organization_id, client_id, name, is_default) VALUES ((SELECT id FROM organizations), $1, 'Empty', true)`, client)
 	if !store.IsViolation(err, store.SQLStateCheckViolation, constraintProjectTargets) {
 		t.Fatalf("project without targets: err = %v", err)
 	}
@@ -90,7 +91,7 @@ func TestClientWithProjectsHasOneActiveDefault(t *testing.T) {
 	if !store.IsViolation(err, store.SQLStateCheckViolation, constraintProjectDefaultActive) {
 		t.Fatalf("hidden default: err = %v", err)
 	}
-	_, err = pool.Exec(ctx, `INSERT INTO projects (client_id, name) VALUES ($1, 'sipd')`, client)
+	_, err = pool.Exec(ctx, `INSERT INTO projects (organization_id, client_id, name) VALUES ((SELECT id FROM organizations), $1, 'sipd')`, client)
 	if !store.IsViolation(err, store.SQLStateUniqueViolation, constraintProjectName) {
 		t.Fatalf("same name: err = %v", err)
 	}

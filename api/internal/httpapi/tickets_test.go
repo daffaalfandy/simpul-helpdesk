@@ -16,6 +16,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
 )
@@ -46,12 +47,12 @@ func newTicketEnv(t *testing.T) *ticketEnv {
 	ctx := context.Background()
 	e := newEnv(t)
 	te := &ticketEnv{env: e}
-	a, err := e.st.Q().GetClientByName(ctx, requesterClient)
+	a, err := e.st.Q().GetClientByName(ctx, db.GetClientByNameParams{OrganizationID: e.org, Name: requesterClient})
 	if err != nil {
 		t.Fatal(err)
 	}
 	te.clientA = a.ID
-	if te.clientB, err = e.st.Q().UpsertClient(ctx, otherClient); err != nil {
+	if te.clientB, err = e.st.Q().UpsertClient(ctx, db.UpsertClientParams{OrganizationID: e.org, Name: otherClient}); err != nil {
 		t.Fatal(err)
 	}
 	te.projectA = testdb.Project(t, e.st, te.clientA, "e-Office", true)

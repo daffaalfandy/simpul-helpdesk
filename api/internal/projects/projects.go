@@ -134,15 +134,15 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, clientID *uuid.UU
 	q := s.store.Q()
 	agentID := clients.AgentScope(p)
 	if clientID != nil {
-		if _, err := q.GetClient(ctx, db.GetClientParams{ID: *clientID, AgentID: agentID}); err != nil {
+		if _, err := q.GetClient(ctx, db.GetClientParams{ID: *clientID, OrganizationID: p.OrganizationID, AgentID: agentID}); err != nil {
 			return nil, notFound(err)
 		}
 	}
-	rows, err := q.ListProjects(ctx, db.ListProjectsParams{ClientID: clientID, AgentID: agentID})
+	rows, err := q.ListProjects(ctx, db.ListProjectsParams{OrganizationID: p.OrganizationID, ClientID: clientID, AgentID: agentID})
 	if err != nil {
 		return nil, err
 	}
-	targets, err := TargetsByProject(ctx, q, nil)
+	targets, err := TargetsByProject(ctx, q, p.OrganizationID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -159,10 +159,10 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, clientID *uuid.UU
 
 // Get returns one project, or 404 if p may not see it.
 func (s *Service) Get(ctx context.Context, p *auth.Principal, id uuid.UUID) (Project, error) {
-	return get(ctx, s.store.Q(), id, clients.AgentScope(p))
+	return get(ctx, s.store.Q(), p.OrganizationID, id, clients.AgentScope(p))
 }
 
-func (s *Service) Create(ctx context.Context, actor audit.Actor, in CreateInput) (Project, error) {
+func (s *Service) Create(ctx context.Context, actor audit.Actor, orgID uuid.UUID, in CreateInput) (Project, error) {
 	name, desc, err := normalize(in.Name, in.Description)
 	if err != nil {
 		return Project{}, err
@@ -173,7 +173,7 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, in CreateInput)
 	defaults := sla.DefaultProjectSLA()
 	var id uuid.UUID
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		if _, err := tx.Q.GetClientForUpdate(ctx, in.ClientID); err != nil {
+		if _, err := tx.Q.GetClientForUpdate(ctx, db.GetClientForUpdateParams{ID: in.ClientID, OrganizationID: orgID}); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return apperr.Invalid(apperr.CodeClientNotFound, "Choose a client", "")
 			}
@@ -187,7 +187,7 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, in CreateInput)
 		isDefault := in.IsDefault || n == 0
 		active := in.Active || isDefault
 		if id, err = tx.Q.CreateProject(ctx, db.CreateProjectParams{
-			ClientID: in.ClientID, Name: name, Description: desc, Active: active,
+			OrganizationID: orgID, ClientID: in.ClientID, Name: name, Description: desc, Active: active,
 		}); err != nil {
 			return err
 		}
@@ -214,10 +214,10 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, in CreateInput)
 	if err != nil {
 		return Project{}, projectError(err)
 	}
-	return get(ctx, s.store.Q(), id, nil)
+	return get(ctx, s.store.Q(), orgID, id, nil)
 }
 
-func (s *Service) Update(ctx context.Context, actor audit.Actor, id uuid.UUID, in UpdateInput) (Project, error) {
+func (s *Service) Update(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID, in UpdateInput) (Project, error) {
 	name, desc, err := normalize(in.Name, in.Description)
 	if err != nil {
 		return Project{}, err
@@ -226,12 +226,12 @@ func (s *Service) Update(ctx context.Context, actor audit.Actor, id uuid.UUID, i
 		return Project{}, errDefaultHidden()
 	}
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetProjectForUpdate(ctx, id)
+		old, err := tx.Q.GetProjectForUpdate(ctx, db.GetProjectForUpdateParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
 		// Default switches are serialised per client.
-		if _, err := tx.Q.GetClientForUpdate(ctx, old.ClientID); err != nil {
+		if _, err := tx.Q.GetClientForUpdate(ctx, db.GetClientForUpdateParams{ID: old.ClientID, OrganizationID: orgID}); err != nil {
 			return err
 		}
 		if old.IsDefault && !in.IsDefault {
@@ -251,24 +251,24 @@ func (s *Service) Update(ctx context.Context, actor audit.Actor, id uuid.UUID, i
 			}
 		}
 		if in.IsDefault && !old.IsDefault {
-			return makeDefault(ctx, tx.Q, actor, id, old.ClientID)
+			return makeDefault(ctx, tx.Q, actor, orgID, id, old.ClientID)
 		}
 		return nil
 	})
 	if err != nil {
 		return Project{}, projectError(err)
 	}
-	return get(ctx, s.store.Q(), id, nil)
+	return get(ctx, s.store.Q(), orgID, id, nil)
 }
 
 // Delete removes a project. The default can't go while the client has other active projects.
-func (s *Service) Delete(ctx context.Context, actor audit.Actor, id uuid.UUID) error {
+func (s *Service) Delete(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID) error {
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetProjectForUpdate(ctx, id)
+		old, err := tx.Q.GetProjectForUpdate(ctx, db.GetProjectForUpdateParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
-		if _, err := tx.Q.GetClientForUpdate(ctx, old.ClientID); err != nil {
+		if _, err := tx.Q.GetClientForUpdate(ctx, db.GetClientForUpdateParams{ID: old.ClientID, OrganizationID: orgID}); err != nil {
 			return err
 		}
 		if n, err := tx.Q.CountProjectTickets(ctx, id); err != nil {
@@ -298,8 +298,8 @@ func (s *Service) Delete(ctx context.Context, actor audit.Actor, id uuid.UUID) e
 
 // UpdateSLA replaces a project's targets and settings. Open tickets keep the snapshot they were
 // created with; new tickets use these.
-func (s *Service) UpdateSLA(ctx context.Context, actor audit.Actor, id uuid.UUID, in sla.ProjectSLA) (Project, error) {
-	hours, err := s.sla.BusinessHours(ctx)
+func (s *Service) UpdateSLA(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID, in sla.ProjectSLA) (Project, error) {
+	hours, err := s.sla.BusinessHours(ctx, orgID)
 	if err != nil {
 		return Project{}, err
 	}
@@ -312,11 +312,11 @@ func (s *Service) UpdateSLA(ctx context.Context, actor audit.Actor, id uuid.UUID
 		return Project{}, apperr.Invalid(apperr.CodeInvalidSlaTargets, "Check the SLA targets", err.Error())
 	}
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetProjectForUpdate(ctx, id)
+		old, err := tx.Q.GetProjectForUpdate(ctx, db.GetProjectForUpdateParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
-		oldTargets, err := TargetsByProject(ctx, tx.Q, &id)
+		oldTargets, err := TargetsByProject(ctx, tx.Q, orgID, &id)
 		if err != nil {
 			return err
 		}
@@ -333,14 +333,14 @@ func (s *Service) UpdateSLA(ctx context.Context, actor audit.Actor, id uuid.UUID
 	if err != nil {
 		return Project{}, projectError(err)
 	}
-	return get(ctx, s.store.Q(), id, nil)
+	return get(ctx, s.store.Q(), orgID, id, nil)
 }
 
 // UpdateDoD replaces a project's Definition of Done. It applies to the project's open tickets
 // at once, except tickets with a Definition of Done of their own.
-func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, id uuid.UUID, in DoDInput) (Project, error) {
+func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID, in DoDInput) (Project, error) {
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetProjectForUpdate(ctx, id)
+		old, err := tx.Q.GetProjectForUpdate(ctx, db.GetProjectForUpdateParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
@@ -367,11 +367,11 @@ func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, id uuid.UUID
 	if err != nil {
 		return Project{}, projectError(err)
 	}
-	return get(ctx, s.store.Q(), id, nil)
+	return get(ctx, s.store.Q(), orgID, id, nil)
 }
 
-func makeDefault(ctx context.Context, q *db.Queries, actor audit.Actor, id, clientID uuid.UUID) error {
-	previous, err := q.ListProjects(ctx, db.ListProjectsParams{ClientID: &clientID})
+func makeDefault(ctx context.Context, q *db.Queries, actor audit.Actor, orgID, id, clientID uuid.UUID) error {
+	previous, err := q.ListProjects(ctx, db.ListProjectsParams{OrganizationID: orgID, ClientID: &clientID})
 	if err != nil {
 		return err
 	}
@@ -441,25 +441,26 @@ func slaChanges(prev, next sla.ProjectSLA) audit.Changes {
 
 // Load reads one project on q, unscoped, inside the caller's transaction (ticket creation
 // copies its SLA).
-func Load(ctx context.Context, q *db.Queries, id uuid.UUID) (Project, error) {
-	return get(ctx, q, id, nil)
+func Load(ctx context.Context, q *db.Queries, orgID, id uuid.UUID) (Project, error) {
+	return get(ctx, q, orgID, id, nil)
 }
 
-func get(ctx context.Context, q *db.Queries, id uuid.UUID, agentID *uuid.UUID) (Project, error) {
-	r, err := q.GetProject(ctx, db.GetProjectParams{ID: id, AgentID: agentID})
+func get(ctx context.Context, q *db.Queries, orgID, id uuid.UUID, agentID *uuid.UUID) (Project, error) {
+	r, err := q.GetProject(ctx, db.GetProjectParams{ID: id, OrganizationID: orgID, AgentID: agentID})
 	if err != nil {
 		return Project{}, notFound(err)
 	}
-	targets, err := TargetsByProject(ctx, q, &id)
+	targets, err := TargetsByProject(ctx, q, orgID, &id)
 	if err != nil {
 		return Project{}, err
 	}
 	return fromRow(r, targets[id])
 }
 
-// TargetsByProject reads targets for one project, or for all when id is nil, ordered P1–P4.
-func TargetsByProject(ctx context.Context, q *db.Queries, id *uuid.UUID) (map[uuid.UUID][]sla.ProjectTarget, error) {
-	rows, err := q.ListProjectSlaTargets(ctx, id)
+// TargetsByProject reads targets for one project, or for all of the organization's when id is
+// nil, ordered P1–P4.
+func TargetsByProject(ctx context.Context, q *db.Queries, orgID uuid.UUID, id *uuid.UUID) (map[uuid.UUID][]sla.ProjectTarget, error) {
+	rows, err := q.ListProjectSlaTargets(ctx, db.ListProjectSlaTargetsParams{OrganizationID: orgID, ProjectID: id})
 	if err != nil {
 		return nil, err
 	}

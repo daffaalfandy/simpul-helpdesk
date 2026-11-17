@@ -13,18 +13,19 @@ import (
 )
 
 const getTicketForAlert = `-- name: GetTicketForAlert :one
-SELECT t.id, t.status, t.priority, t.sla_snapshot, c.pic_email
+SELECT t.id, t.organization_id, t.status, t.priority, t.sla_snapshot, c.pic_email
 FROM tickets t
 JOIN clients c ON c.id = t.client_id
 WHERE t.id = $1
 `
 
 type GetTicketForAlertRow struct {
-	ID          uuid.UUID
-	Status      string
-	Priority    string
-	SlaSnapshot []byte
-	PicEmail    *string
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Status         string
+	Priority       string
+	SlaSnapshot    []byte
+	PicEmail       *string
 }
 
 func (q *Queries) GetTicketForAlert(ctx context.Context, id uuid.UUID) (GetTicketForAlertRow, error) {
@@ -32,6 +33,7 @@ func (q *Queries) GetTicketForAlert(ctx context.Context, id uuid.UUID) (GetTicke
 	var i GetTicketForAlertRow
 	err := row.Scan(
 		&i.ID,
+		&i.OrganizationID,
 		&i.Status,
 		&i.Priority,
 		&i.SlaSnapshot,
@@ -41,13 +43,14 @@ func (q *Queries) GetTicketForAlert(ctx context.Context, id uuid.UUID) (GetTicke
 }
 
 const getTicketForSLA = `-- name: GetTicketForSLA :one
-SELECT t.id, t.type, t.status, t.priority, t.sla_snapshot, t.first_response_at, t.resolved_at
+SELECT t.id, t.organization_id, t.type, t.status, t.priority, t.sla_snapshot, t.first_response_at, t.resolved_at
 FROM tickets t
 WHERE t.id = $1
 `
 
 type GetTicketForSLARow struct {
 	ID              uuid.UUID
+	OrganizationID  uuid.UUID
 	Type            string
 	Status          string
 	Priority        string
@@ -61,6 +64,7 @@ func (q *Queries) GetTicketForSLA(ctx context.Context, id uuid.UUID) (GetTicketF
 	var i GetTicketForSLARow
 	err := row.Scan(
 		&i.ID,
+		&i.OrganizationID,
 		&i.Type,
 		&i.Status,
 		&i.Priority,
@@ -105,20 +109,26 @@ func (q *Queries) GetTicketSLA(ctx context.Context, ticketID uuid.UUID) (TicketS
 
 const listOpenTicketIDsAfter = `-- name: ListOpenTicketIDsAfter :many
 SELECT id FROM tickets
-WHERE status = ANY($1::text[]) AND ($2::uuid IS NULL OR id > $2::uuid)
+WHERE organization_id = $1 AND status = ANY($2::text[]) AND ($3::uuid IS NULL OR id > $3::uuid)
 ORDER BY id
-LIMIT $3
+LIMIT $4
 `
 
 type ListOpenTicketIDsAfterParams struct {
-	OpenStatuses []string
-	After        *uuid.UUID
-	RowLimit     int32
+	OrganizationID uuid.UUID
+	OpenStatuses   []string
+	After          *uuid.UUID
+	RowLimit       int32
 }
 
-// Open tickets in id order, a batch at a time (recompute).
+// One organization's open tickets in id order, a batch at a time (recompute).
 func (q *Queries) ListOpenTicketIDsAfter(ctx context.Context, arg ListOpenTicketIDsAfterParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listOpenTicketIDsAfter, arg.OpenStatuses, arg.After, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listOpenTicketIDsAfter,
+		arg.OrganizationID,
+		arg.OpenStatuses,
+		arg.After,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

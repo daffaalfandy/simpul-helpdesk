@@ -84,7 +84,7 @@ func seedRepositories(ctx context.Context, q *db.Queries, box *secretbox.Box, no
 		if err != nil {
 			return nil, fmt.Errorf("repository %s: %w", d.url, err)
 		}
-		existing, err := q.GetRepositoryByName(ctx, db.GetRepositoryByNameParams{Provider: string(d.provider), Host: loc.Host, FullName: loc.FullName})
+		existing, err := q.GetRepositoryByName(ctx, db.GetRepositoryByNameParams{OrganizationID: r.org, Provider: string(d.provider), Host: loc.Host, FullName: loc.FullName})
 		id := existing.ID
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
@@ -92,7 +92,7 @@ func seedRepositories(ctx context.Context, q *db.Queries, box *secretbox.Box, no
 				return nil, err
 			}
 			if err := q.InsertRepository(ctx, db.InsertRepositoryParams{
-				ID: id, Provider: string(d.provider), Host: loc.Host, FullName: loc.FullName, WebUrl: loc.WebURL,
+				ID: id, OrganizationID: r.org, Provider: string(d.provider), Host: loc.Host, FullName: loc.FullName, WebUrl: loc.WebURL,
 				WebhookSecret: connector.Seal(box, id, DevWebhookSecret), CreatedBy: r.users[emailAdmin],
 			}); err != nil {
 				return nil, fmt.Errorf("repository %s: %w", d.url, err)

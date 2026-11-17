@@ -67,9 +67,10 @@ type Service struct {
 
 func NewService(st *store.Store) *Service { return &Service{store: st} }
 
-// ListItems returns catalogue items in display order; activeOnly leaves out hidden ones.
-func (s *Service) ListItems(ctx context.Context, activeOnly bool) ([]Item, error) {
-	rows, err := s.store.Q().ListCatalogItems(ctx, activeFilter(activeOnly))
+// ListItems returns the organization's catalogue items in display order; activeOnly leaves out
+// hidden ones.
+func (s *Service) ListItems(ctx context.Context, orgID uuid.UUID, activeOnly bool) ([]Item, error) {
+	rows, err := s.store.Q().ListCatalogItems(ctx, db.ListCatalogItemsParams{OrganizationID: orgID, Active: activeFilter(activeOnly)})
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +81,7 @@ func (s *Service) ListItems(ctx context.Context, activeOnly bool) ([]Item, error
 	return out, nil
 }
 
-func (s *Service) CreateItem(ctx context.Context, actor audit.Actor, in ItemInput) (Item, error) {
+func (s *Service) CreateItem(ctx context.Context, actor audit.Actor, orgID uuid.UUID, in ItemInput) (Item, error) {
 	in, err := normalizeItem(in)
 	if err != nil {
 		return Item{}, err
@@ -88,7 +89,7 @@ func (s *Service) CreateItem(ctx context.Context, actor audit.Actor, in ItemInpu
 	var id uuid.UUID
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
 		if id, err = tx.Q.CreateCatalogItem(ctx, db.CreateCatalogItemParams{
-			Name: in.Name, Description: in.Description, SortOrder: int32(in.SortOrder), Active: in.Active,
+			OrganizationID: orgID, Name: in.Name, Description: in.Description, SortOrder: int32(in.SortOrder), Active: in.Active,
 		}); err != nil {
 			return err
 		}
@@ -99,22 +100,22 @@ func (s *Service) CreateItem(ctx context.Context, actor audit.Actor, in ItemInpu
 	if err != nil {
 		return Item{}, catalogError(err)
 	}
-	return s.getItem(ctx, id)
+	return s.getItem(ctx, orgID, id)
 }
 
 // UpdateItem replaces a catalogue item.
-func (s *Service) UpdateItem(ctx context.Context, actor audit.Actor, id uuid.UUID, in ItemInput) (Item, error) {
+func (s *Service) UpdateItem(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID, in ItemInput) (Item, error) {
 	in, err := normalizeItem(in)
 	if err != nil {
 		return Item{}, err
 	}
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetCatalogItemForUpdate(ctx, id)
+		old, err := tx.Q.GetCatalogItemForUpdate(ctx, db.GetCatalogItemForUpdateParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
 		if err := tx.Q.UpdateCatalogItem(ctx, db.UpdateCatalogItemParams{
-			ID: id, Name: in.Name, Description: in.Description, SortOrder: int32(in.SortOrder), Active: in.Active,
+			ID: id, OrganizationID: orgID, Name: in.Name, Description: in.Description, SortOrder: int32(in.SortOrder), Active: in.Active,
 		}); err != nil {
 			return err
 		}
@@ -131,13 +132,13 @@ func (s *Service) UpdateItem(ctx context.Context, actor audit.Actor, id uuid.UUI
 	if err != nil {
 		return Item{}, catalogError(err)
 	}
-	return s.getItem(ctx, id)
+	return s.getItem(ctx, orgID, id)
 }
 
 // DeleteItem removes a catalogue item no ticket uses.
-func (s *Service) DeleteItem(ctx context.Context, actor audit.Actor, id uuid.UUID) error {
+func (s *Service) DeleteItem(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID) error {
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetCatalogItemForUpdate(ctx, id)
+		old, err := tx.Q.GetCatalogItemForUpdate(ctx, db.GetCatalogItemForUpdateParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
@@ -146,7 +147,7 @@ func (s *Service) DeleteItem(ctx context.Context, actor audit.Actor, id uuid.UUI
 		} else if n > 0 {
 			return errItemInUse()
 		}
-		if err := tx.Q.DeleteCatalogItem(ctx, id); err != nil {
+		if err := tx.Q.DeleteCatalogItem(ctx, db.DeleteCatalogItemParams{ID: id, OrganizationID: orgID}); err != nil {
 			return err
 		}
 		return audit.Write(ctx, tx.Q, actor.Entry(ActionCatalogItemDeleted, TargetCatalogItem, &id, map[string]any{dataName: old.Name}))
@@ -154,8 +155,8 @@ func (s *Service) DeleteItem(ctx context.Context, actor audit.Actor, id uuid.UUI
 	return catalogError(err)
 }
 
-func (s *Service) getItem(ctx context.Context, id uuid.UUID) (Item, error) {
-	r, err := s.store.Q().GetCatalogItem(ctx, id)
+func (s *Service) getItem(ctx context.Context, orgID, id uuid.UUID) (Item, error) {
+	r, err := s.store.Q().GetCatalogItem(ctx, db.GetCatalogItemParams{ID: id, OrganizationID: orgID})
 	if err != nil {
 		return Item{}, notFound(err)
 	}

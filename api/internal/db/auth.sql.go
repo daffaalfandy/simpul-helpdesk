@@ -142,7 +142,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) erro
 const getSessionPrincipal = `-- name: GetSessionPrincipal :one
 SELECT s.id AS session_id, s.created_at AS session_created_at, s.last_seen_at, s.expires_at,
        u.id AS user_id, u.email, u.name, u.role, u.client_id, c.name AS client_name,
-       u.job_title, u.status, u.password_changed_at
+       c.organization_id AS client_organization_id, u.job_title, u.status, u.password_changed_at
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 LEFT JOIN clients c ON c.id = u.client_id
@@ -150,19 +150,20 @@ WHERE s.token_hash = $1
 `
 
 type GetSessionPrincipalRow struct {
-	SessionID         uuid.UUID
-	SessionCreatedAt  time.Time
-	LastSeenAt        time.Time
-	ExpiresAt         time.Time
-	UserID            uuid.UUID
-	Email             string
-	Name              string
-	Role              string
-	ClientID          *uuid.UUID
-	ClientName        *string
-	JobTitle          *string
-	Status            string
-	PasswordChangedAt time.Time
+	SessionID            uuid.UUID
+	SessionCreatedAt     time.Time
+	LastSeenAt           time.Time
+	ExpiresAt            time.Time
+	UserID               uuid.UUID
+	Email                string
+	Name                 string
+	Role                 string
+	ClientID             *uuid.UUID
+	ClientName           *string
+	ClientOrganizationID *uuid.UUID
+	JobTitle             *string
+	Status               string
+	PasswordChangedAt    time.Time
 }
 
 func (q *Queries) GetSessionPrincipal(ctx context.Context, tokenHash []byte) (GetSessionPrincipalRow, error) {
@@ -179,6 +180,7 @@ func (q *Queries) GetSessionPrincipal(ctx context.Context, tokenHash []byte) (Ge
 		&i.Role,
 		&i.ClientID,
 		&i.ClientName,
+		&i.ClientOrganizationID,
 		&i.JobTitle,
 		&i.Status,
 		&i.PasswordChangedAt,

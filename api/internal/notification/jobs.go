@@ -44,11 +44,15 @@ func (TicketEmailArgs) Kind() string { return JobKindTicketEmail }
 // DigestArgs sends one user's hourly or daily summary of the routine items created before
 // Before. Period names the summary; FirstID (the oldest due row) names the group, so a row that
 // arrives after its period's summary went out still gets one instead of waiting a whole period.
+//
+// OrganizationID keeps one organization's tickets in a summary, with its name, logo and time
+// zone; a summary queued before organizations existed has none and covers every one.
 type DigestArgs struct {
-	UserID  uuid.UUID `json:"user_id"`
-	Period  string    `json:"period"`
-	Before  time.Time `json:"before"`
-	FirstID uuid.UUID `json:"first_id"`
+	OrganizationID uuid.UUID `json:"organization_id,omitzero"`
+	UserID         uuid.UUID `json:"user_id"`
+	Period         string    `json:"period"`
+	Before         time.Time `json:"before"`
+	FirstID        uuid.UUID `json:"first_id"`
 }
 
 func (DigestArgs) Kind() string { return JobKindDigest }

@@ -79,10 +79,11 @@ func (w *InviteEmailWorker) Work(ctx context.Context, job *river.Job[SendInviteA
 		if UserStatus(user.Status) != UserStatusInvited {
 			return nil
 		}
-		org, err := tx.Q.GetOrganization(ctx)
+		first, err := tx.Q.GetFirstOrganization(ctx)
 		if err != nil {
 			return err
 		}
+		org := db.GetOrganizationRow(first)
 		inviter := ""
 		if job.Args.InvitedBy != nil {
 			by, err := tx.Q.GetUserByID(ctx, *job.Args.InvitedBy)

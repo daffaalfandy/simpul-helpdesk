@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/commitmsg"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
@@ -24,15 +25,16 @@ type TestRef struct {
 	TicketExists bool
 }
 
-// TestMessage reads a commit message the way the connector does ("Try a commit message").
-func (s *Service) TestMessage(ctx context.Context, message string) ([]TestRef, error) {
+// TestMessage reads a commit message the way the connector does ("Try a commit message"), for
+// the organization's tickets.
+func (s *Service) TestMessage(ctx context.Context, orgID uuid.UUID, message string) ([]TestRef, error) {
 	q := s.store.Q()
-	prefixes, err := q.ListTicketPrefixes(ctx)
+	prefixes, err := q.ListTicketPrefixes(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
 	keys := commitmsg.New(prefixes).Keys(message)
-	found, err := q.TicketKeysExist(ctx, keys)
+	found, err := q.TicketKeysExist(ctx, db.TicketKeysExistParams{OrganizationID: orgID, Keys: keys})
 	if err != nil {
 		return nil, err
 	}
@@ -59,8 +61,8 @@ type LogEntry struct {
 }
 
 // Log lists the latest commit links, newest first, ignored keys included.
-func (s *Service) Log(ctx context.Context) ([]LogEntry, error) {
-	rows, err := s.store.Q().ListCodeLog(ctx, LogLimit)
+func (s *Service) Log(ctx context.Context, orgID uuid.UUID) ([]LogEntry, error) {
+	rows, err := s.store.Q().ListCodeLog(ctx, db.ListCodeLogParams{OrganizationID: orgID, RowLimit: LogLimit})
 	if err != nil {
 		return nil, err
 	}

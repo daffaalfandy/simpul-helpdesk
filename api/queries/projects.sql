@@ -11,7 +11,8 @@ SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_def
 FROM projects p
 JOIN clients c ON c.id = p.client_id
 LEFT JOIN repositories r ON r.id = p.repository_id
-WHERE (sqlc.narg(client_id)::uuid IS NULL OR p.client_id = sqlc.narg(client_id)::uuid)
+WHERE p.organization_id = @organization_id
+  AND (sqlc.narg(client_id)::uuid IS NULL OR p.client_id = sqlc.narg(client_id)::uuid)
   AND (sqlc.narg(agent_id)::uuid IS NULL OR EXISTS (
         SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = sqlc.narg(agent_id)::uuid))
 ORDER BY lower(c.name), lower(p.name);
@@ -29,6 +30,7 @@ FROM projects p
 JOIN clients c ON c.id = p.client_id
 LEFT JOIN repositories r ON r.id = p.repository_id
 WHERE p.id = @id
+  AND p.organization_id = @organization_id
   AND (sqlc.narg(agent_id)::uuid IS NULL OR EXISTS (
         SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = sqlc.narg(agent_id)::uuid));
 
@@ -36,14 +38,15 @@ WHERE p.id = @id
 SELECT id, client_id, name, description, is_default, active,
        sla_pause_on_waiting_client, sla_pause_on_uat, sla_at_risk_percent,
        sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach, dod_config, allow_ticket_override, repository_id
-FROM projects WHERE id = @id FOR UPDATE;
+FROM projects WHERE id = @id AND organization_id = @organization_id FOR UPDATE;
 
 -- name: ListProjectSlaTargets :many
--- project_id NULL lists every project's targets.
+-- project_id NULL lists the targets of every project of the organization.
 SELECT project_id, priority, first_response_value, first_response_unit, resolve_value, resolve_unit,
        deliver_value, deliver_unit, calendar
 FROM project_sla_targets
-WHERE sqlc.narg(project_id)::uuid IS NULL OR project_id = sqlc.narg(project_id)::uuid
+WHERE project_id IN (SELECT id FROM projects WHERE organization_id = @organization_id)
+  AND (sqlc.narg(project_id)::uuid IS NULL OR project_id = sqlc.narg(project_id)::uuid)
 ORDER BY project_id, priority;
 
 -- name: CountClientProjects :one
@@ -53,8 +56,8 @@ SELECT count(*)::int FROM projects WHERE client_id = @client_id;
 SELECT count(*)::int FROM projects WHERE client_id = @client_id AND active AND id <> @id;
 
 -- name: CreateProject :one
-INSERT INTO projects (client_id, name, description, is_default, active)
-VALUES (@client_id, @name, sqlc.narg(description), @is_default, @active)
+INSERT INTO projects (organization_id, client_id, name, description, is_default, active)
+VALUES (@organization_id, @client_id, @name, sqlc.narg(description), @is_default, @active)
 RETURNING id;
 
 -- name: UpdateProject :exec

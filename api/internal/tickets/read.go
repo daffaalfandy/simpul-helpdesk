@@ -56,7 +56,7 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f ListFilter) ([]
 		statuses = ticket.Statuses
 	}
 	params := db.ListTicketsParams{
-		ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID, Statuses: statusStrings(statuses),
+		OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID, Statuses: statusStrings(statuses),
 		ClientID: f.ClientID, Unassigned: f.Assignee == AssigneeUnassigned, Before: f.Before,
 		RowLimit: int32(pageSize(f.Limit)),
 	}
@@ -143,7 +143,7 @@ func (s *Service) getAs(ctx context.Context, p *auth.Principal, a access, key st
 	if t.SLA, err = snap.Effective(t.Priority, t.Type); err != nil {
 		return Ticket{}, err
 	}
-	schedules, err := s.sla.Schedules(ctx)
+	schedules, err := s.sla.Schedules(ctx, a.org)
 	if err != nil {
 		return Ticket{}, err
 	}
@@ -189,7 +189,7 @@ func (s *Service) getRow(ctx context.Context, q *db.Queries, a access, key strin
 	if !ticket.ValidKey(key) {
 		return db.GetTicketRow{}, notFound(pgx.ErrNoRows)
 	}
-	r, err := q.GetTicket(ctx, db.GetTicketParams{Key: key, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID})
+	r, err := q.GetTicket(ctx, db.GetTicketParams{Key: key, OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID})
 	return r, notFound(err)
 }
 

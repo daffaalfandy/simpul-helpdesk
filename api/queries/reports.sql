@@ -11,7 +11,8 @@ SELECT t.id, t.key, t.client_id, t.project_id, p.name AS project_name, t.type, t
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_sla s ON s.ticket_id = t.id
-WHERE t.created_at >= @month_start::timestamptz
+WHERE t.organization_id = @organization_id
+  AND t.created_at >= @month_start::timestamptz
   AND t.created_at < @month_end::timestamptz
   AND (sqlc.narg(client_id)::uuid IS NULL OR t.client_id = sqlc.narg(client_id)::uuid)
 ORDER BY t.created_at, t.number;
@@ -19,13 +20,14 @@ ORDER BY t.created_at, t.number;
 -- name: ListReportClients :many
 SELECT id, name, contract_no, contract_start, contract_end
 FROM clients
+WHERE organization_id = @organization_id
 ORDER BY lower(name);
 
 -- name: GetReportClient :one
 SELECT id, name, contract_no, contract_start, contract_end
 FROM clients
-WHERE id = @id;
+WHERE id = @id AND organization_id = @organization_id;
 
 -- name: GetFirstTicketCreatedAt :one
--- No row on an install without tickets.
-SELECT created_at FROM tickets ORDER BY created_at LIMIT 1;
+-- No row for an organization without tickets.
+SELECT created_at FROM tickets WHERE organization_id = @organization_id ORDER BY created_at LIMIT 1;

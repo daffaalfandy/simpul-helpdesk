@@ -51,6 +51,8 @@ type Principal struct {
 	JobTitle   *string
 	ClientID   *uuid.UUID // requesters only
 	ClientName *string
+	// OrganizationID is the organization the request works in (uuid.Nil: none yet).
+	OrganizationID uuid.UUID
 }
 
 type principalKey struct{}
@@ -65,4 +67,6 @@ func PrincipalFrom(ctx context.Context) (*Principal, bool) {
 	return p, ok && p != nil
 }
 
-func (p *Principal) AuditActor() audit.Actor { return audit.UserActor(p.UserID, p.Name) }
+func (p *Principal) AuditActor() audit.Actor {
+	return audit.UserActor(p.UserID, p.Name).In(p.OrganizationID)
+}

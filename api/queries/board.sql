@@ -33,6 +33,7 @@ WITH board AS (
                    AND (s.first_response_at_risk_flagged_at IS NOT NULL OR s.first_response_breached_at IS NOT NULL))
                OR (s.resolution_met_at IS NULL
                    AND (s.resolution_at_risk_flagged_at IS NOT NULL OR s.resolution_breached_at IS NOT NULL)))))
+    AND t.organization_id = @organization_id
     AND (sqlc.narg(scope_agent_id)::uuid IS NULL
          OR EXISTS (SELECT 1 FROM client_agents ca
                     WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
@@ -90,6 +91,7 @@ LEFT JOIN ticket_sla s ON s.ticket_id = t.id
 -- Only rows a number can count: open tickets, and tickets resolved since the earlier start
 -- (a first response this month belongs to one of those). Closed history stays unread.
 WHERE (t.status = ANY(@open_statuses::text[]) OR t.resolved_at >= least(@week_start::timestamptz, @month_start::timestamptz))
+  AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
@@ -103,6 +105,7 @@ FROM tickets t
 JOIN clients c ON c.id = t.client_id
 JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE t.status = ANY(@open_statuses::text[])
+  AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)

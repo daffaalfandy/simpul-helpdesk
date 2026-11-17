@@ -66,21 +66,23 @@ func (q *Queries) CountProjectTickets(ctx context.Context, projectID uuid.UUID) 
 }
 
 const createProject = `-- name: CreateProject :one
-INSERT INTO projects (client_id, name, description, is_default, active)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO projects (organization_id, client_id, name, description, is_default, active)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id
 `
 
 type CreateProjectParams struct {
-	ClientID    uuid.UUID
-	Name        string
-	Description *string
-	IsDefault   bool
-	Active      bool
+	OrganizationID uuid.UUID
+	ClientID       uuid.UUID
+	Name           string
+	Description    *string
+	IsDefault      bool
+	Active         bool
 }
 
 func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createProject,
+		arg.OrganizationID,
 		arg.ClientID,
 		arg.Name,
 		arg.Description,
@@ -152,13 +154,15 @@ FROM projects p
 JOIN clients c ON c.id = p.client_id
 LEFT JOIN repositories r ON r.id = p.repository_id
 WHERE p.id = $1
-  AND ($2::uuid IS NULL OR EXISTS (
-        SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = $2::uuid))
+  AND p.organization_id = $2
+  AND ($3::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = $3::uuid))
 `
 
 type GetProjectParams struct {
-	ID      uuid.UUID
-	AgentID *uuid.UUID
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	AgentID        *uuid.UUID
 }
 
 type GetProjectRow struct {
@@ -186,7 +190,7 @@ type GetProjectRow struct {
 }
 
 func (q *Queries) GetProject(ctx context.Context, arg GetProjectParams) (GetProjectRow, error) {
-	row := q.db.QueryRow(ctx, getProject, arg.ID, arg.AgentID)
+	row := q.db.QueryRow(ctx, getProject, arg.ID, arg.OrganizationID, arg.AgentID)
 	var i GetProjectRow
 	err := row.Scan(
 		&i.ID,
@@ -235,8 +239,13 @@ const getProjectForUpdate = `-- name: GetProjectForUpdate :one
 SELECT id, client_id, name, description, is_default, active,
        sla_pause_on_waiting_client, sla_pause_on_uat, sla_at_risk_percent,
        sla_notify_supervisor_on_breach, sla_notify_pic_on_p1_breach, dod_config, allow_ticket_override, repository_id
-FROM projects WHERE id = $1 FOR UPDATE
+FROM projects WHERE id = $1 AND organization_id = $2 FOR UPDATE
 `
+
+type GetProjectForUpdateParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
 
 type GetProjectForUpdateRow struct {
 	ID                          uuid.UUID
@@ -255,8 +264,8 @@ type GetProjectForUpdateRow struct {
 	RepositoryID                *uuid.UUID
 }
 
-func (q *Queries) GetProjectForUpdate(ctx context.Context, id uuid.UUID) (GetProjectForUpdateRow, error) {
-	row := q.db.QueryRow(ctx, getProjectForUpdate, id)
+func (q *Queries) GetProjectForUpdate(ctx context.Context, arg GetProjectForUpdateParams) (GetProjectForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getProjectForUpdate, arg.ID, arg.OrganizationID)
 	var i GetProjectForUpdateRow
 	err := row.Scan(
 		&i.ID,
@@ -312,9 +321,15 @@ const listProjectSlaTargets = `-- name: ListProjectSlaTargets :many
 SELECT project_id, priority, first_response_value, first_response_unit, resolve_value, resolve_unit,
        deliver_value, deliver_unit, calendar
 FROM project_sla_targets
-WHERE $1::uuid IS NULL OR project_id = $1::uuid
+WHERE project_id IN (SELECT id FROM projects WHERE organization_id = $1)
+  AND ($2::uuid IS NULL OR project_id = $2::uuid)
 ORDER BY project_id, priority
 `
+
+type ListProjectSlaTargetsParams struct {
+	OrganizationID uuid.UUID
+	ProjectID      *uuid.UUID
+}
 
 type ListProjectSlaTargetsRow struct {
 	ProjectID          uuid.UUID
@@ -328,9 +343,9 @@ type ListProjectSlaTargetsRow struct {
 	Calendar           string
 }
 
-// project_id NULL lists every project's targets.
-func (q *Queries) ListProjectSlaTargets(ctx context.Context, projectID *uuid.UUID) ([]ListProjectSlaTargetsRow, error) {
-	rows, err := q.db.Query(ctx, listProjectSlaTargets, projectID)
+// project_id NULL lists the targets of every project of the organization.
+func (q *Queries) ListProjectSlaTargets(ctx context.Context, arg ListProjectSlaTargetsParams) ([]ListProjectSlaTargetsRow, error) {
+	rows, err := q.db.Query(ctx, listProjectSlaTargets, arg.OrganizationID, arg.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -371,15 +386,17 @@ SELECT p.id, p.client_id, c.name AS client_name, p.name, p.description, p.is_def
 FROM projects p
 JOIN clients c ON c.id = p.client_id
 LEFT JOIN repositories r ON r.id = p.repository_id
-WHERE ($1::uuid IS NULL OR p.client_id = $1::uuid)
-  AND ($2::uuid IS NULL OR EXISTS (
-        SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = $2::uuid))
+WHERE p.organization_id = $1
+  AND ($2::uuid IS NULL OR p.client_id = $2::uuid)
+  AND ($3::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM client_agents ca WHERE ca.client_id = p.client_id AND ca.user_id = $3::uuid))
 ORDER BY lower(c.name), lower(p.name)
 `
 
 type ListProjectsParams struct {
-	ClientID *uuid.UUID
-	AgentID  *uuid.UUID
+	OrganizationID uuid.UUID
+	ClientID       *uuid.UUID
+	AgentID        *uuid.UUID
 }
 
 type ListProjectsRow struct {
@@ -408,7 +425,7 @@ type ListProjectsRow struct {
 
 // client_id NULL lists every client's projects; agent_id NULL skips the agent scope.
 func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]ListProjectsRow, error) {
-	rows, err := q.db.Query(ctx, listProjects, arg.ClientID, arg.AgentID)
+	rows, err := q.db.Query(ctx, listProjects, arg.OrganizationID, arg.ClientID, arg.AgentID)
 	if err != nil {
 		return nil, err
 	}

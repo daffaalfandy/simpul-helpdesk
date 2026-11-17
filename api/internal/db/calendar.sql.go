@@ -13,85 +13,98 @@ import (
 )
 
 const createHoliday = `-- name: CreateHoliday :one
-INSERT INTO holidays (date, name) VALUES ($1, $2) RETURNING id
+INSERT INTO holidays (organization_id, date, name) VALUES ($1, $2, $3) RETURNING id
 `
 
 type CreateHolidayParams struct {
-	Date calendar.Date
-	Name string
+	OrganizationID uuid.UUID
+	Date           calendar.Date
+	Name           string
 }
 
 func (q *Queries) CreateHoliday(ctx context.Context, arg CreateHolidayParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, createHoliday, arg.Date, arg.Name)
+	row := q.db.QueryRow(ctx, createHoliday, arg.OrganizationID, arg.Date, arg.Name)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
 
 const deleteBusinessHours = `-- name: DeleteBusinessHours :exec
-DELETE FROM business_hours
+DELETE FROM business_hours WHERE organization_id = $1
 `
 
-func (q *Queries) DeleteBusinessHours(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteBusinessHours)
+func (q *Queries) DeleteBusinessHours(ctx context.Context, organizationID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteBusinessHours, organizationID)
 	return err
 }
 
 const deleteHoliday = `-- name: DeleteHoliday :one
-DELETE FROM holidays WHERE id = $1 RETURNING date, name
+DELETE FROM holidays WHERE id = $1 AND organization_id = $2 RETURNING date, name
 `
+
+type DeleteHolidayParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
 
 type DeleteHolidayRow struct {
 	Date calendar.Date
 	Name string
 }
 
-func (q *Queries) DeleteHoliday(ctx context.Context, id uuid.UUID) (DeleteHolidayRow, error) {
-	row := q.db.QueryRow(ctx, deleteHoliday, id)
+func (q *Queries) DeleteHoliday(ctx context.Context, arg DeleteHolidayParams) (DeleteHolidayRow, error) {
+	row := q.db.QueryRow(ctx, deleteHoliday, arg.ID, arg.OrganizationID)
 	var i DeleteHolidayRow
 	err := row.Scan(&i.Date, &i.Name)
 	return i, err
 }
 
 const getOrganizationTimezone = `-- name: GetOrganizationTimezone :one
-SELECT timezone FROM organization WHERE id
+SELECT timezone FROM organizations WHERE id = $1
 `
 
-func (q *Queries) GetOrganizationTimezone(ctx context.Context) (string, error) {
-	row := q.db.QueryRow(ctx, getOrganizationTimezone)
+func (q *Queries) GetOrganizationTimezone(ctx context.Context, organizationID uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getOrganizationTimezone, organizationID)
 	var timezone string
 	err := row.Scan(&timezone)
 	return timezone, err
 }
 
 const insertBusinessHours = `-- name: InsertBusinessHours :exec
-INSERT INTO business_hours (weekday, open_minute, close_minute)
-VALUES ($1, $2, $3)
+INSERT INTO business_hours (organization_id, weekday, open_minute, close_minute)
+VALUES ($1, $2, $3, $4)
 `
 
 type InsertBusinessHoursParams struct {
-	Weekday     int16
-	OpenMinute  int16
-	CloseMinute int16
+	OrganizationID uuid.UUID
+	Weekday        int16
+	OpenMinute     int16
+	CloseMinute    int16
 }
 
 func (q *Queries) InsertBusinessHours(ctx context.Context, arg InsertBusinessHoursParams) error {
-	_, err := q.db.Exec(ctx, insertBusinessHours, arg.Weekday, arg.OpenMinute, arg.CloseMinute)
+	_, err := q.db.Exec(ctx, insertBusinessHours,
+		arg.OrganizationID,
+		arg.Weekday,
+		arg.OpenMinute,
+		arg.CloseMinute,
+	)
 	return err
 }
 
 const insertHolidayIfMissing = `-- name: InsertHolidayIfMissing :execrows
-INSERT INTO holidays (date, name) VALUES ($1, $2)
-ON CONFLICT (date) DO NOTHING
+INSERT INTO holidays (organization_id, date, name) VALUES ($1, $2, $3)
+ON CONFLICT (organization_id, date) DO NOTHING
 `
 
 type InsertHolidayIfMissingParams struct {
-	Date calendar.Date
-	Name string
+	OrganizationID uuid.UUID
+	Date           calendar.Date
+	Name           string
 }
 
 func (q *Queries) InsertHolidayIfMissing(ctx context.Context, arg InsertHolidayIfMissingParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertHolidayIfMissing, arg.Date, arg.Name)
+	result, err := q.db.Exec(ctx, insertHolidayIfMissing, arg.OrganizationID, arg.Date, arg.Name)
 	if err != nil {
 		return 0, err
 	}
@@ -99,18 +112,26 @@ func (q *Queries) InsertHolidayIfMissing(ctx context.Context, arg InsertHolidayI
 }
 
 const listBusinessHours = `-- name: ListBusinessHours :many
-SELECT weekday, open_minute, close_minute FROM business_hours ORDER BY weekday
+SELECT weekday, open_minute, close_minute FROM business_hours
+WHERE organization_id = $1
+ORDER BY weekday
 `
 
-func (q *Queries) ListBusinessHours(ctx context.Context) ([]BusinessHour, error) {
-	rows, err := q.db.Query(ctx, listBusinessHours)
+type ListBusinessHoursRow struct {
+	Weekday     int16
+	OpenMinute  int16
+	CloseMinute int16
+}
+
+func (q *Queries) ListBusinessHours(ctx context.Context, organizationID uuid.UUID) ([]ListBusinessHoursRow, error) {
+	rows, err := q.db.Query(ctx, listBusinessHours, organizationID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []BusinessHour{}
+	items := []ListBusinessHoursRow{}
 	for rows.Next() {
-		var i BusinessHour
+		var i ListBusinessHoursRow
 		if err := rows.Scan(&i.Weekday, &i.OpenMinute, &i.CloseMinute); err != nil {
 			return nil, err
 		}
@@ -125,14 +146,16 @@ func (q *Queries) ListBusinessHours(ctx context.Context) ([]BusinessHour, error)
 const listHolidays = `-- name: ListHolidays :many
 SELECT id, date, name
 FROM holidays
-WHERE ($1::date IS NULL OR date >= $1::date)
-  AND ($2::date IS NULL OR date <= $2::date)
+WHERE organization_id = $1
+  AND ($2::date IS NULL OR date >= $2::date)
+  AND ($3::date IS NULL OR date <= $3::date)
 ORDER BY date
 `
 
 type ListHolidaysParams struct {
-	FromDate *calendar.Date
-	ToDate   *calendar.Date
+	OrganizationID uuid.UUID
+	FromDate       *calendar.Date
+	ToDate         *calendar.Date
 }
 
 type ListHolidaysRow struct {
@@ -143,7 +166,7 @@ type ListHolidaysRow struct {
 
 // from/to bound the dates (inclusive); NULL is open-ended.
 func (q *Queries) ListHolidays(ctx context.Context, arg ListHolidaysParams) ([]ListHolidaysRow, error) {
-	rows, err := q.db.Query(ctx, listHolidays, arg.FromDate, arg.ToDate)
+	rows, err := q.db.Query(ctx, listHolidays, arg.OrganizationID, arg.FromDate, arg.ToDate)
 	if err != nil {
 		return nil, err
 	}
@@ -162,12 +185,22 @@ func (q *Queries) ListHolidays(ctx context.Context, arg ListHolidaysParams) ([]L
 	return items, nil
 }
 
-const lockOrganization = `-- name: LockOrganization :exec
-SELECT 1 FROM organization WHERE id FOR UPDATE
+const lockInstall = `-- name: LockInstall :exec
+SELECT 1 FROM install WHERE id FOR UPDATE
 `
 
-// Serialises changes to organisation-wide settings.
-func (q *Queries) LockOrganization(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, lockOrganization)
+// Serialises install-wide rules: the last administrator, first-run setup, new organizations.
+func (q *Queries) LockInstall(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockInstall)
+	return err
+}
+
+const lockOrganization = `-- name: LockOrganization :exec
+SELECT 1 FROM organizations WHERE id = $1 FOR UPDATE
+`
+
+// Serialises changes to one organization's settings.
+func (q *Queries) LockOrganization(ctx context.Context, organizationID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockOrganization, organizationID)
 	return err
 }

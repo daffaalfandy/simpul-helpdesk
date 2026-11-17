@@ -111,15 +111,15 @@ func AgentScope(p *auth.Principal) *uuid.UUID {
 // List returns the clients p may see, by name.
 func (s *Service) List(ctx context.Context, p *auth.Principal) ([]Client, error) {
 	q := s.store.Q()
-	rows, err := q.ListClients(ctx, AgentScope(p))
+	rows, err := q.ListClients(ctx, db.ListClientsParams{OrganizationID: p.OrganizationID, AgentID: AgentScope(p)})
 	if err != nil {
 		return nil, err
 	}
-	agents, err := agentsByClient(ctx, q, nil)
+	agents, err := agentsByClient(ctx, q, p.OrganizationID, nil)
 	if err != nil {
 		return nil, err
 	}
-	projects, err := projectsByClient(ctx, q, nil)
+	projects, err := projectsByClient(ctx, q, p.OrganizationID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -132,10 +132,10 @@ func (s *Service) List(ctx context.Context, p *auth.Principal) ([]Client, error)
 
 // Get returns one client, or 404 if p may not see it.
 func (s *Service) Get(ctx context.Context, p *auth.Principal, id uuid.UUID) (Client, error) {
-	return get(ctx, s.store.Q(), id, AgentScope(p))
+	return get(ctx, s.store.Q(), p.OrganizationID, id, AgentScope(p))
 }
 
-func (s *Service) Create(ctx context.Context, actor audit.Actor, in Input) (Client, error) {
+func (s *Service) Create(ctx context.Context, actor audit.Actor, orgID uuid.UUID, in Input) (Client, error) {
 	in, err := normalize(in)
 	if err != nil {
 		return Client{}, err
@@ -143,7 +143,7 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, in Input) (Clie
 	var id uuid.UUID
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
 		if id, err = tx.Q.CreateClient(ctx, db.CreateClientParams{
-			Name: in.Name, ContractNo: in.ContractNo, ContractStart: in.ContractStart,
+			OrganizationID: orgID, Name: in.Name, ContractNo: in.ContractNo, ContractStart: in.ContractStart,
 			ContractEnd: in.ContractEnd, PicName: in.PicName, PicEmail: in.PicEmail,
 		}); err != nil {
 			return err
@@ -153,21 +153,21 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, in Input) (Clie
 	if err != nil {
 		return Client{}, clientError(err)
 	}
-	return get(ctx, s.store.Q(), id, nil)
+	return get(ctx, s.store.Q(), orgID, id, nil)
 }
 
-func (s *Service) Update(ctx context.Context, actor audit.Actor, id uuid.UUID, in Input) (Client, error) {
+func (s *Service) Update(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID, in Input) (Client, error) {
 	in, err := normalize(in)
 	if err != nil {
 		return Client{}, err
 	}
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetClientForUpdate(ctx, id)
+		old, err := tx.Q.GetClientForUpdate(ctx, db.GetClientForUpdateParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
 		if err := tx.Q.UpdateClient(ctx, db.UpdateClientParams{
-			ID: id, Name: in.Name, ContractNo: in.ContractNo, ContractStart: in.ContractStart,
+			ID: id, OrganizationID: orgID, Name: in.Name, ContractNo: in.ContractNo, ContractStart: in.ContractStart,
 			ContractEnd: in.ContractEnd, PicName: in.PicName, PicEmail: in.PicEmail,
 		}); err != nil {
 			return err
@@ -184,13 +184,13 @@ func (s *Service) Update(ctx context.Context, actor audit.Actor, id uuid.UUID, i
 	if err != nil {
 		return Client{}, clientError(err)
 	}
-	return get(ctx, s.store.Q(), id, nil)
+	return get(ctx, s.store.Q(), orgID, id, nil)
 }
 
 // Delete removes a client that has no requesters and no tickets.
-func (s *Service) Delete(ctx context.Context, actor audit.Actor, id uuid.UUID) error {
+func (s *Service) Delete(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID) error {
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.GetClientForUpdate(ctx, id)
+		old, err := tx.Q.GetClientForUpdate(ctx, db.GetClientForUpdateParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
@@ -204,7 +204,7 @@ func (s *Service) Delete(ctx context.Context, actor audit.Actor, id uuid.UUID) e
 		} else if n > 0 {
 			return errHasRequesters()
 		}
-		if err := tx.Q.DeleteClient(ctx, id); err != nil {
+		if err := tx.Q.DeleteClient(ctx, db.DeleteClientParams{ID: id, OrganizationID: orgID}); err != nil {
 			return err
 		}
 		return audit.Write(ctx, tx.Q, actor.Entry(ActionDeleted, TargetClient, &id, map[string]any{dataName: old.Name}))
@@ -213,12 +213,12 @@ func (s *Service) Delete(ctx context.Context, actor audit.Actor, id uuid.UUID) e
 }
 
 // SetAgents replaces the agents assigned to a client. Every user must be an active agent.
-func (s *Service) SetAgents(ctx context.Context, actor audit.Actor, id uuid.UUID, userIDs []uuid.UUID) (Client, error) {
+func (s *Service) SetAgents(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID, userIDs []uuid.UUID) (Client, error) {
 	ids := slices.Clone(userIDs)
 	slices.SortFunc(ids, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
 	ids = slices.Compact(ids)
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		if _, err := tx.Q.GetClientForUpdate(ctx, id); err != nil {
+		if _, err := tx.Q.GetClientForUpdate(ctx, db.GetClientForUpdateParams{ID: id, OrganizationID: orgID}); err != nil {
 			return notFound(err)
 		}
 		n, err := tx.Q.CountUsersWithRoleAndStatus(ctx, db.CountUsersWithRoleAndStatusParams{
@@ -237,7 +237,7 @@ func (s *Service) SetAgents(ctx context.Context, actor audit.Actor, id uuid.UUID
 		if err := tx.Q.DeleteClientAgents(ctx, id); err != nil {
 			return err
 		}
-		if err := tx.Q.InsertClientAgents(ctx, db.InsertClientAgentsParams{ClientID: id, UserIds: ids}); err != nil {
+		if err := tx.Q.InsertClientAgents(ctx, db.InsertClientAgentsParams{OrganizationID: orgID, ClientID: id, UserIds: ids}); err != nil {
 			return err
 		}
 		added, removed := diff(old, ids)
@@ -251,27 +251,27 @@ func (s *Service) SetAgents(ctx context.Context, actor audit.Actor, id uuid.UUID
 	if err != nil {
 		return Client{}, err
 	}
-	return get(ctx, s.store.Q(), id, nil)
+	return get(ctx, s.store.Q(), orgID, id, nil)
 }
 
-func get(ctx context.Context, q *db.Queries, id uuid.UUID, agentID *uuid.UUID) (Client, error) {
-	r, err := q.GetClient(ctx, db.GetClientParams{ID: id, AgentID: agentID})
+func get(ctx context.Context, q *db.Queries, orgID, id uuid.UUID, agentID *uuid.UUID) (Client, error) {
+	r, err := q.GetClient(ctx, db.GetClientParams{ID: id, OrganizationID: orgID, AgentID: agentID})
 	if err != nil {
 		return Client{}, notFound(err)
 	}
-	agents, err := agentsByClient(ctx, q, &id)
+	agents, err := agentsByClient(ctx, q, orgID, &id)
 	if err != nil {
 		return Client{}, err
 	}
-	projects, err := projectsByClient(ctx, q, &id)
+	projects, err := projectsByClient(ctx, q, orgID, &id)
 	if err != nil {
 		return Client{}, err
 	}
 	return fromRow(r, agents[id], projects[id]), nil
 }
 
-func agentsByClient(ctx context.Context, q *db.Queries, clientID *uuid.UUID) (map[uuid.UUID][]Ref, error) {
-	rows, err := q.ListClientAgents(ctx, clientID)
+func agentsByClient(ctx context.Context, q *db.Queries, orgID uuid.UUID, clientID *uuid.UUID) (map[uuid.UUID][]Ref, error) {
+	rows, err := q.ListClientAgents(ctx, db.ListClientAgentsParams{OrganizationID: orgID, ClientID: clientID})
 	if err != nil {
 		return nil, err
 	}
@@ -282,8 +282,8 @@ func agentsByClient(ctx context.Context, q *db.Queries, clientID *uuid.UUID) (ma
 	return out, nil
 }
 
-func projectsByClient(ctx context.Context, q *db.Queries, clientID *uuid.UUID) (map[uuid.UUID][]Ref, error) {
-	rows, err := q.ListClientProjects(ctx, clientID)
+func projectsByClient(ctx context.Context, q *db.Queries, orgID uuid.UUID, clientID *uuid.UUID) (map[uuid.UUID][]Ref, error) {
+	rows, err := q.ListClientProjects(ctx, db.ListClientProjectsParams{OrganizationID: orgID, ClientID: clientID})
 	if err != nil {
 		return nil, err
 	}

@@ -28,7 +28,7 @@ func TestSweeperPurgesOnlyExpiredPendingFiles(t *testing.T) {
 	pool := st.Pool()
 
 	var client, user, ticketID uuid.UUID
-	if err := pool.QueryRow(ctx, `INSERT INTO clients (name) VALUES ('C') RETURNING id`).Scan(&client); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO clients (organization_id, name) VALUES ((SELECT id FROM organizations), 'C') RETURNING id`).Scan(&client); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `INSERT INTO users (email, name, role, client_id)
@@ -36,9 +36,9 @@ func TestSweeperPurgesOnlyExpiredPendingFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := testdb.Project(t, st, client, "e-Office", true)
-	if err := pool.QueryRow(ctx, `INSERT INTO tickets (number, key, type, status, priority, channel, client_id,
+	if err := pool.QueryRow(ctx, `INSERT INTO tickets (organization_id, number, key, type, status, priority, channel, client_id,
 		requester_id, created_by, project_id, subject, description, sla_snapshot)
-		VALUES (1, 'HD-1', 'incident', 'new', 'P3', 'portal', $1, $2, $2, $3, 'S', 'D', '{}') RETURNING id`,
+		VALUES ((SELECT organization_id FROM clients WHERE id = $1), 1, 'HD-1', 'incident', 'new', 'P3', 'portal', $1, $2, $2, $3, 'S', 'D', '{}') RETURNING id`,
 		client, user, project).Scan(&ticketID); err != nil {
 		t.Fatal(err)
 	}

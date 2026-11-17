@@ -17,6 +17,7 @@ import (
 	"time"
 	_ "time/tzdata" // business hours need IANA zones even on hosts without zoneinfo
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
@@ -407,7 +408,7 @@ func runUser(ctx context.Context, args []string) error {
 	return nil
 }
 
-const holidaysUsage = "usage: simdesk holidays presets | simdesk holidays load-preset --year YYYY"
+const holidaysUsage = "usage: simdesk holidays presets [--organization PREFIX] | simdesk holidays load-preset --year YYYY [--organization PREFIX]"
 
 func runHolidays(ctx context.Context, args []string) error {
 	if len(args) == 0 {
@@ -420,7 +421,14 @@ func runHolidays(ctx context.Context, args []string) error {
 	defer a.close()
 	switch args[0] {
 	case subPresets:
-		presets, err := a.sla.HolidayPresets(ctx)
+		fs := flag.NewFlagSet(cmdHolidays+" "+subPresets, flag.ExitOnError)
+		prefix := fs.String(flagOrganization, "", flagOrganizationHelp)
+		_ = fs.Parse(args[1:])
+		org, err := a.organizationByPrefix(ctx, *prefix)
+		if err != nil {
+			return err
+		}
+		presets, err := a.sla.HolidayPresets(ctx, org)
 		if err != nil {
 			return err
 		}
@@ -431,11 +439,16 @@ func runHolidays(ctx context.Context, args []string) error {
 	case subLoadPreset:
 		fs := flag.NewFlagSet(cmdHolidays+" "+subLoadPreset, flag.ExitOnError)
 		year := fs.Int("year", 0, "year to load (required)")
+		prefix := fs.String(flagOrganization, "", flagOrganizationHelp)
 		_ = fs.Parse(args[1:])
 		if *year == 0 {
 			return errors.New(holidaysUsage)
 		}
-		r, err := a.sla.LoadHolidayPreset(ctx, audit.SystemActor(audit.ActorNameCLI), *year)
+		org, err := a.organizationByPrefix(ctx, *prefix)
+		if err != nil {
+			return err
+		}
+		r, err := a.sla.LoadHolidayPreset(ctx, audit.SystemActor(audit.ActorNameCLI).In(org), org, *year)
 		if err != nil {
 			return err
 		}
@@ -471,4 +484,32 @@ func readPassword(fromStdin bool) (string, error) {
 		return "", errors.New("passwords don't match")
 	}
 	return string(first), nil
+}
+
+// The CLI names an organization by its ticket prefix, which is unique on the install.
+const (
+	flagOrganization     = "organization"
+	flagOrganizationHelp = "the organization's ticket prefix, e.g. HD (needed when the install has more than one)"
+)
+
+// organizationByPrefix finds the organization a command works on: the one with prefix, or the
+// install's only one when prefix is empty.
+func (a *app) organizationByPrefix(ctx context.Context, prefix string) (uuid.UUID, error) {
+	q := a.store.Q()
+	if prefix != "" {
+		id, err := q.GetOrganizationByPrefix(ctx, prefix)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, fmt.Errorf("no organization with ticket prefix %q", prefix)
+		}
+		return id, err
+	}
+	n, err := q.CountOrganizations(ctx)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if n != 1 {
+		return uuid.Nil, fmt.Errorf("the install has %d organizations: name one with --%s", n, flagOrganization)
+	}
+	first, err := q.GetFirstOrganization(ctx)
+	return first.ID, err
 }

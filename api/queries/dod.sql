@@ -48,13 +48,15 @@ SELECT t.id, t.status, t.resolved_at, t.status_changed_at, p.dod_config, o.confi
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
-WHERE t.status = ANY(@statuses::text[]) AND t.status_changed_at <= @changed_before
+WHERE t.organization_id = @organization_id
+  AND t.status = ANY(@statuses::text[]) AND t.status_changed_at <= @changed_before
   AND (sqlc.narg(after)::uuid IS NULL OR t.id > sqlc.narg(after)::uuid)
 ORDER BY t.id
 LIMIT @row_limit;
 
 -- name: GetTicketForLifecycle :one
-SELECT t.id, t.status, t.assignee_id, t.resolved_at, t.status_changed_at, p.dod_config, o.config AS dod_override
+SELECT t.id, t.organization_id, t.status, t.assignee_id, t.resolved_at, t.status_changed_at, p.dod_config,
+       o.config AS dod_override
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id

@@ -106,7 +106,7 @@ func TestPlanEmails(t *testing.T) {
 		{ids[6], daily, ticketA, false, ago(time.Hour), FrequencyDaily},          // 09:30, after 08:00: waits
 		{ids[7], daily, ticketB, false, ago(3 * time.Hour), FrequencyDaily},      // 07:30: today's summary
 	}
-	ticketEmails, digests := PlanEmails(rows, now.UTC(), jakarta)
+	ticketEmails, digests := PlanEmails(uuid.Nil, rows, now.UTC(), jakarta)
 	wantTicket := []TicketEmailArgs{
 		{UserID: user, TicketID: ticketA, FirstID: ids[0]},
 		{UserID: hourly, TicketID: ticketB, FirstID: ids[5]},

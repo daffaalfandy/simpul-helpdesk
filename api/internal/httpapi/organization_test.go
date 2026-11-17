@@ -120,7 +120,7 @@ func TestOrganizationLogo(t *testing.T) {
 func (e *env) logoKey(t *testing.T) string {
 	t.Helper()
 	var key string
-	if err := e.st.Pool().QueryRow(t.Context(), `SELECT logo_key FROM organization`).Scan(&key); err != nil {
+	if err := e.st.Pool().QueryRow(t.Context(), `SELECT logo_key FROM organizations`).Scan(&key); err != nil {
 		t.Fatal(err)
 	}
 	return key

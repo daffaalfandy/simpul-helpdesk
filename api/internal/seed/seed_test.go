@@ -61,7 +61,7 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"users":               count(`SELECT count(*) FROM users`),
 		"clients":             count(`SELECT count(*) FROM clients`),
 		"agent links":         count(`SELECT count(*) FROM client_agents`),
-		"setup open":          count(`SELECT count(*) FROM organization WHERE setup_completed_at IS NULL`),
+		"setup open":          count(`SELECT count(*) FROM install WHERE setup_completed_at IS NULL`),
 		"holidays":            count(`SELECT count(*) FROM holidays`),
 		"invited":             count(`SELECT count(*) FROM users WHERE status = 'invited' AND password_hash IS NULL`),
 		"catalog items":       count(`SELECT count(*) FROM catalog_items`),
@@ -77,8 +77,8 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"ticket history":      count(`SELECT count(DISTINCT a.target_id) FROM audit_log a JOIN tickets t ON t.id = a.target_id WHERE a.action = 'ticket.created' AND ` + demo),
 		"next number":         count(`SELECT nextval('ticket_number_seq')::int`),
 		// The board's resolved column starts at local midnight.
-		"resolved today": count(`SELECT count(*) FROM tickets, organization o
-			WHERE status = 'resolved' AND resolved_at >= date_trunc('day', now() AT TIME ZONE o.timezone) AT TIME ZONE o.timezone`),
+		"resolved today": count(`SELECT count(*) FROM tickets t JOIN organizations o ON o.id = t.organization_id
+			WHERE t.status = 'resolved' AND t.resolved_at >= date_trunc('day', now() AT TIME ZONE o.timezone) AT TIME ZONE o.timezone`),
 		"assigned, not started": count(`SELECT count(*) FROM tickets WHERE status = 'assigned'`),
 		"watchers":              count(`SELECT count(*) FROM ticket_watchers`),
 		"notifications":         count(`SELECT count(*) FROM notifications`),
@@ -119,7 +119,7 @@ func TestSeedIsIdempotent(t *testing.T) {
 	if u := got["unread notifications"]; u == 0 || u >= got["notifications"] {
 		t.Errorf("unread notifications = %d of %d", u, got["notifications"])
 	}
-	org, err := st.Q().GetOrganization(ctx)
+	org, err := st.Q().GetFirstOrganization(ctx)
 	if err != nil || org.Name != seed.OrgName {
 		t.Fatalf("org = %+v err %v", org, err)
 	}

@@ -114,7 +114,7 @@ const (
 
 // seedHistory adds the closed history tickets that don't exist yet.
 func seedHistory(ctx context.Context, q *db.Queries, now time.Time, r refs) error {
-	org, err := q.GetOrganization(ctx)
+	org, err := q.GetOrganization(ctx, r.org)
 	if err != nil {
 		return err
 	}
@@ -179,7 +179,8 @@ func historyFor(hc historyClient, monthIndex int, start, end, now time.Time, r r
 		p := historyPriorities[i%len(historyPriorities)]
 		agent := r.user(agents[i%len(agents)])
 		t := tickets.SeedTicket{
-			Priority: p, ClientID: r.clients[hc.client], Requester: requester, CreatedBy: requester,
+			OrganizationID: r.org,
+			Priority:       p, ClientID: r.clients[hc.client], Requester: requester, CreatedBy: requester,
 			Description: historyDescription, CreatedAt: created, Channel: ticket.ChannelPortal,
 		}
 		proj := projects[i%len(projects)]

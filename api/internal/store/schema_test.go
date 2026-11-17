@@ -53,7 +53,7 @@ func TestRequesterMustHaveClient(t *testing.T) {
 		t.Fatalf("requester without client: err = %v, want check violation", err)
 	}
 	var clientID string
-	if err := pool.QueryRow(ctx, `INSERT INTO clients (name) VALUES ('C') RETURNING id`).Scan(&clientID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO clients (organization_id, name) VALUES ((SELECT id FROM organizations), 'C') RETURNING id`).Scan(&clientID); err != nil {
 		t.Fatal(err)
 	}
 	_, err = pool.Exec(ctx, `INSERT INTO users (email, name, role, client_id) VALUES ('b@b.test', 'B', 'agent', $1)`, clientID)
@@ -73,19 +73,27 @@ func TestEmailMustBeLowercase(t *testing.T) {
 	}
 }
 
-func TestOrganizationIsSingleton(t *testing.T) {
+// The install row is a singleton; organizations are many, each with its own ticket prefix.
+func TestInstallIsSingletonAndPrefixesUnique(t *testing.T) {
 	ctx := context.Background()
 	pool := testdb.New(t).Pool()
 	var n int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM organization`).Scan(&n); err != nil || n != 1 {
-		t.Fatalf("organization rows = %d (err %v), want 1", n, err)
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM install`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("install rows = %d (err %v), want 1", n, err)
 	}
-	_, err := pool.Exec(ctx, `INSERT INTO organization (name) VALUES ('Second')`)
+	_, err := pool.Exec(ctx, `INSERT INTO install (id) VALUES (true)`)
 	if pgCode(err) != codeUniqueViolation {
-		t.Fatalf("second organization: err = %v, want unique violation", err)
+		t.Fatalf("second install row: err = %v, want unique violation", err)
 	}
-	_, err = pool.Exec(ctx, `INSERT INTO organization (id, name) VALUES (false, 'Second')`)
+	_, err = pool.Exec(ctx, `INSERT INTO install (id) VALUES (false)`)
 	if pgCode(err) != codeCheckViolation {
-		t.Fatalf("organization id=false: err = %v, want check violation", err)
+		t.Fatalf("install id=false: err = %v, want check violation", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO organizations (name, ticket_prefix) VALUES ('Second', 'OPS')`); err != nil {
+		t.Fatalf("second organization: %v", err)
+	}
+	_, err = pool.Exec(ctx, `INSERT INTO organizations (name, ticket_prefix) VALUES ('Third', 'OPS')`)
+	if pgCode(err) != codeUniqueViolation {
+		t.Fatalf("taken prefix: err = %v, want unique violation", err)
 	}
 }

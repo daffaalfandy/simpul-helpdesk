@@ -15,6 +15,7 @@ import (
 
 // refs resolves the names used in the demo data to seeded IDs.
 type refs struct {
+	org      uuid.UUID
 	clients  map[string]uuid.UUID
 	users    map[string]uuid.UUID            // by email
 	projects map[string]map[string]uuid.UUID // by client, then project name
@@ -254,11 +255,11 @@ var demoTickets = []demoTicket{
 }
 
 // seedCatalog upserts the mock's catalogue items.
-func seedCatalog(ctx context.Context, q *db.Queries) (map[string]uuid.UUID, error) {
+func seedCatalog(ctx context.Context, q *db.Queries, org uuid.UUID) (map[string]uuid.UUID, error) {
 	out := map[string]uuid.UUID{}
 	for i, e := range catalogItems {
 		id, err := q.UpsertCatalogItemByName(ctx, db.UpsertCatalogItemByNameParams{
-			Name: e.name, Description: optional(e.description), SortOrder: int32((i + 1) * sortStep),
+			OrganizationID: org, Name: e.name, Description: optional(e.description), SortOrder: int32((i + 1) * sortStep),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("catalogue item %s: %w", e.name, err)
@@ -271,7 +272,7 @@ func seedCatalog(ctx context.Context, q *db.Queries) (map[string]uuid.UUID, erro
 // seedTickets adds the demo tickets that don't exist yet, with their code activity, then
 // continues numbering after them.
 func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs, repos map[string]demoRepoRef) error {
-	org, err := q.GetOrganization(ctx)
+	org, err := q.GetOrganization(ctx, r.org)
 	if err != nil {
 		return err
 	}
@@ -291,7 +292,7 @@ func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs, repo
 		}
 		at := func(after int) time.Time { return created.Add(time.Duration(after) * time.Minute) }
 		t := tickets.SeedTicket{
-			Number: d.number, Prefix: org.TicketPrefix, Type: d.typ, Priority: d.priority, Channel: d.channel,
+			OrganizationID: r.org, Number: d.number, Prefix: org.TicketPrefix, Type: d.typ, Priority: d.priority, Channel: d.channel,
 			ClientID: r.clients[d.client], Requester: r.user(d.requester), CreatedBy: r.user(d.creator),
 			Subject: d.subject, Description: d.description, CreatedAt: created,
 		}

@@ -14,12 +14,12 @@ import (
 )
 
 const getFirstTicketCreatedAt = `-- name: GetFirstTicketCreatedAt :one
-SELECT created_at FROM tickets ORDER BY created_at LIMIT 1
+SELECT created_at FROM tickets WHERE organization_id = $1 ORDER BY created_at LIMIT 1
 `
 
-// No row on an install without tickets.
-func (q *Queries) GetFirstTicketCreatedAt(ctx context.Context) (time.Time, error) {
-	row := q.db.QueryRow(ctx, getFirstTicketCreatedAt)
+// No row for an organization without tickets.
+func (q *Queries) GetFirstTicketCreatedAt(ctx context.Context, organizationID uuid.UUID) (time.Time, error) {
+	row := q.db.QueryRow(ctx, getFirstTicketCreatedAt, organizationID)
 	var created_at time.Time
 	err := row.Scan(&created_at)
 	return created_at, err
@@ -28,8 +28,13 @@ func (q *Queries) GetFirstTicketCreatedAt(ctx context.Context) (time.Time, error
 const getReportClient = `-- name: GetReportClient :one
 SELECT id, name, contract_no, contract_start, contract_end
 FROM clients
-WHERE id = $1
+WHERE id = $1 AND organization_id = $2
 `
+
+type GetReportClientParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
 
 type GetReportClientRow struct {
 	ID            uuid.UUID
@@ -39,8 +44,8 @@ type GetReportClientRow struct {
 	ContractEnd   *calendar.Date
 }
 
-func (q *Queries) GetReportClient(ctx context.Context, id uuid.UUID) (GetReportClientRow, error) {
-	row := q.db.QueryRow(ctx, getReportClient, id)
+func (q *Queries) GetReportClient(ctx context.Context, arg GetReportClientParams) (GetReportClientRow, error) {
+	row := q.db.QueryRow(ctx, getReportClient, arg.ID, arg.OrganizationID)
 	var i GetReportClientRow
 	err := row.Scan(
 		&i.ID,
@@ -55,6 +60,7 @@ func (q *Queries) GetReportClient(ctx context.Context, id uuid.UUID) (GetReportC
 const listReportClients = `-- name: ListReportClients :many
 SELECT id, name, contract_no, contract_start, contract_end
 FROM clients
+WHERE organization_id = $1
 ORDER BY lower(name)
 `
 
@@ -66,8 +72,8 @@ type ListReportClientsRow struct {
 	ContractEnd   *calendar.Date
 }
 
-func (q *Queries) ListReportClients(ctx context.Context) ([]ListReportClientsRow, error) {
-	rows, err := q.db.Query(ctx, listReportClients)
+func (q *Queries) ListReportClients(ctx context.Context, organizationID uuid.UUID) ([]ListReportClientsRow, error) {
+	rows, err := q.db.Query(ctx, listReportClients, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -102,16 +108,18 @@ SELECT t.id, t.key, t.client_id, t.project_id, p.name AS project_name, t.type, t
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_sla s ON s.ticket_id = t.id
-WHERE t.created_at >= $1::timestamptz
-  AND t.created_at < $2::timestamptz
-  AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
+WHERE t.organization_id = $1
+  AND t.created_at >= $2::timestamptz
+  AND t.created_at < $3::timestamptz
+  AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
 ORDER BY t.created_at, t.number
 `
 
 type ListReportTicketsParams struct {
-	MonthStart time.Time
-	MonthEnd   time.Time
-	ClientID   *uuid.UUID
+	OrganizationID uuid.UUID
+	MonthStart     time.Time
+	MonthEnd       time.Time
+	ClientID       *uuid.UUID
 }
 
 type ListReportTicketsRow struct {
@@ -139,7 +147,12 @@ type ListReportTicketsRow struct {
 // scan hasn't replayed yet has no ticket_sla row: no breach and no first-response time.
 // client_id narrows the list to one client; NULL lists all.
 func (q *Queries) ListReportTickets(ctx context.Context, arg ListReportTicketsParams) ([]ListReportTicketsRow, error) {
-	rows, err := q.db.Query(ctx, listReportTickets, arg.MonthStart, arg.MonthEnd, arg.ClientID)
+	rows, err := q.db.Query(ctx, listReportTickets,
+		arg.OrganizationID,
+		arg.MonthStart,
+		arg.MonthEnd,
+		arg.ClientID,
+	)
 	if err != nil {
 		return nil, err
 	}

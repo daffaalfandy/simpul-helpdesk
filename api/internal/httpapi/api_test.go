@@ -15,6 +15,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
@@ -26,6 +27,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
@@ -73,6 +75,7 @@ type env struct {
 	connector    *connector.Service
 	process      *connector.ProcessWorker
 	users        map[auth.Role]string // role -> email
+	org          uuid.UUID            // the organization every test works in
 }
 
 // testEncryptionKey seals webhook secrets in tests.
@@ -129,20 +132,22 @@ func newEnv(t *testing.T) *env {
 	}
 	late.JobInserter = jobs
 	svc := auth.NewService(st, auth.NewHasher(cheapParams, auth.DefaultMaxConcurrentHashes), jobs, auth.DefaultOptions(), log)
+	orgSvc := organization.NewService(st, files, slaSvc)
 	h, err := httpapi.New(httpapi.Deps{
 		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st, svc), SLA: slaSvc,
 		Catalog: catalog.NewService(st), Projects: projects.NewService(st, slaSvc), Priorities: priorities.NewService(st),
 		Tickets: ticketSvc, Notifications: notifications.NewService(st), Connector: connectorSvc,
-		Reports: reports.NewService(st), Organization: organization.NewService(st, files, slaSvc), Logger: log,
+		Reports: reports.NewService(st), Organization: orgSvc, Logger: log,
 		WebUI: fstest.MapFS{"index.html": {Data: []byte(spaMarker)}, "assets/app.js": {Data: []byte("//js")}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.Q().UpsertClient(ctx, "Dinas Kominfo Jambi"); err != nil {
+	org := testdb.Organization(t, st)
+	if _, err := st.Q().UpsertClient(ctx, db.UpsertClientParams{OrganizationID: org, Name: "Dinas Kominfo Jambi"}); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, invite: inviteWorker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, pic: pic, files: files, connector: connectorSvc, process: process, users: map[auth.Role]string{}}
+	e := &env{org: org, t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, invite: inviteWorker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, pic: pic, files: files, connector: connectorSvc, process: process, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r}
 		if r == auth.RoleRequester {

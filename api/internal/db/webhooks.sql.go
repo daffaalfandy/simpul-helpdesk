@@ -50,19 +50,20 @@ func (q *Queries) FindStaffByEmail(ctx context.Context, email string) (FindStaff
 }
 
 const getDelivery = `-- name: GetDelivery :one
-SELECT d.id, d.repository_id, d.event_name, d.payload, d.processed_at, r.provider
+SELECT d.id, d.repository_id, d.event_name, d.payload, d.processed_at, r.provider, r.organization_id
 FROM webhook_deliveries d
 JOIN repositories r ON r.id = d.repository_id
 WHERE d.id = $1
 `
 
 type GetDeliveryRow struct {
-	ID           uuid.UUID
-	RepositoryID uuid.UUID
-	EventName    string
-	Payload      []byte
-	ProcessedAt  *time.Time
-	Provider     string
+	ID             uuid.UUID
+	RepositoryID   uuid.UUID
+	EventName      string
+	Payload        []byte
+	ProcessedAt    *time.Time
+	Provider       string
+	OrganizationID uuid.UUID
 }
 
 func (q *Queries) GetDelivery(ctx context.Context, id uuid.UUID) (GetDeliveryRow, error) {
@@ -75,6 +76,7 @@ func (q *Queries) GetDelivery(ctx context.Context, id uuid.UUID) (GetDeliveryRow
 		&i.Payload,
 		&i.ProcessedAt,
 		&i.Provider,
+		&i.OrganizationID,
 	)
 	return i, err
 }
@@ -107,14 +109,15 @@ func (q *Queries) InsertDelivery(ctx context.Context, arg InsertDeliveryParams) 
 }
 
 const listTicketPrefixes = `-- name: ListTicketPrefixes :many
-SELECT ticket_prefix::text AS prefix FROM organization
+SELECT o.ticket_prefix::text AS prefix FROM organizations o WHERE o.id = $1::uuid
 UNION
-SELECT DISTINCT split_part(key, '-', 1) FROM tickets
+SELECT DISTINCT split_part(t.key, '-', 1) FROM tickets t WHERE t.organization_id = $1::uuid
 `
 
-// Every prefix a ticket key can have: the current one and any older one still on a ticket.
-func (q *Queries) ListTicketPrefixes(ctx context.Context) ([]string, error) {
-	rows, err := q.db.Query(ctx, listTicketPrefixes)
+// Every prefix an organization's ticket keys can have: the current one and any older one still
+// on one of its tickets.
+func (q *Queries) ListTicketPrefixes(ctx context.Context, organizationID uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listTicketPrefixes, organizationID)
 	if err != nil {
 		return nil, err
 	}

@@ -11,7 +11,7 @@ import (
 
 // ListProjects is staff only; the service scopes agents to their clients' projects.
 func (s *server) ListProjects(ctx context.Context, req gen.ListProjectsRequestObject) (gen.ListProjectsResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapAgentApp)
+	p, err := requireOrg(ctx, auth.CapAgentApp)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +27,7 @@ func (s *server) ListProjects(ctx context.Context, req gen.ListProjectsRequestOb
 }
 
 func (s *server) GetProject(ctx context.Context, req gen.GetProjectRequestObject) (gen.GetProjectResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapAgentApp)
+	p, err := requireOrg(ctx, auth.CapAgentApp)
 	if err != nil {
 		return nil, err
 	}
@@ -39,12 +39,12 @@ func (s *server) GetProject(ctx context.Context, req gen.GetProjectRequestObject
 }
 
 func (s *server) CreateProject(ctx context.Context, req gen.CreateProjectRequestObject) (gen.CreateProjectResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapProjectsManage)
+	p, err := requireOrg(ctx, auth.CapProjectsManage)
 	if err != nil {
 		return nil, err
 	}
 	b := req.Body
-	pr, err := s.projects.Create(ctx, p.AuditActor(), projects.CreateInput{
+	pr, err := s.projects.Create(ctx, p.AuditActor(), p.OrganizationID, projects.CreateInput{
 		ClientID: b.ClientId, Name: b.Name, Description: b.Description, IsDefault: b.IsDefault, Active: b.Active,
 	})
 	if err != nil {
@@ -54,12 +54,12 @@ func (s *server) CreateProject(ctx context.Context, req gen.CreateProjectRequest
 }
 
 func (s *server) UpdateProject(ctx context.Context, req gen.UpdateProjectRequestObject) (gen.UpdateProjectResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapProjectsManage)
+	p, err := requireOrg(ctx, auth.CapProjectsManage)
 	if err != nil {
 		return nil, err
 	}
 	b := req.Body
-	pr, err := s.projects.Update(ctx, p.AuditActor(), req.ProjectId, projects.UpdateInput{
+	pr, err := s.projects.Update(ctx, p.AuditActor(), p.OrganizationID, req.ProjectId, projects.UpdateInput{
 		Name: b.Name, Description: b.Description, IsDefault: b.IsDefault, Active: b.Active,
 	})
 	if err != nil {
@@ -69,22 +69,22 @@ func (s *server) UpdateProject(ctx context.Context, req gen.UpdateProjectRequest
 }
 
 func (s *server) DeleteProject(ctx context.Context, req gen.DeleteProjectRequestObject) (gen.DeleteProjectResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapProjectsManage)
+	p, err := requireOrg(ctx, auth.CapProjectsManage)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.projects.Delete(ctx, p.AuditActor(), req.ProjectId); err != nil {
+	if err := s.projects.Delete(ctx, p.AuditActor(), p.OrganizationID, req.ProjectId); err != nil {
 		return nil, err
 	}
 	return gen.DeleteProject204Response{}, nil
 }
 
 func (s *server) UpdateProjectSla(ctx context.Context, req gen.UpdateProjectSlaRequestObject) (gen.UpdateProjectSlaResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapProjectsManage)
+	p, err := requireOrg(ctx, auth.CapProjectsManage)
 	if err != nil {
 		return nil, err
 	}
-	pr, err := s.projects.UpdateSLA(ctx, p.AuditActor(), req.ProjectId, domainProjectSLA(*req.Body))
+	pr, err := s.projects.UpdateSLA(ctx, p.AuditActor(), p.OrganizationID, req.ProjectId, domainProjectSLA(*req.Body))
 	if err != nil {
 		return nil, err
 	}
@@ -92,11 +92,11 @@ func (s *server) UpdateProjectSla(ctx context.Context, req gen.UpdateProjectSlaR
 }
 
 func (s *server) UpdateProjectDod(ctx context.Context, req gen.UpdateProjectDodRequestObject) (gen.UpdateProjectDodResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapProjectsManage)
+	p, err := requireOrg(ctx, auth.CapProjectsManage)
 	if err != nil {
 		return nil, err
 	}
-	pr, err := s.projects.UpdateDoD(ctx, p.AuditActor(), req.ProjectId, projects.DoDInput{
+	pr, err := s.projects.UpdateDoD(ctx, p.AuditActor(), p.OrganizationID, req.ProjectId, projects.DoDInput{
 		Config: domainDodConfig(req.Body.Dod), AllowTicketOverride: req.Body.AllowTicketOverride,
 	})
 	if err != nil {

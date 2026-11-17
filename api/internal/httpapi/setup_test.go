@@ -32,7 +32,7 @@ func TestFirstRunSetup(t *testing.T) {
 	}
 
 	// A fresh install: setup is open.
-	if _, err := e.st.Pool().Exec(context.Background(), `UPDATE organization SET setup_completed_at = NULL`); err != nil {
+	if _, err := e.st.Pool().Exec(context.Background(), `UPDATE install SET setup_completed_at = NULL`); err != nil {
 		t.Fatal(err)
 	}
 	if !e.organization(t).SetupRequired {

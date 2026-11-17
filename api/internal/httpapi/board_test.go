@@ -195,9 +195,9 @@ func TestBoardColumnCap(t *testing.T) {
 	te := newTicketEnv(t)
 	extra := 5
 	n := tickets.BoardColumnLimit + extra
-	te.exec(t, `INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, created_by,
+	te.exec(t, `INSERT INTO tickets (organization_id, number, key, type, status, priority, channel, client_id, requester_id, created_by,
 		project_id, subject, description, sla_snapshot)
-		SELECT 900000 + g, 'HD-' || (900000 + g)::text, 'incident', 'new', 'P3', 'portal', $1, $2, $2, $3, $4, 'D', '{}'
+		SELECT (SELECT organization_id FROM clients WHERE id = $1), 900000 + g, 'HD-' || (900000 + g)::text, 'incident', 'new', 'P3', 'portal', $1, $2, $2, $3, $4, 'D', '{}'
 		FROM generate_series(1, $5::int) AS g`,
 		te.clientA, te.requesterID, te.projectA, "Bulk ticket", n)
 	b := te.admin.board(t, "")

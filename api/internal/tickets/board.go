@@ -103,7 +103,7 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 	if err != nil {
 		return Board{}, err
 	}
-	loc, err := s.location(ctx)
+	loc, err := s.location(ctx, a.org)
 	if err != nil {
 		return Board{}, err
 	}
@@ -119,7 +119,7 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 		columns[i] = string(col)
 	}
 	params := db.ListBoardCardsParams{
-		ColumnLimit: BoardColumnLimit, Statuses: statusStrings(statuses), Columns: columns,
+		OrganizationID: a.org, ColumnLimit: BoardColumnLimit, Statuses: statusStrings(statuses), Columns: columns,
 		ScopeAgentID: a.scopeAgentID, ResolvedSince: midnight, Unassigned: f.Assignee == AssigneeUnassigned,
 		SlaAtRisk: f.SLAAtRisk, OpenStatuses: statusStrings(ticket.OpenStatuses),
 	}
@@ -137,7 +137,7 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 	if err != nil {
 		return Board{}, err
 	}
-	schedules, err := s.sla.Schedules(ctx)
+	schedules, err := s.sla.Schedules(ctx, a.org)
 	if err != nil {
 		return Board{}, err
 	}
@@ -212,7 +212,7 @@ func (s *Service) boardStats(ctx context.Context, q *db.Queries, a access, weekS
 	open := statusStrings(ticket.OpenStatuses)
 	r, err := q.CountBoardStats(ctx, db.CountBoardStatsParams{
 		OpenStatuses: open, WeekStart: weekStart, MonthStart: monthStart, PortalChannel: string(ticket.ChannelPortal),
-		ScopeAgentID: a.scopeAgentID,
+		OrganizationID: a.org, ScopeAgentID: a.scopeAgentID,
 	})
 	if err != nil {
 		return BoardStats{}, err
@@ -230,7 +230,7 @@ func (s *Service) boardStats(ctx context.Context, q *db.Queries, a access, weekS
 		stats.WithinSLAPercent = &pct
 	}
 	if stats.SLABreached+stats.SLAAtRisk > 0 {
-		oldest, err := q.GetOldestSLAProblem(ctx, db.GetOldestSLAProblemParams{OpenStatuses: open, ScopeAgentID: a.scopeAgentID})
+		oldest, err := q.GetOldestSLAProblem(ctx, db.GetOldestSLAProblemParams{OrganizationID: a.org, OpenStatuses: open, ScopeAgentID: a.scopeAgentID})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return BoardStats{}, err
 		}
@@ -280,9 +280,9 @@ func deref[T any](p *T) T {
 	return *p
 }
 
-// location is the organisation's time zone, which decides where "today" starts.
-func (s *Service) location(ctx context.Context) (*time.Location, error) {
-	return sla.Location(ctx, s.store.Q())
+// location is the organization's time zone, which decides where "today" starts.
+func (s *Service) location(ctx context.Context, orgID uuid.UUID) (*time.Location, error) {
+	return sla.Location(ctx, s.store.Q(), orgID)
 }
 
 // daysSince counts the days back from day to the last start (0 when day is start).

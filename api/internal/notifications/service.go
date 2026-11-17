@@ -88,7 +88,7 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f notification.Fi
 	q := s.store.Q()
 	rows, err := q.ListNotifications(ctx, db.ListNotificationsParams{
 		QuoteRunes: notification.QuoteMaxRunes + 1, UserID: p.UserID,
-		ScopeClientID: scope.ClientID, ScopeAgentID: scope.AgentID, Events: events,
+		OrganizationID: scope.OrganizationID, ScopeClientID: scope.ClientID, ScopeAgentID: scope.AgentID, Events: events,
 		UnreadOnly: f == notification.FilterUnread, Before: before, RowLimit: int32(limit + 1),
 	})
 	if err != nil {
@@ -129,7 +129,7 @@ func (s *Service) UnreadCount(ctx context.Context, p *auth.Principal) (int, erro
 
 func (s *Service) unread(ctx context.Context, q *db.Queries, user uuid.UUID, scope tickets.Scope) (int, error) {
 	n, err := q.CountUnreadNotifications(ctx, db.CountUnreadNotificationsParams{
-		UserID: user, ScopeClientID: scope.ClientID, ScopeAgentID: scope.AgentID,
+		UserID: user, OrganizationID: scope.OrganizationID, ScopeClientID: scope.ClientID, ScopeAgentID: scope.AgentID,
 	})
 	return int(n), err
 }
@@ -141,7 +141,7 @@ func (s *Service) SetRead(ctx context.Context, p *auth.Principal, id uuid.UUID, 
 		return err
 	}
 	n, err := s.store.Q().SetNotificationRead(ctx, db.SetNotificationReadParams{
-		Read: read, ID: id, UserID: p.UserID, ScopeClientID: scope.ClientID, ScopeAgentID: scope.AgentID,
+		Read: read, ID: id, UserID: p.UserID, OrganizationID: scope.OrganizationID, ScopeClientID: scope.ClientID, ScopeAgentID: scope.AgentID,
 	})
 	if err != nil {
 		return err
@@ -159,7 +159,7 @@ func (s *Service) ReadAll(ctx context.Context, p *auth.Principal) error {
 		return err
 	}
 	return s.store.Q().MarkAllNotificationsRead(ctx, db.MarkAllNotificationsReadParams{
-		UserID: p.UserID, ScopeClientID: scope.ClientID, ScopeAgentID: scope.AgentID,
+		UserID: p.UserID, OrganizationID: scope.OrganizationID, ScopeClientID: scope.ClientID, ScopeAgentID: scope.AgentID,
 	})
 }
 

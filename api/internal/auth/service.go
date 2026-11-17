@@ -276,10 +276,32 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, e
 			s.log.WarnContext(ctx, "touch session", "err", err)
 		}
 	}
-	return &Principal{
+	p := &Principal{
 		SessionID: row.SessionID, UserID: row.UserID, Email: row.Email, Name: row.Name,
 		Role: Role(row.Role), JobTitle: row.JobTitle, ClientID: row.ClientID, ClientName: row.ClientName,
-	}, nil
+	}
+	if err := s.resolveOrganization(ctx, s.store.Q(), p, row.ClientOrganizationID); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// resolveOrganization sets the organization p works in: a requester's client's, otherwise the
+// install's only organization (none on a fresh install).
+func (s *Service) resolveOrganization(ctx context.Context, q *db.Queries, p *Principal, clientOrg *uuid.UUID) error {
+	if clientOrg != nil {
+		p.OrganizationID = *clientOrg
+		return nil
+	}
+	org, err := q.GetFirstOrganization(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	p.OrganizationID = org.ID
+	return nil
 }
 
 func (s *Service) Logout(ctx context.Context, p *Principal) error {
@@ -398,7 +420,11 @@ func (s *Service) CreateUser(ctx context.Context, in NewUser) (uuid.UUID, error)
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
 		var clientID *uuid.UUID
 		if in.ClientName != "" {
-			c, err := tx.Q.GetClientByName(ctx, in.ClientName)
+			first, err := tx.Q.GetFirstOrganization(ctx)
+			if err != nil {
+				return err
+			}
+			c, err := tx.Q.GetClientByName(ctx, db.GetClientByNameParams{OrganizationID: first.ID, Name: in.ClientName})
 			if errors.Is(err, pgx.ErrNoRows) {
 				return apperr.Invalid(apperr.CodeClientNotFound, "No client with that name", in.ClientName)
 			}

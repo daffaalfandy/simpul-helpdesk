@@ -14,29 +14,31 @@ import (
 )
 
 const insertAudit = `-- name: InsertAudit :one
-INSERT INTO audit_log (actor_kind, actor_user_id, actor_name, action, target_type, target_id,
+INSERT INTO audit_log (organization_id, actor_kind, actor_user_id, actor_name, action, target_type, target_id,
                        data, reason, ip, request_id)
-VALUES ($1, $2, $3, $4,
-        $5, $6, $7, $8, $9,
-        $10)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10,
+        $11)
 RETURNING id
 `
 
 type InsertAuditParams struct {
-	ActorKind   string
-	ActorUserID *uuid.UUID
-	ActorName   *string
-	Action      string
-	TargetType  *string
-	TargetID    *uuid.UUID
-	Data        []byte
-	Reason      *string
-	Ip          *netip.Addr
-	RequestID   *string
+	OrganizationID *uuid.UUID
+	ActorKind      string
+	ActorUserID    *uuid.UUID
+	ActorName      *string
+	Action         string
+	TargetType     *string
+	TargetID       *uuid.UUID
+	Data           []byte
+	Reason         *string
+	Ip             *netip.Addr
+	RequestID      *string
 }
 
 func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, insertAudit,
+		arg.OrganizationID,
 		arg.ActorKind,
 		arg.ActorUserID,
 		arg.ActorName,

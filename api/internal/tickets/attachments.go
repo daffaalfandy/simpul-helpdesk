@@ -124,7 +124,7 @@ func (s *Service) Open(ctx context.Context, p *auth.Principal, id uuid.UUID) (Do
 		return Download{}, err
 	}
 	row, err := s.store.Q().GetAttachmentForDownload(ctx, db.GetAttachmentForDownloadParams{
-		ID: id, Visibility: a.visibility, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID,
+		ID: id, OrganizationID: a.org, Visibility: a.visibility, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID,
 	})
 	if err != nil {
 		return Download{}, notFound(err)

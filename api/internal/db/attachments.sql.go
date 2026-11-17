@@ -81,18 +81,20 @@ JOIN tickets t ON t.id = a.ticket_id
 LEFT JOIN ticket_messages m ON m.id = a.message_id
 WHERE a.id = $1
   AND ($2::text IS NULL OR a.message_id IS NULL OR m.visibility = $2::text)
-  AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
-  AND ($4::uuid IS NULL
+  AND t.organization_id = $3
+  AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
+  AND ($5::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
-       OR t.assignee_id = $4::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
+       OR t.assignee_id = $5::uuid)
 `
 
 type GetAttachmentForDownloadParams struct {
-	ID            uuid.UUID
-	Visibility    *string
-	ScopeClientID *uuid.UUID
-	ScopeAgentID  *uuid.UUID
+	ID             uuid.UUID
+	Visibility     *string
+	OrganizationID uuid.UUID
+	ScopeClientID  *uuid.UUID
+	ScopeAgentID   *uuid.UUID
 }
 
 type GetAttachmentForDownloadRow struct {
@@ -108,6 +110,7 @@ func (q *Queries) GetAttachmentForDownload(ctx context.Context, arg GetAttachmen
 	row := q.db.QueryRow(ctx, getAttachmentForDownload,
 		arg.ID,
 		arg.Visibility,
+		arg.OrganizationID,
 		arg.ScopeClientID,
 		arg.ScopeAgentID,
 	)

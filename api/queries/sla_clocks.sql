@@ -1,5 +1,5 @@
 -- name: GetTicketForSLA :one
-SELECT t.id, t.type, t.status, t.priority, t.sla_snapshot, t.first_response_at, t.resolved_at
+SELECT t.id, t.organization_id, t.type, t.status, t.priority, t.sla_snapshot, t.first_response_at, t.resolved_at
 FROM tickets t
 WHERE t.id = @id;
 
@@ -52,9 +52,9 @@ ON CONFLICT (ticket_id) DO UPDATE SET
   resolution_met_at = EXCLUDED.resolution_met_at;
 
 -- name: ListOpenTicketIDsAfter :many
--- Open tickets in id order, a batch at a time (recompute).
+-- One organization's open tickets in id order, a batch at a time (recompute).
 SELECT id FROM tickets
-WHERE status = ANY(@open_statuses::text[]) AND (sqlc.narg(after)::uuid IS NULL OR id > sqlc.narg(after)::uuid)
+WHERE organization_id = @organization_id AND status = ANY(@open_statuses::text[]) AND (sqlc.narg(after)::uuid IS NULL OR id > sqlc.narg(after)::uuid)
 ORDER BY id
 LIMIT @row_limit;
 
@@ -91,7 +91,7 @@ WHERE resolution_at_risk_flagged_at IS NULL AND resolution_breached_at IS NULL
 LIMIT @row_limit;
 
 -- name: GetTicketForAlert :one
-SELECT t.id, t.status, t.priority, t.sla_snapshot, c.pic_email
+SELECT t.id, t.organization_id, t.status, t.priority, t.sla_snapshot, c.pic_email
 FROM tickets t
 JOIN clients c ON c.id = t.client_id
 WHERE t.id = @id;

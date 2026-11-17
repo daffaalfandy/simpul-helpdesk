@@ -54,23 +54,25 @@ func (q *Queries) CountUsersWithRoleAndStatus(ctx context.Context, arg CountUser
 }
 
 const createClient = `-- name: CreateClient :one
-INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email)
-VALUES ($1, $2, $3, $4,
-        $5, $6)
+INSERT INTO clients (organization_id, name, contract_no, contract_start, contract_end, pic_name, pic_email)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7)
 RETURNING id
 `
 
 type CreateClientParams struct {
-	Name          string
-	ContractNo    *string
-	ContractStart *calendar.Date
-	ContractEnd   *calendar.Date
-	PicName       *string
-	PicEmail      *string
+	OrganizationID uuid.UUID
+	Name           string
+	ContractNo     *string
+	ContractStart  *calendar.Date
+	ContractEnd    *calendar.Date
+	PicName        *string
+	PicEmail       *string
 }
 
 func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createClient,
+		arg.OrganizationID,
 		arg.Name,
 		arg.ContractNo,
 		arg.ContractStart,
@@ -84,11 +86,16 @@ func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (uui
 }
 
 const deleteClient = `-- name: DeleteClient :exec
-DELETE FROM clients WHERE id = $1
+DELETE FROM clients WHERE id = $1 AND organization_id = $2
 `
 
-func (q *Queries) DeleteClient(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteClient, id)
+type DeleteClientParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
+
+func (q *Queries) DeleteClient(ctx context.Context, arg DeleteClientParams) error {
+	_, err := q.db.Exec(ctx, deleteClient, arg.ID, arg.OrganizationID)
 	return err
 }
 
@@ -107,14 +114,16 @@ SELECT c.id, c.name, c.contract_no, c.contract_start, c.contract_end, c.pic_name
        (SELECT count(*) FROM users u WHERE u.client_id = c.id)::int AS requester_count
 FROM clients c
 WHERE c.id = $1
-  AND ($2::uuid IS NULL
+  AND c.organization_id = $2
+  AND ($3::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = c.id AND ca.user_id = $2::uuid))
+                  WHERE ca.client_id = c.id AND ca.user_id = $3::uuid))
 `
 
 type GetClientParams struct {
-	ID      uuid.UUID
-	AgentID *uuid.UUID
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	AgentID        *uuid.UUID
 }
 
 type GetClientRow struct {
@@ -131,7 +140,7 @@ type GetClientRow struct {
 }
 
 func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (GetClientRow, error) {
-	row := q.db.QueryRow(ctx, getClient, arg.ID, arg.AgentID)
+	row := q.db.QueryRow(ctx, getClient, arg.ID, arg.OrganizationID, arg.AgentID)
 	var i GetClientRow
 	err := row.Scan(
 		&i.ID,
@@ -149,16 +158,21 @@ func (q *Queries) GetClient(ctx context.Context, arg GetClientParams) (GetClient
 }
 
 const getClientByName = `-- name: GetClientByName :one
-SELECT id, name FROM clients WHERE name = $1
+SELECT id, name FROM clients WHERE organization_id = $1 AND name = $2
 `
+
+type GetClientByNameParams struct {
+	OrganizationID uuid.UUID
+	Name           string
+}
 
 type GetClientByNameRow struct {
 	ID   uuid.UUID
 	Name string
 }
 
-func (q *Queries) GetClientByName(ctx context.Context, name string) (GetClientByNameRow, error) {
-	row := q.db.QueryRow(ctx, getClientByName, name)
+func (q *Queries) GetClientByName(ctx context.Context, arg GetClientByNameParams) (GetClientByNameRow, error) {
+	row := q.db.QueryRow(ctx, getClientByName, arg.OrganizationID, arg.Name)
 	var i GetClientByNameRow
 	err := row.Scan(&i.ID, &i.Name)
 	return i, err
@@ -167,9 +181,14 @@ func (q *Queries) GetClientByName(ctx context.Context, name string) (GetClientBy
 const getClientForUpdate = `-- name: GetClientForUpdate :one
 SELECT id, name, contract_no, contract_start, contract_end, pic_name, pic_email
 FROM clients
-WHERE id = $1
+WHERE id = $1 AND organization_id = $2
 FOR UPDATE
 `
+
+type GetClientForUpdateParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
 
 type GetClientForUpdateRow struct {
 	ID            uuid.UUID
@@ -181,8 +200,8 @@ type GetClientForUpdateRow struct {
 	PicEmail      *string
 }
 
-func (q *Queries) GetClientForUpdate(ctx context.Context, id uuid.UUID) (GetClientForUpdateRow, error) {
-	row := q.db.QueryRow(ctx, getClientForUpdate, id)
+func (q *Queries) GetClientForUpdate(ctx context.Context, arg GetClientForUpdateParams) (GetClientForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getClientForUpdate, arg.ID, arg.OrganizationID)
 	var i GetClientForUpdateRow
 	err := row.Scan(
 		&i.ID,
@@ -215,18 +234,19 @@ func (q *Queries) HasTicketAssignedAt(ctx context.Context, arg HasTicketAssigned
 }
 
 const insertClientAgents = `-- name: InsertClientAgents :exec
-INSERT INTO client_agents (client_id, user_id)
-SELECT $1, unnest($2::uuid[])
+INSERT INTO client_agents (organization_id, client_id, user_id)
+SELECT $1, $2, unnest($3::uuid[])
 ON CONFLICT DO NOTHING
 `
 
 type InsertClientAgentsParams struct {
-	ClientID uuid.UUID
-	UserIds  []uuid.UUID
+	OrganizationID uuid.UUID
+	ClientID       uuid.UUID
+	UserIds        []uuid.UUID
 }
 
 func (q *Queries) InsertClientAgents(ctx context.Context, arg InsertClientAgentsParams) error {
-	_, err := q.db.Exec(ctx, insertClientAgents, arg.ClientID, arg.UserIds)
+	_, err := q.db.Exec(ctx, insertClientAgents, arg.OrganizationID, arg.ClientID, arg.UserIds)
 	return err
 }
 
@@ -258,9 +278,15 @@ const listClientAgents = `-- name: ListClientAgents :many
 SELECT ca.client_id, u.id, u.name
 FROM client_agents ca
 JOIN users u ON u.id = ca.user_id
-WHERE $1::uuid IS NULL OR ca.client_id = $1::uuid
+WHERE ca.organization_id = $1
+  AND ($2::uuid IS NULL OR ca.client_id = $2::uuid)
 ORDER BY u.name, u.id
 `
+
+type ListClientAgentsParams struct {
+	OrganizationID uuid.UUID
+	ClientID       *uuid.UUID
+}
 
 type ListClientAgentsRow struct {
 	ClientID uuid.UUID
@@ -268,9 +294,9 @@ type ListClientAgentsRow struct {
 	Name     string
 }
 
-// client_id NULL lists the agents of every client.
-func (q *Queries) ListClientAgents(ctx context.Context, clientID *uuid.UUID) ([]ListClientAgentsRow, error) {
-	rows, err := q.db.Query(ctx, listClientAgents, clientID)
+// client_id NULL lists the agents of every client of the organization.
+func (q *Queries) ListClientAgents(ctx context.Context, arg ListClientAgentsParams) ([]ListClientAgentsRow, error) {
+	rows, err := q.db.Query(ctx, listClientAgents, arg.OrganizationID, arg.ClientID)
 	if err != nil {
 		return nil, err
 	}
@@ -291,9 +317,15 @@ func (q *Queries) ListClientAgents(ctx context.Context, clientID *uuid.UUID) ([]
 
 const listClientProjects = `-- name: ListClientProjects :many
 SELECT client_id, id, name FROM projects
-WHERE $1::uuid IS NULL OR client_id = $1::uuid
+WHERE organization_id = $1
+  AND ($2::uuid IS NULL OR client_id = $2::uuid)
 ORDER BY lower(name)
 `
+
+type ListClientProjectsParams struct {
+	OrganizationID uuid.UUID
+	ClientID       *uuid.UUID
+}
 
 type ListClientProjectsRow struct {
 	ClientID uuid.UUID
@@ -302,8 +334,8 @@ type ListClientProjectsRow struct {
 }
 
 // client_id NULL lists every client's projects. For the Projects column on Settings › Clients.
-func (q *Queries) ListClientProjects(ctx context.Context, clientID *uuid.UUID) ([]ListClientProjectsRow, error) {
-	rows, err := q.db.Query(ctx, listClientProjects, clientID)
+func (q *Queries) ListClientProjects(ctx context.Context, arg ListClientProjectsParams) ([]ListClientProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listClientProjects, arg.OrganizationID, arg.ClientID)
 	if err != nil {
 		return nil, err
 	}
@@ -327,11 +359,17 @@ SELECT c.id, c.name, c.contract_no, c.contract_start, c.contract_end, c.pic_name
        c.created_at, c.updated_at,
        (SELECT count(*) FROM users u WHERE u.client_id = c.id)::int AS requester_count
 FROM clients c
-WHERE $1::uuid IS NULL
-   OR EXISTS (SELECT 1 FROM client_agents ca
-              WHERE ca.client_id = c.id AND ca.user_id = $1::uuid)
+WHERE c.organization_id = $1
+  AND ($2::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM client_agents ca
+                  WHERE ca.client_id = c.id AND ca.user_id = $2::uuid))
 ORDER BY lower(c.name)
 `
+
+type ListClientsParams struct {
+	OrganizationID uuid.UUID
+	AgentID        *uuid.UUID
+}
 
 type ListClientsRow struct {
 	ID             uuid.UUID
@@ -348,8 +386,8 @@ type ListClientsRow struct {
 
 // agent_id limits the list to clients assigned to that agent; NULL lists all.
 // Only requesters carry a client_id (users_requester_has_client), so this counts requesters.
-func (q *Queries) ListClients(ctx context.Context, agentID *uuid.UUID) ([]ListClientsRow, error) {
-	rows, err := q.db.Query(ctx, listClients, agentID)
+func (q *Queries) ListClients(ctx context.Context, arg ListClientsParams) ([]ListClientsRow, error) {
+	rows, err := q.db.Query(ctx, listClients, arg.OrganizationID, arg.AgentID)
 	if err != nil {
 		return nil, err
 	}
@@ -387,17 +425,18 @@ SET name = $1,
     contract_end = $4,
     pic_name = $5,
     pic_email = $6
-WHERE id = $7
+WHERE id = $7 AND organization_id = $8
 `
 
 type UpdateClientParams struct {
-	Name          string
-	ContractNo    *string
-	ContractStart *calendar.Date
-	ContractEnd   *calendar.Date
-	PicName       *string
-	PicEmail      *string
-	ID            uuid.UUID
+	Name           string
+	ContractNo     *string
+	ContractStart  *calendar.Date
+	ContractEnd    *calendar.Date
+	PicName        *string
+	PicEmail       *string
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
 }
 
 func (q *Queries) UpdateClient(ctx context.Context, arg UpdateClientParams) error {
@@ -409,28 +448,34 @@ func (q *Queries) UpdateClient(ctx context.Context, arg UpdateClientParams) erro
 		arg.PicName,
 		arg.PicEmail,
 		arg.ID,
+		arg.OrganizationID,
 	)
 	return err
 }
 
 const upsertClient = `-- name: UpsertClient :one
-INSERT INTO clients (name) VALUES ($1)
-ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+INSERT INTO clients (organization_id, name) VALUES ($1, $2)
+ON CONFLICT (organization_id, name) DO UPDATE SET name = EXCLUDED.name
 RETURNING id
 `
 
-func (q *Queries) UpsertClient(ctx context.Context, name string) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, upsertClient, name)
+type UpsertClientParams struct {
+	OrganizationID uuid.UUID
+	Name           string
+}
+
+func (q *Queries) UpsertClient(ctx context.Context, arg UpsertClientParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, upsertClient, arg.OrganizationID, arg.Name)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
 
 const upsertClientDetails = `-- name: UpsertClientDetails :one
-INSERT INTO clients (name, contract_no, contract_start, contract_end, pic_name, pic_email)
-VALUES ($1, $2, $3, $4,
-        $5, $6)
-ON CONFLICT (name) DO UPDATE
+INSERT INTO clients (organization_id, name, contract_no, contract_start, contract_end, pic_name, pic_email)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7)
+ON CONFLICT (organization_id, name) DO UPDATE
 SET contract_no = EXCLUDED.contract_no,
     contract_start = EXCLUDED.contract_start,
     contract_end = EXCLUDED.contract_end,
@@ -440,17 +485,19 @@ RETURNING id
 `
 
 type UpsertClientDetailsParams struct {
-	Name          string
-	ContractNo    *string
-	ContractStart *calendar.Date
-	ContractEnd   *calendar.Date
-	PicName       *string
-	PicEmail      *string
+	OrganizationID uuid.UUID
+	Name           string
+	ContractNo     *string
+	ContractStart  *calendar.Date
+	ContractEnd    *calendar.Date
+	PicName        *string
+	PicEmail       *string
 }
 
 // Seed only: create or refresh a client by name.
 func (q *Queries) UpsertClientDetails(ctx context.Context, arg UpsertClientDetailsParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, upsertClientDetails,
+		arg.OrganizationID,
 		arg.Name,
 		arg.ContractNo,
 		arg.ContractStart,

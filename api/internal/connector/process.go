@@ -54,7 +54,7 @@ func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid
 		log.Error("webhook delivery unreadable", "delivery", deliveryID, "err", err)
 		return q.MarkDeliveryProcessed(ctx, deliveryID)
 	}
-	prefixes, err := q.ListTicketPrefixes(ctx)
+	prefixes, err := q.ListTicketPrefixes(ctx, d.OrganizationID)
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid
 		}
 		events = append(events, storedEvent{ID: id, Event: e, Keys: keys, AuthorID: authorID, AuthorName: name})
 	}
-	if err := s.apply(ctx, gitevent.Provider(d.Provider), d.RepositoryID, events); err != nil {
+	if err := s.apply(ctx, gitevent.Provider(d.Provider), d.OrganizationID, d.RepositoryID, events); err != nil {
 		return err
 	}
 	return q.MarkDeliveryProcessed(ctx, deliveryID)

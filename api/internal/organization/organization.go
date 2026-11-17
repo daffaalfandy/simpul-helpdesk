@@ -1,6 +1,6 @@
-// Package organization keeps the install's organisation: its name, ticket prefix, time zone and
-// logo (Settings › General), and whether first-run setup has been completed. There is one
-// organisation per install (a single-row table).
+// Package organization keeps the install's vendor organizations: each one's name, ticket prefix,
+// time zone and logo (Settings › General), and whether first-run setup has been completed
+// (install-wide).
 package organization
 
 import (
@@ -17,6 +17,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
@@ -26,8 +29,9 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
-// Audit actions. The organisation is a single row, so entries carry no target id.
+// Audit actions; entries target the organization.
 const (
+	ActionCreated      = "organization.created"
 	ActionUpdated      = "organization.updated"
 	ActionLogoUpdated  = "organization.logo_updated"
 	ActionLogoRemoved  = "organization.logo_removed"
@@ -74,14 +78,28 @@ const logoVersionParam = "?v="
 // localZone is what time.LoadLocation reads as the server's own zone; never an organisation's.
 const localZone = "Local"
 
-// Settings is the organisation as Settings › General shows it.
+// ProductName brands what belongs to no organization: the sign-in page, setup, and an install
+// that has no organization yet.
+const ProductName = "SimDesk"
+
+// Defaults for a new organization: Indonesia's western time zone, where most clients are, and
+// the mock's HD-24871 keys.
+const (
+	DefaultTimezone     = "Asia/Jakarta"
+	DefaultTicketPrefix = "HD"
+)
+
+// constraintTicketPrefix keeps ticket prefixes, and so ticket keys, unique across the install.
+const constraintTicketPrefix = "organizations_ticket_prefix_key"
+
+// Settings is an organization as Settings › General shows it.
 type Settings struct {
-	Name          string
-	TicketPrefix  string
-	Timezone      string
-	FooterNote    *string
-	Logo          *Logo
-	SetupRequired bool // first-run setup is still open
+	ID           uuid.UUID
+	Name         string
+	TicketPrefix string
+	Timezone     string
+	FooterNote   *string
+	Logo         *Logo
 }
 
 // Logo is the stored logo.
@@ -124,19 +142,39 @@ func NewService(st *store.Store, files storage.Store, slaSvc *sla.Service) *Serv
 	return &Service{store: st, files: files, sla: slaSvc, now: time.Now}
 }
 
-// Get returns the organisation.
-func (s *Service) Get(ctx context.Context) (Settings, error) {
-	row, err := s.store.Q().GetOrganization(ctx)
+// Get returns an organization.
+func (s *Service) Get(ctx context.Context, orgID uuid.UUID) (Settings, error) {
+	row, err := s.store.Q().GetOrganization(ctx, orgID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Settings{}, apperr.NotFound()
+	}
 	if err != nil {
 		return Settings{}, err
 	}
 	return settingsOf(row), nil
 }
 
+// First returns the organization made first; ok is false on an install without one.
+func (s *Service) First(ctx context.Context) (Settings, bool, error) {
+	row, err := s.store.Q().GetFirstOrganization(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Settings{}, false, nil
+	}
+	if err != nil {
+		return Settings{}, false, err
+	}
+	return settingsOf(db.GetOrganizationRow(row)), true, nil
+}
+
+// SetupRequired reports whether first-run setup is still open: until an administrator exists.
+func (s *Service) SetupRequired(ctx context.Context) (bool, error) {
+	done, err := s.store.Q().GetInstall(ctx)
+	return done == nil, err
+}
+
 func settingsOf(row db.GetOrganizationRow) Settings {
 	out := Settings{
-		Name: row.Name, TicketPrefix: row.TicketPrefix, Timezone: row.Timezone, FooterNote: row.FooterNote,
-		SetupRequired: row.SetupCompletedAt == nil,
+		ID: row.ID, Name: row.Name, TicketPrefix: row.TicketPrefix, Timezone: row.Timezone, FooterNote: row.FooterNote,
 	}
 	if row.LogoKey != nil && row.LogoContentType != nil && row.LogoUpdatedAt != nil {
 		out.Logo = &Logo{Key: *row.LogoKey, ContentType: *row.LogoContentType, UpdatedAt: *row.LogoUpdatedAt}
@@ -147,21 +185,19 @@ func settingsOf(row db.GetOrganizationRow) Settings {
 // Update changes the name, ticket prefix and time zone. A new prefix applies to new tickets;
 // existing keys never change. A new time zone recomputes open tickets' SLA clocks, as calendar
 // edits do.
-func (s *Service) Update(ctx context.Context, actor audit.Actor, in Input) (Settings, error) {
-	in.Name = strings.TrimSpace(in.Name)
-	in.TicketPrefix = ticket.NormalizeKey(in.TicketPrefix)
-	in.Timezone = strings.TrimSpace(in.Timezone)
+func (s *Service) Update(ctx context.Context, actor audit.Actor, orgID uuid.UUID, in Input) (Settings, error) {
+	in = normalize(in)
 	if err := validate(in); err != nil {
 		return Settings{}, err
 	}
 	var out Settings
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		if err := tx.Q.LockOrganization(ctx); err != nil {
+		if err := tx.Q.LockOrganization(ctx, orgID); err != nil {
 			return err
 		}
-		old, err := tx.Q.GetOrganization(ctx)
+		old, err := tx.Q.GetOrganization(ctx, orgID)
 		if err != nil {
-			return err
+			return notFound(err)
 		}
 		changes := audit.Changes{}
 		audit.Track(changes, dataName, old.Name, in.Name)
@@ -169,24 +205,92 @@ func (s *Service) Update(ctx context.Context, actor audit.Actor, in Input) (Sett
 		audit.Track(changes, dataTimezone, old.Timezone, in.Timezone)
 		if len(changes) > 0 {
 			if err := tx.Q.UpdateOrganizationSettings(ctx, db.UpdateOrganizationSettingsParams{
-				Name: in.Name, TicketPrefix: in.TicketPrefix, Timezone: in.Timezone,
+				ID: orgID, Name: in.Name, TicketPrefix: in.TicketPrefix, Timezone: in.Timezone,
 			}); err != nil {
 				return err
 			}
-			if err := audit.Write(ctx, tx.Q, actor.Entry(ActionUpdated, TargetOrganization, nil, changes)); err != nil {
+			if err := audit.Write(ctx, tx.Q, actor.Entry(ActionUpdated, TargetOrganization, &orgID, changes)); err != nil {
 				return err
 			}
 			if old.Timezone != in.Timezone {
-				if err := s.sla.Recompute(ctx, tx); err != nil {
+				if err := s.sla.Recompute(ctx, tx, orgID); err != nil {
 					return err
 				}
 			}
 		}
-		row, err := tx.Q.GetOrganization(ctx)
+		row, err := tx.Q.GetOrganization(ctx, orgID)
 		out = settingsOf(row)
 		return err
 	})
-	return out, err
+	return out, prefixError(err)
+}
+
+// Create adds an organization with the default priorities and business hours, under the install
+// lock so two at once can't race for a prefix.
+func (s *Service) Create(ctx context.Context, actor audit.Actor, in Input) (Settings, error) {
+	in = normalize(in)
+	if err := validate(in); err != nil {
+		return Settings{}, err
+	}
+	var id uuid.UUID
+	err := s.store.Tx(ctx, func(tx store.Tx) error {
+		var err error
+		if id, err = CreateTx(ctx, tx, in); err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx.Q, actor.In(id).Entry(ActionCreated, TargetOrganization, &id, map[string]any{
+			dataName: in.Name, dataPrefix: in.TicketPrefix, dataTimezone: in.Timezone,
+		}))
+	})
+	if err != nil {
+		return Settings{}, prefixError(err)
+	}
+	return s.Get(ctx, id)
+}
+
+// CreateTx inserts a validated organization with its defaults inside tx (first-run setup uses it
+// too). The caller audits.
+func CreateTx(ctx context.Context, tx store.Tx, in Input) (uuid.UUID, error) {
+	if err := tx.Q.LockInstall(ctx); err != nil {
+		return uuid.Nil, err
+	}
+	id, err := tx.Q.CreateOrganization(ctx, db.CreateOrganizationParams{Name: in.Name, TicketPrefix: in.TicketPrefix, Timezone: in.Timezone})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if err := tx.Q.InsertDefaultPriorities(ctx, id); err != nil {
+		return uuid.Nil, err
+	}
+	return id, tx.Q.InsertDefaultBusinessHours(ctx, id)
+}
+
+// normalize trims the input and upper-cases the prefix.
+func normalize(in Input) Input {
+	in.Name = strings.TrimSpace(in.Name)
+	in.TicketPrefix = ticket.NormalizeKey(in.TicketPrefix)
+	in.Timezone = strings.TrimSpace(in.Timezone)
+	return in
+}
+
+// Validate checks an organization's name, prefix and time zone after trimming them.
+func Validate(in Input) (Input, error) {
+	in = normalize(in)
+	return in, validate(in)
+}
+
+// prefixError maps another organization's prefix to a 409.
+func prefixError(err error) error {
+	if store.IsViolation(err, store.SQLStateUniqueViolation, constraintTicketPrefix) {
+		return apperr.Conflict(apperr.CodeTicketPrefixTaken, "Another organization uses this ticket prefix", "")
+	}
+	return err
+}
+
+func notFound(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return apperr.NotFound()
+	}
+	return err
 }
 
 func validate(in Input) error {
@@ -210,7 +314,7 @@ func validate(in Input) error {
 
 // SetLogo stores a new logo (PNG, JPEG or WebP, at most MaxLogoBytes) and removes the old file
 // once the change is saved.
-func (s *Service) SetLogo(ctx context.Context, actor audit.Actor, r io.Reader) (Settings, error) {
+func (s *Service) SetLogo(ctx context.Context, actor audit.Actor, orgID uuid.UUID, r io.Reader) (Settings, error) {
 	br := bufio.NewReaderSize(r, sniffBytes)
 	head, err := br.Peek(sniffBytes)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, bufio.ErrBufferFull) {
@@ -232,7 +336,7 @@ func (s *Service) SetLogo(ctx context.Context, actor audit.Actor, r io.Reader) (
 		_ = s.files.Delete(ctx, key)
 		return Settings{}, apperr.TooLarge(apperr.CodeLogoTooLarge, "The logo is too large", fmt.Sprintf("At most %d KB.", MaxLogoBytes>>10))
 	}
-	out, old, err := s.swapLogo(ctx, actor, &key, &contentType, size)
+	out, old, err := s.swapLogo(ctx, actor, orgID, &key, &contentType, size)
 	if err != nil {
 		_ = s.files.Delete(ctx, key)
 		return Settings{}, err
@@ -242,8 +346,8 @@ func (s *Service) SetLogo(ctx context.Context, actor audit.Actor, r io.Reader) (
 }
 
 // RemoveLogo goes back to the name's initials.
-func (s *Service) RemoveLogo(ctx context.Context, actor audit.Actor) (Settings, error) {
-	out, old, err := s.swapLogo(ctx, actor, nil, nil, 0)
+func (s *Service) RemoveLogo(ctx context.Context, actor audit.Actor, orgID uuid.UUID) (Settings, error) {
+	out, old, err := s.swapLogo(ctx, actor, orgID, nil, nil, 0)
 	if err != nil {
 		return Settings{}, err
 	}
@@ -252,16 +356,16 @@ func (s *Service) RemoveLogo(ctx context.Context, actor audit.Actor) (Settings, 
 }
 
 // swapLogo saves the new logo (nil removes it) and returns the old file's key.
-func (s *Service) swapLogo(ctx context.Context, actor audit.Actor, key, contentType *string, size int64) (Settings, *string, error) {
+func (s *Service) swapLogo(ctx context.Context, actor audit.Actor, orgID uuid.UUID, key, contentType *string, size int64) (Settings, *string, error) {
 	var out Settings
 	var old *string
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		if err := tx.Q.LockOrganization(ctx); err != nil {
+		if err := tx.Q.LockOrganization(ctx, orgID); err != nil {
 			return err
 		}
-		prev, err := tx.Q.GetOrganization(ctx)
+		prev, err := tx.Q.GetOrganization(ctx, orgID)
 		if err != nil {
-			return err
+			return notFound(err)
 		}
 		old = prev.LogoKey
 		if key == nil && old == nil {
@@ -269,19 +373,19 @@ func (s *Service) swapLogo(ctx context.Context, actor audit.Actor, key, contentT
 			return nil
 		}
 		var at *time.Time
-		entry := actor.Entry(ActionLogoRemoved, TargetOrganization, nil, nil)
+		entry := actor.Entry(ActionLogoRemoved, TargetOrganization, &orgID, nil)
 		if key != nil {
 			now := s.now()
 			at = &now
-			entry = actor.Entry(ActionLogoUpdated, TargetOrganization, nil, map[string]any{dataType: *contentType, dataSize: size})
+			entry = actor.Entry(ActionLogoUpdated, TargetOrganization, &orgID, map[string]any{dataType: *contentType, dataSize: size})
 		}
-		if err := tx.Q.SetOrganizationLogo(ctx, db.SetOrganizationLogoParams{LogoKey: key, LogoContentType: contentType, LogoUpdatedAt: at}); err != nil {
+		if err := tx.Q.SetOrganizationLogo(ctx, db.SetOrganizationLogoParams{ID: orgID, LogoKey: key, LogoContentType: contentType, LogoUpdatedAt: at}); err != nil {
 			return err
 		}
 		if err := audit.Write(ctx, tx.Q, entry); err != nil {
 			return err
 		}
-		row, err := tx.Q.GetOrganization(ctx)
+		row, err := tx.Q.GetOrganization(ctx, orgID)
 		out = settingsOf(row)
 		return err
 	})
@@ -302,9 +406,9 @@ type LogoFile struct {
 	ContentType string
 }
 
-// OpenLogo opens the logo for serving; 404 without one. Callers close Body.
-func (s *Service) OpenLogo(ctx context.Context) (LogoFile, error) {
-	settings, err := s.Get(ctx)
+// OpenLogo opens an organization's logo for serving; 404 without one. Callers close Body.
+func (s *Service) OpenLogo(ctx context.Context, orgID uuid.UUID) (LogoFile, error) {
+	settings, err := s.Get(ctx, orgID)
 	if err != nil {
 		return LogoFile{}, err
 	}

@@ -17,16 +17,19 @@ UPDATE notifications SET email_claimed_at = now()
 WHERE id IN (
   SELECT n.id FROM notifications n
   WHERE n.user_id = $1 AND n.email AND n.emailed_at IS NULL AND NOT n.urgent
-    AND n.created_at < $2
-    AND (n.email_claimed_at IS NULL OR n.email_claimed_at < $3::timestamptz)
+    AND ($2::uuid IS NULL
+         OR n.ticket_id IN (SELECT t.id FROM tickets t WHERE t.organization_id = $2::uuid))
+    AND n.created_at < $3
+    AND (n.email_claimed_at IS NULL OR n.email_claimed_at < $4::timestamptz)
   FOR UPDATE SKIP LOCKED)
 RETURNING id, ticket_id, event_type, actor_user_id, message_id, data, urgent, created_at
 `
 
 type ClaimDigestParams struct {
-	UserID        uuid.UUID
-	CreatedBefore time.Time
-	StaleBefore   time.Time
+	UserID         uuid.UUID
+	OrganizationID *uuid.UUID
+	CreatedBefore  time.Time
+	StaleBefore    time.Time
 }
 
 type ClaimDigestRow struct {
@@ -40,9 +43,15 @@ type ClaimDigestRow struct {
 	CreatedAt   time.Time
 }
 
-// One user's routine pending rows created before the summary boundary.
+// One user's routine pending rows created before the summary boundary, about one organization's
+// tickets (NULL: every organization, for summaries queued before organizations existed).
 func (q *Queries) ClaimDigest(ctx context.Context, arg ClaimDigestParams) ([]ClaimDigestRow, error) {
-	rows, err := q.db.Query(ctx, claimDigest, arg.UserID, arg.CreatedBefore, arg.StaleBefore)
+	rows, err := q.db.Query(ctx, claimDigest,
+		arg.UserID,
+		arg.OrganizationID,
+		arg.CreatedBefore,
+		arg.StaleBefore,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -139,21 +148,28 @@ SELECT count(*)::int
 FROM notifications n
 JOIN tickets t ON t.id = n.ticket_id
 WHERE n.user_id = $1 AND n.web AND n.read_at IS NULL
-  AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
-  AND ($3::uuid IS NULL
+  AND t.organization_id = $2
+  AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
+  AND ($4::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
-       OR t.assignee_id = $3::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
+       OR t.assignee_id = $4::uuid)
 `
 
 type CountUnreadNotificationsParams struct {
-	UserID        uuid.UUID
-	ScopeClientID *uuid.UUID
-	ScopeAgentID  *uuid.UUID
+	UserID         uuid.UUID
+	OrganizationID uuid.UUID
+	ScopeClientID  *uuid.UUID
+	ScopeAgentID   *uuid.UUID
 }
 
 func (q *Queries) CountUnreadNotifications(ctx context.Context, arg CountUnreadNotificationsParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countUnreadNotifications, arg.UserID, arg.ScopeClientID, arg.ScopeAgentID)
+	row := q.db.QueryRow(ctx, countUnreadNotifications,
+		arg.UserID,
+		arg.OrganizationID,
+		arg.ScopeClientID,
+		arg.ScopeAgentID,
+	)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -236,17 +252,18 @@ func (q *Queries) GetEmailRecipient(ctx context.Context, id uuid.UUID) (GetEmail
 }
 
 const getPicEmailContext = `-- name: GetPicEmailContext :one
-SELECT t.key, t.subject, t.type, t.priority, t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
-       c.name AS client_name, c.pic_name, c.pic_email, s.resolution_breached_at
+SELECT t.organization_id, t.key, t.subject, t.type, t.priority, t.sla_snapshot, pl.name AS priority_name,
+       p.name AS project_name, c.name AS client_name, c.pic_name, c.pic_email, s.resolution_breached_at
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
-JOIN priorities pl ON pl.code = t.priority
+JOIN priorities pl ON pl.organization_id = t.organization_id AND pl.code = t.priority
 JOIN clients c ON c.id = t.client_id
 LEFT JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE t.id = $1
 `
 
 type GetPicEmailContextRow struct {
+	OrganizationID       uuid.UUID
 	Key                  string
 	Subject              string
 	Type                 string
@@ -265,6 +282,7 @@ func (q *Queries) GetPicEmailContext(ctx context.Context, id uuid.UUID) (GetPicE
 	row := q.db.QueryRow(ctx, getPicEmailContext, id)
 	var i GetPicEmailContextRow
 	err := row.Scan(
+		&i.OrganizationID,
 		&i.Key,
 		&i.Subject,
 		&i.Type,
@@ -281,7 +299,8 @@ func (q *Queries) GetPicEmailContext(ctx context.Context, id uuid.UUID) (GetPicE
 }
 
 const getTicketForFanout = `-- name: GetTicketForFanout :one
-SELECT t.id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot, p.dod_config, o.config AS dod_override
+SELECT t.id, t.organization_id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot, p.dod_config,
+       o.config AS dod_override
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
@@ -289,13 +308,14 @@ WHERE t.id = $1
 `
 
 type GetTicketForFanoutRow struct {
-	ID          uuid.UUID
-	Priority    string
-	RequesterID uuid.UUID
-	AssigneeID  *uuid.UUID
-	SlaSnapshot []byte
-	DodConfig   []byte
-	DodOverride []byte
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Priority       string
+	RequesterID    uuid.UUID
+	AssigneeID     *uuid.UUID
+	SlaSnapshot    []byte
+	DodConfig      []byte
+	DodOverride    []byte
 }
 
 func (q *Queries) GetTicketForFanout(ctx context.Context, id uuid.UUID) (GetTicketForFanoutRow, error) {
@@ -303,6 +323,7 @@ func (q *Queries) GetTicketForFanout(ctx context.Context, id uuid.UUID) (GetTick
 	var i GetTicketForFanoutRow
 	err := row.Scan(
 		&i.ID,
+		&i.OrganizationID,
 		&i.Priority,
 		&i.RequesterID,
 		&i.AssigneeID,
@@ -399,24 +420,27 @@ const listDueEmails = `-- name: ListDueEmails :many
 SELECT n.id, n.user_id, n.ticket_id, n.urgent, n.created_at, u.email_frequency
 FROM notifications n
 JOIN users u ON u.id = n.user_id
-WHERE n.email AND n.emailed_at IS NULL
-  AND (n.email_claimed_at IS NULL OR n.email_claimed_at < $1::timestamptz)
-  AND (((n.urgent OR u.email_frequency = $2::text) AND n.created_at <= $3::timestamptz)
-    OR (NOT n.urgent AND u.email_frequency = $4::text AND n.created_at < $5::timestamptz)
-    OR (NOT n.urgent AND u.email_frequency = $6::text AND n.created_at < $7::timestamptz))
+JOIN tickets t ON t.id = n.ticket_id
+WHERE t.organization_id = $1
+  AND n.email AND n.emailed_at IS NULL
+  AND (n.email_claimed_at IS NULL OR n.email_claimed_at < $2::timestamptz)
+  AND (((n.urgent OR u.email_frequency = $3::text) AND n.created_at <= $4::timestamptz)
+    OR (NOT n.urgent AND u.email_frequency = $5::text AND n.created_at < $6::timestamptz)
+    OR (NOT n.urgent AND u.email_frequency = $7::text AND n.created_at < $8::timestamptz))
 ORDER BY n.created_at, n.id
-LIMIT $8
+LIMIT $9
 `
 
 type ListDueEmailsParams struct {
-	StaleBefore  time.Time
-	Instant      string
-	GroupCutoff  time.Time
-	Hourly       string
-	HourlyCutoff time.Time
-	Daily        string
-	DailyCutoff  time.Time
-	RowLimit     int32
+	OrganizationID uuid.UUID
+	StaleBefore    time.Time
+	Instant        string
+	GroupCutoff    time.Time
+	Hourly         string
+	HourlyCutoff   time.Time
+	Daily          string
+	DailyCutoff    time.Time
+	RowLimit       int32
 }
 
 type ListDueEmailsRow struct {
@@ -433,8 +457,10 @@ type ListDueEmailsRow struct {
 // Pending rows whose email is due: ticket emails (instant users, and urgent rows for everyone)
 // once the row has gathered for the group window, summary rows from before their user's last
 // boundary. Rows not yet due stay out, so they can never crowd due ones out of the batch.
+// One organization at a time: summary boundaries follow its time zone.
 func (q *Queries) ListDueEmails(ctx context.Context, arg ListDueEmailsParams) ([]ListDueEmailsRow, error) {
 	rows, err := q.db.Query(ctx, listDueEmails,
+		arg.OrganizationID,
 		arg.StaleBefore,
 		arg.Instant,
 		arg.GroupCutoff,
@@ -470,8 +496,8 @@ func (q *Queries) ListDueEmails(ctx context.Context, arg ListDueEmailsParams) ([
 }
 
 const listEmailTickets = `-- name: ListEmailTickets :many
-SELECT t.id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
-       pl.name AS priority_name, p.name AS project_name,
+SELECT t.id, t.organization_id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id,
+       t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
        (u.role = ANY($1::text[])
         OR (u.role = $2 AND (t.assignee_id = u.id
                                       OR EXISTS (SELECT 1 FROM client_agents ca
@@ -480,7 +506,7 @@ SELECT t.id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.a
        EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = u.id) AS watching
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
-JOIN priorities pl ON pl.code = t.priority
+JOIN priorities pl ON pl.organization_id = t.organization_id AND pl.code = t.priority
 JOIN users u ON u.id = $4
 WHERE t.id = ANY($5::uuid[])
 `
@@ -494,19 +520,20 @@ type ListEmailTicketsParams struct {
 }
 
 type ListEmailTicketsRow struct {
-	ID           uuid.UUID
-	Key          string
-	Subject      string
-	Type         string
-	Status       string
-	Priority     string
-	RequesterID  uuid.UUID
-	AssigneeID   *uuid.UUID
-	SlaSnapshot  []byte
-	PriorityName string
-	ProjectName  string
-	Visible      bool
-	Watching     bool
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Key            string
+	Subject        string
+	Type           string
+	Status         string
+	Priority       string
+	RequesterID    uuid.UUID
+	AssigneeID     *uuid.UUID
+	SlaSnapshot    []byte
+	PriorityName   string
+	ProjectName    string
+	Visible        bool
+	Watching       bool
 }
 
 // What an email shows about each ticket, and whether the recipient may still see it (the same
@@ -529,6 +556,7 @@ func (q *Queries) ListEmailTickets(ctx context.Context, arg ListEmailTicketsPara
 		var i ListEmailTicketsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.OrganizationID,
 			&i.Key,
 			&i.Subject,
 			&i.Type,
@@ -600,29 +628,31 @@ JOIN tickets t ON t.id = n.ticket_id
 LEFT JOIN users a ON a.id = n.actor_user_id
 LEFT JOIN ticket_messages m ON m.id = n.message_id
 WHERE n.user_id = $2 AND n.web
-  AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
-  AND ($4::uuid IS NULL
+  AND t.organization_id = $3
+  AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
+  AND ($5::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
-       OR t.assignee_id = $4::uuid)
-  AND (cardinality($5::text[]) = 0 OR n.event_type = ANY($5::text[]))
-  AND (NOT $6::boolean OR n.read_at IS NULL)
-  AND ($7::uuid IS NULL
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
+       OR t.assignee_id = $5::uuid)
+  AND (cardinality($6::text[]) = 0 OR n.event_type = ANY($6::text[]))
+  AND (NOT $7::boolean OR n.read_at IS NULL)
+  AND ($8::uuid IS NULL
        OR (n.created_at, n.id) < (SELECT b.created_at, b.id FROM notifications b
-                                  WHERE b.id = $7::uuid AND b.user_id = $2))
+                                  WHERE b.id = $8::uuid AND b.user_id = $2))
 ORDER BY n.created_at DESC, n.id DESC
-LIMIT $8
+LIMIT $9
 `
 
 type ListNotificationsParams struct {
-	QuoteRunes    int32
-	UserID        uuid.UUID
-	ScopeClientID *uuid.UUID
-	ScopeAgentID  *uuid.UUID
-	Events        []string
-	UnreadOnly    bool
-	Before        *uuid.UUID
-	RowLimit      int32
+	QuoteRunes     int32
+	UserID         uuid.UUID
+	OrganizationID uuid.UUID
+	ScopeClientID  *uuid.UUID
+	ScopeAgentID   *uuid.UUID
+	Events         []string
+	UnreadOnly     bool
+	Before         *uuid.UUID
+	RowLimit       int32
 }
 
 type ListNotificationsRow struct {
@@ -649,6 +679,7 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 	rows, err := q.db.Query(ctx, listNotifications,
 		arg.QuoteRunes,
 		arg.UserID,
+		arg.OrganizationID,
 		arg.ScopeClientID,
 		arg.ScopeAgentID,
 		arg.Events,
@@ -776,21 +807,28 @@ UPDATE notifications n
 SET read_at = now()
 FROM tickets t
 WHERE n.user_id = $1 AND n.web AND n.read_at IS NULL AND t.id = n.ticket_id
-  AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
-  AND ($3::uuid IS NULL
+  AND t.organization_id = $2
+  AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
+  AND ($4::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
-       OR t.assignee_id = $3::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
+       OR t.assignee_id = $4::uuid)
 `
 
 type MarkAllNotificationsReadParams struct {
-	UserID        uuid.UUID
-	ScopeClientID *uuid.UUID
-	ScopeAgentID  *uuid.UUID
+	UserID         uuid.UUID
+	OrganizationID uuid.UUID
+	ScopeClientID  *uuid.UUID
+	ScopeAgentID   *uuid.UUID
 }
 
 func (q *Queries) MarkAllNotificationsRead(ctx context.Context, arg MarkAllNotificationsReadParams) error {
-	_, err := q.db.Exec(ctx, markAllNotificationsRead, arg.UserID, arg.ScopeClientID, arg.ScopeAgentID)
+	_, err := q.db.Exec(ctx, markAllNotificationsRead,
+		arg.UserID,
+		arg.OrganizationID,
+		arg.ScopeClientID,
+		arg.ScopeAgentID,
+	)
 	return err
 }
 
@@ -823,19 +861,21 @@ UPDATE notifications n
 SET read_at = CASE WHEN $1::boolean THEN coalesce(n.read_at, now()) END
 FROM tickets t
 WHERE n.id = $2 AND n.user_id = $3 AND n.web AND t.id = n.ticket_id
-  AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
-  AND ($5::uuid IS NULL
+  AND t.organization_id = $4
+  AND ($5::uuid IS NULL OR t.client_id = $5::uuid)
+  AND ($6::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
-       OR t.assignee_id = $5::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid)
+       OR t.assignee_id = $6::uuid)
 `
 
 type SetNotificationReadParams struct {
-	Read          bool
-	ID            uuid.UUID
-	UserID        uuid.UUID
-	ScopeClientID *uuid.UUID
-	ScopeAgentID  *uuid.UUID
+	Read           bool
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	OrganizationID uuid.UUID
+	ScopeClientID  *uuid.UUID
+	ScopeAgentID   *uuid.UUID
 }
 
 func (q *Queries) SetNotificationRead(ctx context.Context, arg SetNotificationReadParams) (int64, error) {
@@ -843,6 +883,7 @@ func (q *Queries) SetNotificationRead(ctx context.Context, arg SetNotificationRe
 		arg.Read,
 		arg.ID,
 		arg.UserID,
+		arg.OrganizationID,
 		arg.ScopeClientID,
 		arg.ScopeAgentID,
 	)

@@ -15,7 +15,7 @@ ON CONFLICT (repository_id, delivery_id) DO NOTHING
 RETURNING id;
 
 -- name: GetDelivery :one
-SELECT d.id, d.repository_id, d.event_name, d.payload, d.processed_at, r.provider
+SELECT d.id, d.repository_id, d.event_name, d.payload, d.processed_at, r.provider, r.organization_id
 FROM webhook_deliveries d
 JOIN repositories r ON r.id = d.repository_id
 WHERE d.id = @id;
@@ -29,10 +29,11 @@ WHERE id IN (SELECT o.id FROM webhook_deliveries o WHERE o.received_at < @receiv
              ORDER BY o.received_at LIMIT @batch);
 
 -- name: ListTicketPrefixes :many
--- Every prefix a ticket key can have: the current one and any older one still on a ticket.
-SELECT ticket_prefix::text AS prefix FROM organization
+-- Every prefix an organization's ticket keys can have: the current one and any older one still
+-- on one of its tickets.
+SELECT o.ticket_prefix::text AS prefix FROM organizations o WHERE o.id = @organization_id::uuid
 UNION
-SELECT DISTINCT split_part(key, '-', 1) FROM tickets;
+SELECT DISTINCT split_part(t.key, '-', 1) FROM tickets t WHERE t.organization_id = @organization_id::uuid;
 
 -- name: FindStaffByEmail :one
 -- The active staff member who writes code under this email.

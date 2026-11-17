@@ -562,7 +562,7 @@ func TestDispatchReadsOnlyDueRows(t *testing.T) {
 	te.age(t, notification.GroupWindow)
 	now := time.Now()
 	rows, err := te.st.Q().ListDueEmails(context.Background(), db.ListDueEmailsParams{
-		StaleBefore: now.Add(-notification.ClaimTimeout), GroupCutoff: now.Add(-notification.GroupWindow),
+		OrganizationID: te.org, StaleBefore: now.Add(-notification.ClaimTimeout), GroupCutoff: now.Add(-notification.GroupWindow),
 		Instant: string(notification.FrequencyInstant), Hourly: string(notification.FrequencyHourly),
 		Daily: string(notification.FrequencyDaily), HourlyCutoff: now.Add(-time.Hour), DailyCutoff: now.Add(-24 * time.Hour),
 		RowLimit: 100,

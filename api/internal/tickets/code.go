@@ -82,7 +82,7 @@ func (s *Service) ApplyCode(ctx context.Context, ticketID, repoID uuid.UUID, eve
 				continue
 			}
 			seen = append(seen, e.ID)
-			if err := linkCode(ctx, tx.Q, cs, row.Key, ticket.Status(row.Status).Locked(), e); err != nil {
+			if err := linkCode(ctx, tx.Q, cs, row.OrganizationID, row.Key, ticket.Status(row.Status).Locked(), e); err != nil {
 				return err
 			}
 		}
@@ -92,7 +92,7 @@ func (s *Service) ApplyCode(ctx context.Context, ticketID, repoID uuid.UUID, eve
 
 // linkCode records a commit reaching the ticket: a link row for the code activity and the
 // recent-events log, and, unless the ticket is closed, an audit entry for its activity log.
-func linkCode(ctx context.Context, q *db.Queries, cs *changeSet, key string, closed bool, e CodeEvent) error {
+func linkCode(ctx context.Context, q *db.Queries, cs *changeSet, orgID uuid.UUID, key string, closed bool, e CodeEvent) error {
 	outcome := CodeLinked
 	if closed {
 		outcome = CodeTicketClosed
@@ -102,7 +102,7 @@ func linkCode(ctx context.Context, q *db.Queries, cs *changeSet, key string, clo
 	}); err != nil || closed {
 		return err
 	}
-	actor := audit.GitActor(e.AuthorID, e.AuthorName)
+	actor := audit.GitActor(e.AuthorID, e.AuthorName).In(orgID)
 	return cs.write(ctx, q, actor.Entry(ActionCodeLinked, TargetTicket, &cs.ticketID, map[string]any{
 		dataCodeEvent: e.ID, dataProvider: e.Provider, dataCodeKind: e.Kind, dataCodeRef: e.Ref,
 		dataBranch: e.Branch, dataOutcome: outcome,

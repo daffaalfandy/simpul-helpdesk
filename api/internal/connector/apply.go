@@ -12,13 +12,13 @@ import (
 
 // apply hands the delivery's commits to the tickets they name, one transaction per ticket, when
 // the ticket's project reads this repository. Other keys are logged and ignored.
-func (s *Service) apply(ctx context.Context, provider gitevent.Provider, repoID uuid.UUID, events []storedEvent) error {
+func (s *Service) apply(ctx context.Context, provider gitevent.Provider, orgID, repoID uuid.UUID, events []storedEvent) error {
 	q := s.store.Q()
 	var keys []string
 	for _, e := range events {
 		keys = append(keys, e.Keys...)
 	}
-	found, err := q.ListTicketsByKeys(ctx, keys)
+	found, err := q.ListTicketsByKeys(ctx, db.ListTicketsByKeysParams{OrganizationID: orgID, Keys: keys})
 	if err != nil {
 		return err
 	}

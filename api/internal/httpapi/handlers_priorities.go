@@ -11,10 +11,11 @@ import (
 
 // ListPriorityLevels is open to every signed-in user: requesters see the names when they report.
 func (s *server) ListPriorityLevels(ctx context.Context, _ gen.ListPriorityLevelsRequestObject) (gen.ListPriorityLevelsResponseObject, error) {
-	if _, err := signedIn(ctx); err != nil {
+	p, err := signedInOrg(ctx)
+	if err != nil {
 		return nil, err
 	}
-	levels, err := s.priorities.List(ctx)
+	levels, err := s.priorities.List(ctx, p.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -22,7 +23,7 @@ func (s *server) ListPriorityLevels(ctx context.Context, _ gen.ListPriorityLevel
 }
 
 func (s *server) UpdatePriorityLevels(ctx context.Context, req gen.UpdatePriorityLevelsRequestObject) (gen.UpdatePriorityLevelsResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +31,7 @@ func (s *server) UpdatePriorityLevels(ctx context.Context, req gen.UpdatePriorit
 	for i, l := range *req.Body {
 		in[i] = priorities.Level{Code: sla.Priority(l.Code), Name: l.Name, Description: l.Description}
 	}
-	levels, err := s.priorities.Update(ctx, p.AuditActor(), in)
+	levels, err := s.priorities.Update(ctx, p.AuditActor(), p.OrganizationID, in)
 	if err != nil {
 		return nil, err
 	}

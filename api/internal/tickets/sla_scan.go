@@ -73,11 +73,8 @@ func (w *SLAScanner) SetClock(now func() time.Time) { w.now = now }
 
 func (w *SLAScanner) Work(ctx context.Context, _ *river.Job[SLAScanArgs]) error {
 	now := w.now()
-	schedules, err := w.sla.Schedules(ctx)
-	if err != nil {
-		return err
-	}
-	if err := w.backfill(ctx, schedules, now); err != nil {
+	cals := sla.NewCalendars()
+	if err := w.backfill(ctx, cals, now); err != nil {
 		return err
 	}
 	q := w.store.Q()
@@ -89,7 +86,7 @@ func (w *SLAScanner) Work(ctx context.Context, _ *river.Job[SLAScanArgs]) error 
 		return err
 	}
 	for _, b := range breaches {
-		w.logFailure(ctx, b.TicketID, w.flag(ctx, schedules, b.TicketID, slaengine.Clock(b.Clock), true, now))
+		w.logFailure(ctx, b.TicketID, w.flag(ctx, cals, b.TicketID, slaengine.Clock(b.Clock), true, now))
 	}
 	atRisk, err := q.ListSLAAtRisk(ctx, db.ListSLAAtRiskParams{
 		FirstResponseClock: string(slaengine.ClockFirstResponse), ResolutionClock: string(slaengine.ClockResolution),
@@ -99,7 +96,7 @@ func (w *SLAScanner) Work(ctx context.Context, _ *river.Job[SLAScanArgs]) error 
 		return err
 	}
 	for _, r := range atRisk {
-		w.logFailure(ctx, r.TicketID, w.flag(ctx, schedules, r.TicketID, slaengine.Clock(r.Clock), false, now))
+		w.logFailure(ctx, r.TicketID, w.flag(ctx, cals, r.TicketID, slaengine.Clock(r.Clock), false, now))
 	}
 	return nil
 }
@@ -114,7 +111,7 @@ func (w *SLAScanner) logFailure(ctx context.Context, ticketID uuid.UUID, err err
 
 // backfill replays tickets the engine hasn't seen. A ticket that fails is logged and skipped
 // for this run (it stays unreplayed), and the rest go on.
-func (w *SLAScanner) backfill(ctx context.Context, schedules sla.Schedules, now time.Time) error {
+func (w *SLAScanner) backfill(ctx context.Context, cals *sla.Calendars, now time.Time) error {
 	var after *uuid.UUID
 	for range slaScanMaxBatches {
 		ids, err := w.store.Q().ListUnreplayedTicketIDs(ctx, db.ListUnreplayedTicketIDsParams{After: after, RowLimit: slaBatchSize})
@@ -122,7 +119,7 @@ func (w *SLAScanner) backfill(ctx context.Context, schedules sla.Schedules, now 
 			return err
 		}
 		for _, id := range ids {
-			w.logFailure(ctx, id, replayLocked(ctx, w.store, schedules, id, now))
+			w.logFailure(ctx, id, replayLocked(ctx, w.store, cals, id, now))
 		}
 		if len(ids) < slaBatchSize {
 			return nil
@@ -134,19 +131,19 @@ func (w *SLAScanner) backfill(ctx context.Context, schedules sla.Schedules, now 
 }
 
 // replayLocked replays one ticket under its row lock, like any ticket change.
-func replayLocked(ctx context.Context, st *store.Store, schedules sla.Schedules, id uuid.UUID, now time.Time) error {
+func replayLocked(ctx context.Context, st *store.Store, cals *sla.Calendars, id uuid.UUID, now time.Time) error {
 	return st.Tx(ctx, func(tx store.Tx) error {
 		if _, err := tx.Q.LockTicketForSLA(ctx, id); err != nil {
 			return err
 		}
-		return ReplaySLA(ctx, tx.Q, schedules, id, now)
+		return ReplaySLA(ctx, tx.Q, cals, id, now)
 	})
 }
 
 // flag marks one clock at risk or breached, if it still is under the ticket lock, and queues
 // the alerts: the notification fan-out, and for a P1 resolution breach the client contact's
 // email when the project asks for it.
-func (w *SLAScanner) flag(ctx context.Context, schedules sla.Schedules, ticketID uuid.UUID, clock slaengine.Clock, breach bool, now time.Time) error {
+func (w *SLAScanner) flag(ctx context.Context, cals *sla.Calendars, ticketID uuid.UUID, clock slaengine.Clock, breach bool, now time.Time) error {
 	return w.store.Tx(ctx, func(tx store.Tx) error {
 		if _, err := tx.Q.LockTicketForSLA(ctx, ticketID); err != nil {
 			return err
@@ -178,9 +175,13 @@ func (w *SLAScanner) flag(ctx context.Context, schedules sla.Schedules, ticketID
 		if err := upsertClocks(ctx, tx.Q, row); err != nil {
 			return err
 		}
+		schedules, err := cals.For(ctx, tx.Q, t.OrganizationID)
+		if err != nil {
+			return err
+		}
 		view := slaengine.ViewAt(*stored, schedules, ticket.Status(t.Status).IsOpen(), now)
 		cs := newChangeSet(ticketID)
-		if err := cs.write(ctx, tx.Q, audit.SystemActor(ActorNameSLA).Entry(action, TargetTicket, &ticketID, map[string]any{
+		if err := cs.write(ctx, tx.Q, audit.SystemActor(ActorNameSLA).In(t.OrganizationID).Entry(action, TargetTicket, &ticketID, map[string]any{
 			dataClock: clock, dataDueAt: dueAt, dataLeftMs: view.Remaining.Milliseconds(),
 		})); err != nil {
 			return err

@@ -240,7 +240,7 @@ func (s *Service) changeMember(ctx context.Context, actor *Principal, id uuid.UU
 		return apperr.Conflict(apperr.CodeCannotChangeSelf, "You can't change your own account here", "")
 	}
 	return s.store.Tx(ctx, func(tx store.Tx) error {
-		if err := tx.Q.LockOrganization(ctx); err != nil {
+		if err := tx.Q.LockInstall(ctx); err != nil {
 			return err
 		}
 		u, err := tx.Q.GetUserForUpdate(ctx, id)

@@ -16,31 +16,32 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
-// BusinessHours returns the working window. M2 stores the same window on every working day.
-func (s *Service) BusinessHours(ctx context.Context) (Hours, error) {
-	return readHours(ctx, s.store.Q())
+// BusinessHours returns the organization's working window. M2 stores the same window on every
+// working day.
+func (s *Service) BusinessHours(ctx context.Context, orgID uuid.UUID) (Hours, error) {
+	return readHours(ctx, s.store.Q(), orgID)
 }
 
-func (s *Service) UpdateBusinessHours(ctx context.Context, actor audit.Actor, in HoursInput) (Hours, error) {
+func (s *Service) UpdateBusinessHours(ctx context.Context, actor audit.Actor, orgID uuid.UUID, in HoursInput) (Hours, error) {
 	days, err := in.Validate()
 	if err != nil {
 		return Hours{}, apperr.Invalid(apperr.CodeInvalidBusinessHours, "Check the business hours", err.Error())
 	}
 	var updated Hours
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		if err := tx.Q.LockOrganization(ctx); err != nil {
+		if err := tx.Q.LockOrganization(ctx, orgID); err != nil {
 			return err
 		}
-		old, err := readHours(ctx, tx.Q)
+		old, err := readHours(ctx, tx.Q, orgID)
 		if err != nil {
 			return err
 		}
-		if err := tx.Q.DeleteBusinessHours(ctx); err != nil {
+		if err := tx.Q.DeleteBusinessHours(ctx, orgID); err != nil {
 			return err
 		}
 		for _, d := range days {
 			if err := tx.Q.InsertBusinessHours(ctx, db.InsertBusinessHoursParams{
-				Weekday: int16(d), OpenMinute: toMinutes(in.Opens), CloseMinute: toMinutes(in.Closes),
+				OrganizationID: orgID, Weekday: int16(d), OpenMinute: toMinutes(in.Opens), CloseMinute: toMinutes(in.Closes),
 			}); err != nil {
 				return err
 			}
@@ -51,7 +52,7 @@ func (s *Service) UpdateBusinessHours(ctx context.Context, actor audit.Actor, in
 		})); err != nil {
 			return err
 		}
-		return s.Recompute(ctx, tx)
+		return s.Recompute(ctx, tx, orgID)
 	})
 	if err != nil {
 		return Hours{}, err
@@ -59,12 +60,12 @@ func (s *Service) UpdateBusinessHours(ctx context.Context, actor audit.Actor, in
 	return updated, nil
 }
 
-func readHours(ctx context.Context, q *db.Queries) (Hours, error) {
-	tz, err := q.GetOrganizationTimezone(ctx)
+func readHours(ctx context.Context, q *db.Queries, orgID uuid.UUID) (Hours, error) {
+	tz, err := q.GetOrganizationTimezone(ctx, orgID)
 	if err != nil {
 		return Hours{}, err
 	}
-	rows, err := q.ListBusinessHours(ctx)
+	rows, err := q.ListBusinessHours(ctx, orgID)
 	if err != nil {
 		return Hours{}, err
 	}
@@ -88,9 +89,9 @@ func describeHours(h Hours) string {
 func toMinutes(d time.Duration) int16   { return int16(d / time.Minute) }
 func fromMinutes(m int16) time.Duration { return time.Duration(m) * time.Minute }
 
-// ListHolidays returns holidays in date order, optionally for one year.
-func (s *Service) ListHolidays(ctx context.Context, year *int) ([]Holiday, error) {
-	params := db.ListHolidaysParams{}
+// ListHolidays returns the organization's holidays in date order, optionally for one year.
+func (s *Service) ListHolidays(ctx context.Context, orgID uuid.UUID, year *int) ([]Holiday, error) {
+	params := db.ListHolidaysParams{OrganizationID: orgID}
 	if year != nil {
 		from, to := yearBounds(*year)
 		params.FromDate, params.ToDate = &from, &to
@@ -106,7 +107,7 @@ func (s *Service) ListHolidays(ctx context.Context, year *int) ([]Holiday, error
 	return out, nil
 }
 
-func (s *Service) CreateHoliday(ctx context.Context, actor audit.Actor, date calendar.Date, name string) (Holiday, error) {
+func (s *Service) CreateHoliday(ctx context.Context, actor audit.Actor, orgID uuid.UUID, date calendar.Date, name string) (Holiday, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len([]rune(name)) > MaxHolidayNameLen {
 		return Holiday{}, apperr.Invalid(apperr.CodeInvalidName, "Enter a holiday name", "")
@@ -114,7 +115,7 @@ func (s *Service) CreateHoliday(ctx context.Context, actor audit.Actor, date cal
 	var id uuid.UUID
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
 		var err error
-		if id, err = tx.Q.CreateHoliday(ctx, db.CreateHolidayParams{Date: date, Name: name}); err != nil {
+		if id, err = tx.Q.CreateHoliday(ctx, db.CreateHolidayParams{OrganizationID: orgID, Date: date, Name: name}); err != nil {
 			return err
 		}
 		if err := audit.Write(ctx, tx.Q, actor.Entry(ActionHolidayCreated, TargetHoliday, &id, map[string]any{
@@ -122,7 +123,7 @@ func (s *Service) CreateHoliday(ctx context.Context, actor audit.Actor, date cal
 		})); err != nil {
 			return err
 		}
-		return s.Recompute(ctx, tx)
+		return s.Recompute(ctx, tx, orgID)
 	})
 	if store.IsViolation(err, store.SQLStateUniqueViolation, constraintHolidayDate) {
 		return Holiday{}, apperr.Conflict(apperr.CodeHolidayDateTaken, "That date is already a holiday", date.String())
@@ -133,9 +134,9 @@ func (s *Service) CreateHoliday(ctx context.Context, actor audit.Actor, date cal
 	return Holiday{ID: id, Date: date, Name: name}, nil
 }
 
-func (s *Service) DeleteHoliday(ctx context.Context, actor audit.Actor, id uuid.UUID) error {
+func (s *Service) DeleteHoliday(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID) error {
 	return s.store.Tx(ctx, func(tx store.Tx) error {
-		row, err := tx.Q.DeleteHoliday(ctx, id)
+		row, err := tx.Q.DeleteHoliday(ctx, db.DeleteHolidayParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
@@ -144,17 +145,17 @@ func (s *Service) DeleteHoliday(ctx context.Context, actor audit.Actor, id uuid.
 		})); err != nil {
 			return err
 		}
-		return s.Recompute(ctx, tx)
+		return s.Recompute(ctx, tx, orgID)
 	})
 }
 
 // HolidayPresets lists the bundled holiday lists with how many of their dates are missing.
-func (s *Service) HolidayPresets(ctx context.Context) ([]PresetSummary, error) {
+func (s *Service) HolidayPresets(ctx context.Context, orgID uuid.UUID) ([]PresetSummary, error) {
 	years := holidaypreset.Years()
 	out := make([]PresetSummary, 0, len(years))
 	for _, year := range years {
 		p, _ := holidaypreset.ForYear(year)
-		have, err := s.ListHolidays(ctx, &year)
+		have, err := s.ListHolidays(ctx, orgID, &year)
 		if err != nil {
 			return nil, err
 		}
@@ -175,7 +176,7 @@ func (s *Service) HolidayPresets(ctx context.Context) ([]PresetSummary, error) {
 
 // LoadHolidayPreset adds a bundled year's holidays that are missing. Dates that already
 // have a holiday are left alone, so admin edits survive.
-func (s *Service) LoadHolidayPreset(ctx context.Context, actor audit.Actor, year int) (PresetLoad, error) {
+func (s *Service) LoadHolidayPreset(ctx context.Context, actor audit.Actor, orgID uuid.UUID, year int) (PresetLoad, error) {
 	p, ok := holidaypreset.ForYear(year)
 	if !ok {
 		return PresetLoad{}, apperr.NotFound()
@@ -183,7 +184,7 @@ func (s *Service) LoadHolidayPreset(ctx context.Context, actor audit.Actor, year
 	result := PresetLoad{Year: year}
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
 		for _, h := range p.Holidays {
-			n, err := tx.Q.InsertHolidayIfMissing(ctx, db.InsertHolidayIfMissingParams{Date: h.Date, Name: h.Name})
+			n, err := tx.Q.InsertHolidayIfMissing(ctx, db.InsertHolidayIfMissingParams{OrganizationID: orgID, Date: h.Date, Name: h.Name})
 			if err != nil {
 				return err
 			}
@@ -198,7 +199,7 @@ func (s *Service) LoadHolidayPreset(ctx context.Context, actor audit.Actor, year
 		})); err != nil {
 			return err
 		}
-		return s.Recompute(ctx, tx)
+		return s.Recompute(ctx, tx, orgID)
 	})
 	if err != nil {
 		return PresetLoad{}, err
@@ -206,16 +207,16 @@ func (s *Service) LoadHolidayPreset(ctx context.Context, actor audit.Actor, year
 	return result, nil
 }
 
-// Schedules builds the working-time clocks from the organisation's time zone, business
-// hours and holidays.
-func (s *Service) Schedules(ctx context.Context) (Schedules, error) {
-	return LoadSchedules(ctx, s.store.Q())
+// Schedules builds an organization's working-time clocks from its time zone, business hours and
+// holidays.
+func (s *Service) Schedules(ctx context.Context, orgID uuid.UUID) (Schedules, error) {
+	return LoadSchedules(ctx, s.store.Q(), orgID)
 }
 
 // LoadSchedules is Schedules on the caller's connection: inside a transaction, pass its queries
 // so the read doesn't take a second connection from the pool while the first is held.
-func LoadSchedules(ctx context.Context, q *db.Queries) (Schedules, error) {
-	hours, err := readHours(ctx, q)
+func LoadSchedules(ctx context.Context, q *db.Queries, orgID uuid.UUID) (Schedules, error) {
+	hours, err := readHours(ctx, q, orgID)
 	if err != nil {
 		return Schedules{}, err
 	}
@@ -223,7 +224,7 @@ func LoadSchedules(ctx context.Context, q *db.Queries) (Schedules, error) {
 	if err != nil {
 		return Schedules{}, err
 	}
-	rows, err := q.ListHolidays(ctx, db.ListHolidaysParams{})
+	rows, err := q.ListHolidays(ctx, db.ListHolidaysParams{OrganizationID: orgID})
 	if err != nil {
 		return Schedules{}, err
 	}
@@ -250,10 +251,10 @@ func yearBounds(year int) (calendar.Date, calendar.Date) {
 	return calendar.NewDate(year, time.January, 1), calendar.NewDate(year, time.December, 31)
 }
 
-// Location is the organisation's time zone, which decides business hours, "today" and when
-// summaries go out.
-func Location(ctx context.Context, q *db.Queries) (*time.Location, error) {
-	tz, err := q.GetOrganizationTimezone(ctx)
+// Location is an organization's time zone, which decides its business hours, "today" and when
+// its summaries go out.
+func Location(ctx context.Context, q *db.Queries, orgID uuid.UUID) (*time.Location, error) {
+	tz, err := q.GetOrganizationTimezone(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -267,4 +268,27 @@ func ParseLocation(tz string) (*time.Location, error) {
 		return nil, fmt.Errorf("organisation time zone: %w", err)
 	}
 	return loc, nil
+}
+
+// Calendars loads each organization's schedules once, for jobs that go through tickets of
+// several organizations in one run. It is not safe for concurrent use, and it is meant to live
+// for one run only: the API and the worker can't share a cache that calendar edits would have
+// to invalidate in both.
+type Calendars struct {
+	loaded map[uuid.UUID]Schedules
+}
+
+func NewCalendars() *Calendars { return &Calendars{loaded: map[uuid.UUID]Schedules{}} }
+
+// For returns the organization's schedules, loading them on q the first time.
+func (c *Calendars) For(ctx context.Context, q *db.Queries, orgID uuid.UUID) (Schedules, error) {
+	if s, ok := c.loaded[orgID]; ok {
+		return s, nil
+	}
+	s, err := LoadSchedules(ctx, q, orgID)
+	if err != nil {
+		return Schedules{}, err
+	}
+	c.loaded[orgID] = s
+	return s, nil
 }

@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/holidaypreset"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/secretbox"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
@@ -125,15 +127,13 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		return err
 	}
 	err = st.Tx(ctx, func(tx store.Tx) error {
-		footer := orgFooterNote
-		if err := tx.Q.UpdateOrganizationProfile(ctx, db.UpdateOrganizationProfileParams{
-			Name: OrgName, FooterNote: &footer,
-		}); err != nil {
+		org, err := demoOrganization(ctx, tx)
+		if err != nil {
 			return err
 		}
 		clientIDs := make(map[string]uuid.UUID, len(clients))
 		for _, c := range clients {
-			id, err := upsertClient(ctx, tx.Q, c)
+			id, err := upsertClient(ctx, tx.Q, org, c)
 			if err != nil {
 				return fmt.Errorf("client %s: %w", c.name, err)
 			}
@@ -171,23 +171,23 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 			for _, email := range c.agents {
 				ids = append(ids, userIDs[email])
 			}
-			if err := tx.Q.InsertClientAgents(ctx, db.InsertClientAgentsParams{ClientID: clientIDs[c.name], UserIds: ids}); err != nil {
+			if err := tx.Q.InsertClientAgents(ctx, db.InsertClientAgentsParams{OrganizationID: org, ClientID: clientIDs[c.name], UserIds: ids}); err != nil {
 				return fmt.Errorf("agents of %s: %w", c.name, err)
 			}
 		}
-		if err := seedHolidays(ctx, tx.Q); err != nil {
+		if err := seedHolidays(ctx, tx.Q, org); err != nil {
 			return err
 		}
-		projectIDs, err := seedProjects(ctx, tx.Q, clientIDs)
+		projectIDs, err := seedProjects(ctx, tx.Q, org, clientIDs)
 		if err != nil {
 			return err
 		}
-		items, err := seedCatalog(ctx, tx.Q)
+		items, err := seedCatalog(ctx, tx.Q, org)
 		if err != nil {
 			return err
 		}
 		now := time.Now()
-		r := refs{clients: clientIDs, users: userIDs, projects: projectIDs, items: items}
+		r := refs{org: org, clients: clientIDs, users: userIDs, projects: projectIDs, items: items}
 		repos, err := seedRepositories(ctx, tx.Q, box, now, r)
 		if err != nil {
 			return err
@@ -222,7 +222,7 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 	return nil
 }
 
-func upsertClient(ctx context.Context, q *db.Queries, c client) (uuid.UUID, error) {
+func upsertClient(ctx context.Context, q *db.Queries, org uuid.UUID, c client) (uuid.UUID, error) {
 	start, err := optionalDate(c.start)
 	if err != nil {
 		return uuid.Nil, err
@@ -232,17 +232,17 @@ func upsertClient(ctx context.Context, q *db.Queries, c client) (uuid.UUID, erro
 		return uuid.Nil, err
 	}
 	return q.UpsertClientDetails(ctx, db.UpsertClientDetailsParams{
-		Name: c.name, ContractNo: optional(c.contractNo), ContractStart: start, ContractEnd: end,
+		OrganizationID: org, Name: c.name, ContractNo: optional(c.contractNo), ContractStart: start, ContractEnd: end,
 		PicName: optional(c.picName), PicEmail: optional(c.picEmail),
 	})
 }
 
 // seedHolidays loads every bundled holiday list, keeping dates that already exist.
-func seedHolidays(ctx context.Context, q *db.Queries) error {
+func seedHolidays(ctx context.Context, q *db.Queries, org uuid.UUID) error {
 	for _, year := range holidaypreset.Years() {
 		p, _ := holidaypreset.ForYear(year)
 		for _, h := range p.Holidays {
-			if _, err := q.InsertHolidayIfMissing(ctx, db.InsertHolidayIfMissingParams{Date: h.Date, Name: h.Name}); err != nil {
+			if _, err := q.InsertHolidayIfMissing(ctx, db.InsertHolidayIfMissingParams{OrganizationID: org, Date: h.Date, Name: h.Name}); err != nil {
 				return fmt.Errorf("holiday %s: %w", h.Date, err)
 			}
 		}
@@ -266,4 +266,24 @@ func optionalDate(s string) (*calendar.Date, error) {
 		return nil, err
 	}
 	return &d, nil
+}
+
+// demoOrganization is the demo vendor: the install's first organization, named for the demo, or
+// a new one on a fresh install.
+func demoOrganization(ctx context.Context, tx store.Tx) (uuid.UUID, error) {
+	footer := orgFooterNote
+	first, err := tx.Q.GetFirstOrganization(ctx)
+	switch {
+	case err == nil:
+		return first.ID, tx.Q.UpdateOrganizationProfile(ctx, db.UpdateOrganizationProfileParams{ID: first.ID, Name: OrgName, FooterNote: &footer})
+	case !errors.Is(err, pgx.ErrNoRows):
+		return uuid.Nil, err
+	}
+	id, err := organization.CreateTx(ctx, tx, organization.Input{
+		Name: OrgName, TicketPrefix: organization.DefaultTicketPrefix, Timezone: organization.DefaultTimezone,
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return id, tx.Q.UpdateOrganizationProfile(ctx, db.UpdateOrganizationProfileParams{ID: id, Name: OrgName, FooterNote: &footer})
 }

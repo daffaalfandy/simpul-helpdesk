@@ -22,13 +22,14 @@ func (q *Queries) DeleteRepository(ctx context.Context, id uuid.UUID) error {
 }
 
 const getRepository = `-- name: GetRepository :one
-SELECT id, provider, host, full_name, web_url, external_id, webhook_secret, hidden,
+SELECT id, organization_id, provider, host, full_name, web_url, external_id, webhook_secret, hidden,
        last_delivery_at, last_error, last_error_at, created_at
 FROM repositories WHERE id = $1
 `
 
 type GetRepositoryRow struct {
 	ID             uuid.UUID
+	OrganizationID uuid.UUID
 	Provider       string
 	Host           string
 	FullName       string
@@ -42,11 +43,13 @@ type GetRepositoryRow struct {
 	CreatedAt      time.Time
 }
 
+// By id alone: webhook intake and jobs, which then work in the repository's organization.
 func (q *Queries) GetRepository(ctx context.Context, id uuid.UUID) (GetRepositoryRow, error) {
 	row := q.db.QueryRow(ctx, getRepository, id)
 	var i GetRepositoryRow
 	err := row.Scan(
 		&i.ID,
+		&i.OrganizationID,
 		&i.Provider,
 		&i.Host,
 		&i.FullName,
@@ -64,13 +67,14 @@ func (q *Queries) GetRepository(ctx context.Context, id uuid.UUID) (GetRepositor
 
 const getRepositoryByName = `-- name: GetRepositoryByName :one
 SELECT id, hidden FROM repositories
-WHERE provider = $1 AND lower(host) = lower($2) AND lower(full_name) = lower($3)
+WHERE organization_id = $1 AND provider = $2 AND lower(host) = lower($3) AND lower(full_name) = lower($4)
 `
 
 type GetRepositoryByNameParams struct {
-	Provider string
-	Host     string
-	FullName string
+	OrganizationID uuid.UUID
+	Provider       string
+	Host           string
+	FullName       string
 }
 
 type GetRepositoryByNameRow struct {
@@ -79,15 +83,26 @@ type GetRepositoryByNameRow struct {
 }
 
 func (q *Queries) GetRepositoryByName(ctx context.Context, arg GetRepositoryByNameParams) (GetRepositoryByNameRow, error) {
-	row := q.db.QueryRow(ctx, getRepositoryByName, arg.Provider, arg.Host, arg.FullName)
+	row := q.db.QueryRow(ctx, getRepositoryByName,
+		arg.OrganizationID,
+		arg.Provider,
+		arg.Host,
+		arg.FullName,
+	)
 	var i GetRepositoryByNameRow
 	err := row.Scan(&i.ID, &i.Hidden)
 	return i, err
 }
 
 const getRepositoryForUpdate = `-- name: GetRepositoryForUpdate :one
-SELECT id, provider, host, full_name, web_url, hidden FROM repositories WHERE id = $1 FOR UPDATE
+SELECT id, provider, host, full_name, web_url, hidden FROM repositories
+WHERE id = $1 AND organization_id = $2 FOR UPDATE
 `
+
+type GetRepositoryForUpdateParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
 
 type GetRepositoryForUpdateRow struct {
 	ID       uuid.UUID
@@ -98,8 +113,8 @@ type GetRepositoryForUpdateRow struct {
 	Hidden   bool
 }
 
-func (q *Queries) GetRepositoryForUpdate(ctx context.Context, id uuid.UUID) (GetRepositoryForUpdateRow, error) {
-	row := q.db.QueryRow(ctx, getRepositoryForUpdate, id)
+func (q *Queries) GetRepositoryForUpdate(ctx context.Context, arg GetRepositoryForUpdateParams) (GetRepositoryForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getRepositoryForUpdate, arg.ID, arg.OrganizationID)
 	var i GetRepositoryForUpdateRow
 	err := row.Scan(
 		&i.ID,
@@ -122,24 +137,26 @@ func (q *Queries) HideRepository(ctx context.Context, id uuid.UUID) error {
 }
 
 const insertRepository = `-- name: InsertRepository :exec
-INSERT INTO repositories (id, provider, host, full_name, web_url, webhook_secret, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO repositories (id, organization_id, provider, host, full_name, web_url, webhook_secret, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertRepositoryParams struct {
-	ID            uuid.UUID
-	Provider      string
-	Host          string
-	FullName      string
-	WebUrl        string
-	WebhookSecret []byte
-	CreatedBy     uuid.UUID
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Provider       string
+	Host           string
+	FullName       string
+	WebUrl         string
+	WebhookSecret  []byte
+	CreatedBy      uuid.UUID
 }
 
 // The id comes from the caller: the sealed secret is bound to it.
 func (q *Queries) InsertRepository(ctx context.Context, arg InsertRepositoryParams) error {
 	_, err := q.db.Exec(ctx, insertRepository,
 		arg.ID,
+		arg.OrganizationID,
 		arg.Provider,
 		arg.Host,
 		arg.FullName,
@@ -154,7 +171,7 @@ const listLinkedProjects = `-- name: ListLinkedProjects :many
 SELECT p.id, p.name, p.repository_id, p.client_id, c.name AS client_name
 FROM projects p
 JOIN clients c ON c.id = p.client_id
-WHERE p.repository_id IS NOT NULL
+WHERE p.organization_id = $1 AND p.repository_id IS NOT NULL
 ORDER BY lower(c.name), lower(p.name)
 `
 
@@ -167,8 +184,8 @@ type ListLinkedProjectsRow struct {
 }
 
 // Projects that read code from a repository, for the Integrations page.
-func (q *Queries) ListLinkedProjects(ctx context.Context) ([]ListLinkedProjectsRow, error) {
-	rows, err := q.db.Query(ctx, listLinkedProjects)
+func (q *Queries) ListLinkedProjects(ctx context.Context, organizationID uuid.UUID) ([]ListLinkedProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listLinkedProjects, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +213,7 @@ func (q *Queries) ListLinkedProjects(ctx context.Context) ([]ListLinkedProjectsR
 const listRepositories = `-- name: ListRepositories :many
 SELECT id, provider, host, full_name, web_url, external_id, last_delivery_at, last_error, last_error_at, created_at
 FROM repositories
-WHERE NOT hidden
+WHERE organization_id = $1 AND NOT hidden
 ORDER BY provider, lower(full_name)
 `
 
@@ -213,8 +230,8 @@ type ListRepositoriesRow struct {
 	CreatedAt      time.Time
 }
 
-func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, error) {
-	rows, err := q.db.Query(ctx, listRepositories)
+func (q *Queries) ListRepositories(ctx context.Context, organizationID uuid.UUID) ([]ListRepositoriesRow, error) {
+	rows, err := q.db.Query(ctx, listRepositories, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -247,14 +264,16 @@ func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, 
 const lockProjectsForLink = `-- name: LockProjectsForLink :many
 SELECT p.id, p.name, p.repository_id
 FROM projects p
-WHERE p.id = ANY($1::uuid[]) OR p.repository_id = $2
+WHERE p.organization_id = $1
+  AND (p.id = ANY($2::uuid[]) OR p.repository_id = $3)
 ORDER BY p.id
 FOR UPDATE
 `
 
 type LockProjectsForLinkParams struct {
-	Ids          []uuid.UUID
-	RepositoryID *uuid.UUID
+	OrganizationID uuid.UUID
+	Ids            []uuid.UUID
+	RepositoryID   *uuid.UUID
 }
 
 type LockProjectsForLinkRow struct {
@@ -265,7 +284,7 @@ type LockProjectsForLinkRow struct {
 
 // The projects a link change touches: the ones asked for and the ones linked now.
 func (q *Queries) LockProjectsForLink(ctx context.Context, arg LockProjectsForLinkParams) ([]LockProjectsForLinkRow, error) {
-	rows, err := q.db.Query(ctx, lockProjectsForLink, arg.Ids, arg.RepositoryID)
+	rows, err := q.db.Query(ctx, lockProjectsForLink, arg.OrganizationID, arg.Ids, arg.RepositoryID)
 	if err != nil {
 		return nil, err
 	}

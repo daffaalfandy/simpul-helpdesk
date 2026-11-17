@@ -21,22 +21,23 @@ import (
 // SeedTicket is a demo ticket with its history, for the dev seed only. History is written
 // the way the service writes it, so the activity log and progress tracker look real.
 type SeedTicket struct {
-	Number        int64
-	Prefix        string
-	Type          ticket.Type
-	Priority      sla.Priority
-	Channel       ticket.Channel
-	ClientID      uuid.UUID
-	Requester     Ref
-	CreatedBy     Ref
-	ProjectID     uuid.UUID
-	CatalogItemID *uuid.UUID
-	Subject       string
-	Description   string
-	CreatedAt     time.Time
-	Steps         []SeedStep
-	Messages      []SeedMessage
-	Code          []SeedCode
+	OrganizationID uuid.UUID
+	Number         int64
+	Prefix         string
+	Type           ticket.Type
+	Priority       sla.Priority
+	Channel        ticket.Channel
+	ClientID       uuid.UUID
+	Requester      Ref
+	CreatedBy      Ref
+	ProjectID      uuid.UUID
+	CatalogItemID  *uuid.UUID
+	Subject        string
+	Description    string
+	CreatedAt      time.Time
+	Steps          []SeedStep
+	Messages       []SeedMessage
+	Code           []SeedCode
 }
 
 // SeedCode is a stored commit linked to the ticket: the link and its activity-log line.
@@ -128,7 +129,7 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 			firstResponse = &at
 		}
 	}
-	snap, err := SnapshotFor(ctx, q, t.ProjectID)
+	snap, err := SnapshotFor(ctx, q, t.OrganizationID, t.ProjectID)
 	if err != nil {
 		return false, err
 	}
@@ -141,7 +142,7 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 		updatedAt = t.Steps[n-1].At
 	}
 	params := db.InsertSeedTicketParams{
-		Number: t.Number, Key: ticket.FormatKey(t.Prefix, t.Number), Type: string(t.Type), Status: string(status),
+		OrganizationID: t.OrganizationID, Number: t.Number, Key: ticket.FormatKey(t.Prefix, t.Number), Type: string(t.Type), Status: string(status),
 		Priority: string(t.Priority), Channel: string(t.Channel), ClientID: t.ClientID, RequesterID: t.Requester.ID,
 		CreatedBy: t.CreatedBy.ID, ProjectID: t.ProjectID, CatalogItemID: t.CatalogItemID, Subject: t.Subject,
 		Description: t.Description, SlaSnapshot: snapJSON, FirstResponseAt: firstResponse, ResolvedAt: resolvedAt,
@@ -193,7 +194,7 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 		entries = append(entries, code...)
 	}
 	for _, st := range approvals {
-		items, err := seedClientItems(ctx, q, id, t.ProjectID, st)
+		items, err := seedClientItems(ctx, q, t.OrganizationID, id, t.ProjectID, st)
 		if err != nil {
 			return false, err
 		}
@@ -261,8 +262,8 @@ func seedCode(ctx context.Context, q *db.Queries, ticketID uuid.UUID, key string
 }
 
 // seedClientItems meets the client items of the project's Definition of Done for an approval.
-func seedClientItems(ctx context.Context, q *db.Queries, ticketID, projectID uuid.UUID, st SeedStep) ([]string, error) {
-	p, err := projects.Load(ctx, q, projectID)
+func seedClientItems(ctx context.Context, q *db.Queries, orgID, ticketID, projectID uuid.UUID, st SeedStep) ([]string, error) {
+	p, err := projects.Load(ctx, q, orgID, projectID)
 	if err != nil {
 		return nil, err
 	}

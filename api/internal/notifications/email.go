@@ -92,14 +92,30 @@ func NewDispatchWorker(st *store.Store, jobs tickets.JobInserter) *DispatchWorke
 func (w *DispatchWorker) Work(ctx context.Context, _ *river.Job[notification.DispatchArgs]) error {
 	now := w.now()
 	return w.store.Tx(ctx, func(tx store.Tx) error {
-		loc, err := sla.Location(ctx, tx.Q)
+		orgs, err := tx.Q.ListOrganizationIDs(ctx)
+		if err != nil {
+			return err
+		}
+		for _, org := range orgs {
+			if err := w.dispatch(ctx, tx, org, now); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// dispatch queues one organization's due emails; its time zone sets the summary boundaries.
+func (w *DispatchWorker) dispatch(ctx context.Context, tx store.Tx, orgID uuid.UUID, now time.Time) error {
+	{
+		loc, err := sla.Location(ctx, tx.Q, orgID)
 		if err != nil {
 			return err
 		}
 		hourly, _, _ := notification.DigestCutoff(notification.FrequencyHourly, now, loc)
 		daily, _, _ := notification.DigestCutoff(notification.FrequencyDaily, now, loc)
 		rows, err := tx.Q.ListDueEmails(ctx, db.ListDueEmailsParams{
-			StaleBefore: now.Add(-notification.ClaimTimeout), GroupCutoff: now.Add(-notification.GroupWindow),
+			OrganizationID: orgID, StaleBefore: now.Add(-notification.ClaimTimeout), GroupCutoff: now.Add(-notification.GroupWindow),
 			Instant: string(notification.FrequencyInstant), Hourly: string(notification.FrequencyHourly),
 			Daily: string(notification.FrequencyDaily), HourlyCutoff: hourly, DailyCutoff: daily, RowLimit: dispatchBatch,
 		})
@@ -113,7 +129,7 @@ func (w *DispatchWorker) Work(ctx context.Context, _ *river.Job[notification.Dis
 				Frequency: notification.Frequency(r.EmailFrequency),
 			}
 		}
-		ticketEmails, digests := notification.PlanEmails(pending, now, loc)
+		ticketEmails, digests := notification.PlanEmails(orgID, pending, now, loc)
 		for _, a := range ticketEmails {
 			if _, err := w.jobs.InsertTx(ctx, tx.PG, a, emailInsertOpts); err != nil {
 				return err
@@ -125,7 +141,7 @@ func (w *DispatchWorker) Work(ctx context.Context, _ *river.Job[notification.Dis
 			}
 		}
 		return nil
-	})
+	}
 }
 
 // Mailer renders and sends notification emails.
@@ -182,7 +198,7 @@ func (w *DigestWorker) Work(ctx context.Context, job *river.Job[notification.Dig
 		return err
 	}
 	rows, err := w.m.store.Q().ClaimDigest(ctx, db.ClaimDigestParams{
-		UserID: user.ID, CreatedBefore: job.Args.Before, StaleBefore: w.m.now().Add(-notification.ClaimTimeout),
+		OrganizationID: orgOrNil(job.Args.OrganizationID), UserID: user.ID, CreatedBefore: job.Args.Before, StaleBefore: w.m.now().Add(-notification.ClaimTimeout),
 	})
 	if err != nil {
 		return err
@@ -291,7 +307,8 @@ func (m *Mailer) mark(ctx context.Context, q *db.Queries, rowIDs []uuid.UUID, sk
 // render builds the email for the rows (sorted oldest first).
 func (m *Mailer) render(ctx context.Context, q *db.Queries, user *recipient, rows []claimedRow,
 	byTicket map[uuid.UUID]db.ListEmailTicketsRow, digest bool) (mail.Message, error) {
-	org, err := q.GetOrganization(ctx)
+	// Every row is about the same organization's tickets: one ticket, or one summary.
+	org, err := q.GetOrganization(ctx, byTicket[rows[0].TicketID].OrganizationID)
 	if err != nil {
 		return mail.Message{}, err
 	}
@@ -586,7 +603,7 @@ func (w *PicEmailWorker) Work(ctx context.Context, job *river.Job[notification.P
 	if err != nil {
 		return err
 	}
-	org, err := q.GetOrganization(ctx)
+	org, err := q.GetOrganization(ctx, c.OrganizationID)
 	if err != nil {
 		return err
 	}
@@ -625,4 +642,12 @@ func slaLine(t db.ListEmailTicketsRow) *mail.SLALineData {
 		Request: ticket.Type(t.Type) == ticket.TypeRequest, TargetValue: eff.Resolution.Value,
 		TargetUnit: string(eff.Resolution.Unit), PauseWaiting: eff.PauseOnWaitingClient, PauseUAT: eff.PauseOnUAT,
 	}
+}
+
+// orgOrNil is nil for jobs queued before organizations existed.
+func orgOrNil(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
 }

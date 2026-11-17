@@ -13,7 +13,7 @@ import (
 )
 
 const getTicketForCode = `-- name: GetTicketForCode :one
-SELECT t.id, t.key, t.status, p.repository_id
+SELECT t.id, t.organization_id, t.key, t.status, p.repository_id
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 WHERE t.id = $1
@@ -21,10 +21,11 @@ FOR UPDATE OF t
 `
 
 type GetTicketForCodeRow struct {
-	ID           uuid.UUID
-	Key          string
-	Status       string
-	RepositoryID *uuid.UUID
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Key            string
+	Status         string
+	RepositoryID   *uuid.UUID
 }
 
 func (q *Queries) GetTicketForCode(ctx context.Context, id uuid.UUID) (GetTicketForCodeRow, error) {
@@ -32,6 +33,7 @@ func (q *Queries) GetTicketForCode(ctx context.Context, id uuid.UUID) (GetTicket
 	var i GetTicketForCodeRow
 	err := row.Scan(
 		&i.ID,
+		&i.OrganizationID,
 		&i.Key,
 		&i.Status,
 		&i.RepositoryID,
@@ -123,9 +125,15 @@ SELECT l.id, l.at, l.ticket_key, (l.ticket_id IS NOT NULL)::boolean AS ticket_fo
 FROM code_event_links l
 JOIN code_events e ON e.id = l.code_event_id
 JOIN repositories r ON r.id = e.repository_id
+WHERE r.organization_id = $1
 ORDER BY l.at DESC, l.id DESC
-LIMIT $1
+LIMIT $2
 `
+
+type ListCodeLogParams struct {
+	OrganizationID uuid.UUID
+	RowLimit       int32
+}
 
 type ListCodeLogRow struct {
 	ID          uuid.UUID
@@ -142,8 +150,8 @@ type ListCodeLogRow struct {
 }
 
 // The latest commits linked to tickets, ignored keys included, for the Integrations page.
-func (q *Queries) ListCodeLog(ctx context.Context, rowLimit int32) ([]ListCodeLogRow, error) {
-	rows, err := q.db.Query(ctx, listCodeLog, rowLimit)
+func (q *Queries) ListCodeLog(ctx context.Context, arg ListCodeLogParams) ([]ListCodeLogRow, error) {
+	rows, err := q.db.Query(ctx, listCodeLog, arg.OrganizationID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -265,8 +273,13 @@ const listTicketsByKeys = `-- name: ListTicketsByKeys :many
 SELECT t.id, t.key, p.repository_id
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
-WHERE t.key = ANY($1::text[])
+WHERE t.organization_id = $1 AND t.key = ANY($2::text[])
 `
+
+type ListTicketsByKeysParams struct {
+	OrganizationID uuid.UUID
+	Keys           []string
+}
 
 type ListTicketsByKeysRow struct {
 	ID           uuid.UUID
@@ -275,8 +288,8 @@ type ListTicketsByKeysRow struct {
 }
 
 // The tickets a delivery names, with the repository their project reads code from.
-func (q *Queries) ListTicketsByKeys(ctx context.Context, keys []string) ([]ListTicketsByKeysRow, error) {
-	rows, err := q.db.Query(ctx, listTicketsByKeys, keys)
+func (q *Queries) ListTicketsByKeys(ctx context.Context, arg ListTicketsByKeysParams) ([]ListTicketsByKeysRow, error) {
+	rows, err := q.db.Query(ctx, listTicketsByKeys, arg.OrganizationID, arg.Keys)
 	if err != nil {
 		return nil, err
 	}
@@ -296,11 +309,16 @@ func (q *Queries) ListTicketsByKeys(ctx context.Context, keys []string) ([]ListT
 }
 
 const ticketKeysExist = `-- name: TicketKeysExist :many
-SELECT key FROM tickets WHERE key = ANY($1::text[])
+SELECT key FROM tickets WHERE organization_id = $1 AND key = ANY($2::text[])
 `
 
-func (q *Queries) TicketKeysExist(ctx context.Context, keys []string) ([]string, error) {
-	rows, err := q.db.Query(ctx, ticketKeysExist, keys)
+type TicketKeysExistParams struct {
+	OrganizationID uuid.UUID
+	Keys           []string
+}
+
+func (q *Queries) TicketKeysExist(ctx context.Context, arg TicketKeysExistParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, ticketKeysExist, arg.OrganizationID, arg.Keys)
 	if err != nil {
 		return nil, err
 	}

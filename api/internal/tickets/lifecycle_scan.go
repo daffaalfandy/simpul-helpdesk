@@ -53,9 +53,10 @@ func LifecycleScanJob() *river.PeriodicJob {
 
 // LifecycleScanner moves tickets past a client deadline, each in its own transaction with its
 // audit entries, SLA replay and notifications, like a change by hand. It reads the candidates
-// without locks and locks only those that are due, re-checking there. One run reads at most
-// lifecycleMaxBatches pages; the next run continues after the last ticket it read and wraps
-// around at the end, so a long tail of tickets that are never due can't starve the rest.
+// without locks and locks only those that are due, re-checking there. Each organization runs on
+// its own calendar. One run reads at most lifecycleMaxBatches pages per organization; the next
+// run continues after the last ticket it read there and wraps around at the end, so a long tail
+// of tickets that are never due can't starve the rest.
 type LifecycleScanner struct {
 	river.WorkerDefaults[LifecycleScanArgs]
 	svc *Service
@@ -63,11 +64,11 @@ type LifecycleScanner struct {
 	now func() time.Time
 
 	mu   sync.Mutex
-	next *uuid.UUID // where the next run starts; nil for the first ticket
+	next map[uuid.UUID]*uuid.UUID // per organization, where the next run starts; nil for the first ticket
 }
 
 func NewLifecycleScanner(svc *Service, log *slog.Logger) *LifecycleScanner {
-	return &LifecycleScanner{svc: svc, log: log, now: time.Now}
+	return &LifecycleScanner{svc: svc, log: log, now: time.Now, next: map[uuid.UUID]*uuid.UUID{}}
 }
 
 // SetClock replaces the scanner's clock (tests).
@@ -77,14 +78,28 @@ func (w *LifecycleScanner) Work(ctx context.Context, _ *river.Job[LifecycleScanA
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	now := w.now()
-	schedules, err := w.svc.sla.Schedules(ctx)
+	orgs, err := w.svc.store.Q().ListOrganizationIDs(ctx)
 	if err != nil {
 		return err
 	}
-	after := w.next
+	for _, org := range orgs {
+		if err := w.scan(ctx, org, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// scan moves one organization's overdue tickets, from where its last run stopped.
+func (w *LifecycleScanner) scan(ctx context.Context, orgID uuid.UUID, now time.Time) error {
+	schedules, err := w.svc.sla.Schedules(ctx, orgID)
+	if err != nil {
+		return err
+	}
+	after := w.next[orgID]
 	for range lifecycleMaxBatches {
 		rows, err := w.svc.store.Q().ListLifecycleCandidates(ctx, db.ListLifecycleCandidatesParams{
-			Statuses: statusStrings(lifecycleStatuses), ChangedBefore: now.Add(-schedules.WorkingDay),
+			OrganizationID: orgID, Statuses: statusStrings(lifecycleStatuses), ChangedBefore: now.Add(-schedules.WorkingDay),
 			After: after, RowLimit: lifecycleBatchSize,
 		})
 		if err != nil {
@@ -101,13 +116,13 @@ func (w *LifecycleScanner) Work(ctx context.Context, _ *river.Job[LifecycleScanA
 			}
 		}
 		if len(rows) < lifecycleBatchSize {
-			w.next = nil // read to the end: the next run starts over
+			delete(w.next, orgID) // read to the end: the next run starts over
 			return nil
 		}
 		last := rows[len(rows)-1].ID
 		after = &last
 	}
-	w.next = after
+	w.next[orgID] = after
 	return nil
 }
 
@@ -143,7 +158,7 @@ func (s *Service) passDeadline(ctx context.Context, schedules sla.Schedules, id 
 			return err // the ticket moved on since it was listed, or its deadline moved
 		}
 		cs := newChangeSet(row.ID)
-		actor := audit.SystemActor(ActorNameLifecycle)
+		actor := audit.SystemActor(ActorNameLifecycle).In(row.OrganizationID)
 		move := statusMove{from: from, to: ticket.StatusClosed, cause: ticket.CauseAutoClosed}
 		if from == ticket.StatusInUAT {
 			eff, _, err := dod.ParseEffective(row.DodConfig, row.DodOverride)

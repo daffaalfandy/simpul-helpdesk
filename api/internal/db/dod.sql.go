@@ -55,7 +55,8 @@ func (q *Queries) DeleteTicketDoDOverride(ctx context.Context, ticketID uuid.UUI
 }
 
 const getTicketForLifecycle = `-- name: GetTicketForLifecycle :one
-SELECT t.id, t.status, t.assignee_id, t.resolved_at, t.status_changed_at, p.dod_config, o.config AS dod_override
+SELECT t.id, t.organization_id, t.status, t.assignee_id, t.resolved_at, t.status_changed_at, p.dod_config,
+       o.config AS dod_override
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
@@ -65,6 +66,7 @@ FOR UPDATE OF t
 
 type GetTicketForLifecycleRow struct {
 	ID              uuid.UUID
+	OrganizationID  uuid.UUID
 	Status          string
 	AssigneeID      *uuid.UUID
 	ResolvedAt      *time.Time
@@ -78,6 +80,7 @@ func (q *Queries) GetTicketForLifecycle(ctx context.Context, id uuid.UUID) (GetT
 	var i GetTicketForLifecycleRow
 	err := row.Scan(
 		&i.ID,
+		&i.OrganizationID,
 		&i.Status,
 		&i.AssigneeID,
 		&i.ResolvedAt,
@@ -151,17 +154,19 @@ SELECT t.id, t.status, t.resolved_at, t.status_changed_at, p.dod_config, o.confi
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
-WHERE t.status = ANY($1::text[]) AND t.status_changed_at <= $2
-  AND ($3::uuid IS NULL OR t.id > $3::uuid)
+WHERE t.organization_id = $1
+  AND t.status = ANY($2::text[]) AND t.status_changed_at <= $3
+  AND ($4::uuid IS NULL OR t.id > $4::uuid)
 ORDER BY t.id
-LIMIT $4
+LIMIT $5
 `
 
 type ListLifecycleCandidatesParams struct {
-	Statuses      []string
-	ChangedBefore time.Time
-	After         *uuid.UUID
-	RowLimit      int32
+	OrganizationID uuid.UUID
+	Statuses       []string
+	ChangedBefore  time.Time
+	After          *uuid.UUID
+	RowLimit       int32
 }
 
 type ListLifecycleCandidatesRow struct {
@@ -178,6 +183,7 @@ type ListLifecycleCandidatesRow struct {
 // real time), with what the deadline is computed from. Read without locks; keyset pages by id.
 func (q *Queries) ListLifecycleCandidates(ctx context.Context, arg ListLifecycleCandidatesParams) ([]ListLifecycleCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, listLifecycleCandidates,
+		arg.OrganizationID,
 		arg.Statuses,
 		arg.ChangedBefore,
 		arg.After,

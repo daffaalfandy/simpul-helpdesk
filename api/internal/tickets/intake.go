@@ -57,18 +57,18 @@ func (s *Service) Intake(ctx context.Context, p *auth.Principal, clientID *uuid.
 		id = *clientID
 	}
 	q := s.store.Q()
-	if _, err := q.GetClient(ctx, db.GetClientParams{ID: id, AgentID: a.scopeAgentID}); err != nil {
+	if _, err := q.GetClient(ctx, db.GetClientParams{ID: id, OrganizationID: a.org, AgentID: a.scopeAgentID}); err != nil {
 		return Intake{}, notFound(err)
 	}
 	out := Intake{ClientID: id}
-	if out.Hours, err = s.sla.BusinessHours(ctx); err != nil {
+	if out.Hours, err = s.sla.BusinessHours(ctx, a.org); err != nil {
 		return Intake{}, err
 	}
 	rows, err := q.ListActiveClientProjects(ctx, id)
 	if err != nil {
 		return Intake{}, err
 	}
-	targets, err := projects.TargetsByProject(ctx, q, nil)
+	targets, err := projects.TargetsByProject(ctx, q, a.org, nil)
 	if err != nil {
 		return Intake{}, err
 	}
@@ -84,7 +84,7 @@ func (s *Service) Intake(ctx context.Context, p *auth.Principal, clientID *uuid.
 		return Intake{}, err
 	}
 	active := true
-	items, err := q.ListCatalogItems(ctx, &active)
+	items, err := q.ListCatalogItems(ctx, db.ListCatalogItemsParams{OrganizationID: a.org, Active: &active})
 	if err != nil {
 		return Intake{}, err
 	}

@@ -84,7 +84,7 @@ func (s *Service) SetAssignee(ctx context.Context, p *auth.Principal, key string
 	if apperr.IsCode(err, apperr.CodeNotFound) {
 		// An agent unlinked from the client just handed on the ticket that kept it in their view:
 		// answer once with the ticket as it now stands.
-		return s.getAs(ctx, p, access{staff: true}, key)
+		return s.getAs(ctx, p, access{org: p.OrganizationID, staff: true}, key)
 	}
 	return t, err
 }
@@ -177,7 +177,7 @@ func lockTicket(ctx context.Context, q *db.Queries, a access, key string) (db.Ge
 		return db.GetTicketForUpdateRow{}, apperr.NotFound()
 	}
 	row, err := q.GetTicketForUpdate(ctx, db.GetTicketForUpdateParams{
-		Key: key, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID,
+		Key: key, OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID,
 	})
 	return row, notFound(err)
 }

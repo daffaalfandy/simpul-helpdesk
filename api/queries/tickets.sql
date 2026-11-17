@@ -1,14 +1,16 @@
--- Scoped queries take scope_client_id (requesters: their client) and scope_agent_id (agents: their
--- assigned clients); both are NULL for supervisors and admins. Only internal/tickets/access.go sets them.
+-- Scoped queries take the organization (always), scope_client_id (requesters: their client) and
+-- scope_agent_id (agents: their assigned clients and tickets); both are NULL for supervisors and
+-- admins. Only internal/tickets/access.go sets them.
 
 -- name: NextTicketNumber :one
 SELECT nextval('ticket_number_seq')::bigint;
 
 -- name: CreateTicket :one
-INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
-                     created_by, project_id, catalog_item_id, subject, description, sla_snapshot)
-VALUES (@number, @key, @type, @status, @priority, @channel, @client_id, @requester_id, sqlc.narg(assignee_id),
-        @created_by, @project_id, sqlc.narg(catalog_item_id), @subject, @description, @sla_snapshot)
+INSERT INTO tickets (organization_id, number, key, type, status, priority, channel, client_id, requester_id,
+                     assignee_id, created_by, project_id, catalog_item_id, subject, description, sla_snapshot)
+VALUES (@organization_id, @number, @key, @type, @status, @priority, @channel, @client_id, @requester_id,
+        sqlc.narg(assignee_id), @created_by, @project_id, sqlc.narg(catalog_item_id), @subject, @description,
+        @sla_snapshot)
 RETURNING id, created_at;
 
 -- name: ListTickets :many
@@ -21,7 +23,8 @@ FROM tickets t
 JOIN clients c ON c.id = t.client_id
 JOIN users r ON r.id = t.requester_id
 LEFT JOIN users a ON a.id = t.assignee_id
-WHERE (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
+WHERE t.organization_id = @organization_id
+  AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
@@ -39,7 +42,7 @@ ORDER BY t.id DESC
 LIMIT @row_limit;
 
 -- name: GetTicket :one
-SELECT t.id, t.key, t.type, t.status, t.priority, t.channel, t.subject, t.description, t.sla_snapshot,
+SELECT t.id, t.organization_id, t.key, t.type, t.status, t.priority, t.channel, t.subject, t.description, t.sla_snapshot,
        t.first_response_at, t.resolved_at, t.closed_at, t.created_at, t.updated_at,
        t.client_id, c.name AS client_name,
        t.requester_id, r.name AS requester_name, r.job_title AS requester_job_title,
@@ -58,6 +61,7 @@ JOIN projects p ON p.id = t.project_id
 LEFT JOIN catalog_items ci ON ci.id = t.catalog_item_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.key = @key
+  AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
@@ -66,7 +70,7 @@ WHERE t.key = @key
 
 -- name: GetTicketForUpdate :one
 -- Locks the ticket only; the project's Definition of Done and the override are read as they are.
-SELECT t.id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
+SELECT t.id, t.organization_id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
        a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
        p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
@@ -74,6 +78,7 @@ LEFT JOIN users a ON a.id = t.assignee_id
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.key = @key
+  AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
@@ -121,10 +126,10 @@ ORDER BY m.created_at, m.id;
 
 -- name: InsertSeedTicket :one
 -- Seed only: explicit number, status and times. Returns no row if the key exists.
-INSERT INTO tickets (number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
+INSERT INTO tickets (organization_id, number, key, type, status, priority, channel, client_id, requester_id, assignee_id,
                      created_by, project_id, catalog_item_id, subject, description, sla_snapshot,
                      first_response_at, resolved_at, closed_at, status_changed_at, created_at, updated_at)
-VALUES (@number, @key, @type, @status, @priority, @channel, @client_id, @requester_id, sqlc.narg(assignee_id),
+VALUES (@organization_id, @number, @key, @type, @status, @priority, @channel, @client_id, @requester_id, sqlc.narg(assignee_id),
         @created_by, @project_id, sqlc.narg(catalog_item_id), @subject, @description, @sla_snapshot,
         sqlc.narg(first_response_at), sqlc.narg(resolved_at), sqlc.narg(closed_at), @status_changed_at,
         @created_at, @updated_at)

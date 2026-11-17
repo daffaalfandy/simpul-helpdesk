@@ -62,7 +62,7 @@ func TestBackfillMovesTicketsToProjects(t *testing.T) {
 	scan(&onlyRequesters, `INSERT INTO clients (name) VALUES ('Only requesters') RETURNING id`)
 	scan(&empty, `INSERT INTO clients (name) VALUES ('Empty') RETURNING id`)
 	scan(&alreadyProject, `INSERT INTO clients (name) VALUES ('Already has a project') RETURNING id`)
-	existing := testdb.Project(t, st, alreadyProject, "e-Office", true)
+	existing := testdb.LegacyProject(t, st, alreadyProject, "e-Office", true)
 
 	var requester, system, item uuid.UUID
 	scan(&requester, `INSERT INTO users (email, name, role, client_id) VALUES ('r@c.test', 'R', 'requester', $1) RETURNING id`, withTickets)

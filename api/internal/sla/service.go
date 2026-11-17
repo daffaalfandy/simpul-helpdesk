@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -41,17 +42,20 @@ type JobInserter interface {
 	InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error)
 }
 
-// RecomputeArgs re-runs every open ticket's SLA clocks on the current calendar (owner, 15 Nov:
-// hours and holiday edits apply to open tickets). Each edit queues its own run: replaying is
-// idempotent, and deduplicating could skip an edit made while a run was already reading.
-type RecomputeArgs struct{}
+// RecomputeArgs re-runs an organization's open tickets' SLA clocks on its current calendar
+// (owner, 15 Nov: hours and holiday edits apply to open tickets). Each edit queues its own run:
+// replaying is idempotent, and deduplicating could skip an edit made while a run was already
+// reading. A job queued before organizations existed has no OrganizationID and runs for all.
+type RecomputeArgs struct {
+	OrganizationID uuid.UUID `json:"organization_id,omitzero"`
+}
 
 // JobKindRecompute is RecomputeArgs' job kind; the worker lives in internal/tickets.
 const JobKindRecompute = "sla_recompute"
 
 func (RecomputeArgs) Kind() string { return JobKindRecompute }
 
-// Service manages the organisation's business hours and holidays. SLA targets live on each
+// Service manages each organization's business hours and holidays. SLA targets live on each
 // project (internal/projects).
 type Service struct {
 	store *store.Store
@@ -61,9 +65,9 @@ type Service struct {
 func NewService(st *store.Store, jobs JobInserter) *Service { return &Service{store: st, jobs: jobs} }
 
 // Recompute queues the clock recompute in the edit's transaction: calendar edits here, and a new
-// organisation time zone (internal/organization).
-func (s *Service) Recompute(ctx context.Context, tx store.Tx) error {
-	_, err := s.jobs.InsertTx(ctx, tx.PG, RecomputeArgs{}, nil)
+// organization time zone (internal/organization).
+func (s *Service) Recompute(ctx context.Context, tx store.Tx, orgID uuid.UUID) error {
+	_, err := s.jobs.InsertTx(ctx, tx.PG, RecomputeArgs{OrganizationID: orgID}, nil)
 	return err
 }
 

@@ -85,6 +85,8 @@ const (
 	CodeCannotChangeSelf          = "cannot_change_self"
 	CodeNotInvited                = "not_invited"
 	CodeSetupClosed               = "setup_closed"
+	CodeTicketPrefixTaken         = "ticket_prefix_taken"
+	CodeOrganizationRequired      = "organization_required"
 )
 
 // Error is a domain error with a stable machine-readable code.
@@ -131,6 +133,11 @@ func InvalidCredentials() *Error {
 // Forbidden means the user is signed in but may not do this.
 func Forbidden() *Error {
 	return &Error{Status: http.StatusForbidden, Code: CodeForbidden, Title: "You don't have access to this"}
+}
+
+// OrganizationRequired means the request needs an organization and the user has none to work in.
+func OrganizationRequired() *Error {
+	return &Error{Status: http.StatusConflict, Code: CodeOrganizationRequired, Title: "Choose an organization first"}
 }
 
 // NotFound means the resource does not exist (or is hidden from the user).

@@ -29,16 +29,17 @@ const causeLoggedByStaff = "logged_by_staff"
 // replaySLA recomputes the ticket's clocks from its history and stores them, in the caller's
 // transaction, with the flags slaengine.MergeFlags decides.
 func (s *Service) replaySLA(ctx context.Context, q *db.Queries, ticketID uuid.UUID, now time.Time) error {
-	schedules, err := sla.LoadSchedules(ctx, q)
+	return ReplaySLA(ctx, q, sla.NewCalendars(), ticketID, now)
+}
+
+// ReplaySLA is replaySLA with the run's calendars, for the scan and the recompute job: each
+// ticket runs on its organization's calendar.
+func ReplaySLA(ctx context.Context, q *db.Queries, cals *sla.Calendars, ticketID uuid.UUID, now time.Time) error {
+	t, err := q.GetTicketForSLA(ctx, ticketID)
 	if err != nil {
 		return err
 	}
-	return ReplaySLA(ctx, q, schedules, ticketID, now)
-}
-
-// ReplaySLA is replaySLA with the calendar already loaded, for the scan and the recompute job.
-func ReplaySLA(ctx context.Context, q *db.Queries, schedules sla.Schedules, ticketID uuid.UUID, now time.Time) error {
-	t, err := q.GetTicketForSLA(ctx, ticketID)
+	schedules, err := cals.For(ctx, q, t.OrganizationID)
 	if err != nil {
 		return err
 	}

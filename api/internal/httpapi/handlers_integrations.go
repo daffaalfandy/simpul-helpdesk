@@ -12,10 +12,11 @@ import (
 )
 
 func (s *server) GetIntegrations(ctx context.Context, _ gen.GetIntegrationsRequestObject) (gen.GetIntegrationsResponseObject, error) {
-	if _, err := auth.Require(ctx, auth.CapSettingsManage); err != nil {
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
+	if err != nil {
 		return nil, err
 	}
-	o, err := s.connector.Overview(ctx)
+	o, err := s.connector.Overview(ctx, p.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -27,11 +28,11 @@ func (s *server) GetIntegrations(ctx context.Context, _ gen.GetIntegrationsReque
 }
 
 func (s *server) CreateRepository(ctx context.Context, req gen.CreateRepositoryRequestObject) (gen.CreateRepositoryResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	r, secret, err := s.connector.Create(ctx, p.AuditActor(), p.UserID, connector.CreateInput{
+	r, secret, err := s.connector.Create(ctx, p.AuditActor(), p.OrganizationID, p.UserID, connector.CreateInput{
 		Provider: gitevent.Provider(req.Body.Provider), URL: req.Body.Url, ProjectIDs: req.Body.ProjectIds,
 	})
 	if err != nil {
@@ -41,11 +42,11 @@ func (s *server) CreateRepository(ctx context.Context, req gen.CreateRepositoryR
 }
 
 func (s *server) UpdateRepository(ctx context.Context, req gen.UpdateRepositoryRequestObject) (gen.UpdateRepositoryResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	r, err := s.connector.SetProjects(ctx, p.AuditActor(), req.RepositoryId, req.Body.ProjectIds)
+	r, err := s.connector.SetProjects(ctx, p.AuditActor(), p.OrganizationID, req.RepositoryId, req.Body.ProjectIds)
 	if err != nil {
 		return nil, err
 	}
@@ -53,11 +54,11 @@ func (s *server) UpdateRepository(ctx context.Context, req gen.UpdateRepositoryR
 }
 
 func (s *server) RotateRepositorySecret(ctx context.Context, req gen.RotateRepositorySecretRequestObject) (gen.RotateRepositorySecretResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	r, secret, err := s.connector.RotateSecret(ctx, p.AuditActor(), req.RepositoryId)
+	r, secret, err := s.connector.RotateSecret(ctx, p.AuditActor(), p.OrganizationID, req.RepositoryId)
 	if err != nil {
 		return nil, err
 	}
@@ -65,11 +66,11 @@ func (s *server) RotateRepositorySecret(ctx context.Context, req gen.RotateRepos
 }
 
 func (s *server) DeleteRepository(ctx context.Context, req gen.DeleteRepositoryRequestObject) (gen.DeleteRepositoryResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.connector.Remove(ctx, p.AuditActor(), req.RepositoryId); err != nil {
+	if err := s.connector.Remove(ctx, p.AuditActor(), p.OrganizationID, req.RepositoryId); err != nil {
 		return nil, err
 	}
 	return gen.DeleteRepository204Response{}, nil
@@ -129,10 +130,11 @@ func webhookHeader(p gen.ReceiveWebhookParams) http.Header {
 }
 
 func (s *server) TestCommitMessage(ctx context.Context, req gen.TestCommitMessageRequestObject) (gen.TestCommitMessageResponseObject, error) {
-	if _, err := auth.Require(ctx, auth.CapSettingsManage); err != nil {
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
+	if err != nil {
 		return nil, err
 	}
-	refs, err := s.connector.TestMessage(ctx, req.Body.Message)
+	refs, err := s.connector.TestMessage(ctx, p.OrganizationID, req.Body.Message)
 	if err != nil {
 		return nil, err
 	}
@@ -144,10 +146,11 @@ func (s *server) TestCommitMessage(ctx context.Context, req gen.TestCommitMessag
 }
 
 func (s *server) ListCodeEvents(ctx context.Context, _ gen.ListCodeEventsRequestObject) (gen.ListCodeEventsResponseObject, error) {
-	if _, err := auth.Require(ctx, auth.CapSettingsManage); err != nil {
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
+	if err != nil {
 		return nil, err
 	}
-	log, err := s.connector.Log(ctx)
+	log, err := s.connector.Log(ctx, p.OrganizationID)
 	if err != nil {
 		return nil, err
 	}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
@@ -20,7 +21,7 @@ import (
 
 func newClient(t *testing.T, e *env, name string) uuid.UUID {
 	t.Helper()
-	id, err := e.st.Q().UpsertClient(context.Background(), name)
+	id, err := e.st.Q().UpsertClient(context.Background(), db.UpsertClientParams{OrganizationID: e.org, Name: name})
 	if err != nil {
 		t.Fatal(err)
 	}

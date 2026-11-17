@@ -26,7 +26,7 @@ const (
 	// GroupWindow is how long changes to one ticket gather before their email goes out, so
 	// a burst of edits sends one email (HANDOFF §9: "about 2 minutes").
 	GroupWindow = 2 * time.Minute
-	// DailyDigestAt is when the daily summary goes out, in the organisation's time zone.
+	// DailyDigestAt is when the daily summary goes out, in the organization's time zone.
 	DailyDigestAt = 8 * time.Hour
 	// ClaimTimeout is how long a send job may hold rows before another job may take them
 	// (a crashed job leaves its claim behind).
@@ -88,7 +88,7 @@ type Pending struct {
 // PlanEmails decides which emails are due now: a ticket email per user and ticket whose oldest
 // row for it has waited GroupWindow, and a summary per hourly or daily user with routine rows
 // from before their latest boundary. Rows not yet due wait for a later run.
-func PlanEmails(rows []Pending, now time.Time, loc *time.Location) ([]TicketEmailArgs, []DigestArgs) {
+func PlanEmails(orgID uuid.UUID, rows []Pending, now time.Time, loc *time.Location) ([]TicketEmailArgs, []DigestArgs) {
 	type pair struct{ user, ticket uuid.UUID }
 	oldest := map[pair]Pending{}
 	var pairs []pair
@@ -113,7 +113,7 @@ func PlanEmails(rows []Pending, now time.Time, loc *time.Location) ([]TicketEmai
 		d, seen := digests[r.UserID]
 		if !seen {
 			digestUsers = append(digestUsers, r.UserID)
-			d = DigestArgs{UserID: r.UserID, Period: period, Before: cutoff}
+			d = DigestArgs{OrganizationID: orgID, UserID: r.UserID, Period: period, Before: cutoff}
 		}
 		if !seen || r.CreatedAt.Before(oldestDigest[r.UserID]) {
 			d.FirstID, oldestDigest[r.UserID] = r.ID, r.CreatedAt

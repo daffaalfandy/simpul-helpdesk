@@ -14,8 +14,8 @@ import (
 
 // SnapshotFor copies the project's current SLA (targets and settings) for storing on a new
 // ticket, so later SLA edits never change it.
-func SnapshotFor(ctx context.Context, q *db.Queries, projectID uuid.UUID) (ticket.SLASnapshot, error) {
-	p, err := projects.Load(ctx, q, projectID)
+func SnapshotFor(ctx context.Context, q *db.Queries, orgID, projectID uuid.UUID) (ticket.SLASnapshot, error) {
+	p, err := projects.Load(ctx, q, orgID, projectID)
 	if err != nil {
 		return ticket.SLASnapshot{}, fmt.Errorf("project SLA: %w", err)
 	}

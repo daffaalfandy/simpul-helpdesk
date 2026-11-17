@@ -72,8 +72,8 @@ func (w *ResetEmailWorker) Work(ctx context.Context, job *river.Job[SendPassword
 		if !IsActive(user.Status) {
 			return nil
 		}
-		org, err := tx.Q.GetOrganization(ctx)
-		if err != nil {
+		org, err := tx.Q.GetFirstOrganization(ctx)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		if err := tx.Q.InvalidateUserResetTokens(ctx, user.ID); err != nil {

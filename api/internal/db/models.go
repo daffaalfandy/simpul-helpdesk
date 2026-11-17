@@ -27,52 +27,57 @@ type Attachment struct {
 }
 
 type AuditLog struct {
-	ID          uuid.UUID
-	At          time.Time
-	ActorKind   string
-	ActorUserID *uuid.UUID
-	ActorName   *string
-	Action      string
-	TargetType  *string
-	TargetID    *uuid.UUID
-	Data        []byte
-	Reason      *string
-	Ip          *netip.Addr
-	RequestID   *string
+	ID             uuid.UUID
+	At             time.Time
+	ActorKind      string
+	ActorUserID    *uuid.UUID
+	ActorName      *string
+	Action         string
+	TargetType     *string
+	TargetID       *uuid.UUID
+	Data           []byte
+	Reason         *string
+	Ip             *netip.Addr
+	RequestID      *string
+	OrganizationID *uuid.UUID
 }
 
 type BusinessHour struct {
-	Weekday     int16
-	OpenMinute  int16
-	CloseMinute int16
+	Weekday        int16
+	OpenMinute     int16
+	CloseMinute    int16
+	OrganizationID uuid.UUID
 }
 
 type CatalogItem struct {
-	ID          uuid.UUID
-	Name        string
-	Description *string
-	SortOrder   int32
-	Active      bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID             uuid.UUID
+	Name           string
+	Description    *string
+	SortOrder      int32
+	Active         bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	OrganizationID uuid.UUID
 }
 
 type Client struct {
-	ID            uuid.UUID
-	Name          string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	ContractNo    *string
-	ContractStart *calendar.Date
-	ContractEnd   *calendar.Date
-	PicName       *string
-	PicEmail      *string
+	ID             uuid.UUID
+	Name           string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	ContractNo     *string
+	ContractStart  *calendar.Date
+	ContractEnd    *calendar.Date
+	PicName        *string
+	PicEmail       *string
+	OrganizationID uuid.UUID
 }
 
 type ClientAgent struct {
-	ClientID  uuid.UUID
-	UserID    uuid.UUID
-	CreatedAt time.Time
+	ClientID       uuid.UUID
+	UserID         uuid.UUID
+	CreatedAt      time.Time
+	OrganizationID uuid.UUID
 }
 
 type CodeEvent struct {
@@ -103,11 +108,19 @@ type CodeEventLink struct {
 }
 
 type Holiday struct {
-	ID        uuid.UUID
-	Date      calendar.Date
-	Name      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID             uuid.UUID
+	Date           calendar.Date
+	Name           string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	OrganizationID uuid.UUID
+}
+
+type Install struct {
+	ID               bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	SetupCompletedAt *time.Time
 }
 
 type LoginAttempt struct {
@@ -148,17 +161,16 @@ type NotificationPreference struct {
 }
 
 type Organization struct {
-	ID               bool
-	Name             string
-	TicketPrefix     string
-	Timezone         string
-	FooterNote       *string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	LogoKey          *string
-	LogoContentType  *string
-	LogoUpdatedAt    *time.Time
-	SetupCompletedAt *time.Time
+	ID              uuid.UUID
+	Name            string
+	TicketPrefix    string
+	Timezone        string
+	FooterNote      *string
+	LogoKey         *string
+	LogoContentType *string
+	LogoUpdatedAt   *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type PasswordResetToken struct {
@@ -171,10 +183,11 @@ type PasswordResetToken struct {
 }
 
 type Priority struct {
-	Code        string
-	Name        string
-	Description string
-	UpdatedAt   time.Time
+	Code           string
+	Name           string
+	Description    string
+	UpdatedAt      time.Time
+	OrganizationID uuid.UUID
 }
 
 type Project struct {
@@ -194,6 +207,7 @@ type Project struct {
 	DodConfig                   []byte
 	AllowTicketOverride         bool
 	RepositoryID                *uuid.UUID
+	OrganizationID              uuid.UUID
 }
 
 type ProjectSlaTarget struct {
@@ -224,6 +238,7 @@ type Repository struct {
 	CreatedBy      uuid.UUID
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	OrganizationID uuid.UUID
 }
 
 type Session struct {
@@ -260,6 +275,7 @@ type Ticket struct {
 	UpdatedAt       time.Time
 	ProjectID       uuid.UUID
 	StatusChangedAt time.Time
+	OrganizationID  uuid.UUID
 }
 
 type TicketDodItem struct {

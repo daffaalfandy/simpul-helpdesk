@@ -101,7 +101,7 @@ func (s *Service) Reopen(ctx context.Context, p *auth.Principal, key string) (Ti
 		from := ticket.Status(row.Status)
 		var until time.Time
 		if row.ResolvedAt != nil {
-			schedules, err := sla.LoadSchedules(ctx, tx.Q)
+			schedules, err := sla.LoadSchedules(ctx, tx.Q, row.OrganizationID)
 			if err != nil {
 				return err
 			}
@@ -134,7 +134,7 @@ func (s *Service) UATRequests(ctx context.Context, p *auth.Principal) ([]UATRequ
 	if err != nil || len(rows) == 0 {
 		return []UATRequest{}, err
 	}
-	schedules, err := s.sla.Schedules(ctx)
+	schedules, err := s.sla.Schedules(ctx, a.org)
 	if err != nil {
 		return nil, err
 	}

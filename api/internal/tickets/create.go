@@ -74,11 +74,11 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 			return err
 		}
 		if in.CatalogItemID != nil {
-			if _, err := tx.Q.GetActiveCatalogItem(ctx, *in.CatalogItemID); err != nil {
+			if _, err := tx.Q.GetActiveCatalogItem(ctx, db.GetActiveCatalogItemParams{ID: *in.CatalogItemID, OrganizationID: a.org}); err != nil {
 				return lookupError(err, apperr.CodeInvalidCatalogItem, "Choose an item from the catalogue")
 			}
 		}
-		snap, err := SnapshotFor(ctx, tx.Q, projectID)
+		snap, err := SnapshotFor(ctx, tx.Q, a.org, projectID)
 		if err != nil {
 			return err
 		}
@@ -97,7 +97,7 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 			}
 			status, assignee = ticket.StatusAfterAssignment(status, true), &me
 		}
-		org, err := tx.Q.GetOrganization(ctx)
+		org, err := tx.Q.GetOrganization(ctx, a.org)
 		if err != nil {
 			return err
 		}
@@ -107,7 +107,7 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 		}
 		key = ticket.FormatKey(org.TicketPrefix, number)
 		params := db.CreateTicketParams{
-			Number: number, Key: key, Type: string(in.Type), Status: string(status),
+			OrganizationID: a.org, Number: number, Key: key, Type: string(in.Type), Status: string(status),
 			Priority: string(in.Priority), Channel: string(in.Channel), ClientID: clientID,
 			RequesterID: requesterID, CreatedBy: p.UserID, ProjectID: projectID,
 			CatalogItemID: in.CatalogItemID, Subject: in.Subject, Description: in.Description,
@@ -182,7 +182,7 @@ func ticketProject(ctx context.Context, q *db.Queries, clientID uuid.UUID, in Cr
 // checkStaffTarget checks an agent may log tickets for the client and that the requester
 // belongs to it and isn't suspended.
 func (s *Service) checkStaffTarget(ctx context.Context, q *db.Queries, a access, clientID, requesterID uuid.UUID) error {
-	if _, err := q.GetClient(ctx, db.GetClientParams{ID: clientID, AgentID: a.scopeAgentID}); err != nil {
+	if _, err := q.GetClient(ctx, db.GetClientParams{ID: clientID, OrganizationID: a.org, AgentID: a.scopeAgentID}); err != nil {
 		return lookupError(err, apperr.CodeClientNotFound, "Choose one of your clients")
 	}
 	r, err := q.GetClientRequester(ctx, db.GetClientRequesterParams{

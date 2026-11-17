@@ -23,20 +23,22 @@ func (q *Queries) CountCatalogItemTickets(ctx context.Context, catalogItemID *uu
 }
 
 const createCatalogItem = `-- name: CreateCatalogItem :one
-INSERT INTO catalog_items (name, description, sort_order, active)
-VALUES ($1, $2, $3, $4)
+INSERT INTO catalog_items (organization_id, name, description, sort_order, active)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id
 `
 
 type CreateCatalogItemParams struct {
-	Name        string
-	Description *string
-	SortOrder   int32
-	Active      bool
+	OrganizationID uuid.UUID
+	Name           string
+	Description    *string
+	SortOrder      int32
+	Active         bool
 }
 
 func (q *Queries) CreateCatalogItem(ctx context.Context, arg CreateCatalogItemParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createCatalogItem,
+		arg.OrganizationID,
 		arg.Name,
 		arg.Description,
 		arg.SortOrder,
@@ -48,25 +50,35 @@ func (q *Queries) CreateCatalogItem(ctx context.Context, arg CreateCatalogItemPa
 }
 
 const deleteCatalogItem = `-- name: DeleteCatalogItem :exec
-DELETE FROM catalog_items WHERE id = $1
+DELETE FROM catalog_items WHERE id = $1 AND organization_id = $2
 `
 
-func (q *Queries) DeleteCatalogItem(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteCatalogItem, id)
+type DeleteCatalogItemParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
+
+func (q *Queries) DeleteCatalogItem(ctx context.Context, arg DeleteCatalogItemParams) error {
+	_, err := q.db.Exec(ctx, deleteCatalogItem, arg.ID, arg.OrganizationID)
 	return err
 }
 
 const getActiveCatalogItem = `-- name: GetActiveCatalogItem :one
-SELECT id, name FROM catalog_items WHERE id = $1 AND active
+SELECT id, name FROM catalog_items WHERE id = $1 AND organization_id = $2 AND active
 `
+
+type GetActiveCatalogItemParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
 
 type GetActiveCatalogItemRow struct {
 	ID   uuid.UUID
 	Name string
 }
 
-func (q *Queries) GetActiveCatalogItem(ctx context.Context, id uuid.UUID) (GetActiveCatalogItemRow, error) {
-	row := q.db.QueryRow(ctx, getActiveCatalogItem, id)
+func (q *Queries) GetActiveCatalogItem(ctx context.Context, arg GetActiveCatalogItemParams) (GetActiveCatalogItemRow, error) {
+	row := q.db.QueryRow(ctx, getActiveCatalogItem, arg.ID, arg.OrganizationID)
 	var i GetActiveCatalogItemRow
 	err := row.Scan(&i.ID, &i.Name)
 	return i, err
@@ -76,8 +88,13 @@ const getCatalogItem = `-- name: GetCatalogItem :one
 SELECT i.id, i.name, i.description, i.sort_order, i.active,
        (SELECT count(*) FROM tickets t WHERE t.catalog_item_id = i.id)::int AS ticket_count
 FROM catalog_items i
-WHERE i.id = $1
+WHERE i.id = $1 AND i.organization_id = $2
 `
+
+type GetCatalogItemParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
 
 type GetCatalogItemRow struct {
 	ID          uuid.UUID
@@ -88,8 +105,8 @@ type GetCatalogItemRow struct {
 	TicketCount int32
 }
 
-func (q *Queries) GetCatalogItem(ctx context.Context, id uuid.UUID) (GetCatalogItemRow, error) {
-	row := q.db.QueryRow(ctx, getCatalogItem, id)
+func (q *Queries) GetCatalogItem(ctx context.Context, arg GetCatalogItemParams) (GetCatalogItemRow, error) {
+	row := q.db.QueryRow(ctx, getCatalogItem, arg.ID, arg.OrganizationID)
 	var i GetCatalogItemRow
 	err := row.Scan(
 		&i.ID,
@@ -103,8 +120,14 @@ func (q *Queries) GetCatalogItem(ctx context.Context, id uuid.UUID) (GetCatalogI
 }
 
 const getCatalogItemForUpdate = `-- name: GetCatalogItemForUpdate :one
-SELECT id, name, description, sort_order, active FROM catalog_items WHERE id = $1 FOR UPDATE
+SELECT id, name, description, sort_order, active FROM catalog_items
+WHERE id = $1 AND organization_id = $2 FOR UPDATE
 `
+
+type GetCatalogItemForUpdateParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
 
 type GetCatalogItemForUpdateRow struct {
 	ID          uuid.UUID
@@ -114,8 +137,8 @@ type GetCatalogItemForUpdateRow struct {
 	Active      bool
 }
 
-func (q *Queries) GetCatalogItemForUpdate(ctx context.Context, id uuid.UUID) (GetCatalogItemForUpdateRow, error) {
-	row := q.db.QueryRow(ctx, getCatalogItemForUpdate, id)
+func (q *Queries) GetCatalogItemForUpdate(ctx context.Context, arg GetCatalogItemForUpdateParams) (GetCatalogItemForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getCatalogItemForUpdate, arg.ID, arg.OrganizationID)
 	var i GetCatalogItemForUpdateRow
 	err := row.Scan(
 		&i.ID,
@@ -131,9 +154,15 @@ const listCatalogItems = `-- name: ListCatalogItems :many
 SELECT i.id, i.name, i.description, i.sort_order, i.active,
        (SELECT count(*) FROM tickets t WHERE t.catalog_item_id = i.id)::int AS ticket_count
 FROM catalog_items i
-WHERE $1::boolean IS NULL OR i.active = $1::boolean
+WHERE i.organization_id = $1
+  AND ($2::boolean IS NULL OR i.active = $2::boolean)
 ORDER BY i.sort_order, lower(i.name)
 `
+
+type ListCatalogItemsParams struct {
+	OrganizationID uuid.UUID
+	Active         *bool
+}
 
 type ListCatalogItemsRow struct {
 	ID          uuid.UUID
@@ -145,8 +174,8 @@ type ListCatalogItemsRow struct {
 }
 
 // active NULL lists every item.
-func (q *Queries) ListCatalogItems(ctx context.Context, active *bool) ([]ListCatalogItemsRow, error) {
-	rows, err := q.db.Query(ctx, listCatalogItems, active)
+func (q *Queries) ListCatalogItems(ctx context.Context, arg ListCatalogItemsParams) ([]ListCatalogItemsRow, error) {
+	rows, err := q.db.Query(ctx, listCatalogItems, arg.OrganizationID, arg.Active)
 	if err != nil {
 		return nil, err
 	}
@@ -175,15 +204,16 @@ func (q *Queries) ListCatalogItems(ctx context.Context, active *bool) ([]ListCat
 const updateCatalogItem = `-- name: UpdateCatalogItem :exec
 UPDATE catalog_items
 SET name = $1, description = $2, sort_order = $3, active = $4
-WHERE id = $5
+WHERE id = $5 AND organization_id = $6
 `
 
 type UpdateCatalogItemParams struct {
-	Name        string
-	Description *string
-	SortOrder   int32
-	Active      bool
-	ID          uuid.UUID
+	Name           string
+	Description    *string
+	SortOrder      int32
+	Active         bool
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
 }
 
 func (q *Queries) UpdateCatalogItem(ctx context.Context, arg UpdateCatalogItemParams) error {
@@ -193,27 +223,34 @@ func (q *Queries) UpdateCatalogItem(ctx context.Context, arg UpdateCatalogItemPa
 		arg.SortOrder,
 		arg.Active,
 		arg.ID,
+		arg.OrganizationID,
 	)
 	return err
 }
 
 const upsertCatalogItemByName = `-- name: UpsertCatalogItemByName :one
-INSERT INTO catalog_items (name, description, sort_order)
-VALUES ($1, $2, $3)
-ON CONFLICT (lower(name)) DO UPDATE
+INSERT INTO catalog_items (organization_id, name, description, sort_order)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (organization_id, lower(name)) DO UPDATE
 SET description = EXCLUDED.description, sort_order = EXCLUDED.sort_order
 RETURNING id
 `
 
 type UpsertCatalogItemByNameParams struct {
-	Name        string
-	Description *string
-	SortOrder   int32
+	OrganizationID uuid.UUID
+	Name           string
+	Description    *string
+	SortOrder      int32
 }
 
 // Seed only.
 func (q *Queries) UpsertCatalogItemByName(ctx context.Context, arg UpsertCatalogItemByNameParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, upsertCatalogItemByName, arg.Name, arg.Description, arg.SortOrder)
+	row := q.db.QueryRow(ctx, upsertCatalogItemByName,
+		arg.OrganizationID,
+		arg.Name,
+		arg.Description,
+		arg.SortOrder,
+	)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err

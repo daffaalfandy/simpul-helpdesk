@@ -35,7 +35,7 @@ func TestLoggedTicketsGetTheirFirstResponse(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO users (email, name, role) VALUES ('a@v.test', 'A', 'agent') RETURNING id`).Scan(&agent); err != nil {
 		t.Fatal(err)
 	}
-	project := testdb.Project(t, st, client, "e-Office", true)
+	project := testdb.LegacyProject(t, st, client, "e-Office", true)
 	created := time.Date(2026, 11, 2, 1, 0, 0, 0, time.UTC)
 	insert := func(number int, channel string, createdBy uuid.UUID) uuid.UUID {
 		t.Helper()

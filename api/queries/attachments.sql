@@ -37,6 +37,7 @@ JOIN tickets t ON t.id = a.ticket_id
 LEFT JOIN ticket_messages m ON m.id = a.message_id
 WHERE a.id = @id
   AND (sqlc.narg(visibility)::text IS NULL OR a.message_id IS NULL OR m.visibility = sqlc.narg(visibility)::text)
+  AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca

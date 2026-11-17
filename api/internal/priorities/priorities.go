@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/google/uuid"
+
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
@@ -44,9 +46,9 @@ type Service struct {
 
 func NewService(st *store.Store) *Service { return &Service{store: st} }
 
-// List returns the four levels, P1 first.
-func (s *Service) List(ctx context.Context) ([]Level, error) {
-	rows, err := s.store.Q().ListPriorityLevels(ctx)
+// List returns the organization's four levels, P1 first.
+func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]Level, error) {
+	rows, err := s.store.Q().ListPriorityLevels(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -58,13 +60,13 @@ func (s *Service) List(ctx context.Context) ([]Level, error) {
 }
 
 // Update replaces every level's name and description. Each changed level gets an audit entry.
-func (s *Service) Update(ctx context.Context, actor audit.Actor, in []Level) ([]Level, error) {
+func (s *Service) Update(ctx context.Context, actor audit.Actor, orgID uuid.UUID, in []Level) ([]Level, error) {
 	levels, err := normalize(in)
 	if err != nil {
 		return nil, err
 	}
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		old, err := tx.Q.ListPriorityLevelsForUpdate(ctx)
+		old, err := tx.Q.ListPriorityLevelsForUpdate(ctx, orgID)
 		if err != nil {
 			return err
 		}
@@ -81,7 +83,7 @@ func (s *Service) Update(ctx context.Context, actor audit.Actor, in []Level) ([]
 				continue
 			}
 			if err := tx.Q.UpdatePriorityLevel(ctx, db.UpdatePriorityLevelParams{
-				Code: string(l.Code), Name: l.Name, Description: l.Description,
+				OrganizationID: orgID, Code: string(l.Code), Name: l.Name, Description: l.Description,
 			}); err != nil {
 				return err
 			}
@@ -95,7 +97,7 @@ func (s *Service) Update(ctx context.Context, actor audit.Actor, in []Level) ([]
 	if err != nil {
 		return nil, err
 	}
-	return s.List(ctx)
+	return s.List(ctx, orgID)
 }
 
 // normalize trims the text and checks there is exactly one level per priority, ordered P1–P4.

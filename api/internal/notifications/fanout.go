@@ -72,7 +72,7 @@ func Fanout(ctx context.Context, q *db.Queries, log *slog.Logger, ticketID uuid.
 	if in.Supervisors, err = supervisorsFor(ctx, q, in); err != nil {
 		return err
 	}
-	if err := clientDeadlines(ctx, q, in.Changes, t.DodConfig, t.DodOverride); err != nil {
+	if err := clientDeadlines(ctx, q, t.OrganizationID, in.Changes, t.DodConfig, t.DodOverride); err != nil {
 		return err
 	}
 	if err := loadRecipients(ctx, q, &in); err != nil {
@@ -198,7 +198,7 @@ func supervisorsFor(ctx context.Context, q *db.Queries, in notification.Input) (
 // clientDeadlines dates the client's deadlines on moves In UAT (when the fix is approved without
 // an answer) and to resolved (until when it can be reopened), as of the change, so the inbox and
 // the email promise the same date. The calendar is read only when a change needs it.
-func clientDeadlines(ctx context.Context, q *db.Queries, changes []notification.Change, projectDoD, override []byte) error {
+func clientDeadlines(ctx context.Context, q *db.Queries, orgID uuid.UUID, changes []notification.Change, projectDoD, override []byte) error {
 	var schedules *sla.Schedules
 	for i := range changes {
 		c := &changes[i]
@@ -206,7 +206,7 @@ func clientDeadlines(ctx context.Context, q *db.Queries, changes []notification.
 			continue
 		}
 		if schedules == nil {
-			s, err := sla.LoadSchedules(ctx, q)
+			s, err := sla.LoadSchedules(ctx, q, orgID)
 			if err != nil {
 				return err
 			}

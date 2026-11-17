@@ -10,10 +10,11 @@ import (
 
 // ListCatalogItems lists every catalogue item, hidden ones included.
 func (s *server) ListCatalogItems(ctx context.Context, _ gen.ListCatalogItemsRequestObject) (gen.ListCatalogItemsResponseObject, error) {
-	if _, err := auth.Require(ctx, auth.CapAgentApp); err != nil {
+	p, err := requireOrg(ctx, auth.CapAgentApp)
+	if err != nil {
 		return nil, err
 	}
-	list, err := s.catalog.ListItems(ctx, false)
+	list, err := s.catalog.ListItems(ctx, p.OrganizationID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -25,11 +26,11 @@ func (s *server) ListCatalogItems(ctx context.Context, _ gen.ListCatalogItemsReq
 }
 
 func (s *server) CreateCatalogItem(ctx context.Context, req gen.CreateCatalogItemRequestObject) (gen.CreateCatalogItemResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	it, err := s.catalog.CreateItem(ctx, p.AuditActor(), itemInput(*req.Body))
+	it, err := s.catalog.CreateItem(ctx, p.AuditActor(), p.OrganizationID, itemInput(*req.Body))
 	if err != nil {
 		return nil, err
 	}
@@ -37,11 +38,11 @@ func (s *server) CreateCatalogItem(ctx context.Context, req gen.CreateCatalogIte
 }
 
 func (s *server) UpdateCatalogItem(ctx context.Context, req gen.UpdateCatalogItemRequestObject) (gen.UpdateCatalogItemResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	it, err := s.catalog.UpdateItem(ctx, p.AuditActor(), req.CatalogItemId, itemInput(*req.Body))
+	it, err := s.catalog.UpdateItem(ctx, p.AuditActor(), p.OrganizationID, req.CatalogItemId, itemInput(*req.Body))
 	if err != nil {
 		return nil, err
 	}
@@ -49,11 +50,11 @@ func (s *server) UpdateCatalogItem(ctx context.Context, req gen.UpdateCatalogIte
 }
 
 func (s *server) DeleteCatalogItem(ctx context.Context, req gen.DeleteCatalogItemRequestObject) (gen.DeleteCatalogItemResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapSettingsManage)
+	p, err := requireOrg(ctx, auth.CapSettingsManage)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.catalog.DeleteItem(ctx, p.AuditActor(), req.CatalogItemId); err != nil {
+	if err := s.catalog.DeleteItem(ctx, p.AuditActor(), p.OrganizationID, req.CatalogItemId); err != nil {
 		return nil, err
 	}
 	return gen.DeleteCatalogItem204Response{}, nil

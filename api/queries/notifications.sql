@@ -1,5 +1,6 @@
 -- name: GetTicketForFanout :one
-SELECT t.id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot, p.dod_config, o.config AS dod_override
+SELECT t.id, t.organization_id, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot, p.dod_config,
+       o.config AS dod_override
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
@@ -41,6 +42,7 @@ JOIN tickets t ON t.id = n.ticket_id
 LEFT JOIN users a ON a.id = n.actor_user_id
 LEFT JOIN ticket_messages m ON m.id = n.message_id
 WHERE n.user_id = @user_id AND n.web
+  AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
@@ -59,6 +61,7 @@ SELECT count(*)::int
 FROM notifications n
 JOIN tickets t ON t.id = n.ticket_id
 WHERE n.user_id = @user_id AND n.web AND n.read_at IS NULL
+  AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
@@ -70,6 +73,7 @@ UPDATE notifications n
 SET read_at = CASE WHEN @read::boolean THEN coalesce(n.read_at, now()) END
 FROM tickets t
 WHERE n.id = @id AND n.user_id = @user_id AND n.web AND t.id = n.ticket_id
+  AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
@@ -81,6 +85,7 @@ UPDATE notifications n
 SET read_at = now()
 FROM tickets t
 WHERE n.user_id = @user_id AND n.web AND n.read_at IS NULL AND t.id = n.ticket_id
+  AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
@@ -106,10 +111,13 @@ SET web = EXCLUDED.web, email = EXCLUDED.email, updated_at = now();
 -- Pending rows whose email is due: ticket emails (instant users, and urgent rows for everyone)
 -- once the row has gathered for the group window, summary rows from before their user's last
 -- boundary. Rows not yet due stay out, so they can never crowd due ones out of the batch.
+-- One organization at a time: summary boundaries follow its time zone.
 SELECT n.id, n.user_id, n.ticket_id, n.urgent, n.created_at, u.email_frequency
 FROM notifications n
 JOIN users u ON u.id = n.user_id
-WHERE n.email AND n.emailed_at IS NULL
+JOIN tickets t ON t.id = n.ticket_id
+WHERE t.organization_id = @organization_id
+  AND n.email AND n.emailed_at IS NULL
   AND (n.email_claimed_at IS NULL OR n.email_claimed_at < @stale_before::timestamptz)
   AND (((n.urgent OR u.email_frequency = @instant::text) AND n.created_at <= @group_cutoff::timestamptz)
     OR (NOT n.urgent AND u.email_frequency = @hourly::text AND n.created_at < @hourly_cutoff::timestamptz)
@@ -129,11 +137,14 @@ WHERE id IN (
 RETURNING id, ticket_id, event_type, actor_user_id, message_id, data, urgent, created_at;
 
 -- name: ClaimDigest :many
--- One user's routine pending rows created before the summary boundary.
+-- One user's routine pending rows created before the summary boundary, about one organization's
+-- tickets (NULL: every organization, for summaries queued before organizations existed).
 UPDATE notifications SET email_claimed_at = now()
 WHERE id IN (
   SELECT n.id FROM notifications n
   WHERE n.user_id = @user_id AND n.email AND n.emailed_at IS NULL AND NOT n.urgent
+    AND (sqlc.narg(organization_id)::uuid IS NULL
+         OR n.ticket_id IN (SELECT t.id FROM tickets t WHERE t.organization_id = sqlc.narg(organization_id)::uuid))
     AND n.created_at < @created_before
     AND (n.email_claimed_at IS NULL OR n.email_claimed_at < @stale_before::timestamptz)
   FOR UPDATE SKIP LOCKED)
@@ -153,8 +164,8 @@ SELECT id, email, name, role, status, client_id, email_frequency FROM users WHER
 -- What an email shows about each ticket, and whether the recipient may still see it (the same
 -- rule as internal/tickets access: all for admins and supervisors, linked clients and tickets
 -- assigned to them for agents, their own client for requesters).
-SELECT t.id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
-       pl.name AS priority_name, p.name AS project_name,
+SELECT t.id, t.organization_id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id,
+       t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
        (u.role = ANY(@all_client_roles::text[])
         OR (u.role = @agent_role AND (t.assignee_id = u.id
                                       OR EXISTS (SELECT 1 FROM client_agents ca
@@ -163,7 +174,7 @@ SELECT t.id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.a
        EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = u.id) AS watching
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
-JOIN priorities pl ON pl.code = t.priority
+JOIN priorities pl ON pl.organization_id = t.organization_id AND pl.code = t.priority
 JOIN users u ON u.id = @user_id
 WHERE t.id = ANY(@ticket_ids::uuid[]);
 
@@ -193,11 +204,11 @@ WHERE ticket_id = ANY(@ticket_ids::uuid[]);
 
 -- name: GetPicEmailContext :one
 -- What the client contact's breach email shows.
-SELECT t.key, t.subject, t.type, t.priority, t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
-       c.name AS client_name, c.pic_name, c.pic_email, s.resolution_breached_at
+SELECT t.organization_id, t.key, t.subject, t.type, t.priority, t.sla_snapshot, pl.name AS priority_name,
+       p.name AS project_name, c.name AS client_name, c.pic_name, c.pic_email, s.resolution_breached_at
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
-JOIN priorities pl ON pl.code = t.priority
+JOIN priorities pl ON pl.organization_id = t.organization_id AND pl.code = t.priority
 JOIN clients c ON c.id = t.client_id
 LEFT JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE t.id = @id;
