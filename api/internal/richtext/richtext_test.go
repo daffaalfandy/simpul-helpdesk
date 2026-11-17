@@ -15,6 +15,8 @@ func TestText(t *testing.T) {
 		{"emphasis marks go", "It is **really** _down_ ~~again~~", "It is really down again"},
 		{"inline code keeps text", "Run `make seed` first", "Run make seed first"},
 		{"bullets", "Steps:\n\n- open\n- click", "Steps:\n\n- open\n- click"},
+		{"paragraph after a list", "- open\n- click\n\nThen wait.", "- open\n- click\n\nThen wait."},
+		{"nested list", "- a\n  - b\n- c", "- a\n- b\n- c"},
 		{"numbered from start", "3. third\n4. fourth", "3. third\n4. fourth"},
 		{"link keeps label", "See [the log](https://example.com/log)", "See the log"},
 		{"image keeps alt", "Look ![a screenshot](https://example.com/a.png) here", "Look a screenshot here"},

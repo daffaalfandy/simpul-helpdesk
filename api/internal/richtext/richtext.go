@@ -133,6 +133,11 @@ func writeExit(b *strings.Builder, n ast.Node) {
 		} else {
 			b.WriteString(blockBreak)
 		}
+	case *ast.List:
+		// Its items end in a line break; a top-level list also ends its block.
+		if _, nested := n.Parent().(*ast.ListItem); !nested {
+			b.WriteString(lineBreak)
+		}
 	case *east.TableHeader, *east.TableRow:
 		b.WriteString(lineBreak)
 	case *east.TableCell:
