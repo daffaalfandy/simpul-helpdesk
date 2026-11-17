@@ -13,6 +13,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
@@ -72,9 +73,13 @@ func (w *ResetEmailWorker) Work(ctx context.Context, job *river.Job[SendPassword
 		if !IsActive(user.Status) {
 			return nil
 		}
-		org, err := tx.Q.GetFirstOrganization(ctx)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return err
+		// An account isn't one organization's: requesters see their client's vendor, everyone
+		// else the product.
+		org := db.GetOrganizationRow{Name: organization.ProductName}
+		if user.ClientOrganizationID != nil {
+			if org, err = tx.Q.GetOrganization(ctx, *user.ClientOrganizationID); err != nil {
+				return err
+			}
 		}
 		if err := tx.Q.InvalidateUserResetTokens(ctx, user.ID); err != nil {
 			return err

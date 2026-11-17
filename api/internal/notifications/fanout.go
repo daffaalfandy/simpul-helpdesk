@@ -75,7 +75,7 @@ func Fanout(ctx context.Context, q *db.Queries, log *slog.Logger, ticketID uuid.
 	if err := clientDeadlines(ctx, q, t.OrganizationID, in.Changes, t.DodConfig, t.DodOverride); err != nil {
 		return err
 	}
-	if err := loadRecipients(ctx, q, &in); err != nil {
+	if err := loadRecipients(ctx, q, t.OrganizationID, &in); err != nil {
 		return err
 	}
 	deliveries, dropped := notification.Route(in)
@@ -103,7 +103,7 @@ func Fanout(ctx context.Context, q *db.Queries, log *slog.Logger, ticketID uuid.
 }
 
 // loadRecipients fills in who everyone named in the input is and what they chose to hear.
-func loadRecipients(ctx context.Context, q *db.Queries, in *notification.Input) error {
+func loadRecipients(ctx context.Context, q *db.Queries, orgID uuid.UUID, in *notification.Input) error {
 	ids := []uuid.UUID{in.Requester}
 	add := func(id *uuid.UUID) {
 		if id != nil {
@@ -123,15 +123,19 @@ func loadRecipients(ctx context.Context, q *db.Queries, in *notification.Input) 
 			add(&c.AssigneeOut.ID)
 		}
 	}
-	users, err := q.ListNotifyRecipients(ctx, ids)
+	users, err := q.ListNotifyRecipients(ctx, db.ListNotifyRecipientsParams{
+		Ids: ids, StaffRole: string(auth.RoleStaff), OrganizationID: orgID,
+	})
 	if err != nil {
 		return err
 	}
 	in.Users = make(map[uuid.UUID]notification.Recipient, len(users))
 	for _, u := range users {
 		in.Users[u.ID] = notification.Recipient{
-			Staff:     auth.Role(u.Role) != auth.RoleRequester,
-			Suspended: auth.UserStatus(u.Status) == auth.UserStatusSuspended,
+			Staff: auth.Role(u.Role) != auth.RoleRequester,
+			// Staff who left the ticket's organization hear nothing more about it, like a
+			// suspended account.
+			Suspended: auth.UserStatus(u.Status) == auth.UserStatusSuspended || !u.InOrganization,
 		}
 	}
 	if in.Actor != nil {

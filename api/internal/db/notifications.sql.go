@@ -694,18 +694,30 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 }
 
 const listNotifyRecipients = `-- name: ListNotifyRecipients :many
-SELECT id, role, status FROM users WHERE id = ANY($1::uuid[])
+SELECT u.id, u.role, u.status,
+       (u.role <> $1
+        OR EXISTS (SELECT 1 FROM organization_members m
+                   WHERE m.user_id = u.id AND m.organization_id = $2))::boolean AS in_organization
+FROM users u WHERE u.id = ANY($3::uuid[])
 `
 
-type ListNotifyRecipientsRow struct {
-	ID     uuid.UUID
-	Role   string
-	Status string
+type ListNotifyRecipientsParams struct {
+	StaffRole      string
+	OrganizationID uuid.UUID
+	Ids            []uuid.UUID
 }
 
-// What the router needs about each user a change may concern.
-func (q *Queries) ListNotifyRecipients(ctx context.Context, ids []uuid.UUID) ([]ListNotifyRecipientsRow, error) {
-	rows, err := q.db.Query(ctx, listNotifyRecipients, ids)
+type ListNotifyRecipientsRow struct {
+	ID             uuid.UUID
+	Role           string
+	Status         string
+	InOrganization bool
+}
+
+// What the router needs about each user a change may concern, and whether they still work in
+// the ticket's organization (administrators always do; staff while they are members).
+func (q *Queries) ListNotifyRecipients(ctx context.Context, arg ListNotifyRecipientsParams) ([]ListNotifyRecipientsRow, error) {
+	rows, err := q.db.Query(ctx, listNotifyRecipients, arg.StaffRole, arg.OrganizationID, arg.Ids)
 	if err != nil {
 		return nil, err
 	}
@@ -713,7 +725,12 @@ func (q *Queries) ListNotifyRecipients(ctx context.Context, ids []uuid.UUID) ([]
 	items := []ListNotifyRecipientsRow{}
 	for rows.Next() {
 		var i ListNotifyRecipientsRow
-		if err := rows.Scan(&i.ID, &i.Role, &i.Status); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Role,
+			&i.Status,
+			&i.InOrganization,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

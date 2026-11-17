@@ -36,9 +36,13 @@ const (
 
 // SendInviteArgs queues an invite email. Like resets, the worker mints the token, so it never
 // sits in job args.
+//
+// OrganizationID is where the invite comes from: its name and logo brand the email. Jobs
+// queued before organizations existed have none and use the first organization.
 type SendInviteArgs struct {
-	UserID    uuid.UUID  `json:"user_id"`
-	InvitedBy *uuid.UUID `json:"invited_by,omitempty"`
+	OrganizationID uuid.UUID  `json:"organization_id,omitzero"`
+	UserID         uuid.UUID  `json:"user_id"`
+	InvitedBy      *uuid.UUID `json:"invited_by,omitempty"`
 }
 
 func (SendInviteArgs) Kind() string { return JobKindInvite }
@@ -79,11 +83,10 @@ func (w *InviteEmailWorker) Work(ctx context.Context, job *river.Job[SendInviteA
 		if UserStatus(user.Status) != UserStatusInvited {
 			return nil
 		}
-		first, err := tx.Q.GetFirstOrganization(ctx)
+		org, err := inviteOrganization(ctx, tx.Q, job.Args.OrganizationID)
 		if err != nil {
 			return err
 		}
-		org := db.GetOrganizationRow(first)
 		inviter := ""
 		if job.Args.InvitedBy != nil {
 			by, err := tx.Q.GetUserByID(ctx, *job.Args.InvitedBy)
@@ -135,8 +138,8 @@ func InviteLink(appURL *url.URL, rawToken string) string {
 
 // QueueInvite sends a user their invite from inside the transaction that created or changed
 // them. by is the admin who asked; nil for the system.
-func (s *Service) QueueInvite(ctx context.Context, tx store.Tx, userID uuid.UUID, by *uuid.UUID) error {
-	if _, err := s.jobs.InsertTx(ctx, tx.PG, SendInviteArgs{UserID: userID, InvitedBy: by}, nil); err != nil {
+func (s *Service) QueueInvite(ctx context.Context, tx store.Tx, orgID, userID uuid.UUID, by *uuid.UUID) error {
+	if _, err := s.jobs.InsertTx(ctx, tx.PG, SendInviteArgs{OrganizationID: orgID, UserID: userID, InvitedBy: by}, nil); err != nil {
 		return fmt.Errorf("enqueue invite email: %w", err)
 	}
 	return nil
@@ -214,4 +217,14 @@ func principalOf(ctx context.Context, q *db.Queries, u db.GetUserByIDRow) (*Prin
 	}
 	err := resolveOrganization(ctx, q, p, account{role: Role(u.Role), clientOrg: u.ClientOrganizationID, lastOrg: u.LastOrganizationID})
 	return p, err
+}
+
+// inviteOrganization brands an invite: the organization it comes from, or the first one for jobs
+// queued before organizations existed.
+func inviteOrganization(ctx context.Context, q *db.Queries, orgID uuid.UUID) (db.GetOrganizationRow, error) {
+	if orgID != uuid.Nil {
+		return q.GetOrganization(ctx, orgID)
+	}
+	first, err := q.GetFirstOrganization(ctx)
+	return db.GetOrganizationRow(first), err
 }

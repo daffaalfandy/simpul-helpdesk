@@ -7,8 +7,13 @@ LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.id = @id;
 
 -- name: ListNotifyRecipients :many
--- What the router needs about each user a change may concern.
-SELECT id, role, status FROM users WHERE id = ANY(@ids::uuid[]);
+-- What the router needs about each user a change may concern, and whether they still work in
+-- the ticket's organization (administrators always do; staff while they are members).
+SELECT u.id, u.role, u.status,
+       (u.role <> @staff_role
+        OR EXISTS (SELECT 1 FROM organization_members m
+                   WHERE m.user_id = u.id AND m.organization_id = @organization_id))::boolean AS in_organization
+FROM users u WHERE u.id = ANY(@ids::uuid[]);
 
 -- name: ListNotificationPreferences :many
 SELECT user_id, event_type, web, email

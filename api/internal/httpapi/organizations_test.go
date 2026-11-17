@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -189,4 +190,45 @@ func TestSettingsStayInTheirOrganization(t *testing.T) {
 		gen.ClientAgentsInput{UserIds: []uuid.UUID{te.agentID}}), http.StatusBadRequest, apperr.CodeInvalidAgent)
 	// Same client name, another organization: allowed.
 	decode[gen.Client](t, te.admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "Bappeda Riau"}), http.StatusCreated)
+}
+
+// Someone who leaves an organization stops hearing about its tickets, even one still assigned
+// to them.
+func TestNoNotificationsAfterLeavingTheOrganization(t *testing.T) {
+	te := newTicketEnv(t)
+	tk := te.requester.report(t, incident(te.projectA, "Printer offline"))
+	decode[gen.Ticket](t, te.admin.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	te.fanout(t)
+	if err := te.st.Q().DeleteMembership(context.Background(), db.DeleteMembershipParams{UserID: te.agentID, OrganizationID: te.org}); err != nil {
+		t.Fatal(err)
+	}
+	before := len(te.notices(t, tk.Id))
+	decode[gen.TicketMessage](t, te.requester.message(tk.Key, gen.MessageVisibilityPublic, "Still broken"), http.StatusCreated)
+	te.fanout(t)
+	for _, n := range te.notices(t, tk.Id)[before:] {
+		if n.user == te.agentID {
+			t.Fatalf("former member notified: %+v", n)
+		}
+	}
+}
+
+// An invite carries the name of the organization it comes from.
+func TestInviteNamesTheOrganization(t *testing.T) {
+	e := newEnv(t)
+	b := e.secondOrganization(t, "PT Mitra Data", "MD")
+	const addr = "putri@example.test"
+	if rec := e.as(auth.RoleAdmin).in(b).do(http.MethodPost, "/members", gen.MemberInvite{Email: addr, Name: "Putri", Role: gen.StaffRoleAgent}); rec.Code != http.StatusCreated {
+		t.Fatalf("invite: %d %s", rec.Code, rec.Body)
+	}
+	e.inviteToken(t, addr)
+	for _, m := range e.mailer.Messages() {
+		if m.To == addr && !strings.Contains(m.Subject, "PT Mitra Data") {
+			t.Fatalf("invite subject = %q", m.Subject)
+		}
+	}
+	// They joined the organization that invited them, not the first one.
+	r := e.acceptInvite(e.inviteToken(t, addr), invitePassword)
+	if r.code != http.StatusOK || !strings.Contains(r.body, `"name":"PT Mitra Data"`) {
+		t.Fatalf("accept: %d %s", r.code, r.body)
+	}
 }

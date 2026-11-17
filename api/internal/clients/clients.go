@@ -91,7 +91,7 @@ type Service struct {
 // Inviter emails a new user the link to set their password, from inside the transaction that
 // created them (auth.Service).
 type Inviter interface {
-	QueueInvite(ctx context.Context, tx store.Tx, userID uuid.UUID, by *uuid.UUID) error
+	QueueInvite(ctx context.Context, tx store.Tx, orgID, userID uuid.UUID, by *uuid.UUID) error
 }
 
 func NewService(st *store.Store, inviter Inviter) *Service {

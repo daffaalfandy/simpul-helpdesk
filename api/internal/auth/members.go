@@ -151,7 +151,7 @@ func (s *Service) InviteMember(ctx context.Context, actor *Principal, orgID uuid
 		if err := audit.Write(ctx, tx.Q, actor.AuditActor().Entry(ActionUserInvited, TargetUser, &id, map[string]any{auditDataRole: in.Role})); err != nil {
 			return err
 		}
-		return s.QueueInvite(ctx, tx, id, &actor.UserID)
+		return s.QueueInvite(ctx, tx, orgID, id, &actor.UserID)
 	})
 	return id, err
 }
@@ -298,7 +298,7 @@ func (s *Service) ResendInvite(ctx context.Context, actor *Principal, orgID, id 
 		if UserStatus(u.Status) != UserStatusInvited {
 			return "", nil, apperr.Conflict(apperr.CodeNotInvited, "This person has already set their password", "")
 		}
-		return ActionInviteSent, nil, s.QueueInvite(ctx, tx, id, &actor.UserID)
+		return ActionInviteSent, nil, s.QueueInvite(ctx, tx, orgID, id, &actor.UserID)
 	})
 }
 

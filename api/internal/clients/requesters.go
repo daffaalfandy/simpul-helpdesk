@@ -114,7 +114,7 @@ func (s *Service) InviteRequester(ctx context.Context, p *auth.Principal, client
 		})); err != nil {
 			return err
 		}
-		return s.inviter.QueueInvite(ctx, tx, id, &p.UserID)
+		return s.inviter.QueueInvite(ctx, tx, p.OrganizationID, id, &p.UserID)
 	})
 	if store.IsViolation(err, store.SQLStateUniqueViolation, constraintUserEmail) {
 		return Requester{}, apperr.Conflict(apperr.CodeEmailTaken, "Someone already uses this email address", "")
