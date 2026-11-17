@@ -99,3 +99,15 @@ func (s *server) ResendInvite(ctx context.Context, req gen.ResendInviteRequestOb
 	}
 	return gen.ResendInvite204Response{}, nil
 }
+
+// CompleteSetup is first-run setup: it names the organisation and signs its first admin in.
+func (s *server) CompleteSetup(ctx context.Context, req gen.CompleteSetupRequestObject) (gen.CompleteSetupResponseObject, error) {
+	p, sess, err := s.auth.Setup(ctx, auth.SetupInput{
+		OrganizationName: req.Body.OrganizationName, Name: req.Body.Name, Email: req.Body.Email, Password: req.Body.Password,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cookie := s.sessionCookie(sess.Token, sess.CookieExpires).String()
+	return gen.CompleteSetup200JSONResponse{Body: meFrom(p), Headers: gen.CompleteSetup200ResponseHeaders{SetCookie: &cookie}}, nil
+}

@@ -1,10 +1,15 @@
 import '@testing-library/jest-dom/vitest'
 import '../i18n'
 
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 
 import { resetApi, server } from './server'
+
+// A file's first render loads its routes cold; with every file running in parallel that can
+// take longer than Testing Library's 1 s default for findBy and waitFor.
+const ASYNC_UTIL_TIMEOUT_MS = 3000
+configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS })
 
 // Any API call without a handler fails the test.
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))

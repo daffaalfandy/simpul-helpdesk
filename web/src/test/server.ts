@@ -64,6 +64,7 @@ export const state: {
   forgotRequests: string[]
   resetBodies: unknown[]
   acceptBodies: unknown[]
+  setupBodies: unknown[]
   orgBodies: unknown[]
 } = {
   me: null,
@@ -71,6 +72,7 @@ export const state: {
   forgotRequests: [],
   resetBodies: [],
   acceptBodies: [],
+  setupBodies: [],
   orgBodies: [],
 }
 
@@ -80,6 +82,7 @@ export function resetApi() {
   state.forgotRequests = []
   state.resetBodies = []
   state.acceptBodies = []
+  state.setupBodies = []
   state.orgBodies = []
   resetSettings()
   resetMembers()
@@ -133,6 +136,14 @@ const handlers = [
     return body.token === 'valid-token-0123456789abcdef'
       ? new HttpResponse(null, { status: 204 })
       : problem(400, 'invalid_token')
+  }),
+  http.post('*/api/v1/setup', async ({ request }) => {
+    const body = (await request.json()) as { organizationName: string; name: string; email: string }
+    state.setupBodies.push(body)
+    if (!state.org.setupRequired) return problem(409, 'setup_closed')
+    state.org = { ...state.org, name: body.organizationName, setupRequired: false }
+    state.me = { id: '01a1cedf-0000-7000-8000-0000000000f1', email: body.email, name: body.name, role: 'admin' }
+    return HttpResponse.json(state.me)
   }),
   http.post('*/api/v1/auth/invite/accept', async ({ request }) => {
     const body = (await request.json()) as { token: string }

@@ -180,3 +180,35 @@ describe('accepting an invite', () => {
     expect(await screen.findByText('Open this page from the link in your invitation email.')).toBeInTheDocument()
   })
 })
+
+describe('first-run setup', () => {
+  it('sends people to setup until the first administrator exists', async () => {
+    state.org = { ...state.org, setupRequired: true }
+    const { router } = renderApp('/board')
+    expect(await screen.findByRole('heading', { name: 'Set up SimDesk' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/setup')
+  })
+
+  it('names the organisation, creates the administrator and opens Settings › General', async () => {
+    state.org = { ...state.org, setupRequired: true }
+    const { router } = renderApp('/login')
+    const user = userEvent.setup()
+    await user.type(await screen.findByLabelText('Organisation name'), 'PT Vendor Teknologi')
+    await user.type(screen.getByLabelText('Your name'), 'Dewi Wulandari')
+    await user.type(screen.getByLabelText('Work email'), 'dewi@vendor.test')
+    await user.type(screen.getByLabelText('Password'), 'brand-new-password')
+    await user.type(screen.getByLabelText('Repeat password'), 'brand-new-password')
+    await user.click(screen.getByRole('button', { name: 'Create administrator and sign in' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/general'))
+    expect(state.setupBodies).toEqual([
+      { organizationName: 'PT Vendor Teknologi', name: 'Dewi Wulandari', email: 'dewi@vendor.test', password: 'brand-new-password' },
+    ])
+    expect(await screen.findByRole('link', { name: /PT Vendor Teknologi/ })).toBeInTheDocument()
+  })
+
+  it('is closed once the install is set up', async () => {
+    const { router } = renderApp('/setup')
+    expect(await screen.findByRole('heading', { name: 'Sign in to Demo Vendor' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/login')
+  })
+})

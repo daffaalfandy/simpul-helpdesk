@@ -163,6 +163,19 @@ export function useAcceptInvite() {
   })
 }
 
+/** First-run setup signs the new administrator in and renames the organisation. */
+export function useCompleteSetup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { organizationName: string; name: string; email: string; password: string }) =>
+      unwrap(api.POST('/setup', { body })),
+    onSuccess: async (me) => {
+      queryClient.setQueryData(queryKeys.me, me)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.organization })
+    },
+  })
+}
+
 export function useResetPassword() {
   const queryClient = useQueryClient()
   return useMutation({

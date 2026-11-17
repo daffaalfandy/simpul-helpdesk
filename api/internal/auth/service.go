@@ -414,10 +414,17 @@ func (s *Service) CreateUser(ctx context.Context, in NewUser) (uuid.UUID, error)
 		if err != nil {
 			return err
 		}
-		return audit.Write(ctx, tx.Q, audit.Entry{
+		if err := audit.Write(ctx, tx.Q, audit.Entry{
 			ActorKind: audit.ActorSystem, ActorName: audit.ActorNameCLI, Action: ActionUserCreated,
 			TargetType: TargetUser, TargetID: &id, Data: map[string]any{auditDataRole: in.Role},
-		})
+		}); err != nil {
+			return err
+		}
+		// The first administrator, from the CLI, closes first-run setup as the form would.
+		if in.Role == RoleAdmin {
+			return tx.Q.CompleteSetup(ctx)
+		}
+		return nil
 	})
 	return id, err
 }

@@ -80,6 +80,15 @@
     "missingToken": "Open this page from the link in your invitation email.",
     "invalidToken": "This invitation link is invalid, already used or has expired. Ask your administrator to send a new one."
   },
+  "setup": {
+    "title": "Set up SimDesk",
+    "intro": "Name your organisation and create the first administrator. This page works once; after that, everyone signs in.",
+    "organization": "Organisation name",
+    "organizationHint": "Your company, as clients see it on the portal and in emails. You can change it later.",
+    "name": "Your name",
+    "nameRequired": "Enter your name.",
+    "submit": "Create administrator and sign in"
+  },
   "nav": {
     "main": "Main",
     "board": "Board",
@@ -951,7 +960,9 @@
     "invalid_role": "Choose administrator, supervisor or agent.",
     "last_admin": "Keep at least one active administrator.",
     "cannot_change_self": "You can’t change your own role or suspend yourself. Ask another administrator.",
-    "not_invited": "This person has already set their password, so there is no invite to resend."
+    "not_invited": "This person has already set their password, so there is no invite to resend.",
+    "setup_closed": "This install is already set up. Sign in instead.",
+    "weak_password": "Choose a password of at least 10 characters."
   },
   "time": {
     "justNow": "Just now",

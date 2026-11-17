@@ -2,15 +2,25 @@ import type { QueryClient } from '@tanstack/react-query'
 import { redirect, type ParsedLocation } from '@tanstack/react-router'
 
 import type { Me, Role } from '../api/client'
-import { meQueryOptions } from '../api/queries'
+import { meQueryOptions, organizationQueryOptions } from '../api/queries'
 import { paths } from './constants'
 import { homePathFor } from './roles'
 
-/** Returns the signed-in user or redirects to sign-in, remembering where they were going. */
+/**
+ * Returns the signed-in user or redirects to sign-in, remembering where they were going. On a
+ * fresh install nobody can sign in yet, so it sends people to first-run setup instead.
+ */
 export async function requireUser(queryClient: QueryClient, location: ParsedLocation): Promise<Me> {
   const me = await queryClient.ensureQueryData(meQueryOptions)
-  if (!me) throw redirect({ to: paths.login, search: { redirect: location.href } })
-  return me
+  if (me) return me
+  await redirectToSetupIfOpen(queryClient)
+  throw redirect({ to: paths.login, search: { redirect: location.href } })
+}
+
+/** Sends people to first-run setup while the install has no administrator. */
+export async function redirectToSetupIfOpen(queryClient: QueryClient): Promise<void> {
+  const org = await queryClient.ensureQueryData(organizationQueryOptions)
+  if (org.setupRequired) throw redirect({ to: paths.setup })
 }
 
 /** Sends users who may not see a page to their own start page. */

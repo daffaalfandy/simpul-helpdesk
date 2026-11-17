@@ -167,6 +167,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * First-run setup - name the organisation and create the first administrator
+         * @description Open only until setup completes (`setupRequired` on `GET /organization`): this form or
+         *     `simdesk user create --role admin` closes it for good. The new administrator is signed
+         *     in. Error codes are `setup_closed` (409), `invalid_organization`, `invalid_name`,
+         *     `invalid_email`, `weak_password`, `email_taken` (409) and `rate_limited` (429).
+         */
+        post: operations["completeSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/members": {
         parameters: {
             query?: never;
@@ -2673,6 +2696,13 @@ export interface components {
             token: string;
             password: string;
         };
+        SetupRequest: {
+            /** @example PT Vendor Teknologi */
+            organizationName: string;
+            name: string;
+            email: string;
+            password: string;
+        };
         /**
          * @description The team's roles; client staff (requester) are invited on their client.
          * @enum {string}
@@ -3032,6 +3062,36 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    completeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Set up and signed in. The session cookie is set. */
+            200: {
+                headers: {
+                    /** @description Session cookie (HttpOnly, SameSite=Lax). */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["Problem"];
         };
