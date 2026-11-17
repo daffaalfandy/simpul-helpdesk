@@ -50,7 +50,7 @@ describe('Settings › General › Organisation', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Organisation saved.')
     expect(state.orgBodies).toEqual([{ name: 'PT Vendor Teknologi', ticketPrefix: 'OPS', timezone: 'Asia/Makassar' }])
     // The header reads the saved organisation at once.
-    expect(screen.getByRole('link', { name: /PT Vendor Teknologi/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Switch organization, now PT Vendor Teknologi' })).toBeInTheDocument()
   })
 
   it('refuses a prefix that is not a letter then letters or digits', async () => {

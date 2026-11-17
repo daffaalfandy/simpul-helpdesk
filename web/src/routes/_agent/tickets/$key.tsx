@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
 
-import { attachmentPolicyQueryOptions, loadOrNotFound, organizationQueryOptions } from '../../../api/queries'
+import { attachmentPolicyQueryOptions, loadOrNotFound, organizationElsewhere, organizationQueryOptions } from '../../../api/queries'
 import { AgentTicketPage } from '../../../features/tickets/AgentTicketPage'
 import { ticketMessagesQueryOptions, ticketQueryOptions } from '../../../features/tickets/queries'
 import { TicketNotFound } from '../../../features/tickets/TicketNotFound'
@@ -19,7 +19,7 @@ export const Route = createFileRoute('/_agent/tickets/$key')({
     return { key }
   },
   component: AgentTicketRoute,
-  notFoundComponent: () => <TicketNotFound audience="agent" />,
+  notFoundComponent: ({ data }) => <TicketNotFound audience="agent" organizationId={organizationElsewhere(data)} />,
 })
 
 function AgentTicketRoute() {

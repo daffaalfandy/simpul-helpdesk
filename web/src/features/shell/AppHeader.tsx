@@ -2,10 +2,10 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { Me, Organization } from '../../api/client'
-import { BrandMark } from '../../components/Logo'
-import { BRAND_NAME, paths } from '../../lib/constants'
+import { paths } from '../../lib/constants'
 import { can } from '../../lib/roles'
 import { NotificationBell } from '../notifications/NotificationBell'
+import { OrganizationSwitcher } from './OrganizationSwitcher'
 import { UserMenu } from './UserMenu'
 
 const navLink =
@@ -25,13 +25,7 @@ export function AppHeader({ me, org }: { me: Me; org?: Organization }) {
   return (
     <header className="border-b border-border bg-surface">
       <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-7">
-        <Link to={paths.board} className="flex items-center gap-2.5 text-ink no-underline hover:text-ink">
-          <BrandMark />
-          <span className="flex flex-col">
-            <span className="text-md font-extrabold">{BRAND_NAME}</span>
-            <span className="text-xs text-muted">{t('agent.organization', { org: org?.name ?? '' })}</span>
-          </span>
-        </Link>
+        <OrganizationSwitcher me={me} org={org} />
         <nav aria-label={t('nav.main')} className="flex flex-wrap gap-1 rounded-lg bg-tint p-1">
           {items.map((item) => (
             <Link key={item.to} to={item.to} className={navLink}>

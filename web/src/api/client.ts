@@ -1,5 +1,6 @@
 import createClient from 'openapi-fetch'
 
+import { withOrganization } from './organization'
 import type { components, paths } from './schema.gen'
 
 export const API_BASE_PATH = '/api/v1'
@@ -144,6 +145,8 @@ export const ErrorCode = {
   CannotChangeSelf: 'cannot_change_self',
   NotInvited: 'not_invited',
   SetupClosed: 'setup_closed',
+  OrganizationRequired: 'organization_required',
+  OtherOrganization: 'other_organization',
 } as const
 
 export const HttpStatus = {
@@ -178,3 +181,4 @@ export const api = createClient<paths>({
   baseUrl: new URL(API_BASE_PATH, window.location.origin).toString(),
   fetch: (request) => globalThis.fetch(request),
 })
+api.use({ onRequest: ({ request }) => withOrganization(request) })

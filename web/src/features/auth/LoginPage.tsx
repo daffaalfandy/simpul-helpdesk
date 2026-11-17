@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Form } from 'react-aria-components'
@@ -10,25 +10,19 @@ import { Alert } from '../../components/Alert'
 import { Button } from '../../components/Button'
 import { TextInput } from '../../components/TextInput'
 import { BRAND_NAME, paths, SECONDS_PER_MINUTE } from '../../lib/constants'
-import { homePathFor } from '../../lib/roles'
-import { safeRedirect } from '../../lib/text'
 import { AuthLayout, authCard } from './AuthLayout'
+import { usePostSignIn } from './usePostSignIn'
 
 export function LoginPage({ redirectTo }: { redirectTo?: string }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const postSignIn = usePostSignIn()
   const login = useLogin()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    login.mutate(
-      { email, password },
-      {
-        onSuccess: (me) => void navigate({ href: safeRedirect(redirectTo) ?? homePathFor(me.role), replace: true }),
-      },
-    )
+    login.mutate({ email, password }, { onSuccess: (me) => postSignIn(me, redirectTo) })
   }
 
   return (

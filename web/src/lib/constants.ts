@@ -18,6 +18,8 @@ export const paths = {
   resetPassword: '/reset-password',
   acceptInvite: '/accept-invite',
   setup: '/setup',
+  selectOrganization: '/select-organization',
+  noOrganization: '/no-organization',
   board: '/board',
   projects: '/projects',
   reports: '/reports',

@@ -1,4 +1,3 @@
-import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Form } from 'react-aria-components'
@@ -9,8 +8,8 @@ import { Alert } from '../../components/Alert'
 import { Button } from '../../components/Button'
 import { TextInput } from '../../components/TextInput'
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, RESET_TOKEN_HASH_KEY } from '../../lib/constants'
-import { homePathFor } from '../../lib/roles'
 import { AuthLayout, authCard } from './AuthLayout'
+import { usePostSignIn } from './usePostSignIn'
 
 /** The invite token travels in the URL fragment, as reset tokens do, so it never reaches logs. */
 function readTokenFromHash(): string {
@@ -20,7 +19,7 @@ function readTokenFromHash(): string {
 /** The invite email's link: choose a first password, then straight into the app or portal. */
 export function AcceptInvitePage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const postSignIn = usePostSignIn()
   const accept = useAcceptInvite()
   const [token] = useState(readTokenFromHash)
   const [password, setPassword] = useState('')
@@ -34,7 +33,7 @@ export function AcceptInvitePage() {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    accept.mutate({ token, password }, { onSuccess: (me) => void navigate({ to: homePathFor(me.role), replace: true }) })
+    accept.mutate({ token, password }, { onSuccess: (me) => postSignIn(me) })
   }
 
   if (!token) {

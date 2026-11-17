@@ -15,7 +15,9 @@ import { Route as PortalRouteImport } from './routes/_portal'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as NoOrganizationRouteImport } from './routes/no-organization'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SelectOrganizationRouteImport } from './routes/select-organization'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AgentBoardRouteImport } from './routes/_agent/board'
 import { Route as AgentNotificationsRouteImport } from './routes/_agent/notifications'
@@ -68,9 +70,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NoOrganizationRoute = NoOrganizationRouteImport.update({
+  id: '/no-organization',
+  path: '/no-organization',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SelectOrganizationRoute = SelectOrganizationRouteImport.update({
+  id: '/select-organization',
+  path: '/select-organization',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupRoute = SetupRouteImport.update({
@@ -197,7 +209,9 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/no-organization': typeof NoOrganizationRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/select-organization': typeof SelectOrganizationRoute
   '/setup': typeof SetupRoute
   '/board': typeof AgentBoardRoute
   '/notifications': typeof AgentNotificationsRoute
@@ -227,7 +241,9 @@ export interface FileRoutesByTo {
   '/accept-invite': typeof AcceptInviteRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/no-organization': typeof NoOrganizationRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/select-organization': typeof SelectOrganizationRoute
   '/setup': typeof SetupRoute
   '/board': typeof AgentBoardRoute
   '/notifications': typeof AgentNotificationsRoute
@@ -257,7 +273,9 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/no-organization': typeof NoOrganizationRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/select-organization': typeof SelectOrganizationRoute
   '/setup': typeof SetupRoute
   '/_agent/board': typeof AgentBoardRoute
   '/_agent/notifications': typeof AgentNotificationsRoute
@@ -289,7 +307,9 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/forgot-password'
     | '/login'
+    | '/no-organization'
     | '/reset-password'
+    | '/select-organization'
     | '/setup'
     | '/board'
     | '/notifications'
@@ -319,7 +339,9 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/forgot-password'
     | '/login'
+    | '/no-organization'
     | '/reset-password'
+    | '/select-organization'
     | '/setup'
     | '/board'
     | '/notifications'
@@ -348,7 +370,9 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/forgot-password'
     | '/login'
+    | '/no-organization'
     | '/reset-password'
+    | '/select-organization'
     | '/setup'
     | '/_agent/board'
     | '/_agent/notifications'
@@ -381,7 +405,9 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
+  NoOrganizationRoute: typeof NoOrganizationRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SelectOrganizationRoute: typeof SelectOrganizationRoute
   SetupRoute: typeof SetupRoute
 }
 
@@ -429,11 +455,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/no-organization': {
+      id: '/no-organization'
+      path: '/no-organization'
+      fullPath: '/no-organization'
+      preLoaderRoute: typeof NoOrganizationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/select-organization': {
+      id: '/select-organization'
+      path: '/select-organization'
+      fullPath: '/select-organization'
+      preLoaderRoute: typeof SelectOrganizationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup': {
@@ -698,7 +738,9 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
+  NoOrganizationRoute: NoOrganizationRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  SelectOrganizationRoute: SelectOrganizationRoute,
   SetupRoute: SetupRoute,
 }
 export const routeTree = rootRouteImport

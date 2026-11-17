@@ -90,6 +90,30 @@
     "nameRequired": "Enter your name.",
     "submit": "Create administrator and sign in"
   },
+  "organizations": {
+    "switchLabel": "Switch organization, now {{org}}",
+    "option": "{{org}}, {{role}}",
+    "current": "Current organization",
+    "manage": "Manage organizations",
+    "pick": {
+      "title": "Choose an organization",
+      "intro": "You work in {{count}} organizations. This tab opens the one you pick; switch anytime from the header.",
+      "label": "Your organizations",
+      "signOut": "Sign in as someone else"
+    },
+    "none": {
+      "title": "You’re not in any organization yet",
+      "intro": "An administrator adds you to an organization. Once they have, check again to start working.",
+      "check": "Check again",
+      "still": "Still no organization. Ask your administrator to add you.",
+      "signOut": "Sign out"
+    },
+    "elsewhere": {
+      "title": "This ticket is in {{org}}",
+      "body": "You’re working in {{current}}. Switch this tab to {{org}} to open it.",
+      "switch": "Switch to {{org}}"
+    }
+  },
   "nav": {
     "main": "Main",
     "board": "Board",
@@ -101,7 +125,6 @@
     "notifications": "Notifications"
   },
   "agent": {
-    "organization": "{{org}}",
     "greeting": {
       "morning": "Good morning, {{name}}",
       "afternoon": "Good afternoon, {{name}}",

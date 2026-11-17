@@ -203,7 +203,7 @@ describe('first-run setup', () => {
     expect(state.setupBodies).toEqual([
       { organizationName: 'PT Vendor Teknologi', name: 'Dewi Wulandari', email: 'dewi@vendor.test', password: 'brand-new-password' },
     ])
-    expect(await screen.findByRole('link', { name: /PT Vendor Teknologi/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Switch organization, now PT Vendor Teknologi' })).toBeInTheDocument()
   })
 
   it('is closed once the install is set up', async () => {

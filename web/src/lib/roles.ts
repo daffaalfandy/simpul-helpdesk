@@ -1,4 +1,4 @@
-import type { Role } from '../api/client'
+import type { Me, Role } from '../api/client'
 import { paths } from './constants'
 
 export const Roles = {
@@ -23,6 +23,11 @@ export const can = {
   manageProjects: (role: OrgRole) => role === Roles.Admin || role === Roles.Supervisor,
   viewReports: (role: OrgRole) => role === Roles.Admin || role === Roles.Supervisor,
   manageSettings: (role: OrgRole) => role === Roles.Admin,
+}
+
+/** People who work in more than one organization pick one after signing in, and can switch. */
+export function picksOrganization(me: Me): boolean {
+  return me.organizations.length > 1
 }
 
 /** Where each role lands after signing in. */

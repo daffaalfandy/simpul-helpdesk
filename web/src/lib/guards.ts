@@ -23,6 +23,14 @@ export async function redirectToSetupIfOpen(queryClient: QueryClient): Promise<v
   if (install.setupRequired) throw redirect({ to: paths.setup })
 }
 
+/**
+ * Staff who belong to no organization yet wait on their own page: every organization-owned
+ * request would be refused.
+ */
+export function requireOrganization(me: Me): void {
+  if (!me.organization && !me.isAdmin) throw redirect({ to: paths.noOrganization })
+}
+
 /** Sends users who may not see a page to their own start page. */
 export function requireRole(me: Me, allowed: (role: OrgRole) => boolean): void {
   if (!allowed(me.role)) throw redirect({ to: homePathFor(me.role) })
