@@ -10,6 +10,7 @@ import { Pill } from '../../components/Badges'
 import { Button, buttonClasses } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { FilterPills } from '../../components/FilterPills'
+import { RichText } from '../../components/RichText'
 import { paths } from '../../lib/constants'
 import { firstName } from '../../lib/text'
 import { useSignedInUser } from '../shell/useSignedInUser'
@@ -156,7 +157,11 @@ function TestCard({ test, meId, onAnswer }: { test: UatRequest; meId: string; on
       {test.requester.id !== meId && (
         <span className="text-xs text-on-dark-muted">{t('portal.uat.reportedBy', { name: test.requester.name })}</span>
       )}
-      <p className="line-clamp-3 text-sm leading-relaxed text-on-dark-muted">{test.instructions ?? t('portal.uat.noInstructions')}</p>
+      {test.instructions ? (
+        <RichText markdown={test.instructions} tone="onDark" className="line-clamp-3 text-sm leading-relaxed text-on-dark-muted" />
+      ) : (
+        <p className="line-clamp-3 text-sm leading-relaxed text-on-dark-muted">{t('portal.uat.noInstructions')}</p>
+      )}
       <div className="mt-auto flex flex-wrap gap-2.5 pt-1">
         <Button variant="success" icon={<Check aria-hidden="true" className="size-(--icon-md)" />} onPress={() => onAnswer('approve')}>
           {t('portal.uat.approve')}

@@ -15,6 +15,11 @@ export function initials(name: string): string {
     .join('')
 }
 
+/** Length in characters as the API counts them (code points, so an emoji is one). */
+export function runeLength(text: string): number {
+  return [...text].length
+}
+
 export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name
 }

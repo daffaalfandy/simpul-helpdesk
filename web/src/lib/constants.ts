@@ -84,8 +84,10 @@ export const TICKET_PAGE_SIZE = 50
 export const MAX_SEARCH_LENGTH = 100
 /** A staff reason (priority change, resolving without the DoD, a ticket's own DoD); API MaxReasonLen. */
 export const MAX_REASON_LENGTH = 500
-/** What a client writes when a fix still fails; API MaxMessageLen. */
+/** A reply, an internal note, or what a client writes when a fix still fails (Markdown); API MaxMessageLen. */
 export const MAX_MESSAGE_LENGTH = 20000
+/** A ticket's description (Markdown); API MaxDescriptionLen. */
+export const MAX_DESCRIPTION_LENGTH = 20000
 
 /** How long typing pauses before a search box updates the URL and asks the API. */
 export const SEARCH_DEBOUNCE_MS = 300

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { PROJECT_IDS, projectsApi } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
+import { writeRichText } from '../../test/richText'
 import { state, USERS } from '../../test/server'
 import { IDS } from '../../test/settingsApi'
 import { BOARD_COLUMN_LIMIT, TICKET_IDS, tickets } from '../../test/ticketsApi'
@@ -227,7 +228,7 @@ describe('board', () => {
     await user.click(within(dialog).getByRole('button', { name: /Which system\?/ }))
     await user.click(await screen.findByRole('option', { name: /e-Office/ }))
     await user.type(within(dialog).getByRole('textbox', { name: 'Subject' }), 'Called about e-Office')
-    await user.type(within(dialog).getByRole('textbox', { name: 'Details' }), 'Login fails.')
+    await writeRichText(user, within(dialog).getByRole('textbox', { name: 'Details' }), 'Login fails.')
     await user.click(within(dialog).getByRole('button', { name: 'Create ticket' }))
 
     expect(await screen.findByText('HD-24892 created and assigned to you. The requester gets an email copy.')).toBeInTheDocument()

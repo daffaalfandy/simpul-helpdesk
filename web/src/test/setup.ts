@@ -11,6 +11,13 @@ import { resetApi, server } from './server'
 const ASYNC_UTIL_TIMEOUT_MS = 3000
 configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS })
 
+// The rich text editor (ProseMirror) measures the caret with layout APIs jsdom leaves out. With
+// nothing to measure they answer "no box", which is enough for typing and selecting in tests.
+const noRects = (): DOMRectList => Object.assign([], { item: () => null }) as unknown as DOMRectList
+Range.prototype.getClientRects = noRects
+Range.prototype.getBoundingClientRect = () => new DOMRect()
+document.elementFromPoint = () => null
+
 // Any API call without a handler fails the test.
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
 afterEach(() => {

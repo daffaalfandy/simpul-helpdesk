@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { PROJECT_IDS, projectsApi } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
+import { writeRichText } from '../../test/richText'
 import { PASSWORD, state, USERS } from '../../test/server'
 import { IDS } from '../../test/settingsApi'
 import { ticket, tickets } from '../../test/ticketsApi'
@@ -110,7 +111,7 @@ describe('report an issue', () => {
     await user.click(await screen.findByRole('option', { name: /e-Office/ }))
     await user.click(screen.getByRole('radio', { name: /High/ }))
     expect(screen.getByText(/First reply within 30 min · fix target 8 hours/)).toBeInTheDocument()
-    await user.type(screen.getByRole('textbox', { name: 'Details' }), 'Since this morning.')
+    await writeRichText(user, screen.getByRole('textbox', { name: 'Details' }), 'Since this morning.')
     await screen.findByRole('button', { name: 'Attach screenshot or file' })
     await user.upload(fileInput(), png())
     await waitFor(() => expect(tickets.uploads).toHaveLength(1))
@@ -191,7 +192,7 @@ describe('requester ticket detail', () => {
     const send = await screen.findByRole('button', { name: 'Send reply' })
     await user.click(send)
     expect(await screen.findByText('Write a message first.')).toBeInTheDocument()
-    await user.type(screen.getByRole('textbox', { name: 'Add a reply' }), 'Still failing on my PC')
+    await writeRichText(user, screen.getByRole('textbox', { name: 'Add a reply' }), 'Still failing on my PC')
     await user.click(send)
     expect(await screen.findByText('Still failing on my PC')).toBeInTheDocument()
     expect(lastRequest('POST', '/tickets/HD-24871/messages')?.body).toEqual({

@@ -10,10 +10,12 @@ import { FormDialog } from '../../components/Dialog'
 import { Dropdown } from '../../components/Dropdown'
 import { ErrorAlert } from '../../components/ErrorAlert'
 import { OptionCard, OptionCardGroup } from '../../components/OptionCard'
-import { TextArea } from '../../components/TextArea'
+import { RichTextField } from '../../components/RichTextField'
 import { TextInput } from '../../components/TextInput'
+import { MAX_DESCRIPTION_LENGTH } from '../../lib/constants'
 import { megabytesOf } from '../../lib/files'
 import { formatTarget } from '../../lib/formatDuration'
+import { runeLength } from '../../lib/text'
 import { priorityLong } from '../tickets/labels'
 import { clientRequestersQueryOptions, intakeQueryOptions, useCreateTicket } from '../tickets/queries'
 import { targetFor } from '../tickets/sla'
@@ -26,6 +28,8 @@ const DEFAULT_CHANNEL: TicketChannel = 'phone'
 const DEFAULT_PRIORITY: Priority = 'P3'
 const TYPES: readonly TicketType[] = ['incident', 'request']
 const NO_CLIENT = ''
+/** The details field is three lines tall in the dialog (Main.dc.html). */
+const DETAILS_ROWS = 3
 
 type LogTicketDialogProps = { onClose: () => void; onCreated: (ticket: Ticket) => void }
 
@@ -70,6 +74,7 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
     subject: subject.trim() === '',
     details: details.trim() === '',
   }
+  const detailsTooLong = runeLength(details) > MAX_DESCRIPTION_LENGTH
 
   const changeClient = (id: string) => {
     setClientId(id)
@@ -95,7 +100,7 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
 
   const submit = () => {
     setSubmitted(true)
-    if (Object.values(missing).some(Boolean) || !clientId || !requesterId || uploads.isBlocking) return
+    if (Object.values(missing).some(Boolean) || detailsTooLong || !clientId || !requesterId || uploads.isBlocking) return
     create.mutate(
       {
         clientId,
@@ -203,12 +208,13 @@ export function LogTicketDialog({ onClose, onCreated }: LogTicketDialogProps) {
         isInvalid={submitted && missing.subject}
         errorMessage={t('agent.logTicket.errors.subject')}
       />
-      <TextArea
+      <RichTextField
         label={t('agent.logTicket.details')}
         placeholder={t('agent.logTicket.detailsPlaceholder')}
-        rows={3}
+        rows={DETAILS_ROWS}
         value={details}
         onChange={setDetails}
+        maxLength={MAX_DESCRIPTION_LENGTH}
         isRequired
         isInvalid={submitted && missing.details}
         errorMessage={t('agent.logTicket.errors.details')}

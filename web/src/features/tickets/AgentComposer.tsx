@@ -8,8 +8,10 @@ import { AttachmentPicker } from '../../components/AttachmentPicker'
 import { Button } from '../../components/Button'
 import { ErrorAlert } from '../../components/ErrorAlert'
 import { SegmentedTabs } from '../../components/SegmentedTabs'
-import { TextArea } from '../../components/TextArea'
+import { RichTextField } from '../../components/RichTextField'
+import { MAX_MESSAGE_LENGTH } from '../../lib/constants'
 import { megabytesOf } from '../../lib/files'
+import { runeLength } from '../../lib/text'
 import { useAddMessage } from './queries'
 import { useAttachmentUploads } from './useAttachmentUploads'
 
@@ -23,12 +25,13 @@ export function AgentComposer({ ticket }: { ticket: Ticket }) {
   const [body, setBody] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const empty = body.trim() === ''
+  const tooLong = runeLength(body) > MAX_MESSAGE_LENGTH
   const locked = ticket.status === 'closed'
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
-    if (empty || uploads.isBlocking) return
+    if (empty || tooLong || uploads.isBlocking) return
     send.mutate(
       { visibility: mode, body: body.trim(), attachmentIds: uploads.attachmentIds },
       {
@@ -55,7 +58,7 @@ export function AgentComposer({ ticket }: { ticket: Ticket }) {
           onSelectionChange={setMode}
         >
           {(tab) => (
-            <TextArea
+            <RichTextField
               label={
                 tab === 'internal'
                   ? t('ticket.composer.noteLabel')
@@ -65,6 +68,7 @@ export function AgentComposer({ ticket }: { ticket: Ticket }) {
               tone={tab === 'internal' ? 'internal' : 'default'}
               value={body}
               onChange={setBody}
+              maxLength={MAX_MESSAGE_LENGTH}
               isDisabled={locked}
               isInvalid={submitted && empty}
               errorMessage={t('ticket.composer.bodyRequired')}

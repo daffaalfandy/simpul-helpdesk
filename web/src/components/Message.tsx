@@ -2,6 +2,7 @@ import { Lock } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { cx } from '../lib/text'
+import { RichText } from './RichText'
 
 export type MessageVariant = 'public' | 'support' | 'internal'
 
@@ -16,13 +17,14 @@ type MessageProps = {
   /** Author line, already translated; the author's name is wrapped in <strong> ("Rina Pratiwi · replied to client"). */
   header: ReactNode
   time: ReactNode
-  children: ReactNode
+  /** The message (Markdown). */
+  body: string
   /** Attachment list under the body. */
   footer?: ReactNode
 }
 
 /** Conversation entry per HANDOFF §14.3. Internal notes are yellow and say so in text. */
-export function Message({ variant, header, time, children, footer }: MessageProps) {
+export function Message({ variant, header, time, body, footer }: MessageProps) {
   return (
     <article className={cx('flex flex-col gap-2 rounded-xl border px-4.5 py-4', variants[variant])}>
       <header
@@ -37,7 +39,7 @@ export function Message({ variant, header, time, children, footer }: MessageProp
         </p>
         <span>{time}</span>
       </header>
-      <div className="text-md leading-relaxed wrap-break-word whitespace-pre-line text-ink">{children}</div>
+      <RichText markdown={body} className="text-md leading-relaxed text-ink" />
       {footer}
     </article>
   )

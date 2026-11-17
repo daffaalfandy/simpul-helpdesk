@@ -15,13 +15,14 @@ import { Dropdown } from '../../components/Dropdown'
 import { EmptyState } from '../../components/EmptyState'
 import { ErrorAlert } from '../../components/ErrorAlert'
 import { OptionCard, OptionCardGroup } from '../../components/OptionCard'
-import { TextArea } from '../../components/TextArea'
+import { RichTextField } from '../../components/RichTextField'
 import { TextInput } from '../../components/TextInput'
 import { DATE_LOCALE } from '../../i18n/locale'
-import { paths } from '../../lib/constants'
+import { MAX_DESCRIPTION_LENGTH, paths } from '../../lib/constants'
 import { zoneAbbreviation } from '../../lib/dates'
 import { megabytesOf } from '../../lib/files'
 import { formatTarget } from '../../lib/formatDuration'
+import { runeLength } from '../../lib/text'
 import { weekdayRuns } from '../../lib/weekdays'
 import { priorityLong } from '../tickets/labels'
 import { intakeQueryOptions, useCreateTicket } from '../tickets/queries'
@@ -120,13 +121,14 @@ function ReportFormFields({ intake, onCreated }: { intake: Intake; onCreated: (t
     priority: priority === null,
     details: details.trim() === '',
   }
+  const detailsTooLong = runeLength(details) > MAX_DESCRIPTION_LENGTH
   const target = targets?.find((x) => x.priority === priority)
   const eff = target ? targetFor(target, type) : null
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
-    if (Object.values(missing).some(Boolean) || !priority || uploads.isBlocking) return
+    if (Object.values(missing).some(Boolean) || detailsTooLong || !priority || uploads.isBlocking) return
     create.mutate(
       {
         type,
@@ -211,12 +213,13 @@ function ReportFormFields({ intake, onCreated }: { intake: Intake; onCreated: (t
             isInvalid={submitted && missing.priority}
           />
 
-          <TextArea
+          <RichTextField
             label={t('portal.new.details')}
             placeholder={t('portal.new.detailsPlaceholder')}
             size="lg"
             value={details}
             onChange={setDetails}
+            maxLength={MAX_DESCRIPTION_LENGTH}
             isRequired
             isInvalid={submitted && missing.details}
             errorMessage={t('portal.new.errors.details')}

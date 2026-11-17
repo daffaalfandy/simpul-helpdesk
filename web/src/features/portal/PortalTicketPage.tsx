@@ -15,9 +15,11 @@ import { Card } from '../../components/Card'
 import { DescriptionList } from '../../components/DescriptionList'
 import { ErrorAlert } from '../../components/ErrorAlert'
 import { ProgressTracker } from '../../components/ProgressTracker'
-import { TextArea } from '../../components/TextArea'
-import { paths, SLA_REFRESH_MS } from '../../lib/constants'
+import { RichText } from '../../components/RichText'
+import { RichTextField } from '../../components/RichTextField'
+import { MAX_MESSAGE_LENGTH, paths, SLA_REFRESH_MS } from '../../lib/constants'
 import { megabytesOf } from '../../lib/files'
+import { runeLength } from '../../lib/text'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { priorityLong, requesterStatus } from '../tickets/labels'
 import { MessageThread } from '../tickets/MessageThread'
@@ -184,7 +186,11 @@ function UatBanner({ ticket, onAnswer }: { ticket: Ticket; onAnswer: (a: UatAnsw
           <h2 id={`uat-${ticket.id}`} className="text-xs font-extrabold tracking-caps text-on-dark-accent uppercase">
             {t('portal.uat.banner.eyebrow')}
           </h2>
-          <p className="text-md leading-relaxed whitespace-pre-line">{uat.instructions ?? t('portal.uat.noInstructions')}</p>
+          {uat.instructions ? (
+            <RichText markdown={uat.instructions} tone="onDark" className="text-md leading-relaxed" />
+          ) : (
+            <p className="text-md leading-relaxed">{t('portal.uat.noInstructions')}</p>
+          )}
           {uat.autoApproveAt && (
             <p className="text-sm text-on-dark-muted">{t('portal.uat.banner.autoApprove', { date: day(uat.autoApproveAt) })}</p>
           )}
@@ -264,11 +270,12 @@ function ReplyBox({ ticket }: { ticket: Ticket }) {
   const [body, setBody] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const empty = body.trim() === ''
+  const tooLong = runeLength(body) > MAX_MESSAGE_LENGTH
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
-    if (empty || uploads.isBlocking) return
+    if (empty || tooLong || uploads.isBlocking) return
     send.mutate(
       { visibility: 'public', body: body.trim(), attachmentIds: uploads.attachmentIds },
       {
@@ -284,12 +291,13 @@ function ReplyBox({ ticket }: { ticket: Ticket }) {
   return (
     <section aria-label={t('portal.ticket.replyLabel')} className="rounded-xl border border-border-strong bg-surface px-4 py-3.5">
       <form onSubmit={submit} noValidate className="flex flex-col gap-2.5">
-        <TextArea
+        <RichTextField
           label={t('portal.ticket.replyLabel')}
           rows={REPLY_ROWS}
           placeholder={t('portal.ticket.replyPlaceholder')}
           value={body}
           onChange={setBody}
+          maxLength={MAX_MESSAGE_LENGTH}
           isInvalid={submitted && empty}
           errorMessage={t('ticket.composer.bodyRequired')}
         />

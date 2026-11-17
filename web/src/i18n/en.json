@@ -1051,6 +1051,43 @@
     "retryLabel": "Upload {{name}} again",
     "waitForUploads": "Wait for the files to finish uploading, or remove the ones that failed."
   },
+  "editor": {
+    "toolbar": "Formatting",
+    "tools": {
+      "bold": "Bold",
+      "italic": "Italic",
+      "code": "Code",
+      "link": "Link",
+      "bulletList": "Bulleted list",
+      "orderedList": "Numbered list",
+      "blockquote": "Quote",
+      "codeBlock": "Code block"
+    },
+    "withShortcut": "{{name}} ({{keys}})",
+    "keys": {
+      "mac": {
+        "mod": "⌘",
+        "shift": "⇧",
+        "alt": "⌥",
+        "join": ""
+      },
+      "other": {
+        "mod": "Ctrl",
+        "shift": "Shift",
+        "alt": "Alt",
+        "join": "+"
+      }
+    },
+    "link": {
+      "title": "Link",
+      "address": "Link address",
+      "placeholder": "example.com/page",
+      "invalid": "Use a web or email address ({{protocols}})",
+      "save": "Save link",
+      "remove": "Remove link"
+    },
+    "tooLong": "Keep it under {{max}} characters"
+  },
   "ticket": {
     "type": {
       "incident": "Incident",

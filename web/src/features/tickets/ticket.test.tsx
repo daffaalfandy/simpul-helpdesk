@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { PROJECT_IDS } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
+import { writeRichText } from '../../test/richText'
 import { state, USERS } from '../../test/server'
 import { tickets } from '../../test/ticketsApi'
 
@@ -55,7 +56,7 @@ describe('agent ticket detail', () => {
     expect(await screen.findByText('Write a message first.')).toBeInTheDocument()
 
     await user.click(within(tabs).getByRole('tab', { name: 'Internal note' }))
-    await user.type(screen.getByRole('textbox', { name: 'Note for the support team only' }), 'Ask Adi to revert')
+    await writeRichText(user, screen.getByRole('textbox', { name: 'Note for the support team only' }), 'Ask Adi to revert')
     await user.click(screen.getByRole('button', { name: 'Save note' }))
     await waitFor(() =>
       expect(lastRequest('POST', '/tickets/HD-24871/messages')?.body).toEqual({

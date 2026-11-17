@@ -237,3 +237,149 @@
     }
   }
 }
+
+/*
+ * Rich text: Markdown bodies (RichText) and the editor (RichTextField) share these rules, so a
+ * message looks the same while it is written and once it is sent. Tailwind's reset strips list
+ * markers and margins, so they come back here, on the token scale.
+ */
+@layer components {
+  .rich-text {
+    overflow-wrap: break-word;
+  }
+
+  .rich-text > * + *,
+  .rich-text li + li,
+  .rich-text li > * + *,
+  .rich-text blockquote > * + * {
+    margin-top: var(--space-2);
+  }
+
+  .rich-text :where(ul, ol) {
+    padding-left: var(--space-6);
+  }
+
+  .rich-text ul {
+    list-style: disc;
+  }
+
+  .rich-text ol {
+    list-style: decimal;
+  }
+
+  .rich-text li::marker {
+    color: var(--color-muted);
+  }
+
+  .rich-text a {
+    text-decoration: underline;
+  }
+
+  .rich-text blockquote {
+    border-left: var(--quote-bar-w) solid var(--color-border-strong);
+    padding-left: var(--space-3);
+    color: var(--color-muted);
+  }
+
+  .rich-text code {
+    border-radius: var(--radius-xs);
+    background: var(--color-surface-subtle);
+    padding: 0 var(--space-1);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+
+  .rich-text pre {
+    overflow-x: auto;
+    border: var(--rule-w) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-subtle);
+    padding: var(--space-2) var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+  }
+
+  .rich-text pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  .rich-text table {
+    border-collapse: collapse;
+  }
+
+  .rich-text :where(th, td) {
+    border: var(--rule-w) solid var(--color-border);
+    padding: var(--space-1) var(--space-2);
+    text-align: left;
+  }
+
+  .rich-text th {
+    background: var(--color-surface-subtle);
+    font-weight: var(--weight-bold);
+  }
+
+  /* On the navy UAT banners. */
+  .rich-text-on-dark blockquote {
+    border-color: var(--color-on-dark-muted);
+    color: inherit;
+  }
+
+  .rich-text-on-dark :where(code, pre) {
+    border-color: var(--color-ink-2);
+    background: var(--color-ink-2);
+  }
+
+  /*
+   * The editor. Tiptap's injected stylesheet is off (the CSP allows no inline <style>), so the
+   * ProseMirror rules it needs are here; the field draws the focus ring around toolbar and text.
+   */
+  .rich-text-field .ProseMirror {
+    position: relative;
+    min-height: calc(var(--editor-rows) * 1lh);
+    outline: none;
+    white-space: pre-wrap;
+    white-space: break-spaces;
+    font-variant-ligatures: none;
+    font-feature-settings: 'liga' 0;
+  }
+
+  .rich-text-field .ProseMirror:focus-visible {
+    box-shadow: none;
+  }
+
+  .rich-text-field .ProseMirror pre {
+    white-space: pre-wrap;
+  }
+
+  .rich-text-field .ProseMirror [contenteditable='false'] {
+    white-space: normal;
+  }
+
+  .rich-text-field img.ProseMirror-separator {
+    display: inline !important;
+    margin: 0 !important;
+    border: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  .rich-text-field .ProseMirror-hideselection *::selection {
+    background: transparent;
+  }
+
+  .rich-text-field .ProseMirror-hideselection * {
+    caret-color: transparent;
+  }
+
+  /* Placeholder: Tiptap marks the empty first paragraph; the text comes from data-placeholder. */
+  .rich-text-field .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: var(--color-muted);
+  }
+}

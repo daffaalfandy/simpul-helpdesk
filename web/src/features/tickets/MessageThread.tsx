@@ -69,10 +69,9 @@ export function MessageThread({ ticket, messages, audience, meId }: MessageThrea
           variant="public"
           header={<HeaderText header={header(audience, requester, client, meId)} />}
           time={<Timestamp iso={ticket.createdAt} />}
+          body={ticket.description}
           footer={<AttachmentList items={ticket.attachments} />}
-        >
-          {ticket.description}
-        </Message>
+        />
       </li>
       {messages.map((m) => {
         const author: Author = { id: m.author.id, name: m.author.name, jobTitle: m.authorJobTitle, fromSupport: m.fromSupport }
@@ -90,10 +89,9 @@ export function MessageThread({ ticket, messages, audience, meId }: MessageThrea
                 />
               }
               time={<Timestamp iso={m.createdAt} />}
+              body={m.body}
               footer={<AttachmentList items={m.attachments} />}
-            >
-              {m.body}
-            </Message>
+            />
           </li>
         )
       })}
