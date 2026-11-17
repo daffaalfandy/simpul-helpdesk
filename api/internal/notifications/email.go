@@ -412,7 +412,7 @@ func (m *Mailer) quote(ctx context.Context, q *db.Queries, portal bool, main cla
 	}
 	return &mail.QuoteData{
 		Author: msg.AuthorName, FromSupport: auth.Role(msg.AuthorRole) != auth.RoleRequester,
-		Time: f.time(msg.CreatedAt), Body: msg.Body, BodyHTML: richtext.HTML(msg.Body),
+		Time: f.time(msg.CreatedAt), Body: richtext.Text(msg.Body), BodyHTML: richtext.HTML(msg.Body),
 	}, nil
 }
 

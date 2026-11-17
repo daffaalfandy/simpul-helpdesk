@@ -22,7 +22,7 @@ func TestTicketUpdateRenders(t *testing.T) {
 		Changes: []ChangeData{{Change: "assignee", Assignee: "Rina Pratiwi"}},
 		Others: []NoticeData{{Event: "reply", Portal: true, ActorName: "Rina Pratiwi", Time: "12:40"},
 			{Event: "sla", Kind: "at_risk", SLAClock: "resolution", SLAMinutesLeft: &left, Time: "12:41"}},
-		Quote: &QuoteData{Author: "Rina Pratiwi", FromSupport: true, Time: "12:45", Body: quoteMD,
+		Quote: &QuoteData{Author: "Rina Pratiwi", FromSupport: true, Time: "12:45", Body: richtext.Text(quoteMD),
 			BodyHTML: richtext.HTML(quoteMD)},
 		SLA:       &SLALineData{TargetValue: 4, TargetUnit: "h", PauseUAT: true},
 		TicketURL: "https://helpdesk.example/portal/tickets/HD-24871", SettingsURL: "https://helpdesk.example/portal/notifications#settings",
@@ -44,7 +44,7 @@ func TestTicketUpdateRenders(t *testing.T) {
 		"HD-24871 · P1 Critical · e-Office",
 		"Fix target: 4 hours · time waiting for your test doesn't count",
 		"Powered by SimDesk",
-		quoteMD,
+		"The fix is on the test server now.",
 	} {
 		if !strings.Contains(msg.Text, want) {
 			t.Errorf("text lacks %q:\n%s", want, msg.Text)

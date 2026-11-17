@@ -96,7 +96,11 @@ func Line(md string) string {
 func writeEntering(b *strings.Builder, n ast.Node, src []byte) ast.WalkStatus {
 	switch n := n.(type) {
 	case *ast.Text:
-		b.Write(n.Segment.Value(src))
+		if n.IsRaw() {
+			b.Write(n.Segment.Value(src))
+		} else {
+			b.Write(plain(n.Segment.Value(src)))
+		}
 		if n.SoftLineBreak() || n.HardLineBreak() {
 			b.WriteString(lineBreak)
 		}
@@ -136,6 +140,12 @@ func writeExit(b *strings.Builder, n ast.Node) {
 			b.WriteString(cellSeparator)
 		}
 	}
+}
+
+// plain is text as it reads: backslash escapes and entity references (the editor writes
+// "my\_var" and "&lt;b&gt;") resolved.
+func plain(v []byte) []byte {
+	return util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(v)))
 }
 
 // blockLines is the source of a code or HTML block, line by line.

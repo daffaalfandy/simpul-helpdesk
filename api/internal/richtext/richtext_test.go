@@ -24,6 +24,10 @@ func TestText(t *testing.T) {
 		{"quote", "> client said hi", "client said hi"},
 		{"table", "| a | b |\n|---|---|\n| 1 | 2 |", "a | b\n1 | 2"},
 		{"empty", "", ""},
+		{"editor entities", "Error: &lt;html&gt; &amp; more", "Error: <html> & more"},
+		{"editor escapes", "set my\\_var to 1\\*", "set my_var to 1*"},
+		{"editor hard break", "line one  \nline two", "line one\nline two"},
+		{"code keeps entities literal", "`&lt;`", "&lt;"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -110,6 +114,10 @@ func TestHTML(t *testing.T) {
 		{
 			name: "only the last block loses its margin", md: "one\n\ntwo",
 			contains: []string{`<p style="margin:0 0 10px">one</p>`, `<p style="margin:0">two</p>`},
+		},
+		{
+			name: "editor entities show as characters", md: "Error: &lt;html&gt;",
+			contains: []string{"Error: &lt;html&gt;"}, absent: []string{"&amp;lt;", "<html>"},
 		},
 		{
 			name: "heading is a bold paragraph", md: "# Title",
