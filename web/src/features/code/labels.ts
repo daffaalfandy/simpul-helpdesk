@@ -18,22 +18,15 @@ export function requestRef(t: TFunction, provider: GitProvider, number: number |
   return t(`code.request.${provider}`, { number })
 }
 
-/** What a code event was, in plain words: "commit a1f9c2e on fix/HD-1 fixes this ticket", "PR #42 merged into main". */
+/**
+ * What a code event was, in plain words: "commit a1f9c2e on fix/HD-1 mentions this ticket". Only
+ * commits are read now; requests, CI runs and deployments appear in history from before 17 Nov.
+ */
 export function codeEventText(t: TFunction, c: CodeEventRef): string {
   const request = requestRef(t, c.provider, c.ref)
   switch (c.kind) {
-    case 'commit': {
-      const values = { sha: c.ref, branch: c.branch }
-      switch (c.outcome) {
-        case 'reopened':
-          return t('code.event.commitReopened', values)
-        case 'merged':
-          return t('code.event.commitLanded', values)
-        case 'fix_committed':
-          return t('code.event.commitFixes', values)
-      }
-      return t('code.event.commit', values)
-    }
+    case 'commit':
+      return t('code.event.commit', { sha: c.ref, branch: c.branch })
     case 'pr_opened':
       return t('code.event.pr_opened', { request, target: c.target })
     case 'pr_merged':

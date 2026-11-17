@@ -174,15 +174,13 @@ func (q *Queries) RecordDeliveryError(ctx context.Context, arg RecordDeliveryErr
 }
 
 const upsertCodeEvent = `-- name: UpsertCodeEvent :one
-INSERT INTO code_events (repository_id, kind, external_id, sha, number, title, branch, target, url,
+INSERT INTO code_events (repository_id, kind, external_id, sha, title, branch, branches, url,
                          author_name, author_login, author_user_id, delivery_id, occurred_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
-        $10, $11, $12, $13, $14)
+VALUES ($1, $2, $3, $4, $5, $6, ARRAY[$6::text], $7,
+        $8, $9, $10, $11, $12)
 ON CONFLICT (repository_id, kind, external_id) DO UPDATE
-SET title = CASE WHEN code_events.kind = 'pr_opened' THEN EXCLUDED.title ELSE code_events.title END,
-    occurred_at = CASE WHEN code_events.kind = 'pr_opened'
-                       THEN greatest(code_events.occurred_at, EXCLUDED.occurred_at)
-                       ELSE code_events.occurred_at END
+SET branches = CASE WHEN EXCLUDED.branch = ANY(code_events.branches) THEN code_events.branches
+                    ELSE code_events.branches || EXCLUDED.branch END
 RETURNING id
 `
 
@@ -191,10 +189,8 @@ type UpsertCodeEventParams struct {
 	Kind         string
 	ExternalID   string
 	Sha          string
-	Number       *int64
 	Title        string
 	Branch       string
-	Target       string
 	Url          string
 	AuthorName   string
 	AuthorLogin  string
@@ -203,18 +199,16 @@ type UpsertCodeEventParams struct {
 	OccurredAt   time.Time
 }
 
-// A redelivered event keeps its row. A pull/merge request edited later takes the new title and
-// time, so its state reads from the latest activity.
+// A commit pushed again to another branch (the merge into main) keeps its row and adds the
+// branch; a redelivery adds nothing.
 func (q *Queries) UpsertCodeEvent(ctx context.Context, arg UpsertCodeEventParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, upsertCodeEvent,
 		arg.RepositoryID,
 		arg.Kind,
 		arg.ExternalID,
 		arg.Sha,
-		arg.Number,
 		arg.Title,
 		arg.Branch,
-		arg.Target,
 		arg.Url,
 		arg.AuthorName,
 		arg.AuthorLogin,

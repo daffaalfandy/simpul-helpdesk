@@ -1,6 +1,7 @@
 // Package gitevent reads GitHub and GitLab webhook deliveries (HANDOFF §8): it checks the
-// secret, names the delivery and the repository it came from, and turns the payload into
-// provider-neutral events. It is pure; the connector stores the events and acts on them.
+// secret, names the delivery and the repository it came from, and turns pushes into
+// provider-neutral commit events. It is pure; the connector stores the events and links them.
+// Only pushes are read (owner, 17 Nov): pull/merge requests, CI and deployments are not.
 package gitevent
 
 import (
@@ -33,34 +34,24 @@ func (p Provider) Valid() bool { return slices.Contains(Providers, p) }
 // Kind is what happened in the repository. Values match the code_events.kind CHECK.
 type Kind string
 
-const (
-	KindCommit     Kind = "commit"     // a commit naming a ticket was pushed
-	KindPROpened   Kind = "pr_opened"  // a pull/merge request was opened, reopened or edited
-	KindPRMerged   Kind = "pr_merged"  // a pull/merge request was merged
-	KindPRClosed   Kind = "pr_closed"  // a pull/merge request was closed without merging
-	KindPipeline   Kind = "pipeline"   // CI succeeded on a branch
-	KindDeployment Kind = "deployment" // a deployment to production succeeded
-)
+// KindCommit is a commit pushed to a branch, the only kind read.
+const KindCommit Kind = "commit"
 
-var Kinds = []Kind{KindCommit, KindPROpened, KindPRMerged, KindPRClosed, KindPipeline, KindDeployment}
-
-// Author is who did it, as the provider names them. GitHub sends no email for pull requests.
+// Author is who wrote the commit, as the provider names them.
 type Author struct {
 	Name  string
 	Email string
 	Login string
 }
 
-// Event is one thing that happened, in a form both providers share.
+// Event is one commit a push carried, in a form both providers share.
 type Event struct {
 	Kind       Kind
-	ExternalID string // unique per repository and kind: commit sha, request number, run or deployment id
+	ExternalID string // unique per repository and kind: the commit sha
 	SHA        string
-	Number     int64  // pull/merge request number (GitLab iid), workflow run or pipeline number
-	Title      string // first line of the commit message, request title or workflow name
-	Text       string // everything searched for ticket keys (message, title, description); never stored
-	Branch     string // pushed branch, request source branch, or the branch CI ran on or deployed
-	Target     string // the branch a pull/merge request merges into
+	Title      string // first line of the commit message
+	Text       string // the whole message, searched for ticket keys; never stored
+	Branch     string // the branch it was pushed to
 	URL        string
 	Author     Author
 	OccurredAt time.Time
@@ -202,8 +193,8 @@ func JSON(body []byte) ([]byte, error) {
 	return []byte(payload), nil
 }
 
-// Parse reads a delivery's JSON (see JSON). An event the connector doesn't act on, such as a
-// tag push or a failed pipeline, gives a delivery without events.
+// Parse reads a delivery's JSON (see JSON). A push the connector doesn't act on, such as a tag
+// push or a deleted branch, gives a delivery without events.
 func Parse(p Provider, eventName string, payload []byte) (Delivery, error) {
 	var (
 		d   Delivery
@@ -239,21 +230,6 @@ func FirstLine(s string) string {
 // branchRef is the prefix of a branch in a push's ref; tags use refs/tags/ and are ignored.
 const branchRef = "refs/heads/"
 
-// productionEnvironment is the environment name read as production when the provider doesn't say.
-const productionEnvironment = "production"
-
-func isProduction(flag bool, names ...string) bool {
-	if flag {
-		return true
-	}
-	for _, n := range names {
-		if strings.EqualFold(n, productionEnvironment) {
-			return true
-		}
-	}
-	return false
-}
-
 // timeLayouts are the time formats the providers use: GitHub and newer GitLab send RFC 3339,
 // older GitLab hooks "2026-11-16 08:30:00 UTC" or "… +0000".
 var timeLayouts = []string{time.RFC3339, "2006-01-02 15:04:05 MST", "2006-01-02 15:04:05 -0700"}
@@ -266,15 +242,3 @@ func parseTime(s string) (time.Time, error) {
 	}
 	return time.Time{}, errors.Join(errUnreadableTime, errors.New(s))
 }
-
-// firstTime parses the first non-empty value.
-func firstTime(values ...string) (time.Time, error) {
-	for _, v := range values {
-		if v != "" {
-			return parseTime(v)
-		}
-	}
-	return time.Time{}, errUnreadableTime
-}
-
-func joinText(parts ...string) string { return strings.Join(parts, "\n") }

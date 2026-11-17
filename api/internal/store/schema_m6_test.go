@@ -49,11 +49,11 @@ func TestDoDItemsMatchSchema(t *testing.T) {
 			t.Errorf("item %s: %v", it, err)
 		}
 	}
-	_, err := f.pool.Exec(ctx, sqlInsertDoDItem, tk, string(dod.ItemMerged))
+	_, err := f.pool.Exec(ctx, sqlInsertDoDItem, tk, string(dod.ItemUATApproved))
 	if !store.IsViolation(err, store.SQLStateUniqueViolation, constraintDoDItemsKey) {
 		t.Errorf("same item twice: err = %v", err)
 	}
-	_, err = f.pool.Exec(ctx, sqlInsertDoDItem, tk, "reviewed")
+	_, err = f.pool.Exec(ctx, sqlInsertDoDItem, tk, "merged") // a code item, gone since 17 Nov
 	if !store.IsViolation(err, store.SQLStateCheckViolation, constraintDoDItem) {
 		t.Errorf("unknown item: err = %v", err)
 	}

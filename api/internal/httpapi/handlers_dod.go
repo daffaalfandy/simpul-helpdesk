@@ -12,21 +12,15 @@ import (
 
 func apiDodConfig(c dod.Config) gen.DodConfig {
 	return gen.DodConfig{
-		Merged:             gen.DodMerged{Enabled: c.Merged.Enabled, Branch: gen.DodBranch(c.Merged.Branch)},
-		CiPassed:           c.CIPassed,
-		DeployedProduction: c.DeployedProduction,
-		Uat:                gen.DodUat{Enabled: c.UAT.Enabled, AutoApproveWorkingDays: gen.AutoApproveDays(c.UAT.AutoApproveWorkingDays)},
-		RequesterConfirms:  c.RequesterConfirms,
+		Uat:               gen.DodUat{Enabled: c.UAT.Enabled, AutoApproveWorkingDays: gen.AutoApproveDays(c.UAT.AutoApproveWorkingDays)},
+		RequesterConfirms: c.RequesterConfirms,
 	}
 }
 
 func domainDodConfig(c gen.DodConfig) dod.Config {
 	return dod.Config{
-		Merged:             dod.Merged{Enabled: c.Merged.Enabled, Branch: dod.Branch(c.Merged.Branch)},
-		CIPassed:           c.CiPassed,
-		DeployedProduction: c.DeployedProduction,
-		UAT:                dod.UAT{Enabled: c.Uat.Enabled, AutoApproveWorkingDays: int(c.Uat.AutoApproveWorkingDays)},
-		RequesterConfirms:  c.RequesterConfirms,
+		UAT:               dod.UAT{Enabled: c.Uat.Enabled, AutoApproveWorkingDays: int(c.Uat.AutoApproveWorkingDays)},
+		RequesterConfirms: c.RequesterConfirms,
 	}
 }
 
@@ -56,22 +50,12 @@ func apiTicketDod(d tickets.TicketDoD) gen.TicketDod {
 	out := gen.TicketDod{
 		Source: gen.DodSource(d.Source), Config: apiDodConfig(d.Config), ProjectConfig: apiDodConfig(d.ProjectConfig),
 		OverrideReason: d.OverrideReason, Items: make([]gen.TicketDodItem, len(d.Items)), Met: d.Met,
-		Pending: apiDodItems(d.Pending), CanOverride: d.CanOverride, HasRepository: d.HasRepository,
+		Pending: apiDodItems(d.Pending), CanOverride: d.CanOverride,
 	}
 	for i, it := range d.Items {
-		out.Items[i] = gen.TicketDodItem{Item: gen.DodItem(it.Item), DoneAt: it.DoneAt, DoneBy: apiRefPtr(it.DoneBy), Source: apiCodeSource(it.Source)}
+		out.Items[i] = gen.TicketDodItem{Item: gen.DodItem(it.Item), DoneAt: it.DoneAt, DoneBy: apiRefPtr(it.DoneBy)}
 	}
 	return out
-}
-
-func apiCodeSource(s *tickets.CodeSource) *gen.CodeSource {
-	if s == nil {
-		return nil
-	}
-	return &gen.CodeSource{
-		Provider: gen.GitProvider(s.Provider), Kind: gen.CodeEventKind(s.Kind), Ref: s.Ref, Title: s.Title, Branch: s.Branch,
-		Target: s.Target, Author: s.Author, Url: s.URL, At: s.At,
-	}
 }
 
 func apiDodItems(items []dod.Item) []gen.DodItem {

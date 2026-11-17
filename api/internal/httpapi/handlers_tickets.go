@@ -211,13 +211,9 @@ func (s *server) ListTicketActivity(ctx context.Context, req gen.ListTicketActiv
 			a.Channel = &c
 		}
 		if e.Code != nil {
-			items := make([]gen.DodItem, len(e.Code.Items))
-			for j, it := range e.Code.Items {
-				items[j] = gen.DodItem(it)
-			}
 			a.Code = &gen.TicketActivityCode{
 				Provider: gen.GitProvider(e.Code.Provider), Kind: gen.CodeEventKind(e.Code.Kind), Ref: e.Code.Ref,
-				Branch: e.Code.Branch, Target: e.Code.Target, Outcome: gen.CodeOutcome(e.Code.Outcome), Items: items,
+				Branch: e.Code.Branch, Target: e.Code.Target, Outcome: gen.CodeOutcome(e.Code.Outcome),
 			}
 		}
 		out[i] = a
@@ -320,21 +316,13 @@ func (s *server) GetTicketCode(ctx context.Context, req gen.GetTicketCodeRequest
 	if err != nil {
 		return nil, err
 	}
-	out := gen.GetTicketCode200JSONResponse{
-		Requests: make([]gen.CodeRequest, len(c.Requests)), Commits: make([]gen.CodeCommit, len(c.Commits)),
-	}
+	out := gen.GetTicketCode200JSONResponse{Commits: make([]gen.CodeCommit, len(c.Commits))}
 	if r := c.Repository; r != nil {
 		out.Repository = &gen.RepositoryRef{Id: r.ID, Provider: gen.GitProvider(r.Provider), FullName: r.FullName, WebUrl: r.WebURL}
 	}
-	for i, r := range c.Requests {
-		out.Requests[i] = gen.CodeRequest{
-			Provider: gen.GitProvider(r.Provider), Number: r.Number, Title: r.Title, State: gen.CodeRequestState(r.State),
-			Branch: r.Branch, Target: r.Target, Url: r.URL, Author: r.Author, At: r.At,
-		}
-	}
 	for i, cm := range c.Commits {
 		out.Commits[i] = gen.CodeCommit{
-			Provider: gen.GitProvider(cm.Provider), Sha: cm.SHA, Title: cm.Title, Branch: cm.Branch, Author: cm.Author,
+			Provider: gen.GitProvider(cm.Provider), Sha: cm.SHA, Title: cm.Title, Branches: cm.Branches, Author: cm.Author,
 			Url: cm.URL, At: cm.At,
 		}
 	}

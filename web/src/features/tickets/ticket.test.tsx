@@ -190,12 +190,12 @@ describe('agent ticket detail', () => {
       'href',
       'https://github.com/vendor-id/eoffice-jambi',
     )
-    expect(within(code).getByRole('link', { name: /PR #42 · Revert SSO token TTL change/ })).toBeInTheDocument()
-    expect(within(code).getByText('In review')).toBeInTheDocument()
-    expect(within(code).getByText(/fix\/HD-24871-sso → main · opened by Adi Saputra/)).toBeInTheDocument()
     const commits = within(code).getByRole('list', { name: 'Commits' })
     expect(within(commits).getAllByRole('listitem')[0]).toHaveTextContent('a1f9c2e')
     expect(within(commits).getByText('Fix HD-24871: revert SSO token TTL to 8h')).toBeInTheDocument()
+    // Where the fix has landed so far: its branch, then main.
+    const [fixBranches] = within(commits).getAllByRole('list', { name: 'Branches it reached' })
+    expect(within(fixBranches!).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['fix/HD-24871-sso', 'main'])
   })
 
   it('leaves code activity out for a project without a repository and no code', async () => {

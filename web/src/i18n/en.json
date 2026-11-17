@@ -108,13 +108,8 @@
       "uatChip": "Client testing · day {{day}} of {{days}}",
       "uatChipNoLimit": "Client testing · day {{day}}",
       "code": {
-        "open": "{{request}} in review → {{target}}",
-        "merged": "{{request}} merged → {{target}}",
-        "mergedDeployed": "{{request}} merged + deployed",
-        "closed": "{{request}} closed without merging",
-        "commits_one": "{{count}} commit on {{branch}}",
-        "commits_other": "{{count}} commits on {{branch}}",
-        "deployed": "Deployed to production"
+        "commits_one": "{{sha}} on {{branch}}",
+        "commits_other": "{{count}} commits · {{sha}} on {{branch}}"
       }
     },
     "logTicket": {
@@ -417,7 +412,7 @@
       },
       "integrations": {
         "title": "GitHub / GitLab",
-        "description": "Reads commits, pull requests and merge requests that mention a ticket ID, and moves tickets forward by their project's Definition of Done. Read-only: it never writes to your code."
+        "description": "Shows the commits that mention a ticket ID on that ticket, with the branches they reach. Read-only: it never writes to your code and never moves a ticket."
       },
       "catalog": {
         "title": "Catalogue",
@@ -576,8 +571,8 @@
     },
     "integrations": {
       "how": {
-        "github": "Repository webhooks with a secret. Events: push, pull request, deployment status, workflow run.",
-        "gitlab": "Project webhooks with a secret token. Events: push, merge request, pipeline, deployment."
+        "github": "Repository webhooks with a secret. Events: push.",
+        "gitlab": "Project webhooks with a secret token. Events: push."
       },
       "providerStatus": {
         "notSetUp": "Not set up",
@@ -612,7 +607,7 @@
         "gitlab": "https://gitlab.example.com/group/project"
       },
       "urlRequired": "Enter the repository's address.",
-      "pickerHint": "Their tickets move with this repository's commits, merges, CI runs and deploys. A project reads one repository.",
+      "pickerHint": "Commits that name their tickets show on those tickets. A project reads one repository.",
       "pickerEmpty": "No projects yet. Add one under Projects first.",
       "pickerMoves": "{{client}}. Reads {{repo}} now; it moves here.",
       "editProjects": "Edit projects",
@@ -653,8 +648,8 @@
         "gitlab": "Trigger"
       },
       "setupEvents": {
-        "github": "Let me select individual events: Pushes, Pull requests, Deployment statuses, Workflow runs, Check suites.",
-        "gitlab": "Push events (all branches), Merge request events, Pipeline events, Deployment events."
+        "github": "Let me select individual events: Pushes.",
+        "gitlab": "Push events (all branches)."
       },
       "setupDone": "Done",
       "copy": "Copy",
@@ -662,38 +657,27 @@
       "copyLabel": "Copy the {{label}}",
       "rules": {
         "title": "Commit message rules",
-        "description": "Keywords match GitHub and GitLab habits (fix, close, resolve) so developers don't learn new ones. Unlike their built-in closing, this works on any branch.",
+        "description": "Only commits are read. A ticket ID in the message links the commit to the ticket; nothing in a commit moves a ticket.",
         "cols": {
-          "contains": "Message contains",
+          "contains": "Commit",
           "example": "Example",
           "effect": "What happens"
         },
         "link": {
-          "contains": "Ticket ID only",
+          "contains": "Ticket ID in the message",
           "example": "refs {{prefix}}-24871 add logging",
-          "effect": "Linked to the ticket; New or Assigned → In progress. A new ticket goes to the commit's author when they're on the team."
+          "effect": "Linked to the ticket: it shows under Code activity, and the assignee is told."
         },
-        "fix": {
-          "contains": "fix / close / resolve + ID",
+        "branch": {
+          "contains": "The same commit pushed to another branch",
+          "example": "the merge into main",
+          "effect": "The ticket shows the new branch next to the commit, e.g. fix branch → main."
+        },
+        "words": {
+          "contains": "Words like fix, close or reopen",
           "example": "Fixes {{prefix}}-24871: revert TTL",
-          "effect": "DoD item “Fix committed” ticked"
-        },
-        "opened": {
-          "contains": "PR/MR opened with ID",
-          "example": "branch fix/{{prefix}}-24871-sso",
-          "effect": "Shown on the ticket as “In review”"
-        },
-        "merged": {
-          "contains": "PR/MR merged, or a commit pushed straight to the branch",
-          "example": "into the DoD branch",
-          "effect": "DoD item ticked → In UAT, or Resolved if nothing else is required"
-        },
-        "reopen": {
-          "contains": "reopen + ID",
-          "example": "reopen {{prefix}}-24830 date bug back",
-          "effect": "Back to In progress; assignee notified"
-        },
-        "runs": "CI runs on the DoD branch and production deployments after the merge tick “CI passed” and “Deployed” when the project asks for them."
+          "effect": "Just a link. The team moves tickets by hand; commits never change a status or the Definition of Done."
+        }
       },
       "tester": {
         "title": "Try a commit message",
@@ -701,58 +685,35 @@
         "initial": "Fixes {{prefix}}-24871: revert SSO token TTL to 8h",
         "reading": "Reading the message…",
         "emptyTitle": "Nothing to read",
-        "empty": "Type a commit message to see what it would do.",
+        "empty": "Type a commit message to see which tickets it names.",
         "noneTitle": "No ticket found",
         "none": "No {{prefix}} number in the message, so the commit is ignored.",
         "keySeparator": ", ",
-        "reopen": {
-          "title": "Reopen · {{keys}}",
-          "text": "Moves {{keys}} back to In progress and notifies the assignee."
-        },
-        "fix": {
-          "title": "Fix committed · {{keys}}",
-          "text": "Links the commit and ticks “Fix committed”. The ticket still waits for the rest of its project DoD, such as the merge into main or client UAT."
-        },
         "link": {
           "title": "Linked · {{keys}}",
-          "text": "Adds the commit to the activity log. If the ticket is New or Assigned, it moves to In progress."
+          "text": "Adds the commit to the ticket's code activity. The ticket's status doesn't change."
         },
         "missing_one": "No ticket {{keys}} yet, so it would be logged and ignored.",
         "missing_other": "No tickets {{keys}} yet, so they would be logged and ignored.",
         "samples": {
           "link": "refs {{prefix}}-24859 add retry",
-          "fix": "Closes {{prefix}}-24830",
-          "reopen": "reopen {{prefix}}-24830",
+          "words": "Closes {{prefix}}-24830",
           "none": "update readme"
         }
       },
       "log": {
         "title": "Recent events",
-        "description": "What the latest commits, pull/merge requests, CI runs and deployments did, newest first.",
+        "description": "The latest commits that named a ticket, newest first.",
         "loading": "Loading recent events…",
-        "empty": "No events yet. They show up here once a connected repository sends a commit, pull request or deployment that names a ticket.",
+        "empty": "No commits yet. They show up here once a connected repository pushes a commit that names a ticket.",
         "cut": "{{text}}…",
-        "kind": {
-          "commit": "Push {{ref}} “{{title}}”",
-          "pr_opened": "{{request}} opened on {{repo}}",
-          "pr_merged": "{{request}} merged into {{target}}",
-          "pr_closed": "{{request}} closed without merging",
-          "pipeline": "CI passed on {{branch}}",
-          "deployment": "Deployment to {{ref}} succeeded"
-        },
         "outcome": {
-          "moved": "{{what}} → <key>{{key}}</key> moved to {{status}}",
           "linked": "{{what}} → linked to <key>{{key}}</key>",
-          "in_review": "{{what}} → linked to <key>{{key}}</key>, in review",
-          "fix_committed": "{{what}} → <key>{{key}}</key>: “{{item}}” ticked",
-          "merged": "{{what}} → <key>{{key}}</key>: “{{item}}” ticked",
-          "ci_passed": "{{what}} → <key>{{key}}</key>: “{{item}}” ticked",
-          "deployed": "{{what}} → <key>{{key}}</key>: “{{item}}” ticked",
-          "reopened": "{{what}} → <key>{{key}}</key> reopened",
           "unknown_ticket": "{{what}} mentioned <key>{{key}}</key>: no such ticket, ignored",
           "other_repository": "{{what}} mentioned <key>{{key}}</key>: its project reads another repository, ignored",
           "ticket_closed": "{{what}} mentioned <key>{{key}}</key>: the ticket is closed, ignored"
-        }
+        },
+        "commit": "Push {{ref}} “{{title}}” on {{branch}}"
       },
       "setupReachable": {
         "github": "GitHub must be able to reach this address, so the install has to be reachable from the internet.",
@@ -1041,9 +1002,7 @@
       "statusByCodeActivity": "Status changed from {{from}} to {{to}}: {{actor}} started on the code",
       "statusByCodeDone": "Status changed from {{from}} to {{to}}: the code conditions of the Definition of Done were met",
       "statusByCodeReopened": "Status changed from {{from}} to {{to}}: a commit by {{actor}} reopened the ticket",
-      "codeLinked": "{{provider}}: {{event}}",
-      "codeItems": "{{line}}. Done: {{items}}",
-      "codeItemSeparator": ", "
+      "codeLinked": "{{provider}}: {{event}}"
     },
     "notFound": {
       "title": "Ticket not found",
@@ -1070,23 +1029,15 @@
       "how": {
         "approvedBy": "Approved by {{name}} · {{time}}",
         "approvedAuto": "Approved automatically · {{time}}",
-        "doneAt": "Done · {{time}}",
         "asked": "{{name}} asked to test",
         "askedAuto": "{{name}} asked to test · auto-approves {{date}}",
-        "later": "Asked of {{name}} when the ticket moves to In UAT",
-        "code": "Read from GitHub or GitLab",
-        "commit": "Commit {{sha}} says “{{title}}”",
-        "merged": "{{request}} merged by {{author}} · {{time}}",
-        "pipeline": "CI passed on {{branch}} · {{time}}",
-        "deployed": "Deployed to {{environment}} · {{time}}",
-        "waitingOn": "Waiting on {{request}}"
+        "later": "Asked of {{name}} when the ticket moves to In UAT"
       },
       "foot": {
         "met": "Every condition is met.",
         "waiting": "It resolves when the client approves.",
         "waitingAuto": "It resolves when the client approves, or by itself on {{date}}.",
-        "askClient": "Move the ticket to In UAT when the fix is ready; the client is asked to test.",
-        "code": "It moves on by itself once the code conditions are met."
+        "askClient": "Move the ticket to In UAT when the fix is ready; the client is asked to test."
       },
       "dialog": {
         "title": "A Definition of Done for {{key}}",
@@ -1117,17 +1068,10 @@
       "title": "Code activity",
       "repository": "{{provider}} · {{name}}",
       "loading": "Loading code activity…",
-      "empty": "No commits or pull requests name this ticket yet. Mention {{key}} in a commit message or branch name to link them.",
-      "request": "{{request}} · {{title}}",
-      "state": {
-        "open": "In review",
-        "merged": "Merged",
-        "closed": "Closed"
-      },
-      "openedLine": "{{branch}} → {{target}} · opened by {{author}} · {{time}}",
-      "mergedLine": "{{branch}} → {{target}} · merged by {{author}} · {{time}}",
+      "empty": "No commits name this ticket yet. Mention {{key}} in a commit message to link it.",
       "commits": "Commits",
-      "commitMeta": "{{author}} · {{time}}"
+      "commitMeta": "{{author}} · {{time}}",
+      "branches": "Branches it reached"
     }
   },
   "projects": {
@@ -1355,7 +1299,7 @@
           },
           "status": {
             "label": "Status changes",
-            "hint": "Including moves on the board and by GitHub/GitLab"
+            "hint": "Including moves on the board"
           },
           "assignment": {
             "label": "Assigned to me or unassigned",
@@ -1457,21 +1401,6 @@
   },
   "dod": {
     "items": {
-      "fix_committed": {
-        "label": "Fix committed"
-      },
-      "merged": {
-        "label": "Pull/merge request merged into a branch",
-        "hint": "Read from GitHub or GitLab. The PR or a commit must mention the ticket ID."
-      },
-      "ci_passed": {
-        "label": "CI pipeline passed on that branch",
-        "hint": "GitHub Actions or GitLab CI status after the merge"
-      },
-      "deployed": {
-        "label": "Deployed to production",
-        "hint": "Reported by a deployment event or a webhook from your pipeline"
-      },
       "uat_approved": {
         "label": "UAT approved by the client",
         "hint": "The ticket moves to In UAT; the client approves or rejects in the portal"
@@ -1482,31 +1411,8 @@
       }
     },
     "short": {
-      "fix_committed": "fix committed",
-      "merged": "code merged",
-      "ci_passed": "CI passed",
-      "deployed": "deployed to production",
       "uat_approved": "the client's UAT approval",
       "requester_confirmed": "the requester's confirmation"
-    },
-    "branchLabel": "Target branch",
-    "branch": {
-      "main": {
-        "label": "main",
-        "hint": "Default branch"
-      },
-      "develop": {
-        "label": "develop",
-        "hint": "Integration branch"
-      },
-      "release/*": {
-        "label": "release/*",
-        "hint": "Any release branch, e.g. release/2026.11"
-      },
-      "staging": {
-        "label": "staging",
-        "hint": "Staging environment branch"
-      }
     },
     "autoApproveLabel": "Auto-approve if no answer",
     "autoApprove": {
@@ -1521,14 +1427,10 @@
         "label": "After 5 working days"
       }
     },
-    "needsRepo": "Needs a repository linked to this project",
     "doneMeans": "Done means:",
     "sentence": "{{conditions}}.",
     "nothing": "nothing automatic. An agent resolves each ticket by hand.",
     "conditions": {
-      "merged": "the pull/merge request is merged into {{branch}}",
-      "ci": "CI passes on {{branch}}",
-      "deployed": "it is deployed to production",
       "uat": "the client approves UAT",
       "uatAuto_one": "the client approves UAT (auto-approved after {{count}} working day)",
       "uatAuto_other": "the client approves UAT (auto-approved after {{count}} working days)",
@@ -1537,26 +1439,17 @@
     "flowLabel": "Status flow",
     "flow": {
       "in_progress": "In progress",
-      "merged": "Merged",
-      "mergedDeployed": "Merged & deployed",
       "in_uat": "In UAT",
       "confirm": "Awaiting confirmation",
       "resolved": "Resolved"
     },
     "summary": {
-      "merged": "Merged → {{branch}}",
-      "deployed": "Deployed",
       "uat": "UAT",
       "confirm": "Requester confirms",
       "none": "Resolved by hand",
-      "separator": " + ",
-      "ci": "CI passes on {{branch}}"
+      "separator": " + "
     },
     "check": {
-      "fix_committed": "Fix committed",
-      "merged": "PR merged into {{branch}}",
-      "ci_passed": "CI passed on {{branch}}",
-      "deployed": "Deployed to production",
       "uat_approved": "UAT approved by client",
       "requester_confirmed": "Requester confirmed it's fixed"
     }
@@ -1572,9 +1465,6 @@
     },
     "event": {
       "commit": "commit {{sha}} on {{branch}} mentions this ticket",
-      "commitFixes": "commit {{sha}} on {{branch}} fixes this ticket",
-      "commitLanded": "commit {{sha}} landed on {{branch}}",
-      "commitReopened": "commit {{sha}} says the problem is back",
       "pr_opened": "{{request}} opened → {{target}}",
       "pr_merged": "{{request}} merged into {{target}}",
       "pr_closed": "{{request}} closed without merging",

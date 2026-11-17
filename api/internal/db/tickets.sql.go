@@ -135,8 +135,7 @@ SELECT t.id, t.key, t.type, t.status, t.priority, t.channel, t.subject, t.descri
        t.project_id, p.name AS project_name,
        t.catalog_item_id, ci.name AS catalog_item_name,
        t.status_changed_at, p.dod_config, p.allow_ticket_override,
-       o.config AS dod_override, o.reason AS dod_override_reason,
-       (p.repository_id IS NOT NULL)::boolean AS has_repository
+       o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 JOIN clients c ON c.id = t.client_id
 JOIN users r ON r.id = t.requester_id
@@ -192,7 +191,6 @@ type GetTicketRow struct {
 	AllowTicketOverride bool
 	DodOverride         []byte
 	DodOverrideReason   *string
-	HasRepository       bool
 }
 
 func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicketRow, error) {
@@ -232,7 +230,6 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 		&i.AllowTicketOverride,
 		&i.DodOverride,
 		&i.DodOverrideReason,
-		&i.HasRepository,
 	)
 	return i, err
 }
@@ -240,8 +237,7 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 const getTicketForUpdate = `-- name: GetTicketForUpdate :one
 SELECT t.id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
        a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
-       p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason,
-       (p.repository_id IS NOT NULL)::boolean AS has_repository
+       p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 LEFT JOIN users a ON a.id = t.assignee_id
 JOIN projects p ON p.id = t.project_id
@@ -277,7 +273,6 @@ type GetTicketForUpdateRow struct {
 	AllowTicketOverride bool
 	DodOverride         []byte
 	DodOverrideReason   *string
-	HasRepository       bool
 }
 
 // Locks the ticket only; the project's Definition of Done and the override are read as they are.
@@ -301,7 +296,6 @@ func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdate
 		&i.AllowTicketOverride,
 		&i.DodOverride,
 		&i.DodOverrideReason,
-		&i.HasRepository,
 	)
 	return i, err
 }

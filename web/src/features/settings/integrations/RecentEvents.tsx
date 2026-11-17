@@ -13,12 +13,17 @@ import { useTimestamp } from '../../tickets/time'
 import { codeEventsQueryOptions } from './queries'
 
 /** Outcomes that left the ticket alone: the key is shown, not linked, for unknown tickets. */
-const IGNORED = ['ticket_closed', 'unknown_ticket', 'other_repository']
+const IGNORED = ['ticket_closed', 'unknown_ticket', 'other_repository'] as const
+type Ignored = (typeof IGNORED)[number]
+
+function isIgnored(o: CodeEventLog['outcome']): o is Ignored {
+  return (IGNORED as readonly string[]).includes(o)
+}
 
 /** How much of a commit's first line the log quotes. */
 const TITLE_CHARS = 48
 
-/** "Recent events" (Integrations mock): what the latest code events did, newest first. */
+/** "Recent events" (Integrations mock): the latest commits that named a ticket, newest first. */
 export function RecentEvents() {
   const { t } = useTranslation()
   const events = useQuery(codeEventsQueryOptions)
@@ -56,23 +61,16 @@ function LogRow({ entry: e }: { entry: CodeEventLog }) {
   const { t } = useTranslation()
   const labels = useCodeLabels()
   const { stamp } = useTimestamp()
-  const ignored = IGNORED.includes(e.outcome)
+  const ignored = isIgnored(e.outcome)
   const title = e.title.length > TITLE_CHARS ? t('settings.integrations.log.cut', { text: e.title.slice(0, TITLE_CHARS) }) : e.title
-  const what = t(`settings.integrations.log.kind.${e.kind}`, {
-    ref: e.ref,
-    request: labels.request(e.provider, e.ref),
-    title,
-    branch: e.branch,
-    target: e.target,
-    repo: e.repository.split('/').pop(),
-  })
+  const what = t('settings.integrations.log.commit', { ref: e.ref, title, branch: e.branch })
   const key = e.ticketFound ? (
     <Link to="/tickets/$key" params={{ key: e.ticketKey }} className="font-bold text-primary hover:text-primary-hover" />
   ) : (
     <span className="font-bold" />
   )
-  const outcome = e.statusTo ? 'moved' : e.outcome
-  const item = e.items.at(-1)
+  // Links written before 17 Nov were remapped to "linked" when Git stopped moving tickets.
+  const outcome = isIgnored(e.outcome) ? e.outcome : 'linked'
   return (
     <li className="flex flex-wrap gap-x-2.5 gap-y-0.5">
       <span className="min-w-(--log-time-w) font-semibold text-muted tabular-nums">{stamp(e.at)}</span>
@@ -80,12 +78,7 @@ function LogRow({ entry: e }: { entry: CodeEventLog }) {
       <span className={ignored ? 'text-chip-danger-fg' : undefined}>
         <Trans
           i18nKey={`settings.integrations.log.outcome.${outcome}`}
-          values={{
-            what,
-            key: e.ticketKey,
-            status: e.statusTo ? t(`ticket.status.agent.${e.statusTo}`) : '',
-            item: item ? t(`dod.check.${item}`, { branch: e.target || e.branch }) : '',
-          }}
+          values={{ what, key: e.ticketKey }}
           components={{ key }}
         />
       </span>

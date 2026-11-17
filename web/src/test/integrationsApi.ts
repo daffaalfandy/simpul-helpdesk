@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 
-import type { CodeEventLog, CommitRefAction, CommitTestRef, Repository, RepositoryCreate } from '../api/client'
+import type { CodeEventLog, CommitTestRef, Repository, RepositoryCreate } from '../api/client'
 import { PROJECT_IDS, projectsApi } from './projectsApi'
 import { problem } from './server'
 
@@ -28,19 +28,19 @@ function fixtures() {
   ]
   const events: CodeEventLog[] = [
     {
-      id: 'l-1', at: '2026-11-16T02:05:00Z', provider: 'github', repository: 'vendor-id/eoffice-jambi', kind: 'pr_opened', ref: '42',
-      title: 'Revert SSO token TTL change', branch: 'fix/HD-24871-sso', target: 'main', url: 'u', ticketKey: 'HD-24871',
-      ticketFound: true, outcome: 'in_review', items: [], statusFrom: null, statusTo: null,
+      id: 'l-1', at: '2026-11-16T02:05:00Z', provider: 'github', repository: 'vendor-id/eoffice-jambi', ref: 'a1f9c2e',
+      title: 'Fix HD-24871: revert SSO token TTL', branch: 'fix/HD-24871-sso', url: 'u', ticketKey: 'HD-24871',
+      ticketFound: true, outcome: 'linked',
     },
     {
-      id: 'l-2', at: '2026-11-16T01:30:00Z', provider: 'gitlab', repository: 'gov/sipd-connector', kind: 'pr_merged', ref: '57',
-      title: 'SIPD export streams large files', branch: 'fix/HD-24826-export', target: 'release/2026.11', url: 'u',
-      ticketKey: 'HD-24826', ticketFound: true, outcome: 'merged', items: ['merged'], statusFrom: 'in_progress', statusTo: 'in_uat',
+      id: 'l-2', at: '2026-11-16T01:30:00Z', provider: 'gitlab', repository: 'gov/sipd-connector', ref: 'da15608',
+      title: 'HD-24826: stream large Excel exports', branch: 'fix/HD-24826-export', url: 'u',
+      ticketKey: 'HD-24826', ticketFound: true, outcome: 'linked',
     },
     {
-      id: 'l-3', at: '2026-11-16T00:58:00Z', provider: 'github', repository: 'vendor-id/eoffice-jambi', kind: 'commit', ref: 'f00ba12',
-      title: 'refs HD-99999 clean up old session keys', branch: 'main', target: '', url: 'u', ticketKey: 'HD-99999',
-      ticketFound: false, outcome: 'unknown_ticket', items: [], statusFrom: null, statusTo: null,
+      id: 'l-3', at: '2026-11-16T00:58:00Z', provider: 'github', repository: 'vendor-id/eoffice-jambi', ref: 'f00ba12',
+      title: 'refs HD-99999 clean up old session keys', branch: 'main', url: 'u', ticketKey: 'HD-99999',
+      ticketFound: false, outcome: 'unknown_ticket',
     },
   ]
   return { repositories, events, requests: [] as Recorded[] }
@@ -59,16 +59,15 @@ async function record(request: Request) {
   return body
 }
 
-const KEYWORDS: Record<string, CommitRefAction> = { fix: 'fix', fixes: 'fix', closes: 'fix', close: 'fix', reopen: 'reopen' }
 const EXISTING = ['HD-24871', 'HD-24830', 'HD-24859']
 
-/** A rough stand-in for the API's parser: enough for the tester's states. */
+/** A rough stand-in for the API's parser: the keys a message names, in order. */
 function parse(message: string): CommitTestRef[] {
   const out: CommitTestRef[] = []
-  for (const m of message.matchAll(/(?:\b(\w+)[\s:(]+)?\b(HD-[1-9]\d*)\b/gi)) {
-    const key = (m[2] ?? '').toUpperCase()
+  for (const m of message.matchAll(/\b(HD-[1-9]\d*)\b/gi)) {
+    const key = (m[1] ?? '').toUpperCase()
     if (out.some((r) => r.key === key)) continue
-    out.push({ key, action: KEYWORDS[(m[1] ?? '').toLowerCase()] ?? 'link', ticketExists: EXISTING.includes(key) })
+    out.push({ key, ticketExists: EXISTING.includes(key) })
   }
   return out
 }

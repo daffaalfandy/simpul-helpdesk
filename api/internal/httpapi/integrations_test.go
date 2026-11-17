@@ -66,15 +66,11 @@ func TestRepositories(t *testing.T) {
 		t.Fatal("webhook secret stored in plain text")
 	}
 
-	// The project now reads code from it, so code conditions are allowed.
+	// The project now reads commits from it.
 	p := decode[gen.Project](t, sup.do(http.MethodGet, projectPath(eOffice), nil), http.StatusOK)
-	if !p.HasRepository || p.Repository == nil || p.Repository.Id != r.Id || p.Repository.Provider != gen.GitProviderGithub {
-		t.Fatalf("project repository = %v %+v", p.HasRepository, p.Repository)
+	if p.Repository == nil || p.Repository.Id != r.Id || p.Repository.Provider != gen.GitProviderGithub {
+		t.Fatalf("project repository = %+v", p.Repository)
 	}
-	code := p.Dod
-	code.Merged.Enabled = true
-	decode[gen.Project](t, sup.do(http.MethodPut, projectPath(eOffice)+"/dod", gen.ProjectDodInput{Dod: code, AllowTicketOverride: true}), http.StatusOK)
-	expectProblem(t, sup.do(http.MethodPut, projectPath(website)+"/dod", gen.ProjectDodInput{Dod: code}), http.StatusBadRequest, apperr.CodeInvalidDoD)
 
 	ov := decode[gen.Integrations](t, admin.do(http.MethodGet, "/integrations", nil), http.StatusOK)
 	if ov.TicketPrefix != "HD" || len(ov.Repositories) != 1 || ov.Repositories[0].Id != r.Id {
@@ -86,9 +82,6 @@ func TestRepositories(t *testing.T) {
 	expectProblem(t, admin.do(http.MethodPost, "/repositories", repoInput(gen.GitProviderGithub, "https://github.com/vendor-id")), http.StatusBadRequest, apperr.CodeInvalidRepositoryURL)
 	expectProblem(t, admin.do(http.MethodPost, "/repositories", repoInput(gen.GitProviderGitlab, "https://gitlab.com/g/p", uuid.New())), http.StatusBadRequest, apperr.CodeInvalidProject)
 
-	// e-Office reads merges from it: it can't be unlinked until that condition is off.
-	expectProblem(t, admin.do(http.MethodPatch, repoPath(r), gen.RepositoryUpdate{ProjectIds: []uuid.UUID{website.Id}}), http.StatusConflict, apperr.CodeRepositoryInUse)
-	expectProblem(t, admin.do(http.MethodDelete, repoPath(r), nil), http.StatusConflict, apperr.CodeRepositoryInUse)
 	both := decode[gen.Repository](t, admin.do(http.MethodPatch, repoPath(r), gen.RepositoryUpdate{ProjectIds: []uuid.UUID{website.Id, eOffice.Id, website.Id}}), http.StatusOK)
 	if len(both.Projects) != 2 {
 		t.Fatalf("linked = %+v", both.Projects)
@@ -115,7 +108,7 @@ func TestRepositories(t *testing.T) {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}
 	expectProblem(t, admin.do(http.MethodPatch, repoPath(gl), gen.RepositoryUpdate{ProjectIds: []uuid.UUID{}}), http.StatusNotFound, apperr.CodeNotFound)
-	if p := decode[gen.Project](t, sup.do(http.MethodGet, projectPath(website), nil), http.StatusOK); p.HasRepository {
+	if p := decode[gen.Project](t, sup.do(http.MethodGet, projectPath(website), nil), http.StatusOK); p.Repository != nil {
 		t.Fatal("website still has the deleted repository")
 	}
 	e.connectRepo(t, gen.GitProviderGitlab, "https://gitlab.vendor.co.id/gov/sipd-connector")

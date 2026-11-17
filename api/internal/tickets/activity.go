@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
@@ -48,14 +47,15 @@ type ActivityEntry struct {
 	Code      *ActivityCode
 }
 
-// ActivityCode is what a code event did to the ticket.
+// ActivityCode is a commit that reached the ticket. Entries written before 17 Nov may be pull/
+// merge requests, CI runs or deployments, with the outcome and items they had then: history.
 type ActivityCode struct {
 	Provider gitevent.Provider
 	Kind     gitevent.Kind
 	Ref      string
 	Branch   string
 	Target   string
-	Outcome  codeflow.Outcome
+	Outcome  CodeOutcome
 	Items    []dod.Item
 }
 
@@ -131,7 +131,7 @@ func activityFromRow(r db.ListAuditByTargetRow) (ActivityEntry, bool) {
 		e.Code = &ActivityCode{
 			Provider: deref(decode[gitevent.Provider](data, dataProvider)), Kind: deref(decode[gitevent.Kind](data, dataCodeKind)),
 			Ref: deref(decode[string](data, dataCodeRef)), Branch: deref(decode[string](data, dataBranch)),
-			Target: deref(decode[string](data, dataTarget)), Outcome: deref(decode[codeflow.Outcome](data, dataOutcome)),
+			Target: deref(decode[string](data, dataTarget)), Outcome: deref(decode[CodeOutcome](data, dataOutcome)),
 			Items: deref(decode[[]dod.Item](data, dataItems)),
 		}
 		if e.Code.Items == nil {

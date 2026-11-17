@@ -119,10 +119,9 @@ describe('projects', () => {
   it('edits the Definition of Done with a live preview and saves it', async () => {
     const { user } = await openProjects()
     await user.click(within(dodCard()).getByRole('button', { name: 'Edit DoD' }))
-    // Code conditions wait for a repository (GitHub/GitLab connector).
-    const merged = within(dodCard()).getByRole('checkbox', { name: /Pull\/merge request merged/ })
-    expect(merged).toBeDisabled()
-    expect(within(dodCard()).getAllByText(/Needs a repository linked to this project/, { selector: 'span' })).toHaveLength(3)
+    // Only the client's checks: Git no longer ticks the Definition of Done.
+    expect(within(dodCard()).getAllByRole('checkbox').map((c) => c.closest('label')?.textContent ?? '')).toHaveLength(3)
+    expect(within(dodCard()).queryByRole('checkbox', { name: /merged/i })).not.toBeInTheDocument()
 
     await user.click(within(dodCard()).getByRole('checkbox', { name: /Requester confirms it's fixed/ }))
     await user.click(within(dodCard()).getByRole('button', { name: /Auto-approve if no answer/ }))

@@ -7,7 +7,6 @@ import type { BoardCard, BoardCardCode } from '../../api/client'
 import { Avatar } from '../../components/Avatar'
 import { Pill, PriorityBadge } from '../../components/Badges'
 import { paths } from '../../lib/constants'
-import { useCodeLabels } from '../code/labels'
 import { SlaChip } from './SlaChip'
 
 /**
@@ -70,26 +69,10 @@ export function KanbanCard({ card }: { card: BoardCard }) {
   )
 }
 
-/** The code that reached the ticket (Main mock): its latest pull/merge request, or its commits. */
+/** The commits that named the ticket (Main mock's code chip): the latest one and where it is. */
 function CodeChip({ code }: { code: BoardCardCode }) {
   const { t } = useTranslation()
-  const labels = useCodeLabels()
-  const r = code.request
-  let text: string
-  if (r) {
-    const request = labels.request(code.provider, r.number)
-    if (r.state === 'merged') {
-      text = code.deployed ? t('agent.board.code.mergedDeployed', { request }) : t('agent.board.code.merged', { request, target: r.target })
-    } else if (r.state === 'closed') {
-      text = t('agent.board.code.closed', { request })
-    } else {
-      text = t('agent.board.code.open', { request, target: r.target })
-    }
-  } else if (code.commits > 0) {
-    text = t('agent.board.code.commits', { count: code.commits, branch: code.branch })
-  } else {
-    text = t('agent.board.code.deployed')
-  }
+  const text = t('agent.board.code.commits', { count: code.commits, sha: code.sha, branch: code.branch })
   return (
     <p className="mt-2 flex items-center gap-1.5 rounded-md bg-chip-code-bg px-2 py-1.25 text-xs font-semibold text-chip-code-fg">
       <GitBranch aria-hidden="true" className="size-(--icon-sm) shrink-0" />

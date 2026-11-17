@@ -20,7 +20,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/secretbox"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
@@ -252,9 +251,8 @@ func (s *Service) Remove(ctx context.Context, actor audit.Actor, id uuid.UUID) e
 	return repositoryError(err)
 }
 
-// link makes exactly projectIDs read code from the repository and returns the ones that did
-// before. Projects linked elsewhere move here. A project whose Definition of Done reads code
-// can't be left without a repository.
+// link makes exactly projectIDs read commits from the repository and returns the ones that did
+// before. Projects linked elsewhere move here.
 func link(ctx context.Context, q *db.Queries, repoID uuid.UUID, projectIDs []uuid.UUID) ([]uuid.UUID, error) {
 	if len(projectIDs) > MaxLinkedProjects {
 		return nil, apperr.InvalidRequest("too many projects")
@@ -265,7 +263,6 @@ func link(ctx context.Context, q *db.Queries, repoID uuid.UUID, projectIDs []uui
 		return nil, err
 	}
 	var before, leaving []uuid.UUID
-	var stranded []string
 	found := 0
 	for _, r := range rows {
 		wanted := slices.Contains(projectIDs, r.ID)
@@ -276,24 +273,12 @@ func link(ctx context.Context, q *db.Queries, repoID uuid.UUID, projectIDs []uui
 			continue
 		}
 		before = append(before, r.ID)
-		if wanted {
-			continue
-		}
-		leaving = append(leaving, r.ID)
-		cfg, err := dod.Parse(r.DodConfig)
-		if err != nil {
-			return nil, err
-		}
-		if errors.Is(dod.Validate(cfg, false), dod.ErrNeedsRepository) {
-			stranded = append(stranded, r.Name)
+		if !wanted {
+			leaving = append(leaving, r.ID)
 		}
 	}
-	switch {
-	case found != len(projectIDs):
+	if found != len(projectIDs) {
 		return nil, apperr.Invalid(apperr.CodeInvalidProject, "Choose projects from the list", "")
-	case len(stranded) > 0:
-		return nil, apperr.Conflict(apperr.CodeRepositoryInUse, "These projects read merges, CI or deploys from it: "+
-			strings.Join(stranded, ", "), "Turn those Definition of Done conditions off first, or link the projects to another repository.")
 	}
 	if len(projectIDs) > 0 {
 		if err := q.SetProjectsRepository(ctx, db.SetProjectsRepositoryParams{RepositoryID: &repoID, Ids: projectIDs}); err != nil {

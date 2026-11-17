@@ -58,7 +58,6 @@ export type ProjectCreate = components['schemas']['ProjectCreate']
 export type ProjectUpdate = components['schemas']['ProjectUpdate']
 export type ProjectSla = components['schemas']['ProjectSla']
 export type DodConfig = components['schemas']['DodConfig']
-export type DodBranch = components['schemas']['DodBranch']
 export type AutoApproveDays = components['schemas']['AutoApproveDays']
 export type ProjectDodInput = components['schemas']['ProjectDodInput']
 export type DodItem = components['schemas']['DodItem']
@@ -105,12 +104,8 @@ export type CodeOutcome = components['schemas']['CodeOutcome']
 export type CodeEventLog = components['schemas']['CodeEventLog']
 export type CommitTest = components['schemas']['CommitTest']
 export type CommitTestRef = components['schemas']['CommitTestRef']
-export type CommitRefAction = components['schemas']['CommitRefAction']
 export type TicketCode = components['schemas']['TicketCode']
-export type CodeRequest = components['schemas']['CodeRequest']
-export type CodeRequestState = components['schemas']['CodeRequestState']
 export type CodeCommit = components['schemas']['CodeCommit']
-export type CodeSource = components['schemas']['CodeSource']
 export type BoardCardCode = components['schemas']['BoardCardCode']
 export type TicketActivityCode = components['schemas']['TicketActivityCode']
 export type NotificationCode = components['schemas']['NotificationCode']
@@ -137,7 +132,6 @@ export const ErrorCode = {
   AttachmentTypeNotAllowed: 'attachment_type_not_allowed',
   InvalidRepositoryUrl: 'invalid_repository_url',
   RepositoryTaken: 'repository_taken',
-  RepositoryInUse: 'repository_in_use',
 } as const
 
 export const HttpStatus = {

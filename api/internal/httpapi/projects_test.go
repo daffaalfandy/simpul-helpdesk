@@ -142,8 +142,8 @@ func TestProjectDoD(t *testing.T) {
 	path := projectPath(p) + "/dod"
 
 	// A new project asks the client to test, approved automatically after 3 working days.
-	if want := apiDod(dod.Default()); p.Dod != want || !p.AllowTicketOverride || p.HasRepository {
-		t.Fatalf("new project DoD = %+v, override %v, repo %v", p.Dod, p.AllowTicketOverride, p.HasRepository)
+	if want := apiDod(dod.Default()); p.Dod != want || !p.AllowTicketOverride || p.Repository != nil {
+		t.Fatalf("new project DoD = %+v, override %v, repo %+v", p.Dod, p.AllowTicketOverride, p.Repository)
 	}
 
 	next := p.Dod
@@ -159,10 +159,6 @@ func TestProjectDoD(t *testing.T) {
 	// Saving the same again writes no audit entry.
 	decode[gen.Project](t, sup.do(http.MethodPut, path, gen.ProjectDodInput{Dod: next, AllowTicketOverride: false}), http.StatusOK)
 
-	// Code conditions need a repository.
-	code := next
-	code.Merged.Enabled = true
-	expectProblem(t, sup.do(http.MethodPut, path, gen.ProjectDodInput{Dod: code, AllowTicketOverride: true}), http.StatusBadRequest, apperr.CodeInvalidDoD)
 	days := next
 	days.Uat.AutoApproveWorkingDays = 4
 	if rec := sup.do(http.MethodPut, path, gen.ProjectDodInput{Dod: days}); rec.Code != http.StatusBadRequest {
@@ -185,11 +181,8 @@ func TestProjectDoD(t *testing.T) {
 
 func apiDod(c dod.Config) gen.DodConfig {
 	return gen.DodConfig{
-		Merged:             gen.DodMerged{Enabled: c.Merged.Enabled, Branch: gen.DodBranch(c.Merged.Branch)},
-		CiPassed:           c.CIPassed,
-		DeployedProduction: c.DeployedProduction,
-		Uat:                gen.DodUat{Enabled: c.UAT.Enabled, AutoApproveWorkingDays: gen.AutoApproveDays(c.UAT.AutoApproveWorkingDays)},
-		RequesterConfirms:  c.RequesterConfirms,
+		Uat:               gen.DodUat{Enabled: c.UAT.Enabled, AutoApproveWorkingDays: gen.AutoApproveDays(c.UAT.AutoApproveWorkingDays)},
+		RequesterConfirms: c.RequesterConfirms,
 	}
 }
 

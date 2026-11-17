@@ -227,7 +227,6 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
     delete:
       operationId: deleteClient
@@ -521,8 +520,7 @@ paths:
       summary: Replace a project's Definition of Done (supervisors and admins)
       description: |
         Applies at once to the project's open tickets, except tickets with a Definition of Done
-        of their own. Merge, CI and deploy conditions are read from the project's repository, so
-        they need one (`invalid_dod`).
+        of their own.
       tags: [projects]
       requestBody:
         required: true
@@ -799,9 +797,9 @@ paths:
       operationId: getIntegrations
       summary: Connected repositories and their projects (admin only)
       description: |
-        The GitHub/GitLab connector is read-only: each repository sends webhooks with its own
-        secret, and commits, pull/merge requests, CI runs and deployments that name a ticket move it
-        by its project's Definition of Done.
+        The GitHub/GitLab connector is read-only: each repository sends push webhooks with its own
+        secret, and a commit whose message names a ticket key is linked to that ticket, with every
+        branch it reaches. Commits never change a ticket.
       tags: [integrations]
       responses:
         "200":
@@ -816,7 +814,7 @@ paths:
   /integrations/commit-test:
     post:
       operationId: testCommitMessage
-      summary: What a commit message would do (admin only)
+      summary: Which tickets a commit message names (admin only)
       description: The "Try a commit message" tester; it reads the message the way the connector does.
       tags: [integrations]
       requestBody:
@@ -826,7 +824,7 @@ paths:
             schema: { $ref: "#/components/schemas/CommitTestInput" }
       responses:
         "200":
-          description: The tickets the message names and what it asks of each
+          description: The tickets the message names
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CommitTest" }
@@ -884,11 +882,7 @@ paths:
       - $ref: "#/components/parameters/RepositoryId"
     patch:
       operationId: updateRepository
-      summary: Change which projects read code from a repository (admin only)
-      description: |
-        A project whose Definition of Done asks for merge, CI or deploy can't lose its repository
-        (`repository_in_use`, 409): turn those conditions off first, or link it to another
-        repository.
+      summary: Change which projects read commits from a repository (admin only)
       tags: [integrations]
       requestBody:
         required: true
@@ -912,7 +906,7 @@ paths:
       summary: Disconnect a repository (admin only)
       description: |
         Its webhooks are refused from then on. A repository with code events is hidden, so tickets
-        keep their code activity; one without is deleted. Same `repository_in_use` rule as PATCH.
+        keep their code activity; one without is deleted.
       tags: [integrations]
       responses:
         "204":
@@ -920,7 +914,6 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
   /repositories/{repositoryId}/secret:
@@ -951,8 +944,8 @@ paths:
       description: |
         Public: the repository's secret authenticates it (GitHub signs the body with
         `X-Hub-Signature-256`; GitLab sends `X-Gitlab-Token`). The body is read as sent, JSON or
-        GitHub's form encoding, up to 5 MiB, and processed in the background. A redelivery, a
-        ping or an event the connector doesn't read is acknowledged and changes nothing. Error
+        GitHub's form encoding, up to 5 MiB, and processed in the background. Only pushes are
+        read; a redelivery, a ping or any other event is acknowledged and changes nothing. Error
         codes are `invalid_signature` (401), `repository_mismatch` (409, the webhook was added to
         another repository), `invalid_request` (unreadable payload) and `request_too_large`
         (413); each is shown on the Integrations page.
@@ -2154,22 +2147,12 @@ components:
         notifySupervisorOnBreach: { type: boolean }
         notifyPicOnP1Breach: { type: boolean }
 
-    DodBranch:
-      type: string
-      description: The branch a pull/merge request merges into; `release/*` matches any release branch.
-      enum: [main, develop, release/*, staging]
 
     AutoApproveDays:
       type: integer
       description: Working days a ticket waits In UAT before the test is approved automatically; 0 never.
       enum: [0, 3, 5]
 
-    DodMerged:
-      type: object
-      required: [enabled, branch]
-      properties:
-        enabled: { type: boolean }
-        branch: { $ref: "#/components/schemas/DodBranch" }
 
     DodUat:
       type: object
@@ -2182,15 +2165,10 @@ components:
       type: object
       description: |
         A Definition of Done: every enabled condition must be met before a ticket counts as done.
-        UAT and the requester's confirmation are one client check: the ticket waits In UAT and one
-        answer meets both. The branch and day count are kept while their condition is off.
-      required: [merged, ciPassed, deployedProduction, uat, requesterConfirms]
+        Both are the client's check: the ticket waits In UAT and one answer meets both. The day
+        count is kept while UAT is off. Git never ticks them.
+      required: [uat, requesterConfirms]
       properties:
-        merged: { $ref: "#/components/schemas/DodMerged" }
-        ciPassed:
-          type: boolean
-          description: CI passed on the merge branch.
-        deployedProduction: { type: boolean }
         uat: { $ref: "#/components/schemas/DodUat" }
         requesterConfirms:
           type: boolean
@@ -2207,7 +2185,7 @@ components:
 
     Project:
       type: object
-      required: [id, client, name, description, isDefault, active, sla, dod, allowTicketOverride, hasRepository,
+      required: [id, client, name, description, isDefault, active, sla, dod, allowTicketOverride,
                  repository, openTicketCount, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
@@ -2229,13 +2207,10 @@ components:
         allowTicketOverride:
           type: boolean
           description: Agents may set a different Definition of Done on one ticket, with a reason.
-        hasRepository:
-          type: boolean
-          description: Whether merge, CI and deploy conditions can be read, i.e. a repository is linked.
         repository:
           allOf: [{ $ref: "#/components/schemas/RepositoryRef" }]
           nullable: true
-          description: Where code conditions are read from.
+          description: Where its tickets' commits are read from.
         openTicketCount:
           type: integer
           description: Tickets not yet resolved or closed.
@@ -2328,7 +2303,7 @@ components:
       type: string
       description: |
         Team events: comment, internal_note, status, assignment, priority, sla, uat_result, dod
-        (supervisors; always on, not listed), code (commits, pull/merge requests, CI and deploys).
+        (supervisors; always on, not listed), code (commits that name the ticket).
         Portal events: reply, status, uat_requested (always on), question, resolved, colleague,
         ticket_logged (always on, not listed).
       enum: [comment, internal_note, status, assignment, priority, sla, uat_result, dod, code, reply, question,
@@ -2389,7 +2364,9 @@ components:
     NotificationCode:
       type: object
       required: [provider, kind, ref, branch, target, outcome]
-      description: What a code event did to the ticket; never the commit message.
+      description: |
+        A commit that named the ticket; never its message. Notifications from before 17 Nov may
+        name a pull/merge request, CI run or deployment, with the outcome they had then.
       properties:
         provider: { $ref: "#/components/schemas/GitProvider" }
         kind: { $ref: "#/components/schemas/CodeEventKind" }
@@ -2728,34 +2705,32 @@ components:
 
     CodeEventKind:
       type: string
+      description: Only commits are read now; the other kinds appear in history from before 17 Nov.
       enum: [commit, pr_opened, pr_merged, pr_closed, pipeline, deployment]
 
     CodeOutcome:
       type: string
       description: |
-        What a code event did to a ticket: linked it, showed a pull/merge request in review,
-        ticked a Definition of Done item, or reopened it. `ticket_closed`, `unknown_ticket` and
-        `other_repository` (the ticket's project reads another repository) were ignored.
+        What a commit's key did: `linked` it to the ticket; `ticket_closed`, `unknown_ticket` and
+        `other_repository` (the ticket's project reads another repository) were ignored. The
+        other values appear in history from before 17 Nov, when Git still moved tickets.
       enum: [linked, in_review, fix_committed, merged, ci_passed, deployed, reopened, ticket_closed, unknown_ticket,
              other_repository]
 
     TicketActivityCode:
       type: object
-      required: [provider, kind, ref, branch, target, outcome, items]
+      required: [provider, kind, ref, branch, target, outcome]
       properties:
         provider: { $ref: "#/components/schemas/GitProvider" }
         kind: { $ref: "#/components/schemas/CodeEventKind" }
         ref:
           type: string
-          description: A short commit sha, a request or run number, or the environment deployed to.
-        branch: { type: string }
+          description: A short commit sha (history may hold a request or run number, or an environment).
+        branch: { type: string, description: The branch the commit was first pushed to. }
         target:
           type: string
-          description: The branch a pull/merge request merges into.
+          description: History only, the branch a pull/merge request merged into; empty for commits.
         outcome: { $ref: "#/components/schemas/CodeOutcome" }
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/DodItem" }
 
     TicketActivityAction:
       type: string
@@ -2769,16 +2744,14 @@ components:
         Why the status changed when it wasn't a plain move by hand: the system moved it
         (assignment, requester_reply, uat_auto_approved, auto_closed), the client answered
         (uat_approved, uat_rejected, reopened), an agent resolved with the Definition of Done
-        unmet (dod_skipped, with the reason), or GitHub/GitLab moved it: a commit or pull/merge
-        request started the work (code_activity), the code conditions were met (code_done), or a
-        commit said the problem is back (code_reopened).
+        unmet (dod_skipped, with the reason). `code_activity`, `code_done` and `code_reopened`
+        appear in history only: GitHub/GitLab moved tickets until 17 Nov.
       enum: [assignment, requester_reply, uat_approved, uat_rejected, uat_auto_approved, reopened, auto_closed,
              dod_skipped, code_activity, code_done, code_reopened]
 
     DodItem:
       type: string
-      description: "`fix_committed` is shown with code conditions but never required."
-      enum: [fix_committed, merged, ci_passed, deployed, uat_approved, requester_confirmed]
+      enum: [uat_approved, requester_confirmed]
 
     DodSource:
       type: string
@@ -2787,7 +2760,7 @@ components:
 
     TicketDodItem:
       type: object
-      required: [item, doneAt, doneBy, source]
+      required: [item, doneAt, doneBy]
       properties:
         item: { $ref: "#/components/schemas/DodItem" }
         doneAt: { type: string, format: date-time, nullable: true }
@@ -2795,99 +2768,49 @@ components:
           allOf: [{ $ref: "#/components/schemas/Ref" }]
           nullable: true
           description: Null when not done yet, or when the system met it.
-        source:
-          allOf: [{ $ref: "#/components/schemas/CodeSource" }]
-          nullable: true
-          description: The code event that met it.
 
-    CodeSource:
-      type: object
-      required: [provider, kind, ref, title, branch, target, author, url, at]
-      properties:
-        provider: { $ref: "#/components/schemas/GitProvider" }
-        kind: { $ref: "#/components/schemas/CodeEventKind" }
-        ref:
-          type: string
-          description: A short commit sha, a request or run number, or the environment deployed to.
-        title: { type: string, description: The commit's first line or the request's title. }
-        branch: { type: string }
-        target: { type: string }
-        author: { type: string }
-        url: { type: string }
-        at: { type: string, format: date-time }
 
-    CodeRequestState:
-      type: string
-      description: "`open` is shown as In review; `closed` was closed without merging."
-      enum: [open, merged, closed]
 
-    CodeRequest:
-      type: object
-      required: [provider, number, title, state, branch, target, url, author, at]
-      properties:
-        provider: { $ref: "#/components/schemas/GitProvider" }
-        number: { type: integer, format: int64 }
-        title: { type: string }
-        state: { $ref: "#/components/schemas/CodeRequestState" }
-        branch: { type: string }
-        target: { type: string }
-        url: { type: string }
-        author: { type: string, description: Who opened it, or who merged it once merged. }
-        at: { type: string, format: date-time }
 
     CodeCommit:
       type: object
-      required: [provider, sha, title, branch, author, url, at]
+      required: [provider, sha, title, branches, author, url, at]
       properties:
         provider: { $ref: "#/components/schemas/GitProvider" }
         sha: { type: string, description: The short sha. }
         title: { type: string }
-        branch: { type: string }
+        branches:
+          type: array
+          minItems: 1
+          description: Every branch the commit was pushed to, first one first (the fix branch, then main).
+          items: { type: string }
         author: { type: string }
         url: { type: string }
         at: { type: string, format: date-time }
 
     TicketCode:
       type: object
-      required: [repository, requests, commits]
+      required: [repository, commits]
       properties:
         repository:
           allOf: [{ $ref: "#/components/schemas/RepositoryRef" }]
           nullable: true
-          description: Where the ticket's project reads code from.
-        requests:
-          type: array
-          items: { $ref: "#/components/schemas/CodeRequest" }
+          description: Where the ticket's project reads commits from.
         commits:
           type: array
           items: { $ref: "#/components/schemas/CodeCommit" }
 
     BoardCardCode:
       type: object
-      required: [provider, request, commits, branch, deployed]
+      required: [provider, commits, sha, branch]
       description: The card's code chip.
       properties:
         provider: { $ref: "#/components/schemas/GitProvider" }
-        request:
-          allOf: [{ $ref: "#/components/schemas/BoardCardRequest" }]
-          nullable: true
-          description: The latest pull/merge request.
         commits: { type: integer, description: Commits that named the ticket. }
-        branch: { type: string, description: The latest commit's branch. }
-        deployed: { type: boolean }
+        sha: { type: string, description: The latest commit's short sha. }
+        branch: { type: string, description: The last branch the latest commit reached. }
 
-    BoardCardRequest:
-      type: object
-      required: [number, state, target]
-      properties:
-        number: { type: integer, format: int64 }
-        state: { $ref: "#/components/schemas/CodeRequestState" }
-        target: { type: string }
 
-    CommitRefAction:
-      type: string
-      description: "`link` (the key alone), `fix` (fix/close/resolve right before it), `reopen`."
-      enum: [link, fix, reopen]
 
     CommitTestInput:
       type: object
@@ -2905,39 +2828,31 @@ components:
 
     CommitTestRef:
       type: object
-      required: [key, action, ticketExists]
+      required: [key, ticketExists]
       properties:
         key: { type: string, example: HD-24871 }
-        action: { $ref: "#/components/schemas/CommitRefAction" }
         ticketExists: { type: boolean }
 
     CodeEventLog:
       type: object
-      required: [id, at, provider, repository, kind, ref, title, branch, target, url, ticketKey, ticketFound,
-                 outcome, items, statusFrom, statusTo]
+      required: [id, at, provider, repository, ref, title, branch, url, ticketKey, ticketFound, outcome]
+      description: A key a commit named.
       properties:
         id: { type: string, format: uuid }
         at: { type: string, format: date-time }
         provider: { $ref: "#/components/schemas/GitProvider" }
         repository: { type: string, description: The repository's full name. }
-        kind: { $ref: "#/components/schemas/CodeEventKind" }
-        ref: { type: string }
-        title: { type: string }
-        branch: { type: string }
-        target: { type: string }
+        ref: { type: string, description: The short sha. }
+        title: { type: string, description: The commit's first line. }
+        branch: { type: string, description: The branch it was first pushed to. }
         url: { type: string }
         ticketKey: { type: string }
         ticketFound: { type: boolean, description: False when no ticket has the key. }
         outcome: { $ref: "#/components/schemas/CodeOutcome" }
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/DodItem" }
-        statusFrom: { allOf: [{ $ref: "#/components/schemas/TicketStatus" }], nullable: true }
-        statusTo: { allOf: [{ $ref: "#/components/schemas/TicketStatus" }], nullable: true }
 
     TicketDod:
       type: object
-      required: [source, config, projectConfig, overrideReason, items, met, pending, canOverride, hasRepository]
+      required: [source, config, projectConfig, overrideReason, items, met, pending, canOverride]
       properties:
         source: { $ref: "#/components/schemas/DodSource" }
         config:
@@ -2959,9 +2874,6 @@ components:
         canOverride:
           type: boolean
           description: The viewer may set or reset the ticket's own Definition of Done.
-        hasRepository:
-          type: boolean
-          description: The ticket's project reads code, so merge, CI and deploy can be asked for.
 
     TicketDodInput:
       type: object

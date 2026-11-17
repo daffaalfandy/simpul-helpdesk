@@ -7,11 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/commitmsg"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
 // LogLimit is how many recent events the Integrations page lists.
@@ -23,7 +21,6 @@ const MaxTestMessageLen = 5000
 // TestRef is one ticket a tested message names.
 type TestRef struct {
 	Key          string
-	Action       commitmsg.Action
 	TicketExists bool
 }
 
@@ -34,43 +31,34 @@ func (s *Service) TestMessage(ctx context.Context, message string) ([]TestRef, e
 	if err != nil {
 		return nil, err
 	}
-	refs := commitmsg.New(prefixes).Message(message)
-	keys := make([]string, len(refs))
-	for i, r := range refs {
-		keys[i] = r.Key
-	}
+	keys := commitmsg.New(prefixes).Keys(message)
 	found, err := q.TicketKeysExist(ctx, keys)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]TestRef, len(refs))
-	for i, r := range refs {
-		out[i] = TestRef{Key: r.Key, Action: r.Action, TicketExists: slices.Contains(found, r.Key)}
+	out := make([]TestRef, len(keys))
+	for i, k := range keys {
+		out[i] = TestRef{Key: k, TicketExists: slices.Contains(found, k)}
 	}
 	return out, nil
 }
 
-// LogEntry is one thing a code event did, for the recent-events log.
+// LogEntry is one key a commit named, for the recent-events log.
 type LogEntry struct {
 	ID          uuid.UUID
 	At          time.Time
 	Provider    gitevent.Provider
 	Repository  string
-	Kind        gitevent.Kind
-	Ref         string
+	Ref         string // short sha
 	Title       string
 	Branch      string
-	Target      string
 	URL         string
 	TicketKey   string
 	TicketFound bool
-	Outcome     codeflow.Outcome
-	Items       []dod.Item
-	StatusFrom  *ticket.Status
-	StatusTo    *ticket.Status
+	Outcome     tickets.CodeOutcome
 }
 
-// Log lists what the latest code events did, newest first, ignored keys included.
+// Log lists the latest commit links, newest first, ignored keys included.
 func (s *Service) Log(ctx context.Context) ([]LogEntry, error) {
 	rows, err := s.store.Q().ListCodeLog(ctx, LogLimit)
 	if err != nil {
@@ -78,25 +66,11 @@ func (s *Service) Log(ctx context.Context) ([]LogEntry, error) {
 	}
 	out := make([]LogEntry, len(rows))
 	for i, r := range rows {
-		items := make([]dod.Item, len(r.Items))
-		for j, it := range r.Items {
-			items[j] = dod.Item(it)
-		}
-		kind := gitevent.Kind(r.Kind)
 		out[i] = LogEntry{
-			ID: r.ID, At: r.At, Provider: gitevent.Provider(r.Provider), Repository: r.FullName, Kind: kind,
-			Ref: ref(kind, r.Sha, r.Number, r.Title), Title: r.Title, Branch: r.Branch, Target: r.Target, URL: r.Url,
-			TicketKey: r.TicketKey, TicketFound: r.TicketFound, Outcome: codeflow.Outcome(r.Outcome), Items: items,
-			StatusFrom: statusPtr(r.StatusFrom), StatusTo: statusPtr(r.StatusTo),
+			ID: r.ID, At: r.At, Provider: gitevent.Provider(r.Provider), Repository: r.FullName,
+			Ref: shortSHA(r.Sha), Title: r.Title, Branch: r.Branch, URL: r.Url,
+			TicketKey: r.TicketKey, TicketFound: r.TicketFound, Outcome: tickets.CodeOutcome(r.Outcome),
 		}
 	}
 	return out, nil
-}
-
-func statusPtr(s *string) *ticket.Status {
-	if s == nil {
-		return nil
-	}
-	st := ticket.Status(*s)
-	return &st
 }

@@ -14,9 +14,8 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 )
 
-// ProcessWorker reads a stored delivery: it records the code events and applies them to the
-// tickets they name. Every step can run again: events are unique per repository, and tickets
-// change only where their state differs.
+// ProcessWorker reads a stored delivery: it records the commits that name a ticket and links
+// them. Every step can run again: commits are unique per repository and link once per ticket.
 type ProcessWorker struct {
 	river.WorkerDefaults[ProcessArgs]
 	svc *Service
@@ -31,11 +30,11 @@ func (w *ProcessWorker) Work(ctx context.Context, job *river.Job[ProcessArgs]) e
 	return w.svc.process(ctx, w.log, job.Args.DeliveryID)
 }
 
-// storedEvent is a code event as recorded, with the tickets its text names.
+// storedEvent is a commit as recorded, with the ticket keys its message names.
 type storedEvent struct {
 	ID         uuid.UUID
 	Event      gitevent.Event
-	Refs       []commitmsg.Ref
+	Keys       []string
 	AuthorID   *uuid.UUID // the staff member who wrote it, matched by email
 	AuthorName string     // their name, else the provider's login or name
 }
@@ -62,8 +61,8 @@ func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid
 	parser := commitmsg.New(prefixes)
 	var events []storedEvent
 	for _, e := range parsed.Events {
-		refs := refsOf(parser, e)
-		if e.Kind == gitevent.KindCommit && len(refs) == 0 {
+		keys := parser.Keys(e.Text)
+		if len(keys) == 0 {
 			continue // most commits name no ticket; they aren't kept
 		}
 		author, err := s.staffByEmail(ctx, q, e.Author.Email)
@@ -79,30 +78,12 @@ func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid
 		if err != nil {
 			return err
 		}
-		events = append(events, storedEvent{ID: id, Event: e, Refs: refs, AuthorID: authorID, AuthorName: name})
+		events = append(events, storedEvent{ID: id, Event: e, Keys: keys, AuthorID: authorID, AuthorName: name})
 	}
 	if err := s.apply(ctx, gitevent.Provider(d.Provider), d.RepositoryID, events); err != nil {
 		return err
 	}
 	return q.MarkDeliveryProcessed(ctx, deliveryID)
-}
-
-// refsOf lists the tickets an event names and what it asks of each. Commit messages carry
-// keywords; pull/merge requests only link, by title, description or branch. CI runs and
-// deployments name no ticket: they reach tickets through the merge before them.
-func refsOf(p *commitmsg.Parser, e gitevent.Event) []commitmsg.Ref {
-	switch e.Kind {
-	case gitevent.KindCommit:
-		return p.Message(e.Text)
-	case gitevent.KindPROpened, gitevent.KindPRMerged, gitevent.KindPRClosed:
-		keys := p.Keys(e.Text)
-		out := make([]commitmsg.Ref, len(keys))
-		for i, k := range keys {
-			out[i] = commitmsg.Ref{Key: k, Action: commitmsg.ActionLink}
-		}
-		return out
-	}
-	return nil
 }
 
 func (s *Service) staffByEmail(ctx context.Context, q *db.Queries, email string) (*db.FindStaffByEmailRow, error) {
@@ -132,13 +113,9 @@ func authorName(login, name string, member *string) string {
 }
 
 func codeEventParams(repoID, deliveryID uuid.UUID, e gitevent.Event, author *uuid.UUID) db.UpsertCodeEventParams {
-	var number *int64
-	if e.Number != 0 {
-		number = &e.Number
-	}
 	return db.UpsertCodeEventParams{
-		RepositoryID: repoID, Kind: string(e.Kind), ExternalID: e.ExternalID, Sha: e.SHA, Number: number,
-		Title: e.Title, Branch: e.Branch, Target: e.Target, Url: e.URL, AuthorName: e.Author.Name,
+		RepositoryID: repoID, Kind: string(e.Kind), ExternalID: e.ExternalID, Sha: e.SHA,
+		Title: e.Title, Branch: e.Branch, Url: e.URL, AuthorName: e.Author.Name,
 		AuthorLogin: e.Author.Login, AuthorUserID: author, DeliveryID: &deliveryID, OccurredAt: e.OccurredAt,
 	}
 }

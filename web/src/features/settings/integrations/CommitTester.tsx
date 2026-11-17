@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Input, Label, TextField } from 'react-aria-components'
 import { useTranslation } from 'react-i18next'
 
-import type { CommitRefAction, CommitTestRef } from '../../../api/client'
+import type { CommitTestRef } from '../../../api/client'
 import { Card } from '../../../components/Card'
 import { SEARCH_DEBOUNCE_MS } from '../../../lib/constants'
 import { cx } from '../../../lib/text'
@@ -11,15 +11,12 @@ import { errorMessage } from '../shared'
 import { commitTestQueryOptions } from './queries'
 
 /** The sample messages under the tester (Integrations mock), in order. */
-const SAMPLES = ['link', 'fix', 'reopen', 'none'] as const
-
-/** Result groups, strongest first. */
-const ACTIONS: readonly CommitRefAction[] = ['reopen', 'fix', 'link']
+const SAMPLES = ['link', 'words', 'none'] as const
 
 /** Matches the API's message limit (CommitTestInput). */
 const MAX_MESSAGE_LENGTH = 5000
 
-/** "Try a commit message" (Integrations mock): reads a message the way the connector does, as you type. */
+/** "Try a commit message" (Integrations mock): which tickets a message names, read as the connector does, as you type. */
 export function CommitTester({ prefix, className }: { prefix: string; className?: string }) {
   const { t } = useTranslation()
   const [typed, setTyped] = useState(() => t('settings.integrations.tester.initial', { prefix }))
@@ -77,26 +74,20 @@ function Results({ refs, prefix }: { refs: CommitTestRef[]; prefix: string }) {
   if (refs.length === 0) {
     return <Result title={t('settings.integrations.tester.noneTitle')} text={t('settings.integrations.tester.none', { prefix })} />
   }
+  const separator = t('settings.integrations.tester.keySeparator')
   const missing = refs.filter((r) => !r.ticketExists).map((r) => r.key)
+  const list = refs.map((r) => r.key).join(separator)
   return (
     <>
-      {ACTIONS.map((action) => {
-        const keys = refs.filter((r) => r.action === action).map((r) => r.key)
-        if (keys.length === 0) return null
-        const list = keys.join(t('settings.integrations.tester.keySeparator'))
-        return (
-          <Result
-            key={action}
-            title={t(`settings.integrations.tester.${action}.title`, { keys: list })}
-            text={t(`settings.integrations.tester.${action}.text`, { keys: list })}
-          />
-        )
-      })}
+      <Result
+        title={t('settings.integrations.tester.link.title', { keys: list })}
+        text={t('settings.integrations.tester.link.text', { keys: list })}
+      />
       {missing.length > 0 && (
         <p className="text-sm text-on-dark-muted">
           {t('settings.integrations.tester.missing', {
             count: missing.length,
-            keys: missing.join(t('settings.integrations.tester.keySeparator')),
+            keys: missing.join(separator),
           })}
         </p>
       )}

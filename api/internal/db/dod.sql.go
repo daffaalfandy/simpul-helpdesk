@@ -89,54 +89,45 @@ func (q *Queries) GetTicketForLifecycle(ctx context.Context, id uuid.UUID) (GetT
 }
 
 const insertSeedDoDItem = `-- name: InsertSeedDoDItem :exec
-INSERT INTO ticket_dod_items (ticket_id, item, done_at, done_by, code_event_id)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO ticket_dod_items (ticket_id, item, done_at, done_by)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (ticket_id, item) DO NOTHING
 `
 
 type InsertSeedDoDItemParams struct {
-	TicketID    uuid.UUID
-	Item        string
-	DoneAt      time.Time
-	DoneBy      *uuid.UUID
-	CodeEventID *uuid.UUID
+	TicketID uuid.UUID
+	Item     string
+	DoneAt   time.Time
+	DoneBy   *uuid.UUID
 }
 
-// Seed only: an item met at an explicit time, by a code event or not.
+// Seed only: an item met at an explicit time.
 func (q *Queries) InsertSeedDoDItem(ctx context.Context, arg InsertSeedDoDItemParams) error {
 	_, err := q.db.Exec(ctx, insertSeedDoDItem,
 		arg.TicketID,
 		arg.Item,
 		arg.DoneAt,
 		arg.DoneBy,
-		arg.CodeEventID,
 	)
 	return err
 }
 
 const insertTicketDoDItems = `-- name: InsertTicketDoDItems :many
-INSERT INTO ticket_dod_items (ticket_id, item, done_by, code_event_id)
-SELECT $1, unnest($2::text[]), $3::uuid, $4::uuid
+INSERT INTO ticket_dod_items (ticket_id, item, done_by)
+SELECT $1, unnest($2::text[]), $3::uuid
 ON CONFLICT (ticket_id, item) DO NOTHING
 RETURNING item
 `
 
 type InsertTicketDoDItemsParams struct {
-	TicketID    uuid.UUID
-	Items       []string
-	DoneBy      *uuid.UUID
-	CodeEventID *uuid.UUID
+	TicketID uuid.UUID
+	Items    []string
+	DoneBy   *uuid.UUID
 }
 
-// Returns the items newly met; items already met keep their first time and person. A code
-// item names the code event that met it.
+// Returns the items newly met; items already met keep their first time and person.
 func (q *Queries) InsertTicketDoDItems(ctx context.Context, arg InsertTicketDoDItemsParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, insertTicketDoDItems,
-		arg.TicketID,
-		arg.Items,
-		arg.DoneBy,
-		arg.CodeEventID,
-	)
+	rows, err := q.db.Query(ctx, insertTicketDoDItems, arg.TicketID, arg.Items, arg.DoneBy)
 	if err != nil {
 		return nil, err
 	}
@@ -218,38 +209,20 @@ func (q *Queries) ListLifecycleCandidates(ctx context.Context, arg ListLifecycle
 }
 
 const listTicketDoDItems = `-- name: ListTicketDoDItems :many
-SELECT i.item, i.done_at, i.done_by, u.name AS done_by_name, e.id AS code_event_id, e.kind AS code_kind,
-       e.sha AS code_sha, e.number AS code_number, e.title AS code_title, e.branch AS code_branch,
-       e.target AS code_target, e.url AS code_url, e.author_login AS code_author_login,
-       e.author_name AS code_author_name, e.occurred_at AS code_at, r.provider AS code_provider
+SELECT i.item, i.done_at, i.done_by, u.name AS done_by_name
 FROM ticket_dod_items i
 LEFT JOIN users u ON u.id = i.done_by
-LEFT JOIN code_events e ON e.id = i.code_event_id
-LEFT JOIN repositories r ON r.id = e.repository_id
 WHERE i.ticket_id = $1
 ORDER BY i.done_at, i.item
 `
 
 type ListTicketDoDItemsRow struct {
-	Item            string
-	DoneAt          time.Time
-	DoneBy          *uuid.UUID
-	DoneByName      *string
-	CodeEventID     *uuid.UUID
-	CodeKind        *string
-	CodeSha         *string
-	CodeNumber      *int64
-	CodeTitle       *string
-	CodeBranch      *string
-	CodeTarget      *string
-	CodeUrl         *string
-	CodeAuthorLogin *string
-	CodeAuthorName  *string
-	CodeAt          *time.Time
-	CodeProvider    *string
+	Item       string
+	DoneAt     time.Time
+	DoneBy     *uuid.UUID
+	DoneByName *string
 }
 
-// With the code event that met an item, if one did.
 func (q *Queries) ListTicketDoDItems(ctx context.Context, ticketID uuid.UUID) ([]ListTicketDoDItemsRow, error) {
 	rows, err := q.db.Query(ctx, listTicketDoDItems, ticketID)
 	if err != nil {
@@ -264,18 +237,6 @@ func (q *Queries) ListTicketDoDItems(ctx context.Context, ticketID uuid.UUID) ([
 			&i.DoneAt,
 			&i.DoneBy,
 			&i.DoneByName,
-			&i.CodeEventID,
-			&i.CodeKind,
-			&i.CodeSha,
-			&i.CodeNumber,
-			&i.CodeTitle,
-			&i.CodeBranch,
-			&i.CodeTarget,
-			&i.CodeUrl,
-			&i.CodeAuthorLogin,
-			&i.CodeAuthorName,
-			&i.CodeAt,
-			&i.CodeProvider,
 		); err != nil {
 			return nil, err
 		}

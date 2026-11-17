@@ -138,7 +138,7 @@ func (s *server) TestCommitMessage(ctx context.Context, req gen.TestCommitMessag
 	}
 	out := gen.TestCommitMessage200JSONResponse{Refs: make([]gen.CommitTestRef, len(refs))}
 	for i, r := range refs {
-		out.Refs[i] = gen.CommitTestRef{Key: r.Key, Action: gen.CommitRefAction(r.Action), TicketExists: r.TicketExists}
+		out.Refs[i] = gen.CommitTestRef{Key: r.Key, TicketExists: r.TicketExists}
 	}
 	return out, nil
 }
@@ -153,15 +153,10 @@ func (s *server) ListCodeEvents(ctx context.Context, _ gen.ListCodeEventsRequest
 	}
 	out := make(gen.ListCodeEvents200JSONResponse, len(log))
 	for i, l := range log {
-		items := make([]gen.DodItem, len(l.Items))
-		for j, it := range l.Items {
-			items[j] = gen.DodItem(it)
-		}
 		out[i] = gen.CodeEventLog{
-			Id: l.ID, At: l.At, Provider: gen.GitProvider(l.Provider), Repository: l.Repository, Kind: gen.CodeEventKind(l.Kind),
-			Ref: l.Ref, Title: l.Title, Branch: l.Branch, Target: l.Target, Url: l.URL, TicketKey: l.TicketKey,
-			TicketFound: l.TicketFound, Outcome: gen.CodeOutcome(l.Outcome), Items: items,
-			StatusFrom: (*gen.TicketStatus)(l.StatusFrom), StatusTo: (*gen.TicketStatus)(l.StatusTo),
+			Id: l.ID, At: l.At, Provider: gen.GitProvider(l.Provider), Repository: l.Repository,
+			Ref: l.Ref, Title: l.Title, Branch: l.Branch, Url: l.URL, TicketKey: l.TicketKey,
+			TicketFound: l.TicketFound, Outcome: gen.CodeOutcome(l.Outcome),
 		}
 	}
 	return out, nil

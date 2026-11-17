@@ -3,10 +3,16 @@ import { useTranslation } from 'react-i18next'
 import { Card } from '../../../components/Card'
 import { RowHeader, Table, Td, Th } from '../../../components/Table'
 
-/** The rows of the rules table, in the mock's order. */
-const RULES = ['link', 'fix', 'opened', 'merged', 'reopen'] as const
+/**
+ * The rows of the rules table. The mock's keyword, pull/merge request and reopen rows went when
+ * Git stopped moving tickets (owner, 17 Nov).
+ */
+const RULES = ['link', 'branch', 'words'] as const
 
-/** "Commit message rules" (Integrations mock): what a message or event does, with examples under the install's ticket prefix. */
+/** Rows whose example is described in words rather than quoted as a commit message. */
+const PROSE_EXAMPLES: ReadonlySet<(typeof RULES)[number]> = new Set(['branch'])
+
+/** "Commit message rules" (Integrations mock): what a commit does, with examples under the install's ticket prefix. */
 export function CommitRules({ prefix, className }: { prefix: string; className?: string }) {
   const { t } = useTranslation()
   return (
@@ -29,8 +35,8 @@ export function CommitRules({ prefix, className }: { prefix: string; className?:
             <tr key={rule}>
               <RowHeader>{t(`settings.integrations.rules.${rule}.contains`)}</RowHeader>
               <Td>
-                {rule === 'merged' ? (
-                  t('settings.integrations.rules.merged.example')
+                {PROSE_EXAMPLES.has(rule) ? (
+                  t(`settings.integrations.rules.${rule}.example`)
                 ) : (
                   <code className="font-mono text-sm">{t(`settings.integrations.rules.${rule}.example`, { prefix })}</code>
                 )}
@@ -40,7 +46,6 @@ export function CommitRules({ prefix, className }: { prefix: string; className?:
           ))}
         </tbody>
       </Table>
-      <p className="text-sm text-muted">{t('settings.integrations.rules.runs')}</p>
     </Card>
   )
 }

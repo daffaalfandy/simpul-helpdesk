@@ -142,9 +142,6 @@ func TestTicketDoDOverride(t *testing.T) {
 	hotfix := dod.None()
 
 	expectProblem(t, te.agent.setDod(tk.Key, &hotfix, ""), http.StatusBadRequest, apperr.CodeReasonRequired)
-	code := dod.None()
-	code.Merged.Enabled = true
-	expectProblem(t, te.agent.setDod(tk.Key, &code, hotfixReason), http.StatusBadRequest, apperr.CodeInvalidDoD)
 
 	got := decode[gen.Ticket](t, te.agent.setDod(tk.Key, &hotfix, hotfixReason), http.StatusOK)
 	if d := got.Dod; d.Source != gen.DodSourceTicket || !d.Met || len(d.Items) != 0 || d.OverrideReason == nil ||

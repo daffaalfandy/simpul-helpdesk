@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
@@ -17,70 +16,29 @@ import (
 // Item is one condition on the way to done. Values match the ticket_dod_items.item CHECK.
 type Item string
 
+// Every item is the client's (owner, 17 Nov: Git no longer ticks code conditions).
 const (
-	ItemFixCommitted       Item = "fix_committed" // informational: a fix/close/resolve commit names the ticket
-	ItemMerged             Item = "merged"
-	ItemCIPassed           Item = "ci_passed"
-	ItemDeployed           Item = "deployed"
 	ItemUATApproved        Item = "uat_approved"
 	ItemRequesterConfirmed Item = "requester_confirmed"
 )
 
 // Items lists every item in checklist order.
-var Items = []Item{ItemFixCommitted, ItemMerged, ItemCIPassed, ItemDeployed, ItemUATApproved, ItemRequesterConfirmed}
+var Items = []Item{ItemUATApproved, ItemRequesterConfirmed}
 
 // ClientItems are the items the client ticks by answering the test (or the system, when the
-// answer is overdue). Leaving a done status clears them, so a reopened ticket asks again.
-var ClientItems = []Item{ItemUATApproved, ItemRequesterConfirmed}
+// answer is overdue). Today that is every item.
+var ClientItems = Items
 
-// CodeItems are the items read from the repository, in checklist order.
-var CodeItems = []Item{ItemFixCommitted, ItemMerged, ItemCIPassed, ItemDeployed}
-
-// workStatuses are where a ticket is worked on, before anyone checks the result.
-var workStatuses = []ticket.Status{ticket.StatusNew, ticket.StatusAssigned, ticket.StatusInProgress, ticket.StatusWaitingOnClient}
-
-// Cleared lists the items a status change forgets. A done ticket that opens again asks the
-// client again. A ticket sent back to work from the client's test or from resolved needs a new
-// fix, so its code items go too; otherwise the next commit would move it straight back.
+// Cleared lists the items a status change forgets: a done ticket that opens again asks the
+// client again.
 func Cleared(from, to ticket.Status) []Item {
-	var out []Item
 	if ticket.MarksResolved(from) && !ticket.MarksResolved(to) {
-		out = append(out, ClientItems...)
+		return ClientItems
 	}
-	if (from == ticket.StatusInUAT || ticket.MarksResolved(from)) && slices.Contains(workStatuses, to) {
-		out = append(out, CodeItems...)
-	}
-	return out
+	return nil
 }
 
 func (i Item) Valid() bool { return slices.Contains(Items, i) }
-
-// Branch is the branch a pull/merge request must merge into. release/* matches any release branch.
-type Branch string
-
-const (
-	BranchMain    Branch = "main"
-	BranchDevelop Branch = "develop"
-	BranchRelease Branch = "release/*"
-	BranchStaging Branch = "staging"
-)
-
-var Branches = []Branch{BranchMain, BranchDevelop, BranchRelease, BranchStaging}
-
-func (b Branch) Valid() bool { return slices.Contains(Branches, b) }
-
-// branchGlobSuffix ends a branch that stands for every branch under its folder (release/*).
-const branchGlobSuffix = "/*"
-
-// Matches reports whether a branch counts as b: the same name, or any branch under the folder
-// of a glob such as release/* (release/2026.11, release/v2/hotfix).
-func (b Branch) Matches(name string) bool {
-	if folder, ok := strings.CutSuffix(string(b), branchGlobSuffix); ok {
-		rest, under := strings.CutPrefix(name, folder+"/")
-		return under && rest != ""
-	}
-	return name == string(b)
-}
 
 // Auto-approve choices on the project's UAT condition, in working days (Projects mock).
 const (
@@ -104,12 +62,6 @@ const (
 	SourceTicket  Source = "ticket"  // an agent set a different one on this ticket
 )
 
-// Merged is the pull/merge request condition. The branch is kept while the condition is off.
-type Merged struct {
-	Enabled bool   `json:"enabled"`
-	Branch  Branch `json:"branch"`
-}
-
 // UAT is the client's acceptance test. The day count is kept while the condition is off.
 type UAT struct {
 	Enabled                bool `json:"enabled"`
@@ -117,21 +69,17 @@ type UAT struct {
 }
 
 // Config is a Definition of Done. Its JSON is the storage format of projects.dod_config and
-// ticket_dod_overrides.config (HANDOFF §7), so the tags must not change.
+// ticket_dod_overrides.config (HANDOFF §7), so the tags must not change. JSON stored before the
+// code conditions went (merged, ci_passed, deployed_production) still parses: unknown keys are
+// ignored.
 type Config struct {
-	Merged             Merged `json:"merged"`
-	CIPassed           bool   `json:"ci_passed"`
-	DeployedProduction bool   `json:"deployed_production"`
-	UAT                UAT    `json:"uat"`
-	RequesterConfirms  bool   `json:"requester_confirms"`
+	UAT               UAT  `json:"uat"`
+	RequesterConfirms bool `json:"requester_confirms"`
 }
 
 // None has no conditions: an agent resolves each ticket by hand.
 func None() Config {
-	return Config{
-		Merged: Merged{Branch: BranchMain},
-		UAT:    UAT{AutoApproveWorkingDays: DefaultAutoApproveDays},
-	}
+	return Config{UAT: UAT{AutoApproveWorkingDays: DefaultAutoApproveDays}}
 }
 
 // Default is a new project's Definition of Done: the client approves a test, and the fix is
@@ -158,50 +106,20 @@ func (c Config) JSON() []byte {
 	return b
 }
 
-var (
-	ErrNeedsRepository = errors.New("code conditions need a repository")
-	ErrUnknownBranch   = errors.New("unknown target branch")
-	ErrAutoApproveDays = errors.New("auto-approve must be never, 3 or 5 working days")
-)
+var ErrAutoApproveDays = errors.New("auto-approve must be never, 3 or 5 working days")
 
-// Validate checks a configuration. Code conditions (merge, CI, deploy) are read from a
-// repository, so they need the project to have one.
-func Validate(c Config, hasRepository bool) error {
-	switch {
-	case !c.Merged.Branch.Valid():
-		return ErrUnknownBranch
-	case !slices.Contains(AutoApproveDayOptions, c.UAT.AutoApproveWorkingDays):
+// Validate checks a configuration.
+func Validate(c Config) error {
+	if !slices.Contains(AutoApproveDayOptions, c.UAT.AutoApproveWorkingDays) {
 		return ErrAutoApproveDays
-	case c.hasCode() && !hasRepository:
-		return ErrNeedsRepository
 	}
 	return nil
 }
 
-func (c Config) hasCode() bool { return c.Merged.Enabled || c.CIPassed || c.DeployedProduction }
-
-// Checklist lists the items a ticket shows, in order. Fix committed is shown with code
-// conditions but never required.
-func Checklist(c Config) []Item {
-	var out []Item
-	if c.hasCode() {
-		out = append(out, ItemFixCommitted)
-	}
-	return append(out, Required(c)...)
-}
-
-// Required lists the items that must be done before the ticket counts as done, in order.
+// Required lists the items that must be done before the ticket counts as done, in order: what
+// the ticket's checklist shows.
 func Required(c Config) []Item {
 	var out []Item
-	if c.Merged.Enabled {
-		out = append(out, ItemMerged)
-	}
-	if c.CIPassed {
-		out = append(out, ItemCIPassed)
-	}
-	if c.DeployedProduction {
-		out = append(out, ItemDeployed)
-	}
 	if c.UAT.Enabled {
 		out = append(out, ItemUATApproved)
 	}
@@ -221,16 +139,9 @@ func Evaluate(c Config, done map[Item]bool) (met bool, pending []Item) {
 	return len(pending) == 0, pending
 }
 
-// ClientRequired lists the client items c requires: what one answer to the test meets.
-func ClientRequired(c Config) []Item {
-	var out []Item
-	for _, it := range Required(c) {
-		if slices.Contains(ClientItems, it) {
-			out = append(out, it)
-		}
-	}
-	return out
-}
+// ClientRequired lists the client items c requires: what one answer to the test meets. Every
+// item is the client's, so it is Required.
+func ClientRequired(c Config) []Item { return Required(c) }
 
 // HasClientCheck reports whether the client answers before the ticket is done. UAT and the
 // requester's confirmation are one step: the ticket waits In UAT and one answer ticks both.

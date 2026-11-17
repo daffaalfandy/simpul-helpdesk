@@ -4,19 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/secretbox"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
 
@@ -30,7 +26,7 @@ const (
 	repoSIPD    = "gov/sipd-connector"
 )
 
-// demoRepo is a connected repository and the projects that read code from it. The SIPD
+// demoRepo is a connected repository and the projects that read commits from it. The SIPD
 // connector serves two clients' projects: the same system run for each.
 type demoRepo struct {
 	provider gitevent.Provider
@@ -49,34 +45,24 @@ var gitLogins = map[string]string{
 	emailAdi: "adi.saputra", emailRina: "rina.p", emailYoga: "yoga.h", emailDewi: "dewi.w",
 }
 
-// URL paths of commits, requests and deployments under a repository's web address.
-var (
-	commitPath     = map[gitevent.Provider]string{gitevent.ProviderGitHub: "/commit/", gitevent.ProviderGitLab: "/-/commit/"}
-	requestPath    = map[gitevent.Provider]string{gitevent.ProviderGitHub: "/pull/", gitevent.ProviderGitLab: "/-/merge_requests/"}
-	deploymentPath = map[gitevent.Provider]string{gitevent.ProviderGitHub: "/deployments", gitevent.ProviderGitLab: "/-/environments"}
-)
+// commitPath is where a commit lives under a repository's web address.
+var commitPath = map[gitevent.Provider]string{gitevent.ProviderGitHub: "/commit/", gitevent.ProviderGitLab: "/-/commit/"}
 
-// demoCode is a code event on a demo ticket, minutes after the ticket was opened. Titles may
-// hold %s for the ticket's key.
+// demoCode is a commit naming a demo ticket, pushed minutes after the ticket was opened, then to
+// each later branch (the merge into main) as it lands. Titles may hold %s for the ticket's key.
 type demoCode struct {
 	after    int
 	repo     string
-	kind     gitevent.Kind
-	id       string // commit sha, or the request or deployment number
+	sha      string
 	title    string
-	branch   string
-	target   string
-	author   string // email
-	outcome  codeflow.Outcome
-	items    []dod.Item
-	from, to ticket.Status
+	branches []string // first push first
+	author   string   // email
 }
 
 // unknownKeyCode is a push naming a ticket that doesn't exist, for the recent-events log.
 var unknownKeyCode = demoCode{
-	repo: repoEOffice, kind: gitevent.KindCommit, id: "f00ba125c2d94e1b8a3f6c7d8e9f0a1b2c3d4e5f",
-	title: "refs HD-99999 clean up old session keys", branch: "main", author: emailAdi,
-	outcome: codeflow.OutcomeUnknownTicket,
+	repo: repoEOffice, sha: "f00ba125c2d94e1b8a3f6c7d8e9f0a1b2c3d4e5f",
+	title: "refs HD-99999 clean up old session keys", branches: []string{"main"}, author: emailAdi,
 }
 
 // unknownKeyAge is how long ago that push happened, in minutes.
@@ -129,38 +115,30 @@ func seedRepositories(ctx context.Context, q *db.Queries, box *secretbox.Box, no
 	return out, nil
 }
 
-// seedCodeEvent stores a demo code event at its time and returns it as it reaches a ticket.
+// seedCodeEvent stores a demo commit, pushed to each of its branches in turn, and returns it as
+// it reaches a ticket.
 func seedCodeEvent(ctx context.Context, q *db.Queries, repos map[string]demoRepoRef, r refs, c demoCode, key string, at time.Time) (tickets.CodeEvent, error) {
 	repo := repos[c.repo]
 	title := c.title
 	if key != "" {
 		title = fmt.Sprintf(c.title, key)
 	}
-	params := db.UpsertCodeEventParams{
-		RepositoryID: repo.id, Kind: string(c.kind), ExternalID: c.id, Title: gitevent.FirstLine(title), Branch: c.branch,
-		Target: c.target, AuthorLogin: gitLogins[c.author], OccurredAt: at,
-	}
-	ref := c.id
-	switch c.kind {
-	case gitevent.KindCommit:
-		params.Sha, params.Url, ref = c.id, repo.webURL+commitPath[repo.provider]+c.id, c.id[:tickets.ShortSHALen]
-	case gitevent.KindDeployment:
-		params.Url, params.Title, ref = repo.webURL+deploymentPath[repo.provider], c.title, c.title
-	default:
-		params.Url = repo.webURL + requestPath[repo.provider] + c.id
-	}
-	if n, err := strconv.ParseInt(c.id, 10, 64); err == nil {
-		params.Number = &n
-	}
 	author := r.user(c.author)
-	params.AuthorName, params.AuthorUserID = author.Name, &author.ID
-	id, err := q.UpsertCodeEvent(ctx, params)
-	if err != nil {
-		return tickets.CodeEvent{}, err
+	var id uuid.UUID
+	for _, branch := range c.branches {
+		var err error
+		id, err = q.UpsertCodeEvent(ctx, db.UpsertCodeEventParams{
+			RepositoryID: repo.id, Kind: string(gitevent.KindCommit), ExternalID: c.sha, Sha: c.sha,
+			Title: gitevent.FirstLine(title), Branch: branch, Url: repo.webURL + commitPath[repo.provider] + c.sha,
+			AuthorName: author.Name, AuthorLogin: gitLogins[c.author], AuthorUserID: &author.ID, OccurredAt: at,
+		})
+		if err != nil {
+			return tickets.CodeEvent{}, err
+		}
 	}
 	return tickets.CodeEvent{
-		ID: id, Provider: repo.provider, Kind: c.kind, Ref: ref, Branch: c.branch, Target: c.target, At: at,
-		AuthorID: &author.ID, AuthorName: author.Name,
+		ID: id, Provider: repo.provider, Kind: gitevent.KindCommit, Ref: c.sha[:tickets.ShortSHALen],
+		Branch: c.branches[0], At: at, AuthorID: &author.ID, AuthorName: author.Name,
 	}, nil
 }
 
@@ -172,7 +150,7 @@ func seedUnknownKey(ctx context.Context, q *db.Queries, repos map[string]demoRep
 		return err
 	}
 	return q.InsertSeedCodeLink(ctx, db.InsertSeedCodeLinkParams{
-		CodeEventID: e.ID, TicketKey: unknownTicketKey, Outcome: string(codeflow.OutcomeUnknownTicket), Items: []string{}, At: at,
+		CodeEventID: e.ID, TicketKey: unknownTicketKey, Outcome: string(tickets.CodeUnknownTicket), At: at,
 	})
 }
 

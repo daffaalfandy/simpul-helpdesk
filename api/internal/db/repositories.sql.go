@@ -245,7 +245,7 @@ func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, 
 }
 
 const lockProjectsForLink = `-- name: LockProjectsForLink :many
-SELECT p.id, p.name, p.repository_id, p.dod_config
+SELECT p.id, p.name, p.repository_id
 FROM projects p
 WHERE p.id = ANY($1::uuid[]) OR p.repository_id = $2
 ORDER BY p.id
@@ -261,7 +261,6 @@ type LockProjectsForLinkRow struct {
 	ID           uuid.UUID
 	Name         string
 	RepositoryID *uuid.UUID
-	DodConfig    []byte
 }
 
 // The projects a link change touches: the ones asked for and the ones linked now.
@@ -274,12 +273,7 @@ func (q *Queries) LockProjectsForLink(ctx context.Context, arg LockProjectsForLi
 	items := []LockProjectsForLinkRow{}
 	for rows.Next() {
 		var i LockProjectsForLinkRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.RepositoryID,
-			&i.DodConfig,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.RepositoryID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

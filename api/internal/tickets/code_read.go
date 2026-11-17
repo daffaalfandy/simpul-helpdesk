@@ -17,40 +17,18 @@ import (
 // ShortSHALen is how a commit is named, as on GitHub and GitLab.
 const ShortSHALen = 7
 
-// RequestState is where a pull/merge request stands. Values match the CodeRequestState enum.
-type RequestState string
-
-const (
-	RequestOpen   RequestState = "open" // "In review"
-	RequestMerged RequestState = "merged"
-	RequestClosed RequestState = "closed" // closed without merging
-)
-
-// CodeRequest is a pull/merge request that named the ticket.
-type CodeRequest struct {
-	Provider gitevent.Provider
-	Number   int64
-	Title    string
-	State    RequestState
-	Branch   string
-	Target   string
-	URL      string
-	Author   string // who opened it, or who merged it once merged
-	At       time.Time
-}
-
-// CodeCommit is a commit that named the ticket.
+// CodeCommit is a commit that named the ticket, with every branch it has reached so far.
 type CodeCommit struct {
 	Provider gitevent.Provider
 	SHA      string // short
 	Title    string
-	Branch   string
+	Branches []string // in the order they were seen: the fix branch, then main
 	Author   string
 	URL      string
 	At       time.Time
 }
 
-// RepositoryRef is the repository a ticket's project reads code from.
+// RepositoryRef is the repository a ticket's project reads commits from.
 type RepositoryRef struct {
 	ID       uuid.UUID
 	Provider gitevent.Provider
@@ -61,18 +39,16 @@ type RepositoryRef struct {
 // TicketCode is a ticket's code activity, newest first (staff only).
 type TicketCode struct {
 	Repository *RepositoryRef
-	Requests   []CodeRequest
 	Commits    []CodeCommit
 }
 
-// CardCode is what a board card's code chip says: the latest pull/merge request, or else how
-// many commits on which branch, and whether the fix was deployed.
+// CardCode is what a board card's code chip says: how many commits named the ticket, and the
+// latest one with the last branch it reached.
 type CardCode struct {
 	Provider gitevent.Provider
-	Request  *CodeRequest
 	Commits  int
-	Branch   string // the latest commit's branch
-	Deployed bool
+	SHA      string
+	Branch   string
 }
 
 // Code returns a ticket's code activity. Commit messages are internal, so client staff get 404.
@@ -86,7 +62,7 @@ func (s *Service) Code(ctx context.Context, p *auth.Principal, key string) (Tick
 	if err != nil {
 		return TicketCode{}, err
 	}
-	out := TicketCode{Requests: []CodeRequest{}, Commits: []CodeCommit{}}
+	out := TicketCode{Commits: []CodeCommit{}}
 	repo, err := q.GetTicketRepository(ctx, t.ID)
 	switch {
 	case err == nil:
@@ -98,7 +74,7 @@ func (s *Service) Code(ctx context.Context, p *auth.Principal, key string) (Tick
 	if err != nil {
 		return TicketCode{}, err
 	}
-	out.Requests, out.Commits, _ = summarizeCode(rows)
+	out.Commits = commitsOf(rows)
 	return out, nil
 }
 
@@ -114,86 +90,29 @@ func cardCodes(ctx context.Context, q *db.Queries, ids []uuid.UUID) (map[uuid.UU
 	}
 	out := make(map[uuid.UUID]*CardCode, len(byTicket))
 	for id, evs := range byTicket {
-		requests, commits, deployed := summarizeCode(evs)
-		c := &CardCode{Provider: gitevent.Provider(evs[0].Provider), Commits: len(commits), Deployed: deployed}
-		if len(requests) > 0 {
-			c.Request = &requests[0]
-		}
-		if len(commits) > 0 {
-			c.Branch = commits[0].Branch
-		}
-		out[id] = c
+		commits := commitsOf(evs)
+		latest := commits[0]
+		out[id] = &CardCode{Provider: latest.Provider, Commits: len(commits), SHA: latest.SHA, Branch: latest.Branches[len(latest.Branches)-1]}
 	}
 	return out, nil
 }
 
-// summarizeCode folds a ticket's code events into its pull/merge requests (one per number,
-// in its latest state) and commits, newest first, and says whether a deployment reached it.
-func summarizeCode(rows []db.ListLinkedCodeEventsRow) (requests []CodeRequest, commits []CodeCommit, deployed bool) {
-	type acc struct {
-		latest, opened, merged, closed *db.ListLinkedCodeEventsRow
-	}
-	byNumber := map[int64]*acc{}
-	var numbers []int64
-	later := func(a, b *db.ListLinkedCodeEventsRow) bool { return a == nil || b.OccurredAt.After(a.OccurredAt) }
+// commitsOf lists a ticket's commits, newest first.
+func commitsOf(rows []db.ListLinkedCodeEventsRow) []CodeCommit {
+	out := make([]CodeCommit, 0, len(rows))
 	for i := range rows {
 		r := &rows[i]
-		switch gitevent.Kind(r.Kind) {
-		case gitevent.KindCommit:
-			commits = append(commits, CodeCommit{
-				Provider: gitevent.Provider(r.Provider), SHA: shortSHA(r.Sha), Title: r.Title, Branch: r.Branch,
-				Author: authorOf(r), URL: r.Url, At: r.OccurredAt,
-			})
-		case gitevent.KindDeployment:
-			deployed = true
-		case gitevent.KindPROpened, gitevent.KindPRMerged, gitevent.KindPRClosed:
-			if r.Number == nil {
-				continue
-			}
-			a, ok := byNumber[*r.Number]
-			if !ok {
-				a = &acc{}
-				byNumber[*r.Number] = a
-				numbers = append(numbers, *r.Number)
-			}
-			if later(a.latest, r) {
-				a.latest = r
-			}
-			switch gitevent.Kind(r.Kind) {
-			case gitevent.KindPROpened:
-				a.opened = r
-			case gitevent.KindPRMerged:
-				a.merged = r
-			case gitevent.KindPRClosed:
-				a.closed = r
-			}
+		branches := r.Branches
+		if len(branches) == 0 {
+			branches = []string{""}
 		}
+		out = append(out, CodeCommit{
+			Provider: gitevent.Provider(r.Provider), SHA: shortSHA(r.Sha), Title: r.Title, Branches: branches,
+			Author: authorOf(r), URL: r.Url, At: r.OccurredAt,
+		})
 	}
-	for _, n := range numbers {
-		a := byNumber[n]
-		req := CodeRequest{
-			Provider: gitevent.Provider(a.latest.Provider), Number: n, Title: a.latest.Title, State: RequestOpen,
-			Branch: a.latest.Branch, Target: a.latest.Target, URL: a.latest.Url, Author: authorOf(a.latest), At: a.latest.OccurredAt,
-		}
-		switch {
-		case a.merged != nil:
-			req.State, req.Author, req.At = RequestMerged, authorOf(a.merged), a.merged.OccurredAt
-		case a.closed != nil && (a.opened == nil || !a.closed.OccurredAt.Before(a.opened.OccurredAt)):
-			req.State = RequestClosed
-		case a.opened != nil:
-			req.Author = authorOf(a.opened)
-		}
-		requests = append(requests, req)
-	}
-	slices.SortFunc(requests, func(a, b CodeRequest) int { return b.At.Compare(a.At) })
-	slices.SortFunc(commits, func(a, b CodeCommit) int { return b.At.Compare(a.At) })
-	if requests == nil {
-		requests = []CodeRequest{}
-	}
-	if commits == nil {
-		commits = []CodeCommit{}
-	}
-	return requests, commits, deployed
+	slices.SortFunc(out, func(a, b CodeCommit) int { return b.At.Compare(a.At) })
+	return out
 }
 
 func authorOf(r *db.ListLinkedCodeEventsRow) string {

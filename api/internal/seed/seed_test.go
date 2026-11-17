@@ -95,8 +95,6 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"code events":                  count(`SELECT count(*) FROM code_events`),
 		"code links":                   count(`SELECT count(*) FROM code_event_links`),
 		"unknown keys":                 count(`SELECT count(*) FROM code_event_links WHERE outcome = 'unknown_ticket'`),
-		"items met by code":            count(`SELECT count(*) FROM ticket_dod_items WHERE code_event_id IS NOT NULL`),
-		"moves by code":                count(`SELECT count(*) FROM audit_log WHERE actor_kind = 'git' AND data->>'cause' = 'code_done'`),
 		"code notifications":           count(`SELECT count(*) FROM notifications WHERE event_type = 'code'`),
 	}
 	want := map[string]int{
@@ -105,11 +103,11 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"projects": 8, "tickets on projects": 12, "requests on default": 4, "project targets": 32, "default projects": 5, "e-Office P1 fix": 2,
 		"tickets": 12, "messages": 12, "internal notes": 1, "ticket history": 12, "next number": 24891,
 		"resolved today": 2, "assigned, not started": 1,
-		"watchers": 1, "notifications": 56, "emails pending": 0, "internal notes to client staff": 0,
+		"watchers": 1, "notifications": 51, "emails pending": 0, "internal notes to client staff": 0,
 		"projects asking for UAT": 2, "projects asking to confirm": 2, "in UAT": 2, "items met by the requester": 1,
 		"UAT requests to client staff": 3,
-		"repositories":                 3, "projects reading code": 4, "code events": 14, "code links": 14, "unknown keys": 1,
-		"items met by code": 8, "moves by code": 3, "code notifications": 4,
+		"repositories":                 3, "projects reading code": 4, "code events": 8, "code links": 8, "unknown keys": 1,
+		"code notifications": 2,
 	}
 	for k, w := range want {
 		if got[k] != w {

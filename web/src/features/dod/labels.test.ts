@@ -11,18 +11,17 @@ const with_ = (over: Partial<DodConfig>): DodConfig => ({ ...noDod, ...over })
 describe('Definition of Done labels', () => {
   it('summarises a configuration as the project list chip', () => {
     expect(dodSummary(t, noDod)).toBe('Resolved by hand')
-    expect(dodSummary(t, with_({ merged: { enabled: true, branch: 'main' }, ciPassed: true, uat: { enabled: true, autoApproveWorkingDays: 3 } }))).toBe(
-      'Merged → main + UAT',
+    expect(dodSummary(t, with_({ uat: { enabled: true, autoApproveWorkingDays: 3 } }))).toBe('UAT')
+    expect(dodSummary(t, with_({ uat: { enabled: true, autoApproveWorkingDays: 0 }, requesterConfirms: true }))).toBe(
+      'UAT + Requester confirms',
     )
-    // CI alone isn't "by hand": the ticket still waits for it.
-    expect(dodSummary(t, with_({ ciPassed: true, merged: { enabled: false, branch: 'release/*' } }))).toBe('CI passes on release/*')
-    expect(dodSummary(t, with_({ requesterConfirms: true }))).toBe('Requester confirms')
   })
 
   it('writes the sentence and the flow', () => {
-    const c = with_({ merged: { enabled: true, branch: 'main' }, deployedProduction: true })
-    expect(doneMeans(t, c, 'en')).toBe('the pull/merge request is merged into main and it is deployed to production.')
-    expect(flowSteps(t, c)).toEqual(['In progress', 'Merged & deployed', 'Resolved'])
+    const c = with_({ uat: { enabled: true, autoApproveWorkingDays: 3 } })
+    expect(doneMeans(t, c, 'en')).toBe('the client approves UAT (auto-approved after 3 working days).')
+    expect(flowSteps(t, c)).toEqual(['In progress', 'In UAT', 'Resolved'])
     expect(flowSteps(t, with_({ requesterConfirms: true }))).toEqual(['In progress', 'Awaiting confirmation', 'Resolved'])
+    expect(doneMeans(t, noDod, 'en')).toBe('nothing automatic. An agent resolves each ticket by hand.')
   })
 })

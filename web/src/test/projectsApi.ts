@@ -36,9 +36,6 @@ const fastSla: ProjectSla = {
 
 /** No conditions: an agent resolves each ticket by hand. */
 export const noDod: DodConfig = {
-  merged: { enabled: false, branch: 'main' },
-  ciPassed: false,
-  deployedProduction: false,
   uat: { enabled: false, autoApproveWorkingDays: 3 },
   requesterConfirms: false,
 }
@@ -60,18 +57,18 @@ function fixtures() {
   const projects: Project[] = [
     {
       id: PROJECT_IDS.eOffice, client: JAMBI, name: 'e-Office', description: 'Letters, dispositions, archives',
-      isDefault: true, active: true, sla: fastSla, dod: uatDod, allowTicketOverride: true, hasRepository: false, repository: null,
+      isDefault: true, active: true, sla: fastSla, dod: uatDod, allowTicketOverride: true, repository: null,
       openTicketCount: 2, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.email, client: JAMBI, name: 'Email', description: 'Mailboxes and accounts',
-      isDefault: false, active: true, sla: defaultSla, dod: noDod, allowTicketOverride: true, hasRepository: false, repository: null,
+      isDefault: false, active: true, sla: defaultSla, dod: noDod, allowTicketOverride: true, repository: null,
       openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.network, client: BATAM, name: 'Network & infra support', description: null,
       isDefault: true, active: true, sla: defaultSla, dod: { ...noDod, requesterConfirms: true }, allowTicketOverride: true,
-      hasRepository: false, repository: null, openTicketCount: 1, createdAt: STAMP, updatedAt: STAMP,
+      repository: null, openTicketCount: 1, createdAt: STAMP, updatedAt: STAMP,
     },
   ]
   return { levels, projects }
@@ -131,7 +128,7 @@ export const projectsHandlers = [
     const project: Project = {
       id: newId(), client, name: body.name, description: body.description ?? null,
       isDefault: body.isDefault || first, active: body.active || first, sla: defaultSla, dod: uatDod,
-      allowTicketOverride: true, hasRepository: false, repository: null, openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
+      allowTicketOverride: true, repository: null, openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
     }
     projectsApi.projects.push(project)
     return HttpResponse.json(project, { status: 201 })
@@ -163,8 +160,6 @@ export const projectsHandlers = [
     const body = (await record(request)) as ProjectDodInput
     const p = find(String(params.id))
     if (!p) return problem(404, 'not_found')
-    const code = body.dod.merged.enabled || body.dod.ciPassed || body.dod.deployedProduction
-    if (code && !p.hasRepository) return problem(400, 'invalid_dod')
     p.dod = body.dod
     p.allowTicketOverride = body.allowTicketOverride
     return HttpResponse.json(p)

@@ -93,15 +93,15 @@ const (
 	CauseReopened        Cause = "reopened"          // the client reopened a resolved ticket
 	CauseAutoClosed      Cause = "auto_closed"       // the reopen window ended
 	CauseDoDSkipped      Cause = "dod_skipped"       // an agent resolved with the Definition of Done unmet
-	CauseCodeActivity    Cause = "code_activity"     // a commit or pull/merge request started the work
-	CauseCodeDone        Cause = "code_done"         // the code conditions of the Definition of Done were met
-	CauseCodeReopened    Cause = "code_reopened"     // a commit said the problem is back
 )
 
-// FromCode reports whether code activity (GitHub/GitLab) moved the ticket.
-func (c Cause) FromCode() bool {
-	return c == CauseCodeActivity || c == CauseCodeDone || c == CauseCodeReopened
-}
+// Causes of moves GitHub/GitLab made before 17 Nov. Nothing writes them now (Git no longer moves
+// tickets); old activity lines and notifications still carry them.
+const (
+	CauseCodeActivity Cause = "code_activity" // a commit or pull/merge request started the work
+	CauseCodeDone     Cause = "code_done"     // the code conditions of the Definition of Done were met
+	CauseCodeReopened Cause = "code_reopened" // a commit said the problem is back
+)
 
 // Causes lists every cause.
 var Causes = []Cause{

@@ -13,12 +13,9 @@ import (
 )
 
 const getTicketForCode = `-- name: GetTicketForCode :one
-SELECT t.id, t.key, t.status, t.assignee_id, a.name AS assignee_name, t.client_id, p.repository_id,
-       p.dod_config, o.config AS dod_override
+SELECT t.id, t.key, t.status, p.repository_id
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
-LEFT JOIN users a ON a.id = t.assignee_id
-LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.id = $1
 FOR UPDATE OF t
 `
@@ -27,12 +24,7 @@ type GetTicketForCodeRow struct {
 	ID           uuid.UUID
 	Key          string
 	Status       string
-	AssigneeID   *uuid.UUID
-	AssigneeName *string
-	ClientID     uuid.UUID
 	RepositoryID *uuid.UUID
-	DodConfig    []byte
-	DodOverride  []byte
 }
 
 func (q *Queries) GetTicketForCode(ctx context.Context, id uuid.UUID) (GetTicketForCodeRow, error) {
@@ -42,12 +34,7 @@ func (q *Queries) GetTicketForCode(ctx context.Context, id uuid.UUID) (GetTicket
 		&i.ID,
 		&i.Key,
 		&i.Status,
-		&i.AssigneeID,
-		&i.AssigneeName,
-		&i.ClientID,
 		&i.RepositoryID,
-		&i.DodConfig,
-		&i.DodOverride,
 	)
 	return i, err
 }
@@ -81,8 +68,8 @@ func (q *Queries) GetTicketRepository(ctx context.Context, ticketID uuid.UUID) (
 }
 
 const insertCodeLink = `-- name: InsertCodeLink :exec
-INSERT INTO code_event_links (code_event_id, ticket_id, ticket_key, outcome, items, status_from, status_to)
-VALUES ($1, $2, $3, $4, $5::text[], $6, $7)
+INSERT INTO code_event_links (code_event_id, ticket_id, ticket_key, outcome)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT DO NOTHING
 `
 
@@ -91,9 +78,6 @@ type InsertCodeLinkParams struct {
 	TicketID    *uuid.UUID
 	TicketKey   string
 	Outcome     string
-	Items       []string
-	StatusFrom  *string
-	StatusTo    *string
 }
 
 // An ignored key is logged once per event (code_event_links_ignored_key).
@@ -103,17 +87,13 @@ func (q *Queries) InsertCodeLink(ctx context.Context, arg InsertCodeLinkParams) 
 		arg.TicketID,
 		arg.TicketKey,
 		arg.Outcome,
-		arg.Items,
-		arg.StatusFrom,
-		arg.StatusTo,
 	)
 	return err
 }
 
 const insertSeedCodeLink = `-- name: InsertSeedCodeLink :exec
-INSERT INTO code_event_links (code_event_id, ticket_id, ticket_key, outcome, items, status_from, status_to, at)
-VALUES ($1, $2, $3, $4, $5::text[], $6,
-        $7, $8)
+INSERT INTO code_event_links (code_event_id, ticket_id, ticket_key, outcome, at)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT DO NOTHING
 `
 
@@ -122,31 +102,24 @@ type InsertSeedCodeLinkParams struct {
 	TicketID    *uuid.UUID
 	TicketKey   string
 	Outcome     string
-	Items       []string
-	StatusFrom  *string
-	StatusTo    *string
 	At          time.Time
 }
 
-// Seed only: what a code event did, at an explicit time.
+// Seed only: a commit linked at an explicit time.
 func (q *Queries) InsertSeedCodeLink(ctx context.Context, arg InsertSeedCodeLinkParams) error {
 	_, err := q.db.Exec(ctx, insertSeedCodeLink,
 		arg.CodeEventID,
 		arg.TicketID,
 		arg.TicketKey,
 		arg.Outcome,
-		arg.Items,
-		arg.StatusFrom,
-		arg.StatusTo,
 		arg.At,
 	)
 	return err
 }
 
 const listCodeLog = `-- name: ListCodeLog :many
-SELECT l.id, l.at, l.ticket_key, (l.ticket_id IS NOT NULL)::boolean AS ticket_found, l.outcome, l.items,
-       l.status_from, l.status_to, e.kind, e.sha, e.number, e.title, e.branch, e.target, e.url,
-       r.provider, r.full_name
+SELECT l.id, l.at, l.ticket_key, (l.ticket_id IS NOT NULL)::boolean AS ticket_found, l.outcome,
+       e.sha, e.title, e.branch, e.url, r.provider, r.full_name
 FROM code_event_links l
 JOIN code_events e ON e.id = l.code_event_id
 JOIN repositories r ON r.id = e.repository_id
@@ -160,21 +133,15 @@ type ListCodeLogRow struct {
 	TicketKey   string
 	TicketFound bool
 	Outcome     string
-	Items       []string
-	StatusFrom  *string
-	StatusTo    *string
-	Kind        string
 	Sha         string
-	Number      *int64
 	Title       string
 	Branch      string
-	Target      string
 	Url         string
 	Provider    string
 	FullName    string
 }
 
-// The latest things code events did, ignored keys included, for the Integrations page.
+// The latest commits linked to tickets, ignored keys included, for the Integrations page.
 func (q *Queries) ListCodeLog(ctx context.Context, rowLimit int32) ([]ListCodeLogRow, error) {
 	rows, err := q.db.Query(ctx, listCodeLog, rowLimit)
 	if err != nil {
@@ -190,15 +157,9 @@ func (q *Queries) ListCodeLog(ctx context.Context, rowLimit int32) ([]ListCodeLo
 			&i.TicketKey,
 			&i.TicketFound,
 			&i.Outcome,
-			&i.Items,
-			&i.StatusFrom,
-			&i.StatusTo,
-			&i.Kind,
 			&i.Sha,
-			&i.Number,
 			&i.Title,
 			&i.Branch,
-			&i.Target,
 			&i.Url,
 			&i.Provider,
 			&i.FullName,
@@ -215,7 +176,7 @@ func (q *Queries) ListCodeLog(ctx context.Context, rowLimit int32) ([]ListCodeLo
 
 const listLinkedCodeEvents = `-- name: ListLinkedCodeEvents :many
 SELECT DISTINCT ON (l.ticket_id, e.id)
-       l.ticket_id, e.id, e.kind, e.sha, e.number, e.title, e.branch, e.target, e.url, e.author_login,
+       l.ticket_id, e.id, e.sha, e.title, e.branches, e.url, e.author_login,
        e.author_name, u.name AS author_user_name, e.occurred_at, r.provider
 FROM code_event_links l
 JOIN code_events e ON e.id = l.code_event_id
@@ -229,12 +190,9 @@ ORDER BY l.ticket_id, e.id
 type ListLinkedCodeEventsRow struct {
 	TicketID       *uuid.UUID
 	ID             uuid.UUID
-	Kind           string
 	Sha            string
-	Number         *int64
 	Title          string
-	Branch         string
-	Target         string
+	Branches       []string
 	Url            string
 	AuthorLogin    string
 	AuthorName     string
@@ -256,12 +214,9 @@ func (q *Queries) ListLinkedCodeEvents(ctx context.Context, ticketIds []uuid.UUI
 		if err := rows.Scan(
 			&i.TicketID,
 			&i.ID,
-			&i.Kind,
 			&i.Sha,
-			&i.Number,
 			&i.Title,
-			&i.Branch,
-			&i.Target,
+			&i.Branches,
 			&i.Url,
 			&i.AuthorLogin,
 			&i.AuthorName,
@@ -279,183 +234,26 @@ func (q *Queries) ListLinkedCodeEvents(ctx context.Context, ticketIds []uuid.UUI
 	return items, nil
 }
 
-const listRunCandidates = `-- name: ListRunCandidates :many
-SELECT t.id, t.key, p.dod_config, o.config AS dod_override
-FROM tickets t
-JOIN projects p ON p.id = t.project_id
-LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
-WHERE p.repository_id = $1 AND t.status = ANY($2::text[])
-  AND EXISTS (SELECT 1 FROM code_event_links l WHERE l.ticket_id = t.id
-              AND l.outcome NOT IN ('ticket_closed', 'unknown_ticket', 'other_repository'))
-ORDER BY t.id
-`
-
-type ListRunCandidatesParams struct {
-	RepositoryID *uuid.UUID
-	Statuses     []string
-}
-
-type ListRunCandidatesRow struct {
-	ID          uuid.UUID
-	Key         string
-	DodConfig   []byte
-	DodOverride []byte
-}
-
-// Open tickets a CI run or deployment in the repository may complete: their project reads code
-// from it and code already reached them.
-func (q *Queries) ListRunCandidates(ctx context.Context, arg ListRunCandidatesParams) ([]ListRunCandidatesRow, error) {
-	rows, err := q.db.Query(ctx, listRunCandidates, arg.RepositoryID, arg.Statuses)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListRunCandidatesRow{}
-	for rows.Next() {
-		var i ListRunCandidatesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Key,
-			&i.DodConfig,
-			&i.DodOverride,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listRunsSince = `-- name: ListRunsSince :many
-SELECT e.id, e.kind, e.sha, e.number, e.title, e.branch, e.target, e.occurred_at, e.author_user_id,
-       e.author_login, e.author_name, u.name AS author_user_name
-FROM code_events e
-LEFT JOIN users u ON u.id = e.author_user_id
-WHERE e.repository_id = $1 AND e.kind IN ('pipeline', 'deployment') AND e.occurred_at >= $2
-ORDER BY e.occurred_at, e.id
-LIMIT $3
-`
-
-type ListRunsSinceParams struct {
-	RepositoryID uuid.UUID
-	Since        time.Time
-	RowLimit     int32
-}
-
-type ListRunsSinceRow struct {
-	ID             uuid.UUID
-	Kind           string
-	Sha            string
-	Number         *int64
-	Title          string
-	Branch         string
-	Target         string
-	OccurredAt     time.Time
-	AuthorUserID   *uuid.UUID
-	AuthorLogin    string
-	AuthorName     string
-	AuthorUserName *string
-}
-
-// Successful CI runs and deployments stored for the repository from @since: one read before
-// the merge it follows still counts.
-func (q *Queries) ListRunsSince(ctx context.Context, arg ListRunsSinceParams) ([]ListRunsSinceRow, error) {
-	rows, err := q.db.Query(ctx, listRunsSince, arg.RepositoryID, arg.Since, arg.RowLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListRunsSinceRow{}
-	for rows.Next() {
-		var i ListRunsSinceRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Kind,
-			&i.Sha,
-			&i.Number,
-			&i.Title,
-			&i.Branch,
-			&i.Target,
-			&i.OccurredAt,
-			&i.AuthorUserID,
-			&i.AuthorLogin,
-			&i.AuthorName,
-			&i.AuthorUserName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listTicketCodeLinks = `-- name: ListTicketCodeLinks :many
-SELECT l.code_event_id, e.occurred_at, l.outcome
+SELECT l.code_event_id
 FROM code_event_links l
-JOIN code_events e ON e.id = l.code_event_id
 WHERE l.ticket_id = $1
 `
 
-type ListTicketCodeLinksRow struct {
-	CodeEventID uuid.UUID
-	OccurredAt  time.Time
-	Outcome     string
-}
-
-// The code events that reached a ticket, ignored or not, with when they happened.
-func (q *Queries) ListTicketCodeLinks(ctx context.Context, ticketID *uuid.UUID) ([]ListTicketCodeLinksRow, error) {
+// The code events that reached a ticket, ignored or not.
+func (q *Queries) ListTicketCodeLinks(ctx context.Context, ticketID *uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listTicketCodeLinks, ticketID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListTicketCodeLinksRow{}
+	items := []uuid.UUID{}
 	for rows.Next() {
-		var i ListTicketCodeLinksRow
-		if err := rows.Scan(&i.CodeEventID, &i.OccurredAt, &i.Outcome); err != nil {
+		var code_event_id uuid.UUID
+		if err := rows.Scan(&code_event_id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listTicketDoDItemTimes = `-- name: ListTicketDoDItemTimes :many
-SELECT i.item, coalesce(e.occurred_at, i.done_at)::timestamptz AS at
-FROM ticket_dod_items i
-LEFT JOIN code_events e ON e.id = i.code_event_id
-WHERE i.ticket_id = $1
-`
-
-type ListTicketDoDItemTimesRow struct {
-	Item string
-	At   time.Time
-}
-
-// Items a ticket has met, dated by the code event that met them (a merge's own time) or else
-// when they were recorded.
-func (q *Queries) ListTicketDoDItemTimes(ctx context.Context, ticketID uuid.UUID) ([]ListTicketDoDItemTimesRow, error) {
-	rows, err := q.db.Query(ctx, listTicketDoDItemTimes, ticketID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListTicketDoDItemTimesRow{}
-	for rows.Next() {
-		var i ListTicketDoDItemTimesRow
-		if err := rows.Scan(&i.Item, &i.At); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
+		items = append(items, code_event_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

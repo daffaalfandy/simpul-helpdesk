@@ -80,7 +80,7 @@ describe('board', () => {
 
     // Code that reached the ticket: its pull request in review.
     const coded = within(column('In progress')).getByRole('row', { name: /HD-24871/ })
-    expect(within(coded).getByText('PR #42 in review → main')).toBeInTheDocument()
+    expect(within(coded).getByText('2 commits · a1f9c2e on fix/HD-24871-sso')).toBeInTheDocument()
     expect(within(owned).queryByText(/PR #/)).not.toBeInTheDocument()
 
     await user.click(within(column('In progress')).getByRole('row', { name: /HD-24871/ }))

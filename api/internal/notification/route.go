@@ -101,8 +101,9 @@ type Change struct {
 	Code          *Code // code: what the code event did
 }
 
-// Code is what a code event did to the ticket, as a notification tells it. Values are the
-// gitevent and codeflow names; never the commit message.
+// Code is a commit that named the ticket, as a notification tells it; never the commit message.
+// Notifications from before 17 Nov may name a pull/merge request, CI run or deployment, with the
+// outcome they had then.
 type Code struct {
 	Provider string `json:"provider"`
 	Kind     string `json:"kind"`
@@ -296,7 +297,7 @@ func (in Input) candidates(c Change) []candidate {
 			add(&s, EventDoD, KindOverride)
 		}
 	case ChangeCode:
-		add(in.Assignee, EventCode, KindNone) // the team's event; client staff see the status it moved
+		add(in.Assignee, EventCode, KindNone) // the team's event; never client staff
 	}
 	return out
 }

@@ -366,8 +366,7 @@ export interface paths {
         /**
          * Replace a project's Definition of Done (supervisors and admins)
          * @description Applies at once to the project's open tickets, except tickets with a Definition of Done
-         *     of their own. Merge, CI and deploy conditions are read from the project's repository, so
-         *     they need one (`invalid_dod`).
+         *     of their own.
          */
         put: operations["updateProjectDod"];
         post?: never;
@@ -573,9 +572,9 @@ export interface paths {
         };
         /**
          * Connected repositories and their projects (admin only)
-         * @description The GitHub/GitLab connector is read-only: each repository sends webhooks with its own
-         *     secret, and commits, pull/merge requests, CI runs and deployments that name a ticket move it
-         *     by its project's Definition of Done.
+         * @description The GitHub/GitLab connector is read-only: each repository sends push webhooks with its own
+         *     secret, and a commit whose message names a ticket key is linked to that ticket, with every
+         *     branch it reaches. Commits never change a ticket.
          */
         get: operations["getIntegrations"];
         put?: never;
@@ -596,7 +595,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * What a commit message would do (admin only)
+         * Which tickets a commit message names (admin only)
          * @description The "Try a commit message" tester; it reads the message the way the connector does.
          */
         post: operations["testCommitMessage"];
@@ -660,17 +659,12 @@ export interface paths {
         /**
          * Disconnect a repository (admin only)
          * @description Its webhooks are refused from then on. A repository with code events is hidden, so tickets
-         *     keep their code activity; one without is deleted. Same `repository_in_use` rule as PATCH.
+         *     keep their code activity; one without is deleted.
          */
         delete: operations["deleteRepository"];
         options?: never;
         head?: never;
-        /**
-         * Change which projects read code from a repository (admin only)
-         * @description A project whose Definition of Done asks for merge, CI or deploy can't lose its repository
-         *     (`repository_in_use`, 409): turn those conditions off first, or link it to another
-         *     repository.
-         */
+        /** Change which projects read commits from a repository (admin only) */
         patch: operations["updateRepository"];
         trace?: never;
     };
@@ -711,8 +705,8 @@ export interface paths {
          * A webhook delivery from GitHub or GitLab
          * @description Public: the repository's secret authenticates it (GitHub signs the body with
          *     `X-Hub-Signature-256`; GitLab sends `X-Gitlab-Token`). The body is read as sent, JSON or
-         *     GitHub's form encoding, up to 5 MiB, and processed in the background. A redelivery, a
-         *     ping or an event the connector doesn't read is acknowledged and changes nothing. Error
+         *     GitHub's form encoding, up to 5 MiB, and processed in the background. Only pushes are
+         *     read; a redelivery, a ping or any other event is acknowledged and changes nothing. Error
          *     codes are `invalid_signature` (401), `repository_mismatch` (409, the webhook was added to
          *     another repository), `invalid_request` (unreadable payload) and `request_too_large`
          *     (413); each is shown on the Integrations page.
@@ -1603,33 +1597,20 @@ export interface components {
             notifyPicOnP1Breach: boolean;
         };
         /**
-         * @description The branch a pull/merge request merges into; `release/*` matches any release branch.
-         * @enum {string}
-         */
-        DodBranch: "main" | "develop" | "release/*" | "staging";
-        /**
          * @description Working days a ticket waits In UAT before the test is approved automatically; 0 never.
          * @enum {integer}
          */
         AutoApproveDays: 0 | 3 | 5;
-        DodMerged: {
-            enabled: boolean;
-            branch: components["schemas"]["DodBranch"];
-        };
         DodUat: {
             enabled: boolean;
             autoApproveWorkingDays: components["schemas"]["AutoApproveDays"];
         };
         /**
          * @description A Definition of Done: every enabled condition must be met before a ticket counts as done.
-         *     UAT and the requester's confirmation are one client check: the ticket waits In UAT and one
-         *     answer meets both. The branch and day count are kept while their condition is off.
+         *     Both are the client's check: the ticket waits In UAT and one answer meets both. The day
+         *     count is kept while UAT is off. Git never ticks them.
          */
         DodConfig: {
-            merged: components["schemas"]["DodMerged"];
-            /** @description CI passed on the merge branch. */
-            ciPassed: boolean;
-            deployedProduction: boolean;
             uat: components["schemas"]["DodUat"];
             /** @description For support work with no code; assumed after 3 working days without an answer. */
             requesterConfirms: boolean;
@@ -1658,9 +1639,7 @@ export interface components {
             dod: components["schemas"]["DodConfig"];
             /** @description Agents may set a different Definition of Done on one ticket, with a reason. */
             allowTicketOverride: boolean;
-            /** @description Whether merge, CI and deploy conditions can be read, i.e. a repository is linked. */
-            hasRepository: boolean;
-            /** @description Where code conditions are read from. */
+            /** @description Where its tickets' commits are read from. */
             repository: components["schemas"]["RepositoryRef"] | null;
             /** @description Tickets not yet resolved or closed. */
             openTicketCount: number;
@@ -1733,7 +1712,7 @@ export interface components {
         };
         /**
          * @description Team events: comment, internal_note, status, assignment, priority, sla, uat_result, dod
-         *     (supervisors; always on, not listed), code (commits, pull/merge requests, CI and deploys).
+         *     (supervisors; always on, not listed), code (commits that name the ticket).
          *     Portal events: reply, status, uat_requested (always on), question, resolved, colleague,
          *     ticket_logged (always on, not listed).
          * @enum {string}
@@ -1779,7 +1758,10 @@ export interface components {
             assigneeName: string | null;
             code: components["schemas"]["NotificationCode"] | null;
         };
-        /** @description What a code event did to the ticket; never the commit message. */
+        /**
+         * @description A commit that named the ticket; never its message. Notifications from before 17 Nov may
+         *     name a pull/merge request, CI run or deployment, with the outcome they had then.
+         */
         NotificationCode: {
             provider: components["schemas"]["GitProvider"];
             kind: components["schemas"]["CodeEventKind"];
@@ -2032,25 +2014,28 @@ export interface components {
         TicketProgressStep: "received" | "assigned" | "in_progress" | "ready_for_test" | "resolved";
         /** @enum {string} */
         TicketProgressState: "done" | "current" | "upcoming" | "skipped";
-        /** @enum {string} */
+        /**
+         * @description Only commits are read now; the other kinds appear in history from before 17 Nov.
+         * @enum {string}
+         */
         CodeEventKind: "commit" | "pr_opened" | "pr_merged" | "pr_closed" | "pipeline" | "deployment";
         /**
-         * @description What a code event did to a ticket: linked it, showed a pull/merge request in review,
-         *     ticked a Definition of Done item, or reopened it. `ticket_closed`, `unknown_ticket` and
-         *     `other_repository` (the ticket's project reads another repository) were ignored.
+         * @description What a commit's key did: `linked` it to the ticket; `ticket_closed`, `unknown_ticket` and
+         *     `other_repository` (the ticket's project reads another repository) were ignored. The
+         *     other values appear in history from before 17 Nov, when Git still moved tickets.
          * @enum {string}
          */
         CodeOutcome: "linked" | "in_review" | "fix_committed" | "merged" | "ci_passed" | "deployed" | "reopened" | "ticket_closed" | "unknown_ticket" | "other_repository";
         TicketActivityCode: {
             provider: components["schemas"]["GitProvider"];
             kind: components["schemas"]["CodeEventKind"];
-            /** @description A short commit sha, a request or run number, or the environment deployed to. */
+            /** @description A short commit sha (history may hold a request or run number, or an environment). */
             ref: string;
+            /** @description The branch the commit was first pushed to. */
             branch: string;
-            /** @description The branch a pull/merge request merges into. */
+            /** @description History only, the branch a pull/merge request merged into; empty for commits. */
             target: string;
             outcome: components["schemas"]["CodeOutcome"];
-            items: components["schemas"]["DodItem"][];
         };
         /**
          * @description `sla_at_risk` and `sla_breached` name the clock (first_response or resolution) in `to`.
@@ -2061,17 +2046,13 @@ export interface components {
          * @description Why the status changed when it wasn't a plain move by hand: the system moved it
          *     (assignment, requester_reply, uat_auto_approved, auto_closed), the client answered
          *     (uat_approved, uat_rejected, reopened), an agent resolved with the Definition of Done
-         *     unmet (dod_skipped, with the reason), or GitHub/GitLab moved it: a commit or pull/merge
-         *     request started the work (code_activity), the code conditions were met (code_done), or a
-         *     commit said the problem is back (code_reopened).
+         *     unmet (dod_skipped, with the reason). `code_activity`, `code_done` and `code_reopened`
+         *     appear in history only: GitHub/GitLab moved tickets until 17 Nov.
          * @enum {string}
          */
         TicketStatusCause: "assignment" | "requester_reply" | "uat_approved" | "uat_rejected" | "uat_auto_approved" | "reopened" | "auto_closed" | "dod_skipped" | "code_activity" | "code_done" | "code_reopened";
-        /**
-         * @description `fix_committed` is shown with code conditions but never required.
-         * @enum {string}
-         */
-        DodItem: "fix_committed" | "merged" | "ci_passed" | "deployed" | "uat_approved" | "requester_confirmed";
+        /** @enum {string} */
+        DodItem: "uat_approved" | "requester_confirmed";
         /**
          * @description `project` follows the project's Definition of Done; `ticket` has its own.
          * @enum {string}
@@ -2083,81 +2064,34 @@ export interface components {
             doneAt: string | null;
             /** @description Null when not done yet, or when the system met it. */
             doneBy: components["schemas"]["Ref"] | null;
-            /** @description The code event that met it. */
-            source: components["schemas"]["CodeSource"] | null;
-        };
-        CodeSource: {
-            provider: components["schemas"]["GitProvider"];
-            kind: components["schemas"]["CodeEventKind"];
-            /** @description A short commit sha, a request or run number, or the environment deployed to. */
-            ref: string;
-            /** @description The commit's first line or the request's title. */
-            title: string;
-            branch: string;
-            target: string;
-            author: string;
-            url: string;
-            /** Format: date-time */
-            at: string;
-        };
-        /**
-         * @description `open` is shown as In review; `closed` was closed without merging.
-         * @enum {string}
-         */
-        CodeRequestState: "open" | "merged" | "closed";
-        CodeRequest: {
-            provider: components["schemas"]["GitProvider"];
-            /** Format: int64 */
-            number: number;
-            title: string;
-            state: components["schemas"]["CodeRequestState"];
-            branch: string;
-            target: string;
-            url: string;
-            /** @description Who opened it */
-            author: string;
-            /** Format: date-time */
-            at: string;
         };
         CodeCommit: {
             provider: components["schemas"]["GitProvider"];
             /** @description The short sha. */
             sha: string;
             title: string;
-            branch: string;
+            /** @description Every branch the commit was pushed to, first one first (the fix branch, then main). */
+            branches: string[];
             author: string;
             url: string;
             /** Format: date-time */
             at: string;
         };
         TicketCode: {
-            /** @description Where the ticket's project reads code from. */
+            /** @description Where the ticket's project reads commits from. */
             repository: components["schemas"]["RepositoryRef"] | null;
-            requests: components["schemas"]["CodeRequest"][];
             commits: components["schemas"]["CodeCommit"][];
         };
         /** @description The card's code chip. */
         BoardCardCode: {
             provider: components["schemas"]["GitProvider"];
-            /** @description The latest pull/merge request. */
-            request: components["schemas"]["BoardCardRequest"] | null;
             /** @description Commits that named the ticket. */
             commits: number;
-            /** @description The latest commit's branch. */
+            /** @description The latest commit's short sha. */
+            sha: string;
+            /** @description The last branch the latest commit reached. */
             branch: string;
-            deployed: boolean;
         };
-        BoardCardRequest: {
-            /** Format: int64 */
-            number: number;
-            state: components["schemas"]["CodeRequestState"];
-            target: string;
-        };
-        /**
-         * @description `link` (the key alone), `fix` (fix/close/resolve right before it), `reopen`.
-         * @enum {string}
-         */
-        CommitRefAction: "link" | "fix" | "reopen";
         CommitTestInput: {
             message: string;
         };
@@ -2167,9 +2101,9 @@ export interface components {
         CommitTestRef: {
             /** @example HD-24871 */
             key: string;
-            action: components["schemas"]["CommitRefAction"];
             ticketExists: boolean;
         };
+        /** @description A key a commit named. */
         CodeEventLog: {
             /** Format: uuid */
             id: string;
@@ -2178,19 +2112,17 @@ export interface components {
             provider: components["schemas"]["GitProvider"];
             /** @description The repository's full name. */
             repository: string;
-            kind: components["schemas"]["CodeEventKind"];
+            /** @description The short sha. */
             ref: string;
+            /** @description The commit's first line. */
             title: string;
+            /** @description The branch it was first pushed to. */
             branch: string;
-            target: string;
             url: string;
             ticketKey: string;
             /** @description False when no ticket has the key. */
             ticketFound: boolean;
             outcome: components["schemas"]["CodeOutcome"];
-            items: components["schemas"]["DodItem"][];
-            statusFrom: components["schemas"]["TicketStatus"] | null;
-            statusTo: components["schemas"]["TicketStatus"] | null;
         };
         TicketDod: {
             source: components["schemas"]["DodSource"];
@@ -2206,8 +2138,6 @@ export interface components {
             pending: components["schemas"]["DodItem"][];
             /** @description The viewer may set or reset the ticket's own Definition of Done. */
             canOverride: boolean;
-            /** @description The ticket's project reads code, so merge, CI and deploy can be asked for. */
-            hasRepository: boolean;
         };
         TicketDodInput: {
             /** @description null returns the ticket to the project's Definition of Done. */
@@ -2861,7 +2791,6 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -3627,7 +3556,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The tickets the message names and what it asks of each */
+            /** @description The tickets the message names */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3715,7 +3644,6 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

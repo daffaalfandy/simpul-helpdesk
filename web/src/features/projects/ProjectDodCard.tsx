@@ -59,7 +59,6 @@ export function ProjectDodCard({ project, canEdit, onEditStart, onSaved }: Proje
         <>
           <DodConditions
             dod={draft.dod}
-            hasRepository={project.hasRepository}
             legend={t('projects.dod.conditionsLabel')}
             onChange={(dod) => setDraft({ ...draft, dod })}
           />

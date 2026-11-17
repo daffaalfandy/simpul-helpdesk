@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
@@ -40,20 +39,16 @@ type SeedTicket struct {
 	Code          []SeedCode
 }
 
-// SeedCode is what a stored code event did to the ticket: the link, its activity-log line and the
-// Definition of Done items it met. Status moves it caused are SeedSteps with a code cause.
+// SeedCode is a stored commit linked to the ticket: the link and its activity-log line.
 type SeedCode struct {
-	At       time.Time
-	Event    CodeEvent
-	Outcome  codeflow.Outcome
-	Items    []dod.Item
-	From, To ticket.Status // set when it moved the ticket
+	At    time.Time
+	Event CodeEvent
 }
 
 // SeedStep is a change after creation: an assignee change, a status change, or both. A move
 // with CauseUATApproved is the client approving the test, which meets the client items of the
-// project's Definition of Done. A move with a code cause is written by a git actor, and one with
-// CauseAutoClosed by the lifecycle scan (Actor is then ignored).
+// project's Definition of Done. A move with CauseAutoClosed is written by the lifecycle scan
+// (Actor is then ignored).
 type SeedStep struct {
 	At       time.Time
 	Actor    Ref
@@ -247,25 +242,11 @@ func seedRank(e seedEntry) int {
 	return 1
 }
 
-// seedCode writes what a code event did to the ticket, as ApplyCode would, at its own time.
+// seedCode links a commit to the ticket, as ApplyCode would, at its own time.
 func seedCode(ctx context.Context, q *db.Queries, ticketID uuid.UUID, key string, c SeedCode) ([]seedEntry, error) {
-	items := make([]string, len(c.Items))
-	for i, it := range c.Items {
-		items[i] = string(it)
-		if err := q.InsertSeedDoDItem(ctx, db.InsertSeedDoDItemParams{
-			TicketID: ticketID, Item: string(it), DoneAt: c.At, DoneBy: c.Event.AuthorID, CodeEventID: &c.Event.ID,
-		}); err != nil {
-			return nil, err
-		}
-	}
-	link := db.InsertSeedCodeLinkParams{
-		CodeEventID: c.Event.ID, TicketID: &ticketID, TicketKey: key, Outcome: string(c.Outcome), Items: items, At: c.At,
-	}
-	if c.To != "" {
-		from, to := string(c.From), string(c.To)
-		link.StatusFrom, link.StatusTo = &from, &to
-	}
-	if err := q.InsertSeedCodeLink(ctx, link); err != nil {
+	if err := q.InsertSeedCodeLink(ctx, db.InsertSeedCodeLinkParams{
+		CodeEventID: c.Event.ID, TicketID: &ticketID, TicketKey: key, Outcome: string(CodeLinked), At: c.At,
+	}); err != nil {
 		return nil, err
 	}
 	actor := Ref{Name: c.Event.AuthorName}
@@ -273,15 +254,10 @@ func seedCode(ctx context.Context, q *db.Queries, ticketID uuid.UUID, key string
 		actor.ID = *c.Event.AuthorID
 	}
 	e := c.Event
-	out := []seedEntry{{at: c.At, actor: actor, git: true, action: ActionCodeLinked, data: map[string]any{
+	return []seedEntry{{at: c.At, actor: actor, git: true, action: ActionCodeLinked, data: map[string]any{
 		dataCodeEvent: e.ID, dataProvider: e.Provider, dataCodeKind: e.Kind, dataCodeRef: e.Ref,
-		dataBranch: e.Branch, dataTarget: e.Target, dataOutcome: c.Outcome, dataItems: items,
-	}}}
-	if len(items) > 0 {
-		out = append(out, seedEntry{at: c.At, actor: actor, git: true, action: ActionDoDItemsDone,
-			data: map[string]any{dataItems: items, dataCodeEvent: e.ID}})
-	}
-	return out, nil
+		dataBranch: e.Branch, dataOutcome: CodeLinked,
+	}}}, nil
 }
 
 // seedClientItems meets the client items of the project's Definition of Done for an approval.
@@ -307,8 +283,7 @@ func statusEntry(at time.Time, actor Ref, from, to ticket.Status, cause ticket.C
 	if cause != "" {
 		data[dataCause] = cause
 	}
-	return seedEntry{at: at, actor: actor, action: ActionStatusChanged, data: data, git: cause.FromCode(),
-		system: cause == ticket.CauseAutoClosed}
+	return seedEntry{at: at, actor: actor, action: ActionStatusChanged, data: data, system: cause == ticket.CauseAutoClosed}
 }
 
 func refDataPtr(r *Ref) any {

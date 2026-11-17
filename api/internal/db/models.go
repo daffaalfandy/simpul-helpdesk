@@ -81,10 +81,8 @@ type CodeEvent struct {
 	Kind         string
 	ExternalID   string
 	Sha          string
-	Number       *int64
 	Title        string
 	Branch       string
-	Target       string
 	Url          string
 	AuthorName   string
 	AuthorLogin  string
@@ -92,6 +90,7 @@ type CodeEvent struct {
 	DeliveryID   *uuid.UUID
 	OccurredAt   time.Time
 	CreatedAt    time.Time
+	Branches     []string
 }
 
 type CodeEventLink struct {
@@ -100,9 +99,6 @@ type CodeEventLink struct {
 	TicketID    *uuid.UUID
 	TicketKey   string
 	Outcome     string
-	Items       []string
-	StatusFrom  *string
-	StatusTo    *string
 	At          time.Time
 }
 
@@ -264,11 +260,10 @@ type Ticket struct {
 }
 
 type TicketDodItem struct {
-	TicketID    uuid.UUID
-	Item        string
-	DoneAt      time.Time
-	DoneBy      *uuid.UUID
-	CodeEventID *uuid.UUID
+	TicketID uuid.UUID
+	Item     string
+	DoneAt   time.Time
+	DoneBy   *uuid.UUID
 }
 
 type TicketDodOverride struct {

@@ -72,11 +72,10 @@ export function ticketDod(project: DodConfig, own?: { config: DodConfig; reason:
     config,
     projectConfig: project,
     overrideReason: own?.reason ?? null,
-    items: items.map((item) => ({ item, doneAt: null, doneBy: null, source: null })),
+    items: items.map((item) => ({ item, doneAt: null, doneBy: null })),
     met: items.length === 0,
     pending: items,
     canOverride: true,
-    hasRepository: false,
   }
 }
 const rina = ref(IDS.rina, 'Rina Pratiwi')
@@ -227,24 +226,18 @@ function fixtures() {
   /** Which day of the client's test each In UAT card is on. */
   const cardUat: Record<string, BoardCardUat> = { 'HD-24915': { day: 2, days: 3 } }
   const cardCode: Record<string, BoardCardCode> = {
-    'HD-24871': { provider: 'github', request: { number: 42, state: 'open', target: 'main' }, commits: 2, branch: 'fix/HD-24871-sso', deployed: false },
+    'HD-24871': { provider: 'github', commits: 2, sha: 'a1f9c2e', branch: 'fix/HD-24871-sso' },
   }
   const code: Record<string, TicketCode> = {
     'HD-24871': {
       repository: { id: 'r-1', provider: 'github', fullName: 'vendor-id/eoffice-jambi', webUrl: 'https://github.com/vendor-id/eoffice-jambi' },
-      requests: [
-        {
-          provider: 'github', number: 42, title: 'Revert SSO token TTL change', state: 'open', branch: 'fix/HD-24871-sso',
-          target: 'main', url: 'https://github.com/vendor-id/eoffice-jambi/pull/42', author: 'Adi Saputra', at: '2026-11-12T02:05:00Z',
-        },
-      ],
       commits: [
         {
-          provider: 'github', sha: 'a1f9c2e', title: 'Fix HD-24871: revert SSO token TTL to 8h', branch: 'fix/HD-24871-sso',
+          provider: 'github', sha: 'a1f9c2e', title: 'Fix HD-24871: revert SSO token TTL to 8h', branches: ['fix/HD-24871-sso', 'main'],
           author: 'Adi Saputra', url: 'https://github.com/vendor-id/eoffice-jambi/commit/a1f9c2e', at: '2026-11-12T01:52:00Z',
         },
         {
-          provider: 'github', sha: '7c3d019', title: 'refs HD-24871 add logging around token refresh', branch: 'fix/HD-24871-sso',
+          provider: 'github', sha: '7c3d019', title: 'refs HD-24871 add logging around token refresh', branches: ['fix/HD-24871-sso'],
           author: 'Adi Saputra', url: 'https://github.com/vendor-id/eoffice-jambi/commit/7c3d019', at: '2026-11-12T01:40:00Z',
         },
       ],

@@ -109,7 +109,7 @@ func apiProject(p projects.Project) gen.Project {
 	return gen.Project{
 		Id: p.ID, Client: gen.Ref{Id: p.Client.ID, Name: p.Client.Name}, Name: p.Name, Description: p.Description,
 		IsDefault: p.IsDefault, Active: p.Active, Sla: apiProjectSLA(p.SLA), Dod: apiDodConfig(p.DoD),
-		AllowTicketOverride: p.AllowTicketOverride, HasRepository: p.HasRepository(), Repository: apiRepositoryRef(p.Repository),
+		AllowTicketOverride: p.AllowTicketOverride, Repository: apiRepositoryRef(p.Repository),
 		OpenTicketCount: p.OpenTicketCount, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }

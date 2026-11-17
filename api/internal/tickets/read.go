@@ -174,7 +174,7 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, key string) (Ticke
 		if err != nil {
 			return Ticket{}, err
 		}
-		d := ticketDoD(sd, r.DodOverrideReason, items, !t.Status.Locked() && canOverrideDoD(p, r.AllowTicketOverride), r.HasRepository)
+		d := ticketDoD(sd, r.DodOverrideReason, items, !t.Status.Locked() && canOverrideDoD(p, r.AllowTicketOverride))
 		t.DoD = &d
 	}
 	return t, nil

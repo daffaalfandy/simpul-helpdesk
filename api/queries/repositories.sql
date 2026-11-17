@@ -38,7 +38,7 @@ ORDER BY lower(c.name), lower(p.name);
 
 -- name: LockProjectsForLink :many
 -- The projects a link change touches: the ones asked for and the ones linked now.
-SELECT p.id, p.name, p.repository_id, p.dod_config
+SELECT p.id, p.name, p.repository_id
 FROM projects p
 WHERE p.id = ANY(@ids::uuid[]) OR p.repository_id = @repository_id
 ORDER BY p.id

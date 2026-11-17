@@ -40,15 +40,13 @@ SELECT id, name FROM users
 WHERE email = lower(@email) AND role <> 'requester' AND status = 'active';
 
 -- name: UpsertCodeEvent :one
--- A redelivered event keeps its row. A pull/merge request edited later takes the new title and
--- time, so its state reads from the latest activity.
-INSERT INTO code_events (repository_id, kind, external_id, sha, number, title, branch, target, url,
+-- A commit pushed again to another branch (the merge into main) keeps its row and adds the
+-- branch; a redelivery adds nothing.
+INSERT INTO code_events (repository_id, kind, external_id, sha, title, branch, branches, url,
                          author_name, author_login, author_user_id, delivery_id, occurred_at)
-VALUES (@repository_id, @kind, @external_id, @sha, sqlc.narg(number), @title, @branch, @target, @url,
+VALUES (@repository_id, @kind, @external_id, @sha, @title, @branch, ARRAY[@branch::text], @url,
         @author_name, @author_login, sqlc.narg(author_user_id), sqlc.narg(delivery_id), @occurred_at)
 ON CONFLICT (repository_id, kind, external_id) DO UPDATE
-SET title = CASE WHEN code_events.kind = 'pr_opened' THEN EXCLUDED.title ELSE code_events.title END,
-    occurred_at = CASE WHEN code_events.kind = 'pr_opened'
-                       THEN greatest(code_events.occurred_at, EXCLUDED.occurred_at)
-                       ELSE code_events.occurred_at END
+SET branches = CASE WHEN EXCLUDED.branch = ANY(code_events.branches) THEN code_events.branches
+                    ELSE code_events.branches || EXCLUDED.branch END
 RETURNING id;

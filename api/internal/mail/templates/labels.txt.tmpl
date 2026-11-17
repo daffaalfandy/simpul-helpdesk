@@ -45,8 +45,9 @@
 
 {{define "code.request"}}{{if eq .Provider "gitlab"}}MR !{{.Ref}}{{else}}PR #{{.Ref}}{{end}}{{end}}
 
+{{- /* Requests, CI runs and deployments appear only in notifications from before 17 Nov. */ -}}
 {{define "code.summary"}}{{template "code.provider" .Provider}}: 
-{{- if eq .Kind "commit"}} commit {{.Ref}}{{if eq .Outcome "reopened"}} reopened this ticket{{else if eq .Outcome "merged"}} landed on {{.Branch}}{{else if eq .Outcome "fix_committed"}} on {{.Branch}} fixes this ticket{{else}} on {{.Branch}} mentions this ticket{{end}}
+{{- if eq .Kind "commit"}} commit {{.Ref}} on {{.Branch}} mentions this ticket
 {{- else if eq .Kind "pr_opened"}} {{template "code.request" .}} opened → {{.Target}}
 {{- else if eq .Kind "pr_merged"}} {{template "code.request" .}} merged into {{.Target}}
 {{- else if eq .Kind "pr_closed"}} {{template "code.request" .}} closed without merging

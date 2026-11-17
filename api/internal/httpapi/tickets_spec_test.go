@@ -5,8 +5,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/commitmsg"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
@@ -72,13 +70,12 @@ func TestTicketContractMatchesDomain(t *testing.T) {
 		"Priority":           strs(sla.Priorities...),
 		"SlaCalendar":        strs(sla.CalendarBusinessHours, sla.CalendarAlways),
 		"DurationUnit":       strs(sla.Units...),
-		"DodBranch":          strs(dod.Branches...),
 		"GitProvider":        strs(gitevent.Providers...),
-		"CodeEventKind":      strs(gitevent.Kinds...),
-		"CodeOutcome":        strs(codeflow.Outcomes...),
-		"CodeRequestState":   strs(tickets.RequestOpen, tickets.RequestMerged, tickets.RequestClosed),
-		"CommitRefAction":    strs(commitmsg.ActionLink, commitmsg.ActionFix, commitmsg.ActionReopen),
-		"RepositoryStatus":   strs(connector.StatusWaiting, connector.StatusConnected, connector.StatusFailing),
+		// Only commits are read now; the other kinds and outcomes are history from before 17 Nov.
+		"CodeEventKind": append(strs(gitevent.KindCommit), "pr_opened", "pr_merged", "pr_closed", "pipeline", "deployment"),
+		"CodeOutcome": {string(tickets.CodeLinked), "in_review", "fix_committed", "merged", "ci_passed", "deployed",
+			"reopened", string(tickets.CodeTicketClosed), string(tickets.CodeUnknownTicket), string(tickets.CodeOtherRepository)},
+		"RepositoryStatus": strs(connector.StatusWaiting, connector.StatusConnected, connector.StatusFailing),
 		"RepositoryError": strs(connector.ErrorBadSignature, connector.ErrorRepositoryMismatch, connector.ErrorMalformed,
 			connector.ErrorTooLarge),
 		"AutoApproveDays": func() []string {

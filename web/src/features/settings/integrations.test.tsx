@@ -36,11 +36,12 @@ describe('Settings › GitHub / GitLab', () => {
 
     const rules = screen.getByRole('table', { name: 'Commit message rules' })
     expect(within(rules).getByText('Fixes HD-24871: revert TTL')).toBeInTheDocument()
+    expect(within(rules).getByText(/commits never change a status or the Definition of Done/)).toBeInTheDocument()
 
     const log = card('Recent events')
-    expect(await log.findByText(/PR #42 opened on eoffice-jambi → linked to/)).toBeInTheDocument()
+    expect(await log.findByText(/Push a1f9c2e “Fix HD-24871: revert SSO token TTL” on fix\/HD-24871-sso → linked to/)).toBeInTheDocument()
     expect(log.getByRole('link', { name: 'HD-24871' })).toHaveAttribute('href', '/tickets/HD-24871')
-    expect(log.getByText(/MR !57 merged into release\/2026\.11 →/)).toHaveTextContent('HD-24826 moved to In UAT')
+    expect(log.getByText(/Push da15608/)).toHaveTextContent('linked to HD-24826')
     expect(log.getByText(/no such ticket, ignored/)).toHaveTextContent('mentioned HD-99999')
     expect(log.queryByRole('link', { name: 'HD-99999' })).not.toBeInTheDocument()
   })
@@ -50,11 +51,12 @@ describe('Settings › GitHub / GitLab', () => {
     renderApp('/settings/integrations')
     const tester = card(await screen.findByText('Try a commit message').then((h) => h.textContent ?? ''))
     const result = tester.getByRole('status')
-    expect(await within(result).findByText('Fix committed · HD-24871')).toBeInTheDocument()
+    // Keywords only link: the ticket's status doesn't change.
+    expect(await within(result).findByText('Linked · HD-24871')).toBeInTheDocument()
+    expect(within(result).getByText("Adds the commit to the ticket's code activity. The ticket's status doesn't change.")).toBeInTheDocument()
 
-    await user.click(tester.getByRole('button', { name: 'reopen HD-24830' }))
-    expect(await within(result).findByText('Reopen · HD-24830')).toBeInTheDocument()
-    expect(within(result).getByText('Moves HD-24830 back to In progress and notifies the assignee.')).toBeInTheDocument()
+    await user.click(tester.getByRole('button', { name: 'Closes HD-24830' }))
+    expect(await within(result).findByText('Linked · HD-24830')).toBeInTheDocument()
 
     await user.click(tester.getByRole('button', { name: 'update readme' }))
     expect(await within(result).findByText('No ticket found')).toBeInTheDocument()

@@ -45,11 +45,6 @@ func with(changes ...func(*Config)) Config {
 	return c
 }
 
-func merged(b Branch) func(*Config) {
-	return func(c *Config) { c.Merged = Merged{Enabled: true, Branch: b} }
-}
-func ci(c *Config)       { c.CIPassed = true }
-func deployed(c *Config) { c.DeployedProduction = true }
 func uat(days int) func(*Config) {
 	return func(c *Config) { c.UAT = UAT{Enabled: true, AutoApproveWorkingDays: days} }
 }
@@ -57,24 +52,29 @@ func confirms(c *Config) { c.RequesterConfirms = true }
 
 // TestStorageFormat pins the JSON stored in projects.dod_config and ticket_dod_overrides.
 func TestStorageFormat(t *testing.T) {
-	got, err := json.Marshal(with(merged(BranchRelease), ci, uat(AutoApproveFiveDays)))
+	got, err := json.Marshal(with(uat(AutoApproveFiveDays), confirms))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"merged":{"enabled":true,"branch":"release/*"},"ci_passed":true,"deployed_production":false,` +
-		`"uat":{"enabled":true,"auto_approve_working_days":5},"requester_confirms":false}`
+	want := `{"uat":{"enabled":true,"auto_approve_working_days":5},"requester_confirms":true}`
 	if string(got) != want {
 		t.Fatalf("JSON = %s\nwant   %s", got, want)
 	}
-	if string(with(merged(BranchRelease), ci, uat(AutoApproveFiveDays)).JSON()) != want {
+	if string(with(uat(AutoApproveFiveDays), confirms).JSON()) != want {
 		t.Fatal("JSON() differs from json.Marshal")
 	}
 	back, err := Parse(got)
-	if err != nil || back != with(merged(BranchRelease), ci, uat(AutoApproveFiveDays)) {
+	if err != nil || back != with(uat(AutoApproveFiveDays), confirms) {
 		t.Fatalf("round trip = %+v, %v", back, err)
 	}
-	if partial, err := Parse([]byte(`{"ci_passed":true}`)); err != nil || partial != with(ci) {
+	if partial, err := Parse([]byte(`{"requester_confirms":true}`)); err != nil || partial != with(confirms) {
 		t.Fatalf("missing fields = %+v, %v", partial, err)
+	}
+	// JSON stored before the code conditions went still reads; the code keys are dropped.
+	old := `{"merged":{"enabled":true,"branch":"release/*"},"ci_passed":true,"deployed_production":false,` +
+		`"uat":{"enabled":true,"auto_approve_working_days":3},"requester_confirms":false}`
+	if c, err := Parse([]byte(old)); err != nil || c != with(uat(AutoApproveThreeDays)) {
+		t.Fatalf("old JSON = %+v, %v", c, err)
 	}
 }
 
@@ -89,50 +89,37 @@ func TestDefaults(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	tests := []struct {
-		name    string
-		c       Config
-		hasRepo bool
-		want    error
+		name string
+		c    Config
+		want error
 	}{
-		{"nothing", None(), false, nil},
-		{"client check without a repository", with(uat(AutoApproveNever), confirms), false, nil},
-		{"merge without a repository", with(merged(BranchMain)), false, ErrNeedsRepository},
-		{"CI without a repository", with(ci), false, ErrNeedsRepository},
-		{"deploy without a repository", with(deployed), false, ErrNeedsRepository},
-		{"code with a repository", with(merged(BranchStaging), ci, deployed), true, nil},
-		{"unknown branch", with(func(c *Config) { c.Merged.Branch = "trunk" }), true, ErrUnknownBranch},
-		{"four days", with(uat(4)), false, ErrAutoApproveDays},
-		{"days checked while UAT is off", with(func(c *Config) { c.UAT.AutoApproveWorkingDays = 4 }), false, ErrAutoApproveDays},
+		{"nothing", None(), nil},
+		{"both client checks", with(uat(AutoApproveNever), confirms), nil},
+		{"four days", with(uat(4)), ErrAutoApproveDays},
+		{"days checked while UAT is off", with(func(c *Config) { c.UAT.AutoApproveWorkingDays = 4 }), ErrAutoApproveDays},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := Validate(tt.c, tt.hasRepo); !errors.Is(err, tt.want) {
+			if err := Validate(tt.c); !errors.Is(err, tt.want) {
 				t.Fatalf("Validate = %v, want %v", err, tt.want)
 			}
 		})
 	}
 }
 
-func TestChecklistOrder(t *testing.T) {
+func TestRequiredOrder(t *testing.T) {
 	tests := []struct {
-		name      string
-		c         Config
-		checklist []Item
-		required  []Item
+		name     string
+		c        Config
+		required []Item
 	}{
-		{"nothing", None(), nil, nil},
-		{"e-Office", with(merged(BranchMain), uat(3)),
-			[]Item{ItemFixCommitted, ItemMerged, ItemUATApproved}, []Item{ItemMerged, ItemUATApproved}},
-		{"everything", with(confirms, uat(0), deployed, ci, merged(BranchMain)),
-			Items, []Item{ItemMerged, ItemCIPassed, ItemDeployed, ItemUATApproved, ItemRequesterConfirmed}},
-		{"deploy only", with(deployed), []Item{ItemFixCommitted, ItemDeployed}, []Item{ItemDeployed}},
-		{"requester confirms", with(confirms), []Item{ItemRequesterConfirmed}, []Item{ItemRequesterConfirmed}},
+		{"nothing", None(), nil},
+		{"UAT", with(uat(3)), []Item{ItemUATApproved}},
+		{"both", with(confirms, uat(0)), Items},
+		{"requester confirms", with(confirms), []Item{ItemRequesterConfirmed}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Checklist(tt.c); !slices.Equal(got, tt.checklist) {
-				t.Errorf("Checklist = %v, want %v", got, tt.checklist)
-			}
 			if got := Required(tt.c); !slices.Equal(got, tt.required) {
 				t.Errorf("Required = %v, want %v", got, tt.required)
 			}
@@ -141,7 +128,7 @@ func TestChecklistOrder(t *testing.T) {
 }
 
 func TestEvaluate(t *testing.T) {
-	eOffice := with(merged(BranchMain), uat(3))
+	eOffice := with(uat(3))
 	tests := []struct {
 		name    string
 		c       Config
@@ -150,9 +137,8 @@ func TestEvaluate(t *testing.T) {
 		pending []Item
 	}{
 		{"nothing required", None(), nil, true, nil},
-		{"nothing done", eOffice, nil, false, []Item{ItemMerged, ItemUATApproved}},
-		{"fix committed is not required", eOffice, []Item{ItemFixCommitted, ItemMerged}, false, []Item{ItemUATApproved}},
-		{"all done", eOffice, []Item{ItemMerged, ItemUATApproved}, true, nil},
+		{"nothing done", eOffice, nil, false, []Item{ItemUATApproved}},
+		{"all done", eOffice, []Item{ItemUATApproved}, true, nil},
 		{"items outside the DoD don't count", with(confirms), []Item{ItemUATApproved}, false, []Item{ItemRequesterConfirmed}},
 	}
 	for _, tt := range tests {
@@ -177,7 +163,7 @@ func TestAutoApproveDays(t *testing.T) {
 		ok     bool
 		client bool
 	}{
-		{"no client check", with(merged(BranchMain)), 0, false, false},
+		{"no client check", None(), 0, false, false},
 		{"UAT never", with(uat(AutoApproveNever)), 0, false, true},
 		{"UAT three days", with(uat(AutoApproveThreeDays)), 3, true, true},
 		{"UAT five days", with(uat(AutoApproveFiveDays)), 5, true, true},
@@ -262,9 +248,8 @@ func TestClientRequired(t *testing.T) {
 		want []Item
 	}{
 		{None(), nil},
-		{with(merged(BranchMain), uat(3)), []Item{ItemUATApproved}},
+		{with(uat(3)), []Item{ItemUATApproved}},
 		{with(uat(0), confirms), []Item{ItemUATApproved, ItemRequesterConfirmed}},
-		{with(deployed), nil},
 	}
 	for _, tt := range tests {
 		if got := ClientRequired(tt.c); !slices.Equal(got, tt.want) {
@@ -286,46 +271,17 @@ func TestParseEffective(t *testing.T) {
 	}
 }
 
-func TestBranchMatches(t *testing.T) {
-	tests := []struct {
-		branch Branch
-		name   string
-		want   bool
-	}{
-		{BranchMain, "main", true},
-		{BranchMain, "main2", false},
-		{BranchMain, "feature/main", false},
-		{BranchDevelop, "develop", true},
-		{BranchStaging, "staging", true},
-		{BranchRelease, "release/2026.11", true},
-		{BranchRelease, "release/v2/hotfix", true},
-		{BranchRelease, "release/", false},
-		{BranchRelease, "release", false},
-		{BranchRelease, "releases/1", false},
-		{BranchRelease, "hotfix/release/1", false},
-	}
-	for _, tt := range tests {
-		if got := tt.branch.Matches(tt.name); got != tt.want {
-			t.Errorf("%s.Matches(%q) = %v, want %v", tt.branch, tt.name, got, tt.want)
-		}
-	}
-}
-
 func TestCleared(t *testing.T) {
-	code, client := CodeItems, ClientItems
-	both := append(slices.Clone(client), code...)
 	tests := []struct {
 		from, to ticket.Status
 		want     []Item
 	}{
-		{ticket.StatusResolved, ticket.StatusInProgress, both},
-		{ticket.StatusResolved, ticket.StatusNew, both},
+		{ticket.StatusResolved, ticket.StatusInProgress, ClientItems},
+		{ticket.StatusResolved, ticket.StatusNew, ClientItems},
+		{ticket.StatusClosed, ticket.StatusInProgress, ClientItems},
 		{ticket.StatusResolved, ticket.StatusClosed, nil},
-		{ticket.StatusInUAT, ticket.StatusInProgress, code},
-		{ticket.StatusInUAT, ticket.StatusWaitingOnClient, code},
+		{ticket.StatusInUAT, ticket.StatusInProgress, nil},
 		{ticket.StatusInUAT, ticket.StatusResolved, nil},
-		{ticket.StatusInProgress, ticket.StatusInUAT, nil},
-		{ticket.StatusInProgress, ticket.StatusResolved, nil},
 		{ticket.StatusNew, ticket.StatusAssigned, nil},
 	}
 	for _, tt := range tests {

@@ -81,7 +81,7 @@ type Project struct {
 	DoD         dod.Config
 	// AllowTicketOverride lets agents set a different Definition of Done on one ticket.
 	AllowTicketOverride bool
-	// Repository is where code conditions are read from; nil without one.
+	// Repository is where its tickets' commits are read from; nil without one.
 	Repository *RepositoryRef
 	// OpenTicketCount counts tickets not yet resolved or closed.
 	OpenTicketCount int
@@ -89,16 +89,13 @@ type Project struct {
 	UpdatedAt       time.Time
 }
 
-// RepositoryRef names the repository a project reads code from (GitHub/GitLab connector).
+// RepositoryRef names the repository a project reads commits from (GitHub/GitLab connector).
 type RepositoryRef struct {
 	ID       uuid.UUID
 	Provider string // github | gitlab
 	FullName string
 	WebURL   string
 }
-
-// HasRepository says whether the project's code conditions can be read.
-func (p Project) HasRepository() bool { return p.Repository != nil }
 
 // CreateInput adds a project. A client's first project becomes its default.
 type CreateInput struct {
@@ -347,7 +344,7 @@ func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, id uuid.UUID
 		if err != nil {
 			return notFound(err)
 		}
-		if err := dod.Validate(in.Config, old.RepositoryID != nil); err != nil {
+		if err := dod.Validate(in.Config); err != nil {
 			return apperr.Invalid(apperr.CodeInvalidDoD, "Check the Definition of Done", err.Error())
 		}
 		prev, err := dod.Parse(old.DodConfig)

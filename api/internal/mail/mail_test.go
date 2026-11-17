@@ -136,12 +136,12 @@ func TestCodeActivityRenders(t *testing.T) {
 		code CodeData
 		want string
 	}{
+		{CodeData{Provider: "github", Kind: "commit", Ref: "a1f9c2e", Branch: "fix/HD-1", Outcome: "linked"}, "GitHub: commit a1f9c2e on fix/HD-1 mentions this ticket"},
+		{CodeData{Provider: "gitlab", Kind: "commit", Ref: "a1f9c2e", Branch: "main", Outcome: "linked"}, "GitLab: commit a1f9c2e on main mentions this ticket"},
+		// Notifications from before 17 Nov keep their wording, outcome aside.
+		{CodeData{Provider: "github", Kind: "commit", Ref: "a1f9c2e", Branch: "fix/HD-1", Outcome: "fix_committed"}, "GitHub: commit a1f9c2e on fix/HD-1 mentions this ticket"},
 		{CodeData{Provider: "github", Kind: "pr_merged", Ref: "142", Target: "main", Outcome: "merged"}, "GitHub: PR #142 merged into main"},
 		{CodeData{Provider: "gitlab", Kind: "pr_opened", Ref: "57", Target: "release/2026.11", Outcome: "in_review"}, "GitLab: MR !57 opened → release/2026.11"},
-		{CodeData{Provider: "github", Kind: "commit", Ref: "a1f9c2e", Branch: "fix/HD-1", Outcome: "fix_committed"}, "GitHub: commit a1f9c2e on fix/HD-1 fixes this ticket"},
-		{CodeData{Provider: "github", Kind: "commit", Ref: "a1f9c2e", Branch: "fix/HD-1", Outcome: "linked"}, "GitHub: commit a1f9c2e on fix/HD-1 mentions this ticket"},
-		{CodeData{Provider: "github", Kind: "commit", Ref: "a1f9c2e", Branch: "main", Outcome: "merged"}, "GitHub: commit a1f9c2e landed on main"},
-		{CodeData{Provider: "gitlab", Kind: "commit", Ref: "a1f9c2e", Outcome: "reopened"}, "GitLab: commit a1f9c2e reopened this ticket"},
 		{CodeData{Provider: "gitlab", Kind: "pipeline", Ref: "31", Branch: "main", Outcome: "ci_passed"}, "GitLab: CI passed on main"},
 		{CodeData{Provider: "github", Kind: "deployment", Ref: "production", Outcome: "deployed"}, "GitHub: deployed to production"},
 	}

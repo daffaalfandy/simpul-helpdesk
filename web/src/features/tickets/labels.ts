@@ -85,13 +85,10 @@ export function activityText(t: TFunction, names: PriorityNames, entry: TicketAc
     case 'code_linked': {
       const code = entry.code
       if (!code) return t('ticket.activity.codeLinked', { provider: '', event: '' })
-      const line = t('ticket.activity.codeLinked', {
+      return t('ticket.activity.codeLinked', {
         provider: t(`code.providers.${code.provider}`),
         event: codeEventText(t, code),
       })
-      if (code.items.length === 0) return line
-      const items = code.items.map((it) => t(`dod.check.${it}`, { branch: code.target || code.branch }))
-      return t('ticket.activity.codeItems', { line, items: items.join(t('ticket.activity.codeItemSeparator')) })
     }
     case 'sla_at_risk':
     case 'sla_breached': {

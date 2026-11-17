@@ -78,9 +78,5 @@ func apiCardCode(c *tickets.CardCode) *gen.BoardCardCode {
 	if c == nil {
 		return nil
 	}
-	out := &gen.BoardCardCode{Provider: gen.GitProvider(c.Provider), Commits: c.Commits, Branch: c.Branch, Deployed: c.Deployed}
-	if r := c.Request; r != nil {
-		out.Request = &gen.BoardCardRequest{Number: r.Number, State: gen.CodeRequestState(r.State), Target: r.Target}
-	}
-	return out
+	return &gen.BoardCardCode{Provider: gen.GitProvider(c.Provider), Commits: c.Commits, Sha: c.SHA, Branch: c.Branch}
 }

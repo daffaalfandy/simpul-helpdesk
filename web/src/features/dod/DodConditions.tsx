@@ -2,11 +2,11 @@ import { ArrowRight } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { AutoApproveDays, DodBranch, DodConfig } from '../../api/client'
+import type { AutoApproveDays, DodConfig } from '../../api/client'
 import { Checkbox } from '../../components/Checkbox'
 import { Dropdown } from '../../components/Dropdown'
 import { cx } from '../../lib/text'
-import { AUTO_APPROVE_DAYS, DOD_BRANCHES, doneMeans, flowSteps } from './labels'
+import { AUTO_APPROVE_DAYS, doneMeans, flowSteps } from './labels'
 
 /** "Done means: …" and the status flow, as the Projects mock draws them under the conditions. */
 export function DodPreview({ dod }: { dod: DodConfig }) {
@@ -41,60 +41,21 @@ export function DodPreview({ dod }: { dod: DodConfig }) {
 
 type DodConditionsProps = {
   dod: DodConfig
-  /** Merge, CI and deploy are read from a repository; without one they stay disabled. */
-  hasRepository: boolean
   onChange: (next: DodConfig) => void
   legend: string
 }
 
-/** The five conditions as rows that turn blue when ticked, with their settings (Projects mock). */
-export function DodConditions({ dod, hasRepository, onChange, legend }: DodConditionsProps) {
+/**
+ * The client's checks as rows that turn blue when ticked, with their settings (Projects mock,
+ * without the code conditions: Git no longer ticks the Definition of Done, owner 17 Nov).
+ */
+export function DodConditions({ dod, onChange, legend }: DodConditionsProps) {
   const { t } = useTranslation()
   const set = (next: Partial<DodConfig>) => onChange({ ...dod, ...next })
-  // Without a repository the code conditions say why they are off, on a line of their own.
-  const codeHint = (hint: string) =>
-    hasRepository ? (
-      hint
-    ) : (
-      <>
-        {hint}
-        <span className="block font-semibold">{t('dod.needsRepo')}</span>
-      </>
-    )
 
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="sr-only">{legend}</legend>
-      <ConditionRow
-        on={dod.merged.enabled}
-        label={t('dod.items.merged.label')}
-        hint={codeHint(t('dod.items.merged.hint'))}
-        isDisabled={!hasRepository}
-        onToggle={(on) => set({ merged: { ...dod.merged, enabled: on } })}
-        control={
-          <Dropdown<DodBranch>
-            label={t('dod.branchLabel')}
-            options={DOD_BRANCHES.map((b) => ({ id: b, label: t(`dod.branch.${b}.label`), description: t(`dod.branch.${b}.hint`) }))}
-            value={dod.merged.branch}
-            onChange={(branch) => set({ merged: { ...dod.merged, branch } })}
-            isDisabled={!hasRepository}
-          />
-        }
-      />
-      <ConditionRow
-        on={dod.ciPassed}
-        label={t('dod.items.ci_passed.label')}
-        hint={codeHint(t('dod.items.ci_passed.hint'))}
-        isDisabled={!hasRepository}
-        onToggle={(ciPassed) => set({ ciPassed })}
-      />
-      <ConditionRow
-        on={dod.deployedProduction}
-        label={t('dod.items.deployed.label')}
-        hint={codeHint(t('dod.items.deployed.hint'))}
-        isDisabled={!hasRepository}
-        onToggle={(deployedProduction) => set({ deployedProduction })}
-      />
       <ConditionRow
         on={dod.uat.enabled}
         label={t('dod.items.uat_approved.label')}
@@ -127,14 +88,13 @@ type ConditionRowProps = {
   on: boolean
   label: string
   hint: ReactNode
-  isDisabled?: boolean
   onToggle: (on: boolean) => void
-  /** The condition's setting (branch, auto-approve), kept while the condition is off. */
+  /** The condition's setting (auto-approve), kept while the condition is off. */
   control?: ReactNode
 }
 
 /** One condition: a bordered row that turns primary when ticked (Projects mock). */
-function ConditionRow({ on, label, hint, isDisabled, onToggle, control }: ConditionRowProps) {
+function ConditionRow({ on, label, hint, onToggle, control }: ConditionRowProps) {
   return (
     <div
       className={cx(
@@ -143,7 +103,7 @@ function ConditionRow({ on, label, hint, isDisabled, onToggle, control }: Condit
         on ? 'border-primary bg-primary-tint' : 'border-border bg-surface',
       )}
     >
-      <Checkbox isSelected={on} isDisabled={isDisabled} onChange={onToggle} description={hint} className="flex-1">
+      <Checkbox isSelected={on} onChange={onToggle} description={hint} className="flex-1">
         {label}
       </Checkbox>
       {control && <div className="w-full sm:w-(--dod-control-w) sm:shrink-0">{control}</div>}

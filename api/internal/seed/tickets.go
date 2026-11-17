@@ -7,10 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/codeflow"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
@@ -92,19 +89,15 @@ var demoTickets = []demoTicket{
 		age:         2 * minutesPerDay,
 		steps: []demoStep{
 			{15, emailYoga, emailYoga, "", ""}, {40, emailYoga, "", ticket.StatusInProgress, ""},
-			{26 * minutesPerHour, emailDewi, "", ticket.StatusInUAT, ticket.CauseCodeDone},
+			{26 * minutesPerHour, emailYoga, "", ticket.StatusInUAT, ""},
 		},
 		messages: []demoMessage{
 			{12, emailYoga, false, "Hi Bu Sri, we can reproduce the timeout on exports over 5,000 rows. We're working on it."},
 			{26*minutesPerHour + 5, emailYoga, false, "Large exports now stream instead of building in memory. Could you export last month's realisation and check it finishes?"},
 		},
 		code: []demoCode{
-			{20 * minutesPerHour, repoSIPD, gitevent.KindCommit, "da1560886d4f094c3e6c9ef40349f7d38b5d27d7",
-				"Closes %s: stream large Excel exports", "fix/HD-24826-export", "", emailYoga,
-				codeflow.OutcomeFixCommitted, []dod.Item{dod.ItemFixCommitted}, "", ""},
-			{26 * minutesPerHour, repoSIPD, gitevent.KindPRMerged, "57", "SIPD export streams large files",
-				"fix/HD-24826-export", "release/2026.11", emailDewi,
-				codeflow.OutcomeMerged, []dod.Item{dod.ItemMerged}, ticket.StatusInProgress, ticket.StatusInUAT},
+			{20 * minutesPerHour, repoSIPD, "da1560886d4f094c3e6c9ef40349f7d38b5d27d7",
+				"%s: stream large Excel exports", []string{"fix/HD-24826-export", "release/2026.11"}, emailYoga},
 		},
 	},
 	{
@@ -115,21 +108,15 @@ var demoTickets = []demoTicket{
 		age:         40 * minutesPerHour,
 		steps: []demoStep{
 			{10, emailRina, emailAdi, "", ""}, {30, emailAdi, "", ticket.StatusInProgress, ""},
-			{15 * minutesPerHour, emailDewi, "", ticket.StatusInUAT, ticket.CauseCodeDone},
+			{15 * minutesPerHour, emailAdi, "", ticket.StatusInUAT, ""},
 		},
 		messages: []demoMessage{
 			{25, emailAdi, false, "Thanks Pak Hendra. The PDF uses the server's UTC date; we're switching it to WIB."},
 			{15*minutesPerHour + 5, emailAdi, false, "The fix is on the e-Office test server. Could you print a few letters and check the date?"},
 		},
 		code: []demoCode{
-			{14 * minutesPerHour, repoEOffice, gitevent.KindCommit, "c4e1b20f9a8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b",
-				"Fix %s: print disposition dates in WIB", "fix/HD-24830-wib", "", emailAdi,
-				codeflow.OutcomeFixCommitted, []dod.Item{dod.ItemFixCommitted}, "", ""},
-			{14*minutesPerHour + 10, repoEOffice, gitevent.KindPROpened, "138", "Disposition PDF uses WIB dates",
-				"fix/HD-24830-wib", "main", emailAdi, codeflow.OutcomeInReview, nil, "", ""},
-			{15 * minutesPerHour, repoEOffice, gitevent.KindPRMerged, "138", "Disposition PDF uses WIB dates",
-				"fix/HD-24830-wib", "main", emailDewi,
-				codeflow.OutcomeMerged, []dod.Item{dod.ItemMerged}, ticket.StatusInProgress, ticket.StatusInUAT},
+			{14 * minutesPerHour, repoEOffice, "c4e1b20f9a8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b",
+				"%s: print disposition dates in WIB", []string{"fix/HD-24830-wib", "main"}, emailAdi},
 		},
 	},
 	{
@@ -197,10 +184,10 @@ var demoTickets = []demoTicket{
 			{85, emailAdi, false, "Could you send the officer's name, work email and the date access should start?"},
 		},
 		code: []demoCode{
-			{70, repoEOffice, gitevent.KindCommit, "5b2e7aa4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
-				"refs %s add VPN profile template", "fix/HD-24859", "", emailAdi, codeflow.OutcomeLinked, nil, "", ""},
-			{80, repoEOffice, gitevent.KindCommit, "9d03c11e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c",
-				"refs %s add retry", "fix/HD-24859", "", emailAdi, codeflow.OutcomeLinked, nil, "", ""},
+			{70, repoEOffice, "5b2e7aa4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
+				"refs %s add VPN profile template", []string{"fix/HD-24859"}, emailAdi},
+			{80, repoEOffice, "9d03c11e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c",
+				"refs %s add retry", []string{"fix/HD-24859"}, emailAdi},
 		},
 	},
 	{
@@ -233,13 +220,10 @@ var demoTickets = []demoTicket{
 			{17, emailRina, true, "Matches last night's SSO patch: the token lifetime dropped to 5 minutes. Adi is preparing a revert."},
 		},
 		code: []demoCode{
-			{40, repoEOffice, gitevent.KindCommit, "7c3d019b2a3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e",
-				"refs %s add logging around token refresh", "fix/HD-24871-sso", "", emailAdi, codeflow.OutcomeLinked, nil, "", ""},
-			{52, repoEOffice, gitevent.KindCommit, "a1f9c2e5d7b8c9a0b1c2d3e4f5a6b7c8d9e0f1a2",
-				"Fix %s: revert SSO token TTL to 8h", "fix/HD-24871-sso", "", emailAdi,
-				codeflow.OutcomeFixCommitted, []dod.Item{dod.ItemFixCommitted}, "", ""},
-			{65, repoEOffice, gitevent.KindPROpened, "142", "Revert SSO token TTL change", "fix/HD-24871-sso", "main",
-				emailAdi, codeflow.OutcomeInReview, nil, "", ""},
+			{40, repoEOffice, "7c3d019b2a3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e",
+				"refs %s add logging around token refresh", []string{"fix/HD-24871-sso"}, emailAdi},
+			{52, repoEOffice, "a1f9c2e5d7b8c9a0b1c2d3e4f5a6b7c8d9e0f1a2",
+				"%s: revert SSO token TTL to 8h", []string{"fix/HD-24871-sso"}, emailAdi},
 		},
 	},
 	{
@@ -250,19 +234,14 @@ var demoTickets = []demoTicket{
 		endsToday:   true,
 		steps: []demoStep{
 			{10, emailYoga, emailYoga, "", ""}, {20, emailYoga, "", ticket.StatusInProgress, ""},
-			{150, emailDewi, "", ticket.StatusResolved, ticket.CauseCodeDone},
+			{150, emailYoga, "", ticket.StatusResolved, ""},
 		},
 		messages: []demoMessage{
 			{25, emailYoga, false, "Hi Bu Maya, the proxy in front of the website gives up too early on slow news pages. We're raising its timeout."},
 		},
 		code: []demoCode{
-			{100, repoBintan, gitevent.KindCommit, "e81f4d2a3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0",
-				"Fix %s: raise the proxy's upstream timeout", "fix/HD-24888-502", "", emailYoga,
-				codeflow.OutcomeFixCommitted, []dod.Item{dod.ItemFixCommitted}, "", ""},
-			{120, repoBintan, gitevent.KindPRMerged, "91", "Raise proxy upstream timeout", "fix/HD-24888-502", "main",
-				emailDewi, codeflow.OutcomeMerged, []dod.Item{dod.ItemMerged}, "", ""},
-			{150, repoBintan, gitevent.KindDeployment, "3301", "production", "main", "", emailDewi,
-				codeflow.OutcomeDeployed, []dod.Item{dod.ItemDeployed}, ticket.StatusInProgress, ticket.StatusResolved},
+			{100, repoBintan, "e81f4d2a3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0",
+				"%s: raise the proxy's upstream timeout", []string{"fix/HD-24888-502", "main"}, emailYoga},
 		},
 	},
 	{
@@ -347,7 +326,7 @@ func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs, repo
 			if err != nil {
 				return fmt.Errorf("ticket %d code: %w", d.number, err)
 			}
-			t.Code = append(t.Code, tickets.SeedCode{At: at(c.after), Event: e, Outcome: c.outcome, Items: c.items, From: c.from, To: c.to})
+			t.Code = append(t.Code, tickets.SeedCode{At: at(c.after), Event: e})
 		}
 		if _, err := tickets.InsertSeed(ctx, q, t); err != nil {
 			return fmt.Errorf("ticket %d: %w", d.number, err)
