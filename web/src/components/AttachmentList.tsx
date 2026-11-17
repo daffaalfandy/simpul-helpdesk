@@ -18,7 +18,7 @@ export function AttachmentList({ items }: { items: ReadonlyArray<Attachment> }) 
           >
             <Paperclip aria-hidden="true" className="size-(--icon-sm) shrink-0" />
             <span className="truncate">{a.filename}</span>
-            <span className="shrink-0 font-normal text-muted">{formatFileSize(a.sizeBytes)}</span>
+            <span className="shrink-0 font-regular text-muted">{formatFileSize(a.sizeBytes)}</span>
           </a>
         </li>
       ))}

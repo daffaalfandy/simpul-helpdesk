@@ -65,7 +65,7 @@ export function Dropdown<K extends string>({
           size === 'lg' ? 'min-h-(--control-h-lg) text-md' : 'min-h-(--control-h-md) text-base',
         )}
       >
-        <SelectValue className="truncate font-bold data-placeholder:font-normal data-placeholder:text-muted">
+        <SelectValue className="truncate font-bold data-placeholder:font-regular data-placeholder:text-muted">
           {({ isPlaceholder, selectedText, defaultChildren }) => (isPlaceholder ? defaultChildren : selectedText)}
         </SelectValue>
         <ChevronDown
