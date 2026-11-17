@@ -256,12 +256,18 @@ func TestTicketScope(t *testing.T) {
 		}
 	}
 
+	// Working in another organization, even an administrator reaches none of it: a ticket key is
+	// answered with the organization to switch to, everything else is refused or not found.
+	elsewhere := te.admin.in(te.secondOrganization(t, "PT Mitra Data", "MD"))
 	for op, want := range scopedOps {
 		if rec := calls[op](te.otherRequester); rec.Code != want.otherRequester {
 			t.Errorf("%s as requester of another client: %d, want %d", op, rec.Code, want.otherRequester)
 		}
 		if rec := calls[op](te.otherAgent); rec.Code != want.otherAgent {
 			t.Errorf("%s as unassigned agent: %d, want %d", op, rec.Code, want.otherAgent)
+		}
+		if rec := calls[op](elsewhere); rec.Code != http.StatusForbidden && rec.Code != http.StatusNotFound && rec.Code != http.StatusConflict {
+			t.Errorf("%s from another organization: %d %s", op, rec.Code, rec.Body)
 		}
 	}
 	for name, s := range map[string]session{"other requester": te.otherRequester, "other agent": te.otherAgent} {

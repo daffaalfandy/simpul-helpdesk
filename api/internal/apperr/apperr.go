@@ -87,6 +87,7 @@ const (
 	CodeSetupClosed               = "setup_closed"
 	CodeTicketPrefixTaken         = "ticket_prefix_taken"
 	CodeOrganizationRequired      = "organization_required"
+	CodeOtherOrganization         = "other_organization"
 )
 
 // Error is a domain error with a stable machine-readable code.
@@ -138,6 +139,12 @@ func Forbidden() *Error {
 // OrganizationRequired means the request needs an organization and the user has none to work in.
 func OrganizationRequired() *Error {
 	return &Error{Status: http.StatusConflict, Code: CodeOrganizationRequired, Title: "Choose an organization first"}
+}
+
+// OtherOrganization means the ticket is in another organization the user works in; detail is
+// that organization's id, so the client can offer to switch.
+func OtherOrganization(orgID string) *Error {
+	return &Error{Status: http.StatusConflict, Code: CodeOtherOrganization, Title: "This ticket is in another organization", Detail: orgID}
 }
 
 // NotFound means the resource does not exist (or is hidden from the user).

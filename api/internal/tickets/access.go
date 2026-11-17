@@ -13,6 +13,7 @@ import (
 // plus any ticket assigned to them (they keep it after being unlinked; owner, 17 Nov).
 type access struct {
 	org           uuid.UUID  // the organization the request works in; every query filters on it
+	user          uuid.UUID  // who asks: a key of another organization they work in gets a 409
 	scopeClientID *uuid.UUID // requesters: their client
 	scopeAgentID  *uuid.UUID // agents: clients they are assigned to, and tickets assigned to them
 	visibility    *string    // requesters: public messages only
@@ -33,12 +34,12 @@ func accessFor(p *auth.Principal) (access, error) {
 			return access{}, apperr.Forbidden()
 		}
 		client := *p.ClientID
-		return access{org: p.OrganizationID, scopeClientID: &client, visibility: &publicOnly}, nil
+		return access{org: p.OrganizationID, scopeClientID: &client, visibility: &publicOnly}, nil // never switches
 	case auth.Can(p.Role, auth.CapClientsViewAll):
-		return access{org: p.OrganizationID, staff: true}, nil
+		return access{org: p.OrganizationID, user: p.UserID, staff: true}, nil
 	case auth.Can(p.Role, auth.CapAgentApp):
 		agent := p.UserID
-		return access{org: p.OrganizationID, scopeAgentID: &agent, staff: true}, nil
+		return access{org: p.OrganizationID, user: p.UserID, scopeAgentID: &agent, staff: true}, nil
 	}
 	return access{}, apperr.Forbidden()
 }

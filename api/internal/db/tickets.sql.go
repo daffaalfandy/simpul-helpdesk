@@ -99,6 +99,30 @@ func (q *Queries) CreateTicketMessage(ctx context.Context, arg CreateTicketMessa
 	return i, err
 }
 
+const findTicketOrganization = `-- name: FindTicketOrganization :one
+SELECT t.organization_id
+FROM tickets t
+JOIN users u ON u.id = $1
+WHERE t.key = $2
+  AND (u.role = $3
+       OR EXISTS (SELECT 1 FROM organization_members m WHERE m.user_id = u.id AND m.organization_id = t.organization_id))
+`
+
+type FindTicketOrganizationParams struct {
+	UserID    uuid.UUID
+	Key       string
+	AdminRole string
+}
+
+// The organization a ticket key belongs to, when the user could work there (an administrator,
+// or a member): an email link to a ticket of another organization offers to switch.
+func (q *Queries) FindTicketOrganization(ctx context.Context, arg FindTicketOrganizationParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, findTicketOrganization, arg.UserID, arg.Key, arg.AdminRole)
+	var organization_id uuid.UUID
+	err := row.Scan(&organization_id)
+	return organization_id, err
+}
+
 const getLatestPublicStaffMessage = `-- name: GetLatestPublicStaffMessage :one
 SELECT m.id, m.body
 FROM ticket_messages m

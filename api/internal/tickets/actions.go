@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
@@ -179,7 +180,10 @@ func lockTicket(ctx context.Context, q *db.Queries, a access, key string) (db.Ge
 	row, err := q.GetTicketForUpdate(ctx, db.GetTicketForUpdateParams{
 		Key: key, OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID,
 	})
-	return row, notFound(err)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return row, elsewhere(ctx, q, a, key)
+	}
+	return row, err
 }
 
 // statusMove is one status change: cause is empty for a plain move by hand; reason is a staff

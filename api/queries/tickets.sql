@@ -154,3 +154,13 @@ JOIN users u ON u.id = m.author_id
 WHERE m.ticket_id = @ticket_id AND m.visibility = @visibility AND u.role <> @requester_role
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT 1;
+
+-- name: FindTicketOrganization :one
+-- The organization a ticket key belongs to, when the user could work there (an administrator,
+-- or a member): an email link to a ticket of another organization offers to switch.
+SELECT t.organization_id
+FROM tickets t
+JOIN users u ON u.id = @user_id
+WHERE t.key = @key
+  AND (u.role = @admin_role
+       OR EXISTS (SELECT 1 FROM organization_members m WHERE m.user_id = u.id AND m.organization_id = t.organization_id));

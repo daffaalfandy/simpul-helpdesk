@@ -3,11 +3,13 @@ package tickets
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
@@ -190,7 +192,28 @@ func (s *Service) getRow(ctx context.Context, q *db.Queries, a access, key strin
 		return db.GetTicketRow{}, notFound(pgx.ErrNoRows)
 	}
 	r, err := q.GetTicket(ctx, db.GetTicketParams{Key: key, OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID})
-	return r, notFound(err)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return r, elsewhere(ctx, q, a, key)
+	}
+	return r, err
+}
+
+// elsewhere answers for a key not found in the organization the request works in: 409 with the
+// organization it is in when the user works there too, otherwise 404.
+func elsewhere(ctx context.Context, q *db.Queries, a access, key string) error {
+	if a.user == uuid.Nil {
+		return apperr.NotFound()
+	}
+	org, err := q.FindTicketOrganization(ctx, db.FindTicketOrganizationParams{Key: key, UserID: a.user, AdminRole: string(auth.RoleAdmin)})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return apperr.NotFound()
+	case err != nil:
+		return err
+	case org == a.org:
+		return apperr.NotFound() // here, but out of this user's scope
+	}
+	return apperr.OtherOrganization(org.String())
 }
 
 // statusHistory reads the ticket's status changes from its audit entries: the status it was

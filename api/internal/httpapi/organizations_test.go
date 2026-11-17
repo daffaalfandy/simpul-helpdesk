@@ -100,7 +100,8 @@ func TestOrganizationsDontSeeEachOther(t *testing.T) {
 	tk := te.requester.report(t, incident(te.projectA, "Printer offline"))
 	admin := te.admin.in(b)
 
-	expectProblem(t, admin.do(http.MethodGet, "/tickets/"+tk.Key, nil), http.StatusNotFound, apperr.CodeNotFound)
+	// The ticket itself answers with its organization (TestTicketOfAnotherOrganization).
+	expectProblem(t, admin.do(http.MethodGet, "/tickets/"+tk.Key, nil), http.StatusConflict, apperr.CodeOtherOrganization)
 	expectProblem(t, admin.do(http.MethodGet, "/clients/"+te.clientA.String(), nil), http.StatusNotFound, apperr.CodeNotFound)
 	expectProblem(t, admin.do(http.MethodGet, "/projects/"+te.projectA.String(), nil), http.StatusNotFound, apperr.CodeNotFound)
 	if list := decode[[]gen.TicketSummary](t, admin.do(http.MethodGet, "/tickets", nil), http.StatusOK); len(list) != 0 {
@@ -148,4 +149,44 @@ func TestRememberedOrganization(t *testing.T) {
 	}
 	expectProblem(t, e.as(auth.RoleRequester).do(http.MethodPut, "/me/organization", gen.SetMyOrganizationJSONRequestBody{OrganizationId: b}),
 		http.StatusForbidden, apperr.CodeForbidden)
+}
+
+// An email link to a ticket of another organization the user works in names it, so the app can
+// offer to switch; someone outside that organization learns nothing.
+func TestTicketOfAnotherOrganization(t *testing.T) {
+	te := newTicketEnv(t)
+	b := te.secondOrganization(t, "PT Mitra Data", "MD")
+	tk := te.requester.report(t, incident(te.projectA, "Printer offline"))
+
+	rec := te.admin.in(b).do(http.MethodGet, "/tickets/"+tk.Key, nil)
+	expectProblem(t, rec, http.StatusConflict, apperr.CodeOtherOrganization)
+	if p := decode[gen.Problem](t, rec, http.StatusConflict); p.Detail == nil || *p.Detail != te.org.String() {
+		t.Fatalf("problem = %+v, want the ticket's organization", p)
+	}
+	// A supervisor of the other organization only doesn't learn the key exists.
+	te.member(t, auth.RoleSupervisor, b, auth.RoleSupervisor)
+	if err := te.st.Q().DeleteMembership(context.Background(), db.DeleteMembershipParams{
+		UserID: userID(t, te.env, auth.RoleSupervisor), OrganizationID: te.org,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	expectProblem(t, te.supervisor.do(http.MethodGet, "/tickets/"+tk.Key, nil), http.StatusNotFound, apperr.CodeNotFound)
+}
+
+// Settings and records of one organization can't be changed from another.
+func TestSettingsStayInTheirOrganization(t *testing.T) {
+	te := newTicketEnv(t)
+	b := te.secondOrganization(t, "PT Mitra Data", "MD")
+	admin := te.admin.in(b)
+	expectProblem(t, admin.do(http.MethodPut, "/clients/"+te.clientA.String(), gen.ClientInput{Name: "Renamed"}),
+		http.StatusNotFound, apperr.CodeNotFound)
+	expectProblem(t, admin.do(http.MethodDelete, "/projects/"+te.projectA.String(), nil), http.StatusNotFound, apperr.CodeNotFound)
+	expectProblem(t, admin.do(http.MethodPut, "/clients/"+te.clientA.String()+"/agents",
+		gen.ClientAgentsInput{UserIds: []uuid.UUID{te.agentID}}), http.StatusNotFound, apperr.CodeNotFound)
+	// The agent isn't one of this organization's agents, so no client here can be given to them.
+	c := decode[gen.Client](t, admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "Bappeda Riau"}), http.StatusCreated)
+	expectProblem(t, admin.do(http.MethodPut, "/clients/"+c.Id.String()+"/agents",
+		gen.ClientAgentsInput{UserIds: []uuid.UUID{te.agentID}}), http.StatusBadRequest, apperr.CodeInvalidAgent)
+	// Same client name, another organization: allowed.
+	decode[gen.Client](t, te.admin.do(http.MethodPost, "/clients", gen.ClientInput{Name: "Bappeda Riau"}), http.StatusCreated)
 }

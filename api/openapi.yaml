@@ -1448,7 +1448,10 @@ paths:
     get:
       operationId: getTicket
       summary: One ticket
-      description: 404 when the user may not see it.
+      description: |
+        404 when the user may not see it. A ticket of another organization the user works in
+        answers `other_organization` (409) with that organization's id as `detail`, so the app
+        can offer to switch (every operation on a ticket key does the same).
       tags: [tickets]
       responses:
         "200":
@@ -1459,6 +1462,7 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
   /tickets/{ticketKey}/messages:
