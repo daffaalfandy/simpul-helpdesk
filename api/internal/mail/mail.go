@@ -245,8 +245,14 @@ func Render(name, to, toName string, data any) (Message, error) {
 	return Message{To: to, ToName: toName, Subject: subject.String(), Text: text.String(), HTML: html.String()}, nil
 }
 
-// HumanDuration formats a whole number of hours or minutes for email copy.
+// day is a calendar day, for link lifetimes in email copy.
+const day = 24 * time.Hour
+
+// HumanDuration formats a whole number of days, hours or minutes for email copy.
 func HumanDuration(d time.Duration) string {
+	if d >= day && d%day == 0 {
+		return plural(int(d/day), "day")
+	}
 	if d >= time.Hour && d%time.Hour == 0 {
 		return plural(int(d/time.Hour), "hour")
 	}

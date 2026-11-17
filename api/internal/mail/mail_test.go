@@ -3,6 +3,7 @@ package mail
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 const noValue = "<no value>"
@@ -189,5 +190,22 @@ func TestAutomaticHeaders(t *testing.T) {
 	h := AutomaticHeaders("https://helpdesk.example/notifications#settings")
 	if h[HeaderAutoSubmitted] != AutoSubmittedGenerated || h[HeaderListUnsubscribe] != "<https://helpdesk.example/notifications#settings>" {
 		t.Errorf("headers = %v", h)
+	}
+}
+
+func TestHumanDuration(t *testing.T) {
+	for _, tc := range []struct {
+		in   time.Duration
+		want string
+	}{
+		{7 * 24 * time.Hour, "7 days"},
+		{24 * time.Hour, "1 day"},
+		{36 * time.Hour, "36 hours"},
+		{time.Hour, "1 hour"},
+		{30 * time.Minute, "30 minutes"},
+	} {
+		if got := HumanDuration(tc.in); got != tc.want {
+			t.Errorf("HumanDuration(%v) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }
