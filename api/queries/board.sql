@@ -1,4 +1,5 @@
--- The agent board. Staff only, so only the agent scope applies (see tickets.sql).
+-- The agent board. Staff only, so only the agent scope applies (see tickets.sql). project_ids is
+-- the viewer's saved project filter (project_filters.sql); empty means every project.
 
 -- name: ListBoardCards :many
 -- A ticket with a status in @statuses lands in the column at the same index of @columns.
@@ -38,6 +39,7 @@ WITH board AS (
          OR EXISTS (SELECT 1 FROM client_agents ca
                     WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
          OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
+    AND (coalesce(cardinality(@project_ids::uuid[]), 0) = 0 OR t.project_id = ANY(@project_ids::uuid[]))
     AND (t.resolved_at IS NULL OR t.resolved_at >= @resolved_since::timestamptz)
     AND (sqlc.narg(assignee_id)::uuid IS NULL OR t.assignee_id = sqlc.narg(assignee_id)::uuid)
     AND (NOT @unassigned::boolean OR t.assignee_id IS NULL)
@@ -95,7 +97,8 @@ WHERE (t.status = ANY(@open_statuses::text[]) OR t.resolved_at >= least(@week_st
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
-       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid);
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
+  AND (coalesce(cardinality(@project_ids::uuid[]), 0) = 0 OR t.project_id = ANY(@project_ids::uuid[]));
 
 -- name: GetOldestSLAProblem :one
 -- The open ticket in scope whose flagged, unmet clock fell due (or turns due) first: the
@@ -110,6 +113,7 @@ WHERE t.status = ANY(@open_statuses::text[])
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
        OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
+  AND (coalesce(cardinality(@project_ids::uuid[]), 0) = 0 OR t.project_id = ANY(@project_ids::uuid[]))
   AND ((s.first_response_met_at IS NULL
         AND (s.first_response_at_risk_flagged_at IS NOT NULL OR s.first_response_breached_at IS NOT NULL))
     OR (s.resolution_met_at IS NULL

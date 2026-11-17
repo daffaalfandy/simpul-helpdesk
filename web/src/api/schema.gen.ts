@@ -115,6 +115,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/project-filter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The projects the user sees on the board and in ticket lists
+         * @description Saved per user and organization. Empty means every project; projects the user can no
+         *     longer see drop out. Vendor staff only.
+         */
+        get: operations["getMyProjectFilter"];
+        /**
+         * Choose the projects the user sees on the board and in ticket lists
+         * @description Replaces the filter in the active organization. Every project must be one the user can
+         *     see there (`invalid_project`). The board, its counts and the staff ticket list follow it;
+         *     notifications and reports still cover every project. Vendor staff only.
+         */
+        put: operations["setMyProjectFilter"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organization/logo": {
         parameters: {
             query?: never;
@@ -1769,6 +1796,10 @@ export interface components {
             /** @description Set for requesters only. */
             client?: components["schemas"]["ClientRef"] | null;
         };
+        ProjectFilter: {
+            /** @description Projects shown on the board and in ticket lists. Empty shows every project. */
+            projectIds: string[];
+        };
         OrganizationChoice: {
             /** Format: uuid */
             id: string;
@@ -3123,6 +3154,59 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMyProjectFilter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The saved filter in the active organization */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectFilter"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setMyProjectFilter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectFilter"];
+            };
+        };
+        responses: {
+            /** @description The saved filter */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectFilter"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

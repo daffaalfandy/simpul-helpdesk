@@ -4,6 +4,15 @@ import { cx } from '../lib/text'
 
 export type FilterPillOption<K extends string> = { id: K; label: string; count?: number }
 
+/** A filter pill's look, on or off; the board's project filter opens from one. */
+export function pillClasses(isSelected: boolean) {
+  return cx(
+    'inline-flex min-h-(--control-h-md) cursor-pointer items-center gap-2 rounded-full border px-4 text-sm font-bold',
+    'transition-colors duration-(--duration-fast)',
+    isSelected ? 'border-ink bg-ink text-on-primary' : 'border-border-strong bg-surface text-ink hover:bg-surface-subtle',
+  )
+}
+
 type FilterPillsProps<K extends string> = {
   label: string
   options: ReadonlyArray<FilterPillOption<K>>
@@ -24,15 +33,7 @@ export function FilterPills<K extends string>({ label, options, value, onChange,
           key={o.id}
           isSelected={value === o.id}
           onChange={() => onChange(o.id)}
-          className={({ isSelected }) =>
-            cx(
-              'inline-flex min-h-(--control-h-md) cursor-pointer items-center gap-2 rounded-full border px-4 text-sm font-bold',
-              'transition-colors duration-(--duration-fast)',
-              isSelected
-                ? 'border-ink bg-ink text-on-primary'
-                : 'border-border-strong bg-surface text-ink hover:bg-surface-subtle',
-            )
-          }
+          className={({ isSelected }) => pillClasses(isSelected)}
         >
           {o.label}
           {o.count !== undefined && <span className="tabular-nums opacity-80">{o.count}</span>}

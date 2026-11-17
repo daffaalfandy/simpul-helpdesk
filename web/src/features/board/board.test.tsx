@@ -2,7 +2,7 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { PROJECT_IDS } from '../../test/projectsApi'
+import { PROJECT_IDS, projectsApi } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
 import { state, USERS } from '../../test/server'
 import { IDS } from '../../test/settingsApi'
@@ -320,5 +320,43 @@ describe('board search box', () => {
     // Past the debounce, the old text must not come back.
     await act(() => new Promise((resolve) => setTimeout(resolve, 400)))
     expect(router.state.location.search).toEqual({})
+  })
+})
+
+describe('board › project filter', () => {
+  beforeEach(() => {
+    state.me = AGENT
+  })
+
+  const boardLoads = () => tickets.requests.filter((r) => r.method === 'GET' && r.path.endsWith('/board')).length
+
+  it('saves the projects the user sees and reloads the board', async () => {
+    const user = userEvent.setup()
+    renderApp('/board')
+    await user.click(await screen.findByRole('button', { name: 'All projects' }))
+    const panel = within(await screen.findByRole('dialog', { name: 'Projects you see' }))
+    expect(panel.getByText(/Saved for you in Demo Vendor/)).toBeInTheDocument()
+    const loads = boardLoads()
+
+    await user.click(panel.getByRole('checkbox', { name: /^e-Office/ }))
+    await waitFor(() => expect(projectsApi.filter).toEqual([PROJECT_IDS.eOffice]))
+    await waitFor(() => expect(boardLoads()).toBeGreaterThan(loads))
+    await user.keyboard('{Escape}')
+    await user.click(await screen.findByRole('button', { name: '1 of 3 projects' }))
+
+    const again = within(await screen.findByRole('dialog', { name: 'Projects you see' }))
+    await user.click(again.getByRole('button', { name: 'Show all projects' }))
+    expect(await screen.findByRole('button', { name: 'All projects' })).toBeInTheDocument()
+    expect(projectsApi.filter).toEqual([])
+  })
+
+  it('opens with the saved filter', async () => {
+    projectsApi.filter = [PROJECT_IDS.email, PROJECT_IDS.network]
+    const user = userEvent.setup()
+    renderApp('/board')
+    await user.click(await screen.findByRole('button', { name: '2 of 3 projects' }))
+    const panel = within(await screen.findByRole('dialog', { name: 'Projects you see' }))
+    expect(panel.getByRole('checkbox', { name: /^Email/ })).toBeChecked()
+    expect(panel.getByRole('checkbox', { name: /^e-Office/ })).not.toBeChecked()
   })
 })

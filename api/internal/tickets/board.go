@@ -118,8 +118,13 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 		col, _ := ticket.ColumnOf(st)
 		columns[i] = string(col)
 	}
+	q := s.store.Q()
+	filter, err := projectFilter(ctx, q, a)
+	if err != nil {
+		return Board{}, err
+	}
 	params := db.ListBoardCardsParams{
-		OrganizationID: a.org, ColumnLimit: BoardColumnLimit, Statuses: statusStrings(statuses), Columns: columns,
+		OrganizationID: a.org, ProjectIds: filter, ColumnLimit: BoardColumnLimit, Statuses: statusStrings(statuses), Columns: columns,
 		ScopeAgentID: a.scopeAgentID, ResolvedSince: midnight, Unassigned: f.Assignee == AssigneeUnassigned,
 		SlaAtRisk: f.SLAAtRisk, OpenStatuses: statusStrings(ticket.OpenStatuses),
 	}
@@ -128,12 +133,11 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 		params.AssigneeID = &me
 	}
 	params.SearchKey, params.SearchPattern = searchParams(f.Query)
-	q := s.store.Q()
 	rows, err := q.ListBoardCards(ctx, params)
 	if err != nil {
 		return Board{}, err
 	}
-	stats, err := s.boardStats(ctx, q, a, weekStart, monthStart)
+	stats, err := s.boardStats(ctx, q, a, filter, weekStart, monthStart)
 	if err != nil {
 		return Board{}, err
 	}
@@ -208,11 +212,11 @@ func (s *Service) addCardCodes(ctx context.Context, q *db.Queries, b *Board) err
 	return nil
 }
 
-func (s *Service) boardStats(ctx context.Context, q *db.Queries, a access, weekStart, monthStart time.Time) (BoardStats, error) {
+func (s *Service) boardStats(ctx context.Context, q *db.Queries, a access, filter []uuid.UUID, weekStart, monthStart time.Time) (BoardStats, error) {
 	open := statusStrings(ticket.OpenStatuses)
 	r, err := q.CountBoardStats(ctx, db.CountBoardStatsParams{
 		OpenStatuses: open, WeekStart: weekStart, MonthStart: monthStart, PortalChannel: string(ticket.ChannelPortal),
-		OrganizationID: a.org, ScopeAgentID: a.scopeAgentID,
+		OrganizationID: a.org, ScopeAgentID: a.scopeAgentID, ProjectIds: filter,
 	})
 	if err != nil {
 		return BoardStats{}, err
@@ -230,7 +234,7 @@ func (s *Service) boardStats(ctx context.Context, q *db.Queries, a access, weekS
 		stats.WithinSLAPercent = &pct
 	}
 	if stats.SLABreached+stats.SLAAtRisk > 0 {
-		oldest, err := q.GetOldestSLAProblem(ctx, db.GetOldestSLAProblemParams{OrganizationID: a.org, OpenStatuses: open, ScopeAgentID: a.scopeAgentID})
+		oldest, err := q.GetOldestSLAProblem(ctx, db.GetOldestSLAProblemParams{OrganizationID: a.org, OpenStatuses: open, ScopeAgentID: a.scopeAgentID, ProjectIds: filter})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return BoardStats{}, err
 		}

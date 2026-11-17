@@ -8,13 +8,12 @@ import { Button as AriaButton, Dialog, DialogTrigger, Heading, Popover } from 'r
 import type { Audience, Notification, NotificationFilter } from '../../api/client'
 import { FilterPills } from '../../components/FilterPills'
 import { Spinner } from '../../components/Spinner'
-import { NOTIFICATION_SETTINGS_HASH, paths } from '../../lib/constants'
+import { NOTIFICATION_SETTINGS_HASH, paths, POPOVER_OFFSET_PX } from '../../lib/constants'
 import { cx } from '../../lib/text'
 import { NotificationItem } from './NotificationItem'
 import { BELL_FILTERS, DEFAULT_FILTER } from './notice'
 import { bellQueryOptions, unreadCountQueryOptions, useMarkAllRead, useMarkRead } from './queries'
 
-const POPOVER_OFFSET = 8
 
 const footerLink = 'inline-flex min-h-(--control-h-md) items-center text-sm font-bold text-primary no-underline'
 
@@ -69,7 +68,7 @@ export function NotificationBell({ audience }: { audience: Audience }) {
       </AriaButton>
       <Popover
         placement="bottom end"
-        offset={POPOVER_OFFSET}
+        offset={POPOVER_OFFSET_PX}
         className={cx(
           'w-(--bell-panel-w) max-w-[calc(100vw-2*var(--space-4))] rounded-2xl border border-border-strong bg-surface',
           'shadow-popover outline-none data-entering:animate-enter',

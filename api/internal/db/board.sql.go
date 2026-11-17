@@ -38,6 +38,7 @@ WHERE (t.status = ANY($1::text[]) OR t.resolved_at >= least($2::timestamptz, $3:
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid)
        OR t.assignee_id = $6::uuid)
+  AND (coalesce(cardinality($7::uuid[]), 0) = 0 OR t.project_id = ANY($7::uuid[]))
 `
 
 type CountBoardStatsParams struct {
@@ -47,6 +48,7 @@ type CountBoardStatsParams struct {
 	PortalChannel  string
 	OrganizationID uuid.UUID
 	ScopeAgentID   *uuid.UUID
+	ProjectIds     []uuid.UUID
 }
 
 type CountBoardStatsRow struct {
@@ -74,6 +76,7 @@ func (q *Queries) CountBoardStats(ctx context.Context, arg CountBoardStatsParams
 		arg.PortalChannel,
 		arg.OrganizationID,
 		arg.ScopeAgentID,
+		arg.ProjectIds,
 	)
 	var i CountBoardStatsRow
 	err := row.Scan(
@@ -100,6 +103,7 @@ WHERE t.status = ANY($1::text[])
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
        OR t.assignee_id = $3::uuid)
+  AND (coalesce(cardinality($4::uuid[]), 0) = 0 OR t.project_id = ANY($4::uuid[]))
   AND ((s.first_response_met_at IS NULL
         AND (s.first_response_at_risk_flagged_at IS NOT NULL OR s.first_response_breached_at IS NOT NULL))
     OR (s.resolution_met_at IS NULL
@@ -115,6 +119,7 @@ type GetOldestSLAProblemParams struct {
 	OpenStatuses   []string
 	OrganizationID uuid.UUID
 	ScopeAgentID   *uuid.UUID
+	ProjectIds     []uuid.UUID
 }
 
 type GetOldestSLAProblemRow struct {
@@ -125,7 +130,12 @@ type GetOldestSLAProblemRow struct {
 // The open ticket in scope whose flagged, unmet clock fell due (or turns due) first: the
 // board banner names it.
 func (q *Queries) GetOldestSLAProblem(ctx context.Context, arg GetOldestSLAProblemParams) (GetOldestSLAProblemRow, error) {
-	row := q.db.QueryRow(ctx, getOldestSLAProblem, arg.OpenStatuses, arg.OrganizationID, arg.ScopeAgentID)
+	row := q.db.QueryRow(ctx, getOldestSLAProblem,
+		arg.OpenStatuses,
+		arg.OrganizationID,
+		arg.ScopeAgentID,
+		arg.ProjectIds,
+	)
 	var i GetOldestSLAProblemRow
 	err := row.Scan(&i.Key, &i.ClientName)
 	return i, err
@@ -165,13 +175,14 @@ WITH board AS (
          OR EXISTS (SELECT 1 FROM client_agents ca
                     WHERE ca.client_id = t.client_id AND ca.user_id = $7::uuid)
          OR t.assignee_id = $7::uuid)
-    AND (t.resolved_at IS NULL OR t.resolved_at >= $8::timestamptz)
-    AND ($9::uuid IS NULL OR t.assignee_id = $9::uuid)
-    AND (NOT $10::boolean OR t.assignee_id IS NULL)
-    AND ($11::text IS NULL
-         OR t.key = $12::text
-         OR t.subject ILIKE $11::text
-         OR c.name ILIKE $11::text)
+    AND (coalesce(cardinality($8::uuid[]), 0) = 0 OR t.project_id = ANY($8::uuid[]))
+    AND (t.resolved_at IS NULL OR t.resolved_at >= $9::timestamptz)
+    AND ($10::uuid IS NULL OR t.assignee_id = $10::uuid)
+    AND (NOT $11::boolean OR t.assignee_id IS NULL)
+    AND ($12::text IS NULL
+         OR t.key = $13::text
+         OR t.subject ILIKE $12::text
+         OR c.name ILIKE $12::text)
 ), ranked AS (
   SELECT board.id, board.key, board.type, board.status, board.priority, board.subject, board.status_changed_at, board.client_id, board.client_name, board.assignee_id, board.assignee_name, board.dod_config, board.dod_override, board.dod_done, board.column_id, board.sla_ticket_id, board.first_response_budget_ms, board.first_response_calendar, board.first_response_elapsed_ms, board.first_response_running_since, board.first_response_due_at, board.first_response_at_risk_flagged_at, board.first_response_breached_at, board.first_response_met_at, board.resolution_budget_ms, board.resolution_calendar, board.resolution_elapsed_ms, board.resolution_running_since, board.resolution_due_at, board.resolution_at_risk_flagged_at, board.resolution_breached_at, board.resolution_met_at,
          row_number() OVER (PARTITION BY column_id ORDER BY priority, status_changed_at, id) AS position,
@@ -200,6 +211,7 @@ type ListBoardCardsParams struct {
 	OpenStatuses   []string
 	OrganizationID uuid.UUID
 	ScopeAgentID   *uuid.UUID
+	ProjectIds     []uuid.UUID
 	ResolvedSince  time.Time
 	AssigneeID     *uuid.UUID
 	Unassigned     bool
@@ -243,7 +255,8 @@ type ListBoardCardsRow struct {
 	ResolutionMetAt              *time.Time
 }
 
-// The agent board. Staff only, so only the agent scope applies (see tickets.sql).
+// The agent board. Staff only, so only the agent scope applies (see tickets.sql). project_ids is
+// the viewer's saved project filter (project_filters.sql); empty means every project.
 // A ticket with a status in @statuses lands in the column at the same index of @columns.
 // Done tickets show only once resolved_at >= @resolved_since (open ones have no resolved_at).
 // Each column keeps its first @column_limit cards, P1 first (priority codes sort as text),
@@ -258,6 +271,7 @@ func (q *Queries) ListBoardCards(ctx context.Context, arg ListBoardCardsParams) 
 		arg.OpenStatuses,
 		arg.OrganizationID,
 		arg.ScopeAgentID,
+		arg.ProjectIds,
 		arg.ResolvedSince,
 		arg.AssigneeID,
 		arg.Unassigned,

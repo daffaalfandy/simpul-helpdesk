@@ -1,10 +1,14 @@
 package tickets
 
 import (
+	"context"
+
 	"github.com/google/uuid"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
@@ -42,6 +46,15 @@ func accessFor(p *auth.Principal) (access, error) {
 		return access{org: p.OrganizationID, user: p.UserID, scopeAgentID: &agent, staff: true}, nil
 	}
 	return access{}, apperr.Forbidden()
+}
+
+// projectFilter is the viewer's saved project filter for the board and ticket lists. Requesters
+// have none: they see every ticket of their client.
+func projectFilter(ctx context.Context, q *db.Queries, a access) ([]uuid.UUID, error) {
+	if !a.staff {
+		return nil, nil
+	}
+	return projects.FilterOf(ctx, q, a.user, a.org, a.scopeAgentID)
 }
 
 // staffAccess is accessFor for agent-only actions: requesters get 403.

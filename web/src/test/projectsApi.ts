@@ -71,7 +71,7 @@ function fixtures() {
       repository: null, openTicketCount: 1, createdAt: STAMP, updatedAt: STAMP,
     },
   ]
-  return { levels, projects }
+  return { levels, projects, filter: [] as string[] }
 }
 
 type Recorded = { method: string; path: string; body: unknown }
@@ -105,6 +105,13 @@ function find(id: string) {
 }
 
 export const projectsHandlers = [
+  http.get(`${API}/me/project-filter`, () => HttpResponse.json({ projectIds: projectsApi.filter })),
+  http.put(`${API}/me/project-filter`, async ({ request }) => {
+    const { projectIds } = (await record(request)) as { projectIds: string[] }
+    if (projectIds.some((id) => !find(id))) return problem(400, 'invalid_project')
+    projectsApi.filter = [...new Set(projectIds)]
+    return HttpResponse.json({ projectIds: projectsApi.filter })
+  }),
   http.get(`${API}/priorities`, () => HttpResponse.json(projectsApi.levels)),
   http.put(`${API}/priorities`, async ({ request }) => {
     projectsApi.levels = (await record(request)) as PriorityLevel[]

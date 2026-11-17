@@ -30,6 +30,7 @@ import { dropStatus } from './columns'
 import { EarlierTickets } from './EarlierTickets'
 import { KanbanBoard } from './KanbanBoard'
 import { LogTicketDialog } from './LogTicketDialog'
+import { ProjectFilter } from './ProjectFilter'
 import { SlaBanner } from './SlaBanner'
 import { StatTiles } from './StatTiles'
 import { useMoveTicket } from './useMoveTicket'
@@ -134,12 +135,15 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
         onShow={search.view === RISK_VIEW ? undefined : () => onSearchChange({ ...search, view: RISK_VIEW })}
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <FilterPills
-          label={t('agent.board.view.label')}
-          options={BOARD_VIEWS.map((id) => ({ id, label: t(`agent.board.view.${id}`) }))}
-          value={search.view ?? DEFAULT_VIEW}
-          onChange={(view) => onSearchChange({ ...search, view: view === DEFAULT_VIEW ? undefined : view })}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterPills
+            label={t('agent.board.view.label')}
+            options={BOARD_VIEWS.map((id) => ({ id, label: t(`agent.board.view.${id}`) }))}
+            value={search.view ?? DEFAULT_VIEW}
+            onChange={(view) => onSearchChange({ ...search, view: view === DEFAULT_VIEW ? undefined : view })}
+          />
+          <ProjectFilter />
+        </div>
         <BoardSearchBox value={search.q ?? ''} onCommit={(q) => onSearchChange({ ...search, q: q || undefined })} />
       </div>
       <p className="-mt-2 text-sm text-muted">{t('board.hint')}</p>

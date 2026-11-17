@@ -144,6 +144,8 @@
   --board-column-min-h: 160px; /* an empty board column still reads as a drop target */
   --stat-tile-min-w: 180px;    /* board stat tiles */
   --board-search-w: 340px;     /* board search box beside the filter pills */
+  --project-filter-w: 340px;   /* board project filter popover */
+  --project-filter-max-h: 320px; /* its project list scrolls past this height */
   --switch-w: 44px;            /* on/off switch track (Notifications settings) */
   --switch-h: 26px;
   --switch-knob: 20px;

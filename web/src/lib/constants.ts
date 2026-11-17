@@ -40,6 +40,9 @@ export const paths = {
   portalNotifications: '/portal/notifications',
 } as const
 
+/** Gap between a popover and the control that opened it. */
+export const POPOVER_OFFSET_PX = 8
+
 /** Fragment that opens the notifications page at its settings card. */
 export const NOTIFICATION_SETTINGS_HASH = 'settings'
 

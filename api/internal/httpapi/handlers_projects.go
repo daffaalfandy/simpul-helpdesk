@@ -173,3 +173,29 @@ func domainProjectSLA(b gen.ProjectSla) sla.ProjectSLA {
 		NotifyPicOnP1Breach:      b.NotifyPicOnP1Breach,
 	}}
 }
+
+// GetMyProjectFilter is the projects the user sees on the board and in ticket lists.
+func (s *server) GetMyProjectFilter(ctx context.Context, _ gen.GetMyProjectFilterRequestObject) (gen.GetMyProjectFilterResponseObject, error) {
+	p, err := requireOrg(ctx, auth.CapAgentApp)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := s.projects.Filter(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return gen.GetMyProjectFilter200JSONResponse{ProjectIds: ids}, nil
+}
+
+// SetMyProjectFilter saves the projects the user sees on the board and in ticket lists.
+func (s *server) SetMyProjectFilter(ctx context.Context, req gen.SetMyProjectFilterRequestObject) (gen.SetMyProjectFilterResponseObject, error) {
+	p, err := requireOrg(ctx, auth.CapAgentApp)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := s.projects.SetFilter(ctx, p, req.Body.ProjectIds)
+	if err != nil {
+		return nil, err
+	}
+	return gen.SetMyProjectFilter200JSONResponse{ProjectIds: ids}, nil
+}

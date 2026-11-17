@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { attachmentPolicyQueryOptions, clientsQueryOptions, organizationQueryOptions } from '../../api/queries'
 import { BoardPage } from '../../features/board/BoardPage'
 import { boardQueryOptions, validateBoardSearch } from '../../features/board/boardSearch'
+import { projectFilterQueryOptions, projectsQueryOptions } from '../../features/projects/queries'
 
 export const Route = createFileRoute('/_agent/board')({
   validateSearch: validateBoardSearch,
@@ -13,6 +14,8 @@ export const Route = createFileRoute('/_agent/board')({
       queryClient.ensureQueryData(clientsQueryOptions),
       queryClient.ensureQueryData(organizationQueryOptions),
       queryClient.ensureQueryData(attachmentPolicyQueryOptions),
+      queryClient.ensureQueryData(projectsQueryOptions),
+      queryClient.ensureQueryData(projectFilterQueryOptions),
     ]),
   component: BoardRoute,
 })

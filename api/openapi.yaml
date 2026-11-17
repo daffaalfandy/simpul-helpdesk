@@ -187,6 +187,49 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /me/project-filter:
+    get:
+      operationId: getMyProjectFilter
+      summary: The projects the user sees on the board and in ticket lists
+      description: |
+        Saved per user and organization. Empty means every project; projects the user can no
+        longer see drop out. Vendor staff only.
+      tags: [auth]
+      responses:
+        "200":
+          description: The saved filter in the active organization
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectFilter" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setMyProjectFilter
+      summary: Choose the projects the user sees on the board and in ticket lists
+      description: |
+        Replaces the filter in the active organization. Every project must be one the user can
+        see there (`invalid_project`). The board, its counts and the staff ticket list follow it;
+        notifications and reports still cover every project. Vendor staff only.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectFilter" }
+      responses:
+        "200":
+          description: The saved filter
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectFilter" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /organization/logo:
     get:
       operationId: getOrganizationLogo
@@ -2359,6 +2402,15 @@ components:
           nullable: true
           description: Set for requesters only.
 
+    ProjectFilter:
+      type: object
+      required: [projectIds]
+      properties:
+        projectIds:
+          type: array
+          maxItems: 200
+          description: Projects shown on the board and in ticket lists. Empty shows every project.
+          items: { type: string, format: uuid }
     OrganizationChoice:
       type: object
       required: [id, name, role, logoUrl]

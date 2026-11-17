@@ -513,16 +513,17 @@ WHERE t.organization_id = $1
                   WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
        OR t.assignee_id = $3::uuid)
   AND t.status = ANY($4::text[])
-  AND ($5::uuid IS NULL OR t.client_id = $5::uuid)
-  AND ($6::uuid IS NULL OR t.assignee_id = $6::uuid)
-  AND (NOT $7::boolean OR t.assignee_id IS NULL)
-  AND ($8::text IS NULL
-       OR t.key = $9::text
-       OR t.subject ILIKE $8::text
-       OR c.name ILIKE $8::text)
-  AND ($10::uuid IS NULL OR t.id < $10::uuid)
+  AND (coalesce(cardinality($5::uuid[]), 0) = 0 OR t.project_id = ANY($5::uuid[]))
+  AND ($6::uuid IS NULL OR t.client_id = $6::uuid)
+  AND ($7::uuid IS NULL OR t.assignee_id = $7::uuid)
+  AND (NOT $8::boolean OR t.assignee_id IS NULL)
+  AND ($9::text IS NULL
+       OR t.key = $10::text
+       OR t.subject ILIKE $9::text
+       OR c.name ILIKE $9::text)
+  AND ($11::uuid IS NULL OR t.id < $11::uuid)
 ORDER BY t.id DESC
-LIMIT $11
+LIMIT $12
 `
 
 type ListTicketsParams struct {
@@ -530,6 +531,7 @@ type ListTicketsParams struct {
 	ScopeClientID  *uuid.UUID
 	ScopeAgentID   *uuid.UUID
 	Statuses       []string
+	ProjectIds     []uuid.UUID
 	ClientID       *uuid.UUID
 	AssigneeID     *uuid.UUID
 	Unassigned     bool
@@ -559,12 +561,14 @@ type ListTicketsRow struct {
 
 // Newest first. before pages by id (uuidv7, so creation order). search_key matches a key
 // exactly; search_pattern is an escaped ILIKE pattern over the subject and the client name.
+// project_ids is staff's saved project filter (empty: every project; requesters always empty).
 func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]ListTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listTickets,
 		arg.OrganizationID,
 		arg.ScopeClientID,
 		arg.ScopeAgentID,
 		arg.Statuses,
+		arg.ProjectIds,
 		arg.ClientID,
 		arg.AssigneeID,
 		arg.Unassigned,

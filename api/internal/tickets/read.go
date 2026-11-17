@@ -57,8 +57,13 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f ListFilter) ([]
 	if len(statuses) == 0 {
 		statuses = ticket.Statuses
 	}
+	q := s.store.Q()
+	filter, err := projectFilter(ctx, q, a)
+	if err != nil {
+		return nil, err
+	}
 	params := db.ListTicketsParams{
-		OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID, Statuses: statusStrings(statuses),
+		OrganizationID: a.org, ProjectIds: filter, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID, Statuses: statusStrings(statuses),
 		ClientID: f.ClientID, Unassigned: f.Assignee == AssigneeUnassigned, Before: f.Before,
 		RowLimit: int32(pageSize(f.Limit)),
 	}
@@ -67,7 +72,7 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f ListFilter) ([]
 		params.AssigneeID = &me
 	}
 	params.SearchKey, params.SearchPattern = searchParams(f.Query)
-	rows, err := s.store.Q().ListTickets(ctx, params)
+	rows, err := q.ListTickets(ctx, params)
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,32 @@ export const projectsQueryOptions = queryOptions({
   queryFn: () => unwrap(api.GET('/projects')),
 })
 
+/** The projects this user sees on the board and in ticket lists; none saved means all. */
+export const projectFilterQueryOptions = queryOptions({
+  queryKey: queryKeys.projectFilter,
+  queryFn: () => unwrap(api.GET('/me/project-filter')),
+})
+
+/** Saves the project filter at once (the checkbox shows it before the API answers). */
+export function useSetProjectFilter() {
+  const queryClient = useQueryClient()
+  const key = projectFilterQueryOptions.queryKey
+  return useMutation({
+    mutationFn: (projectIds: string[]) => unwrap(api.PUT('/me/project-filter', { body: { projectIds } })),
+    onMutate: async (projectIds) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      const previous = queryClient.getQueryData(key)
+      queryClient.setQueryData(key, { projectIds })
+      return { previous }
+    },
+    onError: (_error, _ids, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous)
+    },
+    onSuccess: (saved) => queryClient.setQueryData(key, saved),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.tickets }),
+  })
+}
+
 export function projectQueryOptions(id: string) {
   return queryOptions({
     queryKey: queryKeys.project(id),

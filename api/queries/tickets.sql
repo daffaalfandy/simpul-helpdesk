@@ -16,6 +16,7 @@ RETURNING id, created_at;
 -- name: ListTickets :many
 -- Newest first. before pages by id (uuidv7, so creation order). search_key matches a key
 -- exactly; search_pattern is an escaped ILIKE pattern over the subject and the client name.
+-- project_ids is staff's saved project filter (empty: every project; requesters always empty).
 SELECT t.id, t.key, t.type, t.status, t.priority, t.subject, t.created_at, t.updated_at, t.resolved_at,
        t.client_id, c.name AS client_name, t.requester_id, r.name AS requester_name,
        t.assignee_id, a.name AS assignee_name
@@ -30,6 +31,7 @@ WHERE t.organization_id = @organization_id
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
        OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
   AND t.status = ANY(@statuses::text[])
+  AND (coalesce(cardinality(@project_ids::uuid[]), 0) = 0 OR t.project_id = ANY(@project_ids::uuid[]))
   AND (sqlc.narg(client_id)::uuid IS NULL OR t.client_id = sqlc.narg(client_id)::uuid)
   AND (sqlc.narg(assignee_id)::uuid IS NULL OR t.assignee_id = sqlc.narg(assignee_id)::uuid)
   AND (NOT @unassigned::boolean OR t.assignee_id IS NULL)

@@ -241,6 +241,13 @@
       "loading": "Searching resolved and closed tickets…",
       "resolvedOn": "Resolved {{when}}",
       "ticket": "{{key}} · {{subject}}"
+    },
+    "projects": {
+      "all": "All projects",
+      "some": "{{picked}} of {{total}} projects",
+      "title": "Projects you see",
+      "hint": "Saved for you in {{org}}: the board, its numbers and ticket lists. Notifications and reports still cover every project.",
+      "showAll": "Show all projects"
     }
   },
   "portal": {

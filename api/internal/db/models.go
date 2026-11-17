@@ -366,6 +366,12 @@ type UserInvite struct {
 	UsedAt    *time.Time
 }
 
+type UserProjectFilter struct {
+	UserID         uuid.UUID
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
+}
+
 type WebhookDelivery struct {
 	ID           uuid.UUID
 	RepositoryID uuid.UUID
