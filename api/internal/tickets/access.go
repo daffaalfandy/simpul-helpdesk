@@ -9,10 +9,11 @@ import (
 )
 
 // access is what one user may see. It fills the scope parameters of every ticket query, so
-// requesters get their client's tickets and public messages, and agents their clients' tickets.
+// requesters get their client's tickets and public messages, and agents their clients' tickets
+// plus any ticket assigned to them (they keep it after being unlinked; owner, 17 Nov).
 type access struct {
 	scopeClientID *uuid.UUID // requesters: their client
-	scopeAgentID  *uuid.UUID // agents: clients they are assigned to
+	scopeAgentID  *uuid.UUID // agents: clients they are assigned to, and tickets assigned to them
 	visibility    *string    // requesters: public messages only
 	staff         bool       // vendor staff: internal notes, agent actions
 }

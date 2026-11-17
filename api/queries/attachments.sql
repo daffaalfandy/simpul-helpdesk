@@ -40,7 +40,8 @@ WHERE a.id = @id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid));
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid);
 
 -- name: ListExpiredPendingAttachments :many
 SELECT id, storage_key FROM attachments

@@ -80,7 +80,13 @@ func (s *Service) SetAssignee(ctx context.Context, p *auth.Principal, key string
 	if err != nil {
 		return Ticket{}, err
 	}
-	return s.Get(ctx, p, key)
+	t, err := s.Get(ctx, p, key)
+	if apperr.IsCode(err, apperr.CodeNotFound) {
+		// An agent unlinked from the client just handed on the ticket that kept it in their view:
+		// answer once with the ticket as it now stands.
+		return s.getAs(ctx, p, access{staff: true}, key)
+	}
+	return t, err
 }
 
 // writeAssignee stores a new assignee (nil to unassign) and its audit entries. Assigning a new

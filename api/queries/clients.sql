@@ -100,3 +100,8 @@ SELECT count(*)::int FROM tickets WHERE client_id = @client_id;
 SELECT client_id, id, name FROM projects
 WHERE sqlc.narg(client_id)::uuid IS NULL OR client_id = sqlc.narg(client_id)::uuid
 ORDER BY lower(name);
+
+-- name: HasTicketAssignedAt :one
+-- Whether the user has a ticket at the client assigned to them. An agent unlinked from the client
+-- keeps working those tickets (owner, 17 Nov).
+SELECT EXISTS (SELECT 1 FROM tickets WHERE client_id = @client_id AND assignee_id = @user_id);

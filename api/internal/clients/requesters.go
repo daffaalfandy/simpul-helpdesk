@@ -125,10 +125,22 @@ func (s *Service) InviteRequester(ctx context.Context, p *auth.Principal, client
 	return out, nil
 }
 
-// Assignees lists who can take the client's tickets, with their open workload.
+// Assignees lists who can take the client's tickets, with their open workload. An agent sees it
+// for their clients, and for any client where a ticket is assigned to them, so they can still
+// hand it on after being unlinked.
 func (s *Service) Assignees(ctx context.Context, p *auth.Principal, clientID uuid.UUID) ([]Assignee, error) {
 	q := s.store.Q()
-	if _, err := get(ctx, q, clientID, AgentScope(p)); err != nil {
+	scope := AgentScope(p)
+	if scope != nil {
+		assigned, err := q.HasTicketAssignedAt(ctx, db.HasTicketAssignedAtParams{ClientID: clientID, UserID: scope})
+		if err != nil {
+			return nil, err
+		}
+		if assigned {
+			scope = nil
+		}
+	}
+	if _, err := get(ctx, q, clientID, scope); err != nil {
 		return nil, err
 	}
 	rows, err := q.ListAssignableUsers(ctx, db.ListAssignableUsersParams{

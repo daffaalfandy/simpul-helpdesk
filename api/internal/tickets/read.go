@@ -113,6 +113,10 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, key string) (Ticke
 	if err != nil {
 		return Ticket{}, err
 	}
+	return s.getAs(ctx, p, a, key)
+}
+
+func (s *Service) getAs(ctx context.Context, p *auth.Principal, a access, key string) (Ticket, error) {
 	q := s.store.Q()
 	r, err := s.getRow(ctx, q, a, key)
 	if err != nil {

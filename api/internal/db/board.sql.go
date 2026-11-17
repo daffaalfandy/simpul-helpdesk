@@ -35,7 +35,8 @@ LEFT JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE (t.status = ANY($1::text[]) OR t.resolved_at >= least($2::timestamptz, $3::timestamptz))
   AND ($5::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
+       OR t.assignee_id = $5::uuid)
 `
 
 type CountBoardStatsParams struct {
@@ -93,7 +94,8 @@ JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE t.status = ANY($1::text[])
   AND ($2::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $2::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $2::uuid)
+       OR t.assignee_id = $2::uuid)
   AND ((s.first_response_met_at IS NULL
         AND (s.first_response_at_risk_flagged_at IS NOT NULL OR s.first_response_breached_at IS NOT NULL))
     OR (s.resolution_met_at IS NULL
@@ -155,7 +157,8 @@ WITH board AS (
                    AND (s.resolution_at_risk_flagged_at IS NOT NULL OR s.resolution_breached_at IS NOT NULL)))))
     AND ($6::uuid IS NULL
          OR EXISTS (SELECT 1 FROM client_agents ca
-                    WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid))
+                    WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid)
+         OR t.assignee_id = $6::uuid)
     AND (t.resolved_at IS NULL OR t.resolved_at >= $7::timestamptz)
     AND ($8::uuid IS NULL OR t.assignee_id = $8::uuid)
     AND (NOT $9::boolean OR t.assignee_id IS NULL)

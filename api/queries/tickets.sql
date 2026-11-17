@@ -24,7 +24,8 @@ LEFT JOIN users a ON a.id = t.assignee_id
 WHERE (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
   AND t.status = ANY(@statuses::text[])
   AND (sqlc.narg(client_id)::uuid IS NULL OR t.client_id = sqlc.narg(client_id)::uuid)
   AND (sqlc.narg(assignee_id)::uuid IS NULL OR t.assignee_id = sqlc.narg(assignee_id)::uuid)
@@ -60,7 +61,8 @@ WHERE t.key = @key
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid));
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid);
 
 -- name: GetTicketForUpdate :one
 -- Locks the ticket only; the project's Definition of Done and the override are read as they are.
@@ -75,7 +77,8 @@ WHERE t.key = @key
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
 FOR UPDATE OF t;
 
 -- name: UpdateTicketStatus :exec

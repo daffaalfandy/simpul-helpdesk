@@ -189,7 +189,7 @@ func (s *Service) AcceptInvite(ctx context.Context, token, password string) (*Pr
 		sess, err = s.startSession(ctx, tx, p, info)
 		return err
 	})
-	if isInvalidToken(err) {
+	if apperr.IsCode(err, apperr.CodeInvalidToken) {
 		if limitKey != "" {
 			if rerr := s.store.Q().RecordLoginAttempt(ctx, limitKey); rerr != nil {
 				return nil, NewSession{}, rerr
@@ -201,11 +201,6 @@ func (s *Service) AcceptInvite(ctx context.Context, token, password string) (*Pr
 		return nil, NewSession{}, err
 	}
 	return p, sess, nil
-}
-
-func isInvalidToken(err error) bool {
-	var ae *apperr.Error
-	return errors.As(err, &ae) && ae.Code == apperr.CodeInvalidToken
 }
 
 func principalOf(u db.GetUserByIDRow) *Principal {

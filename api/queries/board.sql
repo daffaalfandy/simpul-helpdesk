@@ -35,7 +35,8 @@ WITH board AS (
                    AND (s.resolution_at_risk_flagged_at IS NOT NULL OR s.resolution_breached_at IS NOT NULL)))))
     AND (sqlc.narg(scope_agent_id)::uuid IS NULL
          OR EXISTS (SELECT 1 FROM client_agents ca
-                    WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid))
+                    WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+         OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
     AND (t.resolved_at IS NULL OR t.resolved_at >= @resolved_since::timestamptz)
     AND (sqlc.narg(assignee_id)::uuid IS NULL OR t.assignee_id = sqlc.narg(assignee_id)::uuid)
     AND (NOT @unassigned::boolean OR t.assignee_id IS NULL)
@@ -91,7 +92,8 @@ LEFT JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE (t.status = ANY(@open_statuses::text[]) OR t.resolved_at >= least(@week_start::timestamptz, @month_start::timestamptz))
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid));
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid);
 
 -- name: GetOldestSLAProblem :one
 -- The open ticket in scope whose flagged, unmet clock fell due (or turns due) first: the
@@ -103,7 +105,8 @@ JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE t.status = ANY(@open_statuses::text[])
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
   AND ((s.first_response_met_at IS NULL
         AND (s.first_response_at_risk_flagged_at IS NOT NULL OR s.first_response_breached_at IS NOT NULL))
     OR (s.resolution_met_at IS NULL

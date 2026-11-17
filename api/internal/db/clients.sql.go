@@ -196,6 +196,24 @@ func (q *Queries) GetClientForUpdate(ctx context.Context, id uuid.UUID) (GetClie
 	return i, err
 }
 
+const hasTicketAssignedAt = `-- name: HasTicketAssignedAt :one
+SELECT EXISTS (SELECT 1 FROM tickets WHERE client_id = $1 AND assignee_id = $2)
+`
+
+type HasTicketAssignedAtParams struct {
+	ClientID uuid.UUID
+	UserID   *uuid.UUID
+}
+
+// Whether the user has a ticket at the client assigned to them. An agent unlinked from the client
+// keeps working those tickets (owner, 17 Nov).
+func (q *Queries) HasTicketAssignedAt(ctx context.Context, arg HasTicketAssignedAtParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasTicketAssignedAt, arg.ClientID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertClientAgents = `-- name: InsertClientAgents :exec
 INSERT INTO client_agents (client_id, user_id)
 SELECT $1, unnest($2::uuid[])

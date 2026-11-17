@@ -142,7 +142,8 @@ WHERE n.user_id = $1 AND n.web AND n.read_at IS NULL
   AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
   AND ($3::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
+       OR t.assignee_id = $3::uuid)
 `
 
 type CountUnreadNotificationsParams struct {
@@ -472,8 +473,9 @@ const listEmailTickets = `-- name: ListEmailTickets :many
 SELECT t.id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
        pl.name AS priority_name, p.name AS project_name,
        (u.role = ANY($1::text[])
-        OR (u.role = $2 AND EXISTS (SELECT 1 FROM client_agents ca
-                                            WHERE ca.client_id = t.client_id AND ca.user_id = u.id))
+        OR (u.role = $2 AND (t.assignee_id = u.id
+                                      OR EXISTS (SELECT 1 FROM client_agents ca
+                                                 WHERE ca.client_id = t.client_id AND ca.user_id = u.id)))
         OR (u.role = $3 AND u.client_id = t.client_id))::boolean AS visible,
        EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = u.id) AS watching
 FROM tickets t
@@ -508,8 +510,8 @@ type ListEmailTicketsRow struct {
 }
 
 // What an email shows about each ticket, and whether the recipient may still see it (the same
-// rule as internal/tickets access: all for admins and supervisors, linked clients for agents,
-// their own client for requesters).
+// rule as internal/tickets access: all for admins and supervisors, linked clients and tickets
+// assigned to them for agents, their own client for requesters).
 func (q *Queries) ListEmailTickets(ctx context.Context, arg ListEmailTicketsParams) ([]ListEmailTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listEmailTickets,
 		arg.AllClientRoles,
@@ -601,7 +603,8 @@ WHERE n.user_id = $2 AND n.web
   AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
   AND ($4::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
+       OR t.assignee_id = $4::uuid)
   AND (cardinality($5::text[]) = 0 OR n.event_type = ANY($5::text[]))
   AND (NOT $6::boolean OR n.read_at IS NULL)
   AND ($7::uuid IS NULL
@@ -776,7 +779,8 @@ WHERE n.user_id = $1 AND n.web AND n.read_at IS NULL AND t.id = n.ticket_id
   AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
   AND ($3::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
+       OR t.assignee_id = $3::uuid)
 `
 
 type MarkAllNotificationsReadParams struct {
@@ -822,7 +826,8 @@ WHERE n.id = $2 AND n.user_id = $3 AND n.web AND t.id = n.ticket_id
   AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
   AND ($5::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
+       OR t.assignee_id = $5::uuid)
 `
 
 type SetNotificationReadParams struct {

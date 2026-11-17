@@ -84,7 +84,8 @@ WHERE a.id = $1
   AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
   AND ($4::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
+       OR t.assignee_id = $4::uuid)
 `
 
 type GetAttachmentForDownloadParams struct {

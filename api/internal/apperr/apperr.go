@@ -2,6 +2,7 @@
 package apperr
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -110,6 +111,12 @@ func (e *Error) Error() string {
 }
 
 func (e *Error) Unwrap() error { return e.Err }
+
+// IsCode reports whether err is (or wraps) an API error with this code.
+func IsCode(err error, code string) bool {
+	var ae *Error
+	return errors.As(err, &ae) && ae.Code == code
+}
 
 // Unauthenticated means the request has no valid session.
 func Unauthenticated() *Error {

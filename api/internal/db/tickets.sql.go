@@ -148,7 +148,8 @@ WHERE t.key = $1
   AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
   AND ($3::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
+       OR t.assignee_id = $3::uuid)
 `
 
 type GetTicketParams struct {
@@ -246,7 +247,8 @@ WHERE t.key = $1
   AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
   AND ($3::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
+       OR t.assignee_id = $3::uuid)
 FOR UPDATE OF t
 `
 
@@ -460,7 +462,8 @@ LEFT JOIN users a ON a.id = t.assignee_id
 WHERE ($1::uuid IS NULL OR t.client_id = $1::uuid)
   AND ($2::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $2::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $2::uuid)
+       OR t.assignee_id = $2::uuid)
   AND t.status = ANY($3::text[])
   AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
   AND ($5::uuid IS NULL OR t.assignee_id = $5::uuid)

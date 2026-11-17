@@ -293,10 +293,31 @@ func TestTicketScope(t *testing.T) {
 	}())
 	expectProblem(t, rec, http.StatusBadRequest, "client_not_found")
 
-	// Unlinking the agent takes their access away at once.
+	// Unlinking the agent takes the client's other tickets away at once; a ticket assigned to them
+	// stays theirs to work and hand on (owner, 17 Nov).
+	mine := te.requester.report(t, incident(te.projectA, "Printer offline"))
+	minePath := "/tickets/" + mine.Key
+	decode[gen.Ticket](t, te.admin.do(http.MethodPut, minePath+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
 	decode[gen.Client](t, te.admin.do(http.MethodPut, clientA+"/agents", gen.ClientAgentsInput{UserIds: []uuid.UUID{}}), http.StatusOK)
 	if rec := te.agent.do(http.MethodGet, path, nil); rec.Code != http.StatusNotFound {
-		t.Errorf("unlinked agent: %d", rec.Code)
+		t.Errorf("unlinked agent, ticket not theirs: %d", rec.Code)
+	}
+	if keys := te.agent.keys(t, ""); !slices.Equal(keys, []string{mine.Key}) {
+		t.Errorf("unlinked agent lists %v", keys)
+	}
+	decode[gen.TicketMessage](t, te.agent.message(mine.Key, gen.MessageVisibilityPublic, "Still on it"), http.StatusCreated)
+	if rec := te.agent.do(http.MethodGet, clientA+"/assignees", nil); rec.Code != http.StatusOK {
+		t.Errorf("unlinked assignee GET assignees: %d", rec.Code)
+	}
+	for _, p := range []string{"/intake?clientId=" + te.clientA.String(), clientA + "/requesters"} {
+		if rec := te.agent.do(http.MethodGet, p, nil); rec.Code != http.StatusNotFound {
+			t.Errorf("unlinked agent GET %s: %d", p, rec.Code)
+		}
+	}
+	supervisorID := userID(t, te.env, auth.RoleSupervisor)
+	decode[gen.Ticket](t, te.agent.do(http.MethodPut, minePath+"/assignee", gen.TicketAssigneeInput{AssigneeId: &supervisorID}), http.StatusOK)
+	if rec := te.agent.do(http.MethodGet, minePath, nil); rec.Code != http.StatusNotFound {
+		t.Errorf("after handing it on: %d", rec.Code)
 	}
 }
 

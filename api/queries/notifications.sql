@@ -44,7 +44,8 @@ WHERE n.user_id = @user_id AND n.web
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid))
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
   AND (cardinality(@events::text[]) = 0 OR n.event_type = ANY(@events::text[]))
   AND (NOT @unread_only::boolean OR n.read_at IS NULL)
   AND (sqlc.narg(before)::uuid IS NULL
@@ -61,7 +62,8 @@ WHERE n.user_id = @user_id AND n.web AND n.read_at IS NULL
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid));
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid);
 
 -- name: SetNotificationRead :execrows
 UPDATE notifications n
@@ -71,7 +73,8 @@ WHERE n.id = @id AND n.user_id = @user_id AND n.web AND t.id = n.ticket_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid));
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid);
 
 -- name: MarkAllNotificationsRead :exec
 UPDATE notifications n
@@ -81,7 +84,8 @@ WHERE n.user_id = @user_id AND n.web AND n.read_at IS NULL AND t.id = n.ticket_i
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid));
+                  WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
+       OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid);
 
 -- name: GetUserEmailFrequency :one
 SELECT email_frequency FROM users WHERE id = @id;
@@ -147,13 +151,14 @@ SELECT id, email, name, role, status, client_id, email_frequency FROM users WHER
 
 -- name: ListEmailTickets :many
 -- What an email shows about each ticket, and whether the recipient may still see it (the same
--- rule as internal/tickets access: all for admins and supervisors, linked clients for agents,
--- their own client for requesters).
+-- rule as internal/tickets access: all for admins and supervisors, linked clients and tickets
+-- assigned to them for agents, their own client for requesters).
 SELECT t.id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id, t.sla_snapshot,
        pl.name AS priority_name, p.name AS project_name,
        (u.role = ANY(@all_client_roles::text[])
-        OR (u.role = @agent_role AND EXISTS (SELECT 1 FROM client_agents ca
-                                            WHERE ca.client_id = t.client_id AND ca.user_id = u.id))
+        OR (u.role = @agent_role AND (t.assignee_id = u.id
+                                      OR EXISTS (SELECT 1 FROM client_agents ca
+                                                 WHERE ca.client_id = t.client_id AND ca.user_id = u.id)))
         OR (u.role = @requester_role AND u.client_id = t.client_id))::boolean AS visible,
        EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = u.id) AS watching
 FROM tickets t
