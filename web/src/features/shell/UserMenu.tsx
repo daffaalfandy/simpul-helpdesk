@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { ChevronDown, LogOut } from 'lucide-react'
+import { ChevronDown, KeyRound, LogOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from 'react-aria-components'
 
@@ -7,10 +7,15 @@ import type { Me } from '../../api/client'
 import { useLogout } from '../../api/queries'
 import { Avatar } from '../../components/Avatar'
 import { paths } from '../../lib/constants'
+import { can } from '../../lib/roles'
 
 const SIGN_OUT_ACTION = 'sign-out'
+const MCP_ACCESS_ACTION = 'mcp-access'
 
-/** User chip with an account menu (sign out). */
+const itemClasses =
+  'flex min-h-(--control-h-md) cursor-pointer items-center gap-2.5 rounded-md px-3 text-base font-semibold text-ink outline-none data-focused:bg-primary-tint'
+
+/** User chip with an account menu: MCP access for staff working in an organization, and sign out. */
 export function UserMenu({ me }: { me: Me }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -18,7 +23,13 @@ export function UserMenu({ me }: { me: Me }) {
   const role = me.role ? t(`roles.${me.role}`) : t('roles.none')
   const roleLine = me.jobTitle ? t('roleWithTitle', { role, title: me.jobTitle }) : role
 
+  const staff = me.role !== null && can.useAgentApp(me.role)
+
   const onAction = (key: React.Key) => {
+    if (key === MCP_ACCESS_ACTION) {
+      void navigate({ to: paths.mcpAccess })
+      return
+    }
     if (key !== SIGN_OUT_ACTION) return
     logout.mutate(undefined, { onSettled: () => void navigate({ to: paths.login }) })
   }
@@ -41,10 +52,13 @@ export function UserMenu({ me }: { me: Me }) {
         className="min-w-48 rounded-xl border border-border bg-surface p-1.5 shadow-popover outline-none"
       >
         <Menu onAction={onAction} className="outline-none">
-          <MenuItem
-            id={SIGN_OUT_ACTION}
-            className="flex min-h-(--control-h-md) cursor-pointer items-center gap-2.5 rounded-md px-3 text-base font-semibold text-ink outline-none data-focused:bg-primary-tint"
-          >
+          {staff && (
+            <MenuItem id={MCP_ACCESS_ACTION} className={itemClasses}>
+              <KeyRound aria-hidden="true" className="size-(--icon-md)" />
+              {t('account.mcp.menu')}
+            </MenuItem>
+          )}
+          <MenuItem id={SIGN_OUT_ACTION} className={itemClasses}>
             <LogOut aria-hidden="true" className="size-(--icon-md)" />
             {t('common.signOut')}
           </MenuItem>

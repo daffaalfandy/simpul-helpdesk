@@ -5,6 +5,7 @@ import type { Install, Me, Organization, OrganizationChoice, OrganizationInput, 
 import { setCurrentOrganization } from '../api/organization'
 import { integrationsHandlers, resetIntegrations } from './integrationsApi'
 import { membersHandlers, resetMembers } from './membersApi'
+import { accountHandlers, resetTokens } from './accountApi'
 import { notificationsHandlers, resetNotifications } from './notificationsApi'
 import { projectsHandlers, resetProjects } from './projectsApi'
 import { reportsHandlers, resetReports } from './reportsApi'
@@ -144,6 +145,7 @@ export function resetApi() {
   resetNotifications()
   resetIntegrations()
   resetReports()
+  resetTokens()
 }
 
 export function problem(status: number, code: string, headers?: Record<string, string>) {
@@ -243,4 +245,5 @@ export const server = setupServer(
   ...notificationsHandlers,
   ...integrationsHandlers,
   ...reportsHandlers,
+  ...accountHandlers,
 )

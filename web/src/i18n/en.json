@@ -22,7 +22,10 @@
     "errorTitle": "Something went wrong",
     "separator": " · ",
     "clearSearch": "Clear search",
-    "newTab": "(opens in a new tab)"
+    "newTab": "(opens in a new tab)",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyLabel": "Copy the {{label}}"
   },
   "roles": {
     "admin": "Administrator",
@@ -712,9 +715,6 @@
         "gitlab": "Push events (all branches)."
       },
       "setupDone": "Done",
-      "copy": "Copy",
-      "copied": "Copied",
-      "copyLabel": "Copy the {{label}}",
       "rules": {
         "title": "Commit message rules",
         "description": "Only commits are read. A ticket ID in the message links the commit to the ticket; nothing in a commit moves a ticket.",
@@ -1029,7 +1029,8 @@
     "weak_password": "Choose a password of at least 10 characters.",
     "member_has_open_tickets": "Reassign their open tickets in this organization first.",
     "ticket_prefix_taken": "Another organization uses this ticket prefix.",
-    "organization_required": "Choose an organization first."
+    "organization_required": "Choose an organization first.",
+    "token_limit": "You have 20 tokens already. Revoke one you no longer use, then make a new one."
   },
   "time": {
     "justNow": "Just now",
@@ -1769,6 +1770,69 @@
       "title": "No clients yet",
       "body": "Clients appear here once they are added in Settings › Clients.",
       "link": "Add clients in Settings"
+    }
+  },
+  "account": {
+    "mcp": {
+      "menu": "MCP access",
+      "title": "MCP access",
+      "intro": "Connect an AI assistant such as Claude Code or Cursor to SimDesk through MCP. It reads tickets in {{org}} and, with a read-and-write token, replies, adds internal notes and changes status, assignee and priority, all as you.",
+      "tokensTitle": "Personal access tokens",
+      "tokensIntro": "A token works in {{org}} only, until it expires or you revoke it. Make one per device or client, so you can revoke one without the others.",
+      "create": "Make a token",
+      "empty": "No tokens yet. Make one, then add SimDesk to your AI client with the settings below.",
+      "cols": {
+        "name": "Name",
+        "access": "Access",
+        "lastUsed": "Last used",
+        "expires": "Expires",
+        "actions": "Actions"
+      },
+      "endsWith": "Ends in …{{lastFour}}",
+      "neverUsed": "Never",
+      "expired": "Expired",
+      "access": {
+        "read": {
+          "short": "Read only",
+          "long": "Finds and reads tickets, their conversation, activity and attachments."
+        },
+        "write": {
+          "short": "Read and write",
+          "long": "Also replies to clients, adds internal notes and changes status, assignee and priority, as you."
+        }
+      },
+      "lifetime": {
+        "30": "30 days",
+        "90": "90 days",
+        "365": "1 year"
+      },
+      "revoke": "Revoke",
+      "revokeLabel": "Revoke {{name}}",
+      "revokeTitle": "Revoke “{{name}}”?",
+      "revokeBody": "Clients using this token stop working at their next request. You can make a new one any time.",
+      "revokeConfirm": "Revoke token",
+      "revoked": "“{{name}}” is revoked.",
+      "connectTitle": "Connect your AI client",
+      "connectIntro": "Add SimDesk as a remote MCP server (HTTP) and send your token in the Authorization header. Replace the placeholder with your token.",
+      "address": "Server address",
+      "claudeCode": "Claude Code command",
+      "claudeCodeHint": "Run it in a terminal; Claude Code then lists SimDesk under /mcp.",
+      "otherClients": "Config for other clients (mcpServers JSON)",
+      "otherClientsHint": "For clients that read an mcpServers file with a url and headers, such as Cursor.",
+      "tokenPlaceholder": "YOUR_TOKEN",
+      "actsAsYou": "Replies and notes the assistant writes appear under your name, and the client gets replies by email, as if you had sent them.",
+      "createTitle": "Make a personal access token",
+      "createSubtitle": "It acts as you in {{org}}.",
+      "createSubmit": "Make token",
+      "nameLabel": "Name",
+      "nameHint": "Where you will use it, for example “Claude Code on my laptop”.",
+      "nameRequired": "Give the token a name.",
+      "accessLabel": "Access",
+      "expiresLabel": "Expires after",
+      "createdTitle": "Copy your token for “{{name}}”",
+      "createdDone": "Done",
+      "token": "Token",
+      "secretOnce": "Shown only now. Copy it before you close this; if you lose it, revoke it and make another."
     }
   }
 }

@@ -26,6 +26,7 @@ export const paths = {
   reports: '/reports',
   reportsSla: '/reports/sla',
   settings: '/settings',
+  mcpAccess: '/account/mcp',
   settingsGeneral: '/settings/general',
   settingsMembers: '/settings/members',
   settingsPriorities: '/settings/priorities',
@@ -88,6 +89,14 @@ export const MAX_REASON_LENGTH = 500
 export const MAX_MESSAGE_LENGTH = 20000
 /** A ticket's description (Markdown); API MaxDescriptionLen. */
 export const MAX_DESCRIPTION_LENGTH = 20000
+
+/** A personal access token's name; API MaxTokenNameLen. */
+export const MAX_TOKEN_NAME_LENGTH = 100
+/** Token lifetimes the API takes, in days, and the one the form starts on (API TokenLifetimeDays). */
+export const TOKEN_LIFETIME_DAYS = [30, 90, 365] as const
+export const DEFAULT_TOKEN_LIFETIME_DAYS = 90
+/** The name an MCP client gives the SimDesk server in the snippets on the MCP access page. */
+export const MCP_SERVER_NAME = 'simdesk'
 
 /** How long typing pauses before a search box updates the URL and asks the API. */
 export const SEARCH_DEBOUNCE_MS = 300

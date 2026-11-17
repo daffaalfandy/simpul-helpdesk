@@ -25,6 +25,7 @@ import { Route as AgentProjectsRouteImport } from './routes/_agent/projects'
 import { Route as AgentReportsRouteImport } from './routes/_agent/reports'
 import { Route as AgentSettingsRouteImport } from './routes/_agent/settings'
 import { Route as SetupOrganizationRouteImport } from './routes/setup_.organization'
+import { Route as AgentAccountMcpRouteImport } from './routes/_agent/account/mcp'
 import { Route as AgentProjectsIndexRouteImport } from './routes/_agent/projects/index'
 import { Route as AgentProjectsProjectIdRouteImport } from './routes/_agent/projects/$projectId'
 import { Route as AgentReportsIndexRouteImport } from './routes/_agent/reports/index'
@@ -120,6 +121,11 @@ const SetupOrganizationRoute = SetupOrganizationRouteImport.update({
   id: '/setup_/organization',
   path: '/setup/organization',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AgentAccountMcpRoute = AgentAccountMcpRouteImport.update({
+  id: '/account/mcp',
+  path: '/account/mcp',
+  getParentRoute: () => AgentRoute,
 } as any)
 const AgentProjectsIndexRoute = AgentProjectsIndexRouteImport.update({
   id: '/',
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof AgentReportsRouteWithChildren
   '/settings': typeof AgentSettingsRouteWithChildren
   '/setup/organization': typeof SetupOrganizationRoute
+  '/account/mcp': typeof AgentAccountMcpRoute
   '/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/reports/sla': typeof AgentReportsSlaRoute
   '/settings/catalog': typeof AgentSettingsCatalogRoute
@@ -255,6 +262,7 @@ export interface FileRoutesByTo {
   '/board': typeof AgentBoardRoute
   '/notifications': typeof AgentNotificationsRoute
   '/setup/organization': typeof SetupOrganizationRoute
+  '/account/mcp': typeof AgentAccountMcpRoute
   '/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/reports/sla': typeof AgentReportsSlaRoute
   '/settings/catalog': typeof AgentSettingsCatalogRoute
@@ -291,6 +299,7 @@ export interface FileRoutesById {
   '/_agent/reports': typeof AgentReportsRouteWithChildren
   '/_agent/settings': typeof AgentSettingsRouteWithChildren
   '/setup_/organization': typeof SetupOrganizationRoute
+  '/_agent/account/mcp': typeof AgentAccountMcpRoute
   '/_agent/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/_agent/reports/sla': typeof AgentReportsSlaRoute
   '/_agent/settings/catalog': typeof AgentSettingsCatalogRoute
@@ -326,6 +335,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/settings'
     | '/setup/organization'
+    | '/account/mcp'
     | '/projects/$projectId'
     | '/reports/sla'
     | '/settings/catalog'
@@ -356,6 +366,7 @@ export interface FileRouteTypes {
     | '/board'
     | '/notifications'
     | '/setup/organization'
+    | '/account/mcp'
     | '/projects/$projectId'
     | '/reports/sla'
     | '/settings/catalog'
@@ -391,6 +402,7 @@ export interface FileRouteTypes {
     | '/_agent/reports'
     | '/_agent/settings'
     | '/setup_/organization'
+    | '/_agent/account/mcp'
     | '/_agent/projects/$projectId'
     | '/_agent/reports/sla'
     | '/_agent/settings/catalog'
@@ -537,6 +549,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/setup/organization'
       preLoaderRoute: typeof SetupOrganizationRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_agent/account/mcp': {
+      id: '/_agent/account/mcp'
+      path: '/account/mcp'
+      fullPath: '/account/mcp'
+      preLoaderRoute: typeof AgentAccountMcpRouteImport
+      parentRoute: typeof AgentRoute
     }
     '/_agent/projects/': {
       id: '/_agent/projects/'
@@ -720,6 +739,7 @@ interface AgentRouteChildren {
   AgentProjectsRoute: typeof AgentProjectsRouteWithChildren
   AgentReportsRoute: typeof AgentReportsRouteWithChildren
   AgentSettingsRoute: typeof AgentSettingsRouteWithChildren
+  AgentAccountMcpRoute: typeof AgentAccountMcpRoute
   AgentTicketsKeyRoute: typeof AgentTicketsKeyRoute
 }
 
@@ -729,6 +749,7 @@ const AgentRouteChildren: AgentRouteChildren = {
   AgentProjectsRoute: AgentProjectsRouteWithChildren,
   AgentReportsRoute: AgentReportsRouteWithChildren,
   AgentSettingsRoute: AgentSettingsRouteWithChildren,
+  AgentAccountMcpRoute: AgentAccountMcpRoute,
   AgentTicketsKeyRoute: AgentTicketsKeyRoute,
 }
 

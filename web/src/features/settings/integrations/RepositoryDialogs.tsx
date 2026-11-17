@@ -1,10 +1,9 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { GitProvider, Project, Repository, RepositoryWithSecret } from '../../../api/client'
-import { Button } from '../../../components/Button'
+import { CopyField } from '../../../components/CopyField'
 import { Checkbox, CheckboxGroup } from '../../../components/Checkbox'
 import { ConfirmDialog, FormDialog } from '../../../components/Dialog'
 import { TextInput } from '../../../components/TextInput'
@@ -12,9 +11,6 @@ import { useCodeLabels } from '../../code/labels'
 import { projectsQueryOptions } from '../../projects/queries'
 import { ErrorAlert } from '../shared'
 import { useCreateRepository, useDeleteRepository, useRotateSecret, useUpdateRepository } from './queries'
-
-/** How long "Copied" shows after a copy. */
-const COPIED_MS = 2000
 
 export function AddRepositoryDialog({
   provider,
@@ -196,34 +192,6 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
     <div className="flex flex-col gap-1">
       <dt className="text-sm font-bold text-ink">{label}</dt>
       <dd className={mono ? 'font-mono text-sm' : 'text-sm text-ink-2'}>{value}</dd>
-    </div>
-  )
-}
-
-function CopyField({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
-  const copy = async () => {
-    await navigator.clipboard.writeText(value)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), COPIED_MS)
-  }
-  return (
-    <div className="flex flex-col gap-1">
-      <dt className="text-sm font-bold text-ink">{label}</dt>
-      <dd className="flex flex-wrap items-center gap-2">
-        <code className="min-w-0 flex-1 rounded-md bg-surface-subtle px-3 py-2 font-mono text-sm break-all text-ink">{value}</code>
-        <Button
-          variant="outline"
-          size="sm"
-          icon={copied ? <Check aria-hidden="true" className="size-(--icon-sm)" /> : <Copy aria-hidden="true" className="size-(--icon-sm)" />}
-          onPress={() => void copy()}
-          aria-label={t('settings.integrations.copyLabel', { label })}
-        >
-          {copied ? t('settings.integrations.copied') : t('settings.integrations.copy')}
-        </Button>
-        {hint && <span className="w-full text-xs text-muted">{hint}</span>}
-      </dd>
     </div>
   )
 }

@@ -9,8 +9,10 @@
 - GitHub / GitLab commits shown on the tickets they name, with the branches they reached
 - Notifications in the app and by email, chosen per event by each user
 - Monthly SLA reports per client
+- Formatted descriptions and replies (stored as Markdown)
+- An MCP server, so staff can read and work tickets from an AI client such as Claude Code
 
-> **Status:** early development. Done: sign-in, users and roles; clients and the business-hours calendar; tickets with replies, internal notes and attachments; projects with their own SLA targets and global priority names; the kanban board with filters, search and drag-and-drop status changes; notifications in the app and by email (per-event switches, grouped emails and summaries, colleagues under "People notified"); live SLA clocks with pauses, at-risk and breach alerts; a Definition of Done per project (or per ticket, with a reason) that guards resolving, client UAT approval in the portal and from email, and the 3-working-day reopen window with auto-close; the read-only GitHub/GitLab connector (repository webhooks with their own secret; a commit that names a ticket shows on it with the branches it reached, on the board and in notifications, and never moves the ticket); the monthly SLA report per client with an Excel export for every client and a PDF for each; settings for the organisation (name, logo, ticket prefix, time zone), members and roles with emailed invites, requesters invited on each client; several vendor organizations per install (people pick one after signing in and switch from the header, with a role in each; administrators work in all of them), a project filter saved per person for the board and ticket lists; and first-run setup (the administrator, then the first organization). Next: the production image and self-hosting guides.
+> **Status:** early development. Done: sign-in, users and roles; clients and the business-hours calendar; tickets with replies, internal notes and attachments; projects with their own SLA targets and global priority names; the kanban board with filters, search and drag-and-drop status changes; notifications in the app and by email (per-event switches, grouped emails and summaries, colleagues under "People notified"); live SLA clocks with pauses, at-risk and breach alerts; a Definition of Done per project (or per ticket, with a reason) that guards resolving, client UAT approval in the portal and from email, and the 3-working-day reopen window with auto-close; the read-only GitHub/GitLab connector (repository webhooks with their own secret; a commit that names a ticket shows on it with the branches it reached, on the board and in notifications, and never moves the ticket); the monthly SLA report per client with an Excel export for every client and a PDF for each; settings for the organisation (name, logo, ticket prefix, time zone), members and roles with emailed invites, requesters invited on each client; several vendor organizations per install (people pick one after signing in and switch from the header, with a role in each; administrators work in all of them), a project filter saved per person for the board and ticket lists; first-run setup (the administrator, then the first organization); a formatting toolbar for descriptions, replies and internal notes; and an MCP server for AI clients with personal access tokens. Next: the production image and self-hosting guides.
 
 ## Stack
 
@@ -33,6 +35,20 @@ make dev       # API on :8080, web on :5173
 - API docs: http://localhost:8080/api/docs
 
 `make test` runs all tests (Docker is needed for the database tests). `make help` lists every target.
+
+## Connect an AI client (MCP)
+
+Staff can read tickets, their attachments and activity, and (with a read-and-write token) reply,
+add internal notes and change status, assignee or priority from an MCP client. In SimDesk, open
+your menu › **MCP access**, make a personal access token, and add the server to your client, for
+example Claude Code:
+
+```sh
+claude mcp add --transport http simdesk https://helpdesk.example/api/mcp \
+  --header "Authorization: Bearer simdesk_pat_…"
+```
+
+A token acts as you in the organization you made it in, until it expires or you revoke it.
 
 ## Self-hosting
 
