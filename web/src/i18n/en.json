@@ -1634,7 +1634,8 @@
     },
     "empty": {
       "title": "No clients yet",
-      "body": "Clients appear here once they are added in Settings › Clients."
+      "body": "Clients appear here once they are added in Settings › Clients.",
+      "link": "Add clients in Settings"
     }
   }
 }

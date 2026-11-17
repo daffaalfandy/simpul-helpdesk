@@ -1,4 +1,5 @@
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { SlaReportClient } from '../../api/client'
@@ -7,6 +8,9 @@ import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { EmptyState } from '../../components/EmptyState'
 import { ErrorAlert } from '../../components/ErrorAlert'
+import { paths } from '../../lib/constants'
+import { can } from '../../lib/roles'
+import { useSignedInUser } from '../shell/useSignedInUser'
 import { ClientTable } from './ClientTable'
 import { formatPercent, reportMonthLabel } from './format'
 import { KpiTiles } from './KpiTiles'
@@ -31,6 +35,8 @@ export function SlaReportPage({ month, onMonthChange }: SlaReportPageProps) {
   })
   const pending = download.isPending ? download.variables : undefined
   const target = formatPercent(report.targetPercent)
+  const me = useSignedInUser()
+  const canAddClients = can.manageSettings(me.role)
 
   return (
     <>
@@ -54,7 +60,17 @@ export function SlaReportPage({ month, onMonthChange }: SlaReportPageProps) {
       <ErrorAlert error={download.error} />
       <KpiTiles report={report} />
       {report.clients.length === 0 ? (
-        <EmptyState title={t('reports.empty.title')}>{t('reports.empty.body')}</EmptyState>
+        <EmptyState title={t('reports.empty.title')}>
+          {t('reports.empty.body')}
+          {canAddClients && (
+            <>
+              {' '}
+              <Link to={paths.settingsClients} className="font-bold">
+                {t('reports.empty.link')}
+              </Link>
+            </>
+          )}
+        </EmptyState>
       ) : (
         <Card
           title={t('reports.byClient', { month: reportMonthLabel(t, report.month, report.toDate) })}

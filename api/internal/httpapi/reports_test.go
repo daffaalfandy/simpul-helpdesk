@@ -152,8 +152,10 @@ func TestSLAReportExcel(t *testing.T) {
 	te.reportedAt(t, formula.Key, time.Date(2026, time.October, 15, 9, 0, 0, 0, jakarta))
 	te.answeredAfter(t, formula.Key, 16*time.Minute)
 
-	if rec := te.agent.do(http.MethodGet, "/reports/sla/excel", nil); rec.Code != http.StatusForbidden {
-		t.Fatalf("agent: status %d, want 403", rec.Code)
+	for name, s := range map[string]session{"agent": te.agent, "requester": te.requester} {
+		if rec := s.do(http.MethodGet, "/reports/sla/excel", nil); rec.Code != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403", name, rec.Code)
+		}
 	}
 	rec := te.supervisor.do(http.MethodGet, "/reports/sla/excel?month=2026-10", nil)
 	if rec.Code != http.StatusOK {
@@ -191,6 +193,9 @@ func TestSLAReportExcel(t *testing.T) {
 	}
 	if cell("Summary", "A9") != "Client" || cell("Summary", "A10") != requesterClient || cell("Summary", "G10") != "100.0%" {
 		t.Errorf("client row = %q, %q, %q", cell("Summary", "A9"), cell("Summary", "A10"), cell("Summary", "G10"))
+	}
+	if panes, err := f.GetPanes("Summary"); err != nil || !panes.Freeze || panes.YSplit != 9 {
+		t.Errorf("Summary panes = %+v, %v; want frozen through the client header (row 9)", panes, err)
 	}
 	if got := cell("Tickets", "I1"); got != "Reported (Asia/Jakarta)" {
 		t.Errorf("reported header = %q", got)

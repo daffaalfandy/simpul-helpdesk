@@ -159,6 +159,7 @@ func buildExcel(d exportData) (Export, error) {
 	}
 	summary.formats(summaryColumns, rowClientHeader+1, r)
 	summary.filter(rowClientHeader, r, len(summaryColumns))
+	summary.freezeThrough(rowClientHeader)
 	r += footnoteGap
 	if note := c.waiting(tickets); note != "" {
 		summary.row(r, note)
@@ -188,7 +189,7 @@ func buildExcel(d exportData) (Export, error) {
 	last := rowTicketHeader + len(d.Rows)
 	list.formats(cols, rowTicketHeader+1, last)
 	list.filter(rowTicketHeader, last, len(cols))
-	list.freezeHeader()
+	list.freezeThrough(rowTicketHeader)
 	list.widths(cols)
 
 	for _, err := range []error{c.err, summary.err, list.err} {
@@ -344,11 +345,12 @@ func (s *sheet) filter(headerRow, lastRow, cols int) {
 	}
 }
 
-func (s *sheet) freezeHeader() {
-	top := s.cell(firstColumn, rowTicketHeader+1)
+// freezeThrough keeps rows 1..header in view while the rest scrolls.
+func (s *sheet) freezeThrough(header int) {
+	top := s.cell(firstColumn, header+1)
 	if s.err == nil {
 		s.err = s.f.SetPanes(s.name, &excelize.Panes{
-			Freeze: true, YSplit: rowTicketHeader, TopLeftCell: top, ActivePane: excelPaneBottomLeft,
+			Freeze: true, YSplit: header, TopLeftCell: top, ActivePane: excelPaneBottomLeft,
 		})
 	}
 }

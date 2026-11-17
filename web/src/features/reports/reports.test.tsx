@@ -113,6 +113,15 @@ describe('SLA report', () => {
     renderApp('/reports/sla')
     expect(await screen.findByRole('heading', { name: 'No clients yet' })).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    // Supervisors can't add clients; admins get the way there.
+    expect(screen.queryByRole('link', { name: 'Add clients in Settings' })).not.toBeInTheDocument()
+  })
+
+  it('points admins without clients to Settings', async () => {
+    reportsApi.noClients = true
+    state.me = USERS['admin@demo-vendor.test'] ?? null
+    renderApp('/reports/sla')
+    expect(await screen.findByRole('link', { name: 'Add clients in Settings' })).toHaveAttribute('href', '/settings/clients')
   })
 
   it('keeps agents out', async () => {
