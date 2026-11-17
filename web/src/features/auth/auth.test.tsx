@@ -189,21 +189,34 @@ describe('first-run setup', () => {
     expect(router.state.location.pathname).toBe('/setup')
   })
 
-  it('names the organisation, creates the administrator and opens Settings › General', async () => {
+  it('creates the administrator, then the first organization, and opens Settings › General', async () => {
     state.install = { ...state.install, setupRequired: true }
     const { router } = renderApp('/login')
     const user = userEvent.setup()
-    await user.type(await screen.findByLabelText('Organisation name'), 'PT Vendor Teknologi')
-    await user.type(screen.getByLabelText('Your name'), 'Dewi Wulandari')
+    await user.type(await screen.findByLabelText('Your name'), 'Dewi Wulandari')
     await user.type(screen.getByLabelText('Work email'), 'dewi@vendor.test')
     await user.type(screen.getByLabelText('Password'), 'brand-new-password')
     await user.type(screen.getByLabelText('Repeat password'), 'brand-new-password')
-    await user.click(screen.getByRole('button', { name: 'Create administrator and sign in' }))
+    await user.click(screen.getByRole('button', { name: 'Create administrator and continue' }))
+    expect(await screen.findByRole('heading', { name: 'Create your first organization' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/setup/organization')
+    expect(state.setupBodies).toEqual([{ name: 'Dewi Wulandari', email: 'dewi@vendor.test', password: 'brand-new-password' }])
+
+    await user.click(screen.getByRole('button', { name: 'Create organization' }))
+    expect(screen.getByText("Enter the organisation's name.")).toBeInTheDocument()
+    await user.type(screen.getByRole('textbox', { name: 'Organisation name' }), 'PT Vendor Teknologi')
+    await user.type(screen.getByRole('textbox', { name: 'Ticket ID prefix' }), 'vt')
+    await user.click(screen.getByRole('button', { name: 'Create organization' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/settings/general'))
-    expect(state.setupBodies).toEqual([
-      { organizationName: 'PT Vendor Teknologi', name: 'Dewi Wulandari', email: 'dewi@vendor.test', password: 'brand-new-password' },
-    ])
+    expect(state.orgBodies).toEqual([{ name: 'PT Vendor Teknologi', ticketPrefix: 'VT', timezone: 'Asia/Jakarta' }])
     expect(await screen.findByRole('button', { name: 'Switch organization, now PT Vendor Teknologi' })).toBeInTheDocument()
+  })
+
+  it('sends an administrator without an organization to create one', async () => {
+    state.me = { ...USERS['admin@demo-vendor.test']!, organization: null, organizations: [] }
+    const { router } = renderApp('/board')
+    expect(await screen.findByRole('heading', { name: 'Create your first organization' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/setup/organization')
   })
 
   it('is closed once the install is set up', async () => {

@@ -52,6 +52,8 @@ func TestSeedIsIdempotent(t *testing.T) {
 	}
 	// The demo tickets from the mock; the closed history below them is checked on its own.
 	const demo = "t.number >= 24826"
+	// Demo Vendor and PT Mitra Data each keep their own holiday calendar.
+	const organizations = 2
 	presetDays := 0
 	for _, year := range holidaypreset.Years() {
 		p, _ := holidaypreset.ForYear(year)
@@ -99,13 +101,13 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"code notifications":           count(`SELECT count(*) FROM notifications WHERE event_type = 'code'`),
 	}
 	want := map[string]int{
-		"users": 11, "clients": 8, "agent links": 7, "setup open": 0,
-		"holidays": presetDays, "invited": 4, "catalog items": 5,
-		"projects": 8, "tickets on projects": 12, "requests on default": 4, "project targets": 32, "default projects": 5, "e-Office P1 fix": 2,
-		"tickets": 12, "messages": 12, "internal notes": 1, "ticket history": 12, "next number": 24891,
+		"users": 13, "clients": 9, "agent links": 8, "setup open": 0,
+		"holidays": presetDays * organizations, "invited": 4, "catalog items": 5,
+		"projects": 9, "tickets on projects": 15, "requests on default": 4, "project targets": 36, "default projects": 6, "e-Office P1 fix": 2,
+		"tickets": 15, "messages": 14, "internal notes": 1, "ticket history": 15, "next number": 24898,
 		"resolved today": 2, "assigned, not started": 1,
 		"watchers": 1, "notifications": 51, "emails pending": 0, "internal notes to client staff": 0,
-		"projects asking for UAT": 2, "projects asking to confirm": 2, "in UAT": 2, "items met by the requester": 1,
+		"projects asking for UAT": 2, "projects asking to confirm": 3, "in UAT": 2, "items met by the requester": 1,
 		"UAT requests to client staff": 3,
 		"repositories":                 3, "projects reading code": 4, "code events": 8, "code links": 8, "unknown keys": 1,
 		"code notifications": 2,
@@ -122,6 +124,14 @@ func TestSeedIsIdempotent(t *testing.T) {
 	org, err := st.Q().GetFirstOrganization(ctx)
 	if err != nil || org.Name != seed.OrgName {
 		t.Fatalf("org = %+v err %v", org, err)
+	}
+	// Rina works in both vendors, with a role in each.
+	if roles := count(`SELECT count(DISTINCT m.role) FROM organization_members m JOIN users u ON u.id = m.user_id
+		WHERE u.email = 'rina@demo-vendor.test'`); roles != organizations {
+		t.Errorf("Rina's roles = %d, want one per organization", roles)
+	}
+	if n := count(`SELECT count(*) FROM tickets t JOIN organizations o ON o.id = t.organization_id WHERE o.name = '` + seed.SecondOrgName + `'`); n == 0 {
+		t.Error("the second organization has no tickets")
 	}
 
 	// History: closed tickets over more than one month, closed after they were resolved.

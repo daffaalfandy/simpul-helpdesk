@@ -2,49 +2,39 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"strings"
-	"unicode/utf8"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/reqinfo"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 )
 
 const (
-	// ActionSetupCompleted is first-run setup: the organisation named and its first admin made.
+	// ActionSetupCompleted is first-run setup: the install's first administrator made. (The
+	// name predates several organizations per install; audit rows keep it.)
 	ActionSetupCompleted = "organization.setup_completed"
 
 	// actorNameSetup names the system actor of the first-run form, as "cli" names the CLI's.
 	actorNameSetup = "setup"
-
-	auditDataName = "name"
 )
 
-// SetupInput is the first-run form: the organisation's name and its first administrator.
+// SetupInput is the first-run form: the install's first administrator.
 type SetupInput struct {
-	OrganizationName string
-	Name             string
-	Email            string
-	Password         string
+	Name     string
+	Email    string
+	Password string
 }
 
-// Setup runs first-run setup: it names the organisation, creates the first administrator and
-// signs them in. It works once; after that, and after `simdesk user create --role admin`, it
-// answers setup_closed. Refused attempts count against the caller's address like failed sign-ins.
+// Setup runs first-run setup: it creates the first administrator and signs them in. They
+// create the first organization next (owner, 17 Nov: an install always has an administrator and
+// an organization). It works once; after that, and after `simdesk user create --role admin`,
+// it answers setup_closed. Refused attempts count against the caller's address like failed
+// sign-ins.
 func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSession, error) {
-	in.OrganizationName = strings.TrimSpace(in.OrganizationName)
 	in.Name = strings.TrimSpace(in.Name)
 	in.Email = NormalizeEmail(in.Email)
-	if in.OrganizationName == "" || utf8.RuneCountInString(in.OrganizationName) > organization.MaxNameLen {
-		return nil, NewSession{}, apperr.Invalid(apperr.CodeInvalidOrganization, "Enter the organisation's name", "")
-	}
 	if err := ValidateNewUser(in.Email, in.Name, ""); err != nil {
 		return nil, NewSession{}, err
 	}
@@ -83,10 +73,6 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 		if err != nil {
 			return err
 		}
-		orgID, err := setupOrganization(ctx, tx, in.OrganizationName)
-		if err != nil {
-			return err
-		}
 		if err := tx.Q.CompleteSetup(ctx); err != nil {
 			return err
 		}
@@ -94,9 +80,7 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 		created, completed := system, system
 		created.Action, created.TargetType, created.TargetID = ActionUserCreated, TargetUser, &id
 		created.Data = map[string]any{auditDataRole: RoleAdmin}
-		completed.OrganizationID = &orgID
-		completed.Action, completed.TargetType, completed.TargetID = ActionSetupCompleted, organization.TargetOrganization, &orgID
-		completed.Data = map[string]any{auditDataName: in.OrganizationName}
+		completed.Action, completed.TargetType, completed.TargetID = ActionSetupCompleted, TargetUser, &id
 		for _, e := range []audit.Entry{created, completed} {
 			if err := audit.Write(ctx, tx.Q, e); err != nil {
 				return err
@@ -121,21 +105,4 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 		return nil, NewSession{}, err
 	}
 	return p, sess, nil
-}
-
-// setupOrganization names the install's organization: the one an upgraded install already has,
-// or a new one with the defaults.
-func setupOrganization(ctx context.Context, tx store.Tx, name string) (uuid.UUID, error) {
-	first, err := tx.Q.GetFirstOrganization(ctx)
-	if err == nil {
-		return first.ID, tx.Q.UpdateOrganizationSettings(ctx, db.UpdateOrganizationSettingsParams{
-			ID: first.ID, Name: name, TicketPrefix: first.TicketPrefix, Timezone: first.Timezone,
-		})
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return uuid.Nil, err
-	}
-	return organization.CreateTx(ctx, tx, organization.Input{
-		Name: name, TicketPrefix: organization.DefaultTicketPrefix, Timezone: organization.DefaultTimezone,
-	})
 }

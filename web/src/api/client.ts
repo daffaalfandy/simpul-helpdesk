@@ -6,6 +6,7 @@ import type { components, paths } from './schema.gen'
 export const API_BASE_PATH = '/api/v1'
 
 export type Me = components['schemas']['Me']
+export type SetupRequest = components['schemas']['SetupRequest']
 export type Organization = components['schemas']['Organization']
 export type OrganizationSummary = components['schemas']['OrganizationSummary']
 export type OrganizationChoice = components['schemas']['OrganizationChoice']

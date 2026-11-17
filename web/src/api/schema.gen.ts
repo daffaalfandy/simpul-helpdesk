@@ -290,10 +290,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * First-run setup - name the organisation and create the first administrator
-         * @description Open only until setup completes (`setupRequired` on `GET /organization`): this form or
+         * First-run setup - create the install's first administrator
+         * @description Open only until setup completes (`setupRequired` on `GET /install`): this form or
          *     `simdesk user create --role admin` closes it for good. The new administrator is signed
-         *     in. Error codes are `setup_closed` (409), `invalid_organization`, `invalid_name`,
+         *     in and creates the first organization next (`POST /organizations`); until one exists
+         *     their `organization` is null. Error codes are `setup_closed` (409), `invalid_name`,
          *     `invalid_email`, `weak_password`, `email_taken` (409) and `rate_limited` (429).
          */
         post: operations["completeSetup"];
@@ -2882,8 +2883,6 @@ export interface components {
             password: string;
         };
         SetupRequest: {
-            /** @example PT Vendor Teknologi */
-            organizationName: string;
             name: string;
             email: string;
             password: string;

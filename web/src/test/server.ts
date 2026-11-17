@@ -205,13 +205,25 @@ const handlers = [
       : problem(400, 'invalid_token')
   }),
   http.post('*/api/v1/setup', async ({ request }) => {
-    const body = (await request.json()) as { organizationName: string; name: string; email: string }
+    const body = (await request.json()) as { name: string; email: string }
     state.setupBodies.push(body)
     if (!state.install.setupRequired) return problem(409, 'setup_closed')
     state.install = { ...state.install, setupRequired: false }
-    state.org = { ...state.org, name: body.organizationName }
-    state.me = inOrg({ id: '01a1cedf-0000-7000-8000-0000000000f1', email: body.email, name: body.name, role: 'admin' })
+    state.me = {
+      id: '01a1cedf-0000-7000-8000-0000000000f1', email: body.email, name: body.name, role: 'admin', isAdmin: true,
+      organization: null, organizations: [],
+    }
     return HttpResponse.json(state.me)
+  }),
+  // An administrator with no organization yet makes the first one (first-run setup).
+  http.post('*/api/v1/organizations', async ({ request }) => {
+    if (!state.me?.isAdmin || state.me.organization) return undefined
+    const body = (await request.json()) as OrganizationInput
+    state.orgBodies.push(body)
+    state.org = { ...state.org, ...body }
+    const choice: OrganizationChoice = { id: state.org.id, name: body.name, role: 'admin', logoUrl: null }
+    state.me = { ...state.me, organization: choice, organizations: [choice] }
+    return HttpResponse.json({ ...body, id: state.org.id, logoUrl: null, memberCount: 0, clientCount: 0 }, { status: 201 })
   }),
   http.post('*/api/v1/auth/invite/accept', async ({ request }) => {
     const body = (await request.json()) as { token: string }

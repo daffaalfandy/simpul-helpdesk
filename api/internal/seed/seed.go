@@ -140,32 +140,13 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 			}
 			clientIDs[c.name] = id
 		}
-		userIDs := make(map[string]uuid.UUID, len(people))
+		userIDs := make(map[string]uuid.UUID, len(people)+len(secondPeople))
 		for _, p := range people {
-			account := p.role
-			if slices.Contains(auth.MemberRoles, p.role) {
-				account = auth.RoleStaff
-			}
-			params := db.UpsertUserByEmailParams{
-				Email: p.email, Name: p.name, PasswordHash: &hash, Role: string(account),
-				Status: string(auth.UserStatusActive),
-			}
-			if p.invited {
-				params.PasswordHash, params.Status = nil, string(auth.UserStatusInvited)
-			}
-			if p.client != "" {
-				id := clientIDs[p.client]
-				params.ClientID = &id
-			}
-			if p.jobTitle != "" {
-				title := p.jobTitle
-				params.JobTitle = &title
-			}
-			id, err := tx.Q.UpsertUserByEmail(ctx, params)
+			id, err := upsertPerson(ctx, tx.Q, hash, p, clientIDs)
 			if err != nil {
-				return fmt.Errorf("user %s: %w", p.email, err)
+				return err
 			}
-			if account == auth.RoleStaff {
+			if slices.Contains(auth.MemberRoles, p.role) {
 				if err := tx.Q.UpsertMembership(ctx, db.UpsertMembershipParams{UserID: id, OrganizationID: org, Role: string(p.role)}); err != nil {
 					return fmt.Errorf("member %s: %w", p.email, err)
 				}
@@ -188,7 +169,7 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		if err := seedHolidays(ctx, tx.Q, org); err != nil {
 			return err
 		}
-		projectIDs, err := seedProjects(ctx, tx.Q, org, clientIDs)
+		projectIDs, err := seedProjects(ctx, tx.Q, org, clientIDs, demoProjects)
 		if err != nil {
 			return err
 		}
@@ -205,13 +186,16 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		if err := seedHistory(ctx, tx.Q, now, r); err != nil {
 			return err
 		}
-		if err := seedTickets(ctx, tx.Q, now, r, repos); err != nil {
+		if err := seedTickets(ctx, tx.Q, now, r, repos, demoTickets); err != nil {
 			return err
 		}
 		if err := seedUnknownKey(ctx, tx.Q, repos, r, now); err != nil {
 			return err
 		}
-		return seedNotifications(ctx, tx.Q, now, r)
+		if err := seedNotifications(ctx, tx.Q, now, r); err != nil {
+			return err
+		}
+		return seedSecondVendor(ctx, tx, hash, now, userIDs)
 	})
 	if err != nil {
 		return err
@@ -226,10 +210,42 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 			fmt.Fprintf(tw, "%s\t%s\t%s\n", p.email, p.name, p.role)
 		}
 	}
+	for _, p := range secondPeople {
+		fmt.Fprintf(tw, "%s\t%s\t%s at %s\n", p.email, p.name, p.role, SecondOrgName)
+	}
 	_ = tw.Flush()
-	fmt.Fprintf(out, "\nPassword for every user: %s\n", DevPassword)
+	fmt.Fprintf(out, "\nA second organisation, %q, has %d tickets; Rina Pratiwi is its supervisor.\n", SecondOrgName, len(secondTickets))
+	fmt.Fprintf(out, "Password for every user: %s\n", DevPassword)
 	fmt.Fprintf(out, "Webhook secret for every demo repository: %s\n", DevWebhookSecret)
 	return nil
+}
+
+// upsertPerson adds or refreshes a demo user's account (memberships are separate).
+func upsertPerson(ctx context.Context, q *db.Queries, hash string, p person, clientIDs map[string]uuid.UUID) (uuid.UUID, error) {
+	account := p.role
+	if slices.Contains(auth.MemberRoles, p.role) {
+		account = auth.RoleStaff
+	}
+	params := db.UpsertUserByEmailParams{
+		Email: p.email, Name: p.name, PasswordHash: &hash, Role: string(account),
+		Status: string(auth.UserStatusActive),
+	}
+	if p.invited {
+		params.PasswordHash, params.Status = nil, string(auth.UserStatusInvited)
+	}
+	if p.client != "" {
+		id := clientIDs[p.client]
+		params.ClientID = &id
+	}
+	if p.jobTitle != "" {
+		title := p.jobTitle
+		params.JobTitle = &title
+	}
+	id, err := q.UpsertUserByEmail(ctx, params)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("user %s: %w", p.email, err)
+	}
+	return id, nil
 }
 
 func upsertClient(ctx context.Context, q *db.Queries, org uuid.UUID, c client) (uuid.UUID, error) {

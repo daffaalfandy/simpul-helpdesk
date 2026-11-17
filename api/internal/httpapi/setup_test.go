@@ -22,7 +22,7 @@ func TestFirstRunSetup(t *testing.T) {
 	if e.install(t).SetupRequired {
 		t.Fatal("setup still open after the CLI created an administrator")
 	}
-	in := gen.SetupRequest{OrganizationName: " PT Vendor Teknologi ", Name: "Dewi Wulandari", Email: "Dewi@Vendor.test", Password: invitePassword}
+	in := gen.SetupRequest{Name: "Dewi Wulandari", Email: "Dewi@Vendor.test", Password: invitePassword}
 	setup := func(body gen.SetupRequest) *httpResponse {
 		rec := e.do(request{method: http.MethodPost, path: apiBase + "/setup", body: body})
 		return &httpResponse{code: rec.Code, body: rec.Body.String(), cookie: rec.Header().Get("Set-Cookie")}
@@ -42,9 +42,9 @@ func TestFirstRunSetup(t *testing.T) {
 		body gen.SetupRequest
 		code string
 	}{
-		{gen.SetupRequest{OrganizationName: "  ", Name: in.Name, Email: in.Email, Password: in.Password}, apperr.CodeInvalidOrganization},
-		{gen.SetupRequest{OrganizationName: in.OrganizationName, Name: in.Name, Email: "nope", Password: in.Password}, apperr.CodeInvalidEmail},
-		{gen.SetupRequest{OrganizationName: in.OrganizationName, Name: in.Name, Email: e.users[auth.RoleAgent], Password: in.Password}, apperr.CodeEmailTaken},
+		{gen.SetupRequest{Name: "  ", Email: in.Email, Password: in.Password}, apperr.CodeInvalidName},
+		{gen.SetupRequest{Name: in.Name, Email: "nope", Password: in.Password}, apperr.CodeInvalidEmail},
+		{gen.SetupRequest{Name: in.Name, Email: e.users[auth.RoleAgent], Password: in.Password}, apperr.CodeEmailTaken},
 	} {
 		if r := setup(bad.body); !strings.Contains(r.body, bad.code) {
 			t.Errorf("want %s: %d %s", bad.code, r.code, r.body)
@@ -54,6 +54,7 @@ func TestFirstRunSetup(t *testing.T) {
 		t.Fatal("a refused form closed setup")
 	}
 
+	organizations := e.count(t, `SELECT count(*) FROM organizations`)
 	r := setup(in)
 	if r.code != http.StatusOK || !strings.Contains(r.cookie, "sd_session") || !strings.Contains(r.body, `"role":"admin"`) {
 		t.Fatalf("setup: %d %s", r.code, r.body)
@@ -61,14 +62,17 @@ func TestFirstRunSetup(t *testing.T) {
 	if e.install(t).SetupRequired {
 		t.Fatal("setup still open after it ran")
 	}
+	// Setup makes the administrator only; they create the first organization next.
+	if n := e.count(t, `SELECT count(*) FROM organizations`); n != organizations {
+		t.Fatalf("organizations after setup = %d, want %d", n, organizations)
+	}
 	admin := session{e: e, cookie: sessionCookie(t, e.login("dewi@vendor.test", invitePassword))}
-	if org := decode[gen.Organization](t, admin.do(http.MethodGet, "/organization", nil), http.StatusOK); org.Name != "PT Vendor Teknologi" {
-		t.Fatalf("organisation after setup = %+v", org)
+	created := decode[gen.OrganizationSummary](t, admin.do(http.MethodPost, "/organizations",
+		gen.OrganizationInput{Name: "PT Vendor Teknologi", TicketPrefix: "VT", Timezone: "Asia/Makassar"}), http.StatusCreated)
+	if me := admin.in(created.Id).me(t); !me.IsAdmin || orgOf(me) != created.Id {
+		t.Fatalf("new admin in the organization they made = %+v", me)
 	}
-	if rec := e.login("dewi@vendor.test", invitePassword); rec.Code != http.StatusOK {
-		t.Fatalf("new admin signs in: %d", rec.Code)
-	}
-	if r := setup(gen.SetupRequest{OrganizationName: "Again", Name: "Mallory", Email: "mallory@example.test", Password: invitePassword}); r.code != http.StatusConflict {
+	if r := setup(gen.SetupRequest{Name: "Mallory", Email: "mallory@example.test", Password: invitePassword}); r.code != http.StatusConflict {
 		t.Fatalf("second setup: %d %s", r.code, r.body)
 	}
 	if n := e.count(t, `SELECT count(*) FROM audit_log WHERE action = $1 AND actor_name = 'setup'`, auth.ActionSetupCompleted); n != 1 {

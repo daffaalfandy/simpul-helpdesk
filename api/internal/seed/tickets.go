@@ -3,6 +3,7 @@ package seed
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,7 +25,7 @@ type refs struct {
 
 // defaultProject is the client's first demo project, which seedProjects makes its default.
 func (r refs) defaultProject(client string) uuid.UUID {
-	for _, p := range demoProjects {
+	for _, p := range slices.Concat(demoProjects, secondProjects) {
 		if p.client == client {
 			return r.projects[client][p.name]
 		}
@@ -33,7 +34,7 @@ func (r refs) defaultProject(client string) uuid.UUID {
 }
 
 func (r refs) user(email string) tickets.Ref {
-	for _, p := range people {
+	for _, p := range slices.Concat(people, secondPeople) {
 		if p.email == email {
 			return tickets.Ref{ID: r.users[email], Name: p.name}
 		}
@@ -271,7 +272,7 @@ func seedCatalog(ctx context.Context, q *db.Queries, org uuid.UUID) (map[string]
 
 // seedTickets adds the demo tickets that don't exist yet, with their code activity, then
 // continues numbering after them.
-func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs, repos map[string]demoRepoRef) error {
+func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs, repos map[string]demoRepoRef, list []demoTicket) error {
 	org, err := q.GetOrganization(ctx, r.org)
 	if err != nil {
 		return err
@@ -285,7 +286,7 @@ func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs, repo
 	// earlierToday is halfway between local midnight and now, so "today" holds wherever the
 	// seed runs.
 	earlierToday := midnight.Add(now.Sub(midnight) / 2)
-	for _, d := range demoTickets {
+	for _, d := range list {
 		created := now.Add(-time.Duration(d.age) * time.Minute)
 		if d.endsToday && len(d.steps) > 0 {
 			created = earlierToday.Add(-time.Duration(d.steps[len(d.steps)-1].after) * time.Minute)

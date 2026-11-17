@@ -24,11 +24,11 @@ export async function redirectToSetupIfOpen(queryClient: QueryClient): Promise<v
 }
 
 /**
- * Staff who belong to no organization yet wait on their own page: every organization-owned
- * request would be refused.
+ * Everything in the app belongs to an organization. An administrator without one creates the
+ * first (first run); staff who belong to none wait on their own page.
  */
 export function requireOrganization(me: Me): void {
-  if (!me.organization && !me.isAdmin) throw redirect({ to: paths.noOrganization })
+  if (!me.organization) throw redirect({ to: me.isAdmin ? paths.setupOrganization : paths.noOrganization })
 }
 
 /** Sends users who may not see a page to their own start page. */

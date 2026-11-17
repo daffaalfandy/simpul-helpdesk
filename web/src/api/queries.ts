@@ -2,7 +2,7 @@ import { type QueryClient, queryOptions, useMutation, useQueryClient, useSuspens
 import { notFound, useRouter } from '@tanstack/react-router'
 
 import { ME_STALE_TIME_MS } from '../lib/constants'
-import { api, ApiError, ErrorCode, HttpStatus, type Me, type Priority, type PriorityLevel } from './client'
+import { api, ApiError, ErrorCode, HttpStatus, type Me, type Priority, type PriorityLevel, type SetupRequest } from './client'
 import { setCurrentOrganization } from './organization'
 import { unwrap } from './unwrap'
 
@@ -203,12 +203,8 @@ export function useAcceptInvite() {
 export function useCompleteSetup() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: { organizationName: string; name: string; email: string; password: string }) =>
-      unwrap(api.POST('/setup', { body })),
-    onSuccess: async (me) => {
-      signedIn(queryClient, me)
-      await queryClient.invalidateQueries({ queryKey: queryKeys.organization })
-    },
+    mutationFn: (body: SetupRequest) => unwrap(api.POST('/setup', { body })),
+    onSuccess: (me) => signedIn(queryClient, me),
   })
 }
 

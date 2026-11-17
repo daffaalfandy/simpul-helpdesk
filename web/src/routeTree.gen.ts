@@ -24,6 +24,7 @@ import { Route as AgentNotificationsRouteImport } from './routes/_agent/notifica
 import { Route as AgentProjectsRouteImport } from './routes/_agent/projects'
 import { Route as AgentReportsRouteImport } from './routes/_agent/reports'
 import { Route as AgentSettingsRouteImport } from './routes/_agent/settings'
+import { Route as SetupOrganizationRouteImport } from './routes/setup_.organization'
 import { Route as AgentProjectsIndexRouteImport } from './routes/_agent/projects/index'
 import { Route as AgentProjectsProjectIdRouteImport } from './routes/_agent/projects/$projectId'
 import { Route as AgentReportsIndexRouteImport } from './routes/_agent/reports/index'
@@ -114,6 +115,11 @@ const AgentSettingsRoute = AgentSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AgentRoute,
+} as any)
+const SetupOrganizationRoute = SetupOrganizationRouteImport.update({
+  id: '/setup_/organization',
+  path: '/setup/organization',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AgentProjectsIndexRoute = AgentProjectsIndexRouteImport.update({
   id: '/',
@@ -218,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/projects': typeof AgentProjectsRouteWithChildren
   '/reports': typeof AgentReportsRouteWithChildren
   '/settings': typeof AgentSettingsRouteWithChildren
+  '/setup/organization': typeof SetupOrganizationRoute
   '/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/reports/sla': typeof AgentReportsSlaRoute
   '/settings/catalog': typeof AgentSettingsCatalogRoute
@@ -247,6 +254,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/board': typeof AgentBoardRoute
   '/notifications': typeof AgentNotificationsRoute
+  '/setup/organization': typeof SetupOrganizationRoute
   '/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/reports/sla': typeof AgentReportsSlaRoute
   '/settings/catalog': typeof AgentSettingsCatalogRoute
@@ -282,6 +290,7 @@ export interface FileRoutesById {
   '/_agent/projects': typeof AgentProjectsRouteWithChildren
   '/_agent/reports': typeof AgentReportsRouteWithChildren
   '/_agent/settings': typeof AgentSettingsRouteWithChildren
+  '/setup_/organization': typeof SetupOrganizationRoute
   '/_agent/projects/$projectId': typeof AgentProjectsProjectIdRoute
   '/_agent/reports/sla': typeof AgentReportsSlaRoute
   '/_agent/settings/catalog': typeof AgentSettingsCatalogRoute
@@ -316,6 +325,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/reports'
     | '/settings'
+    | '/setup/organization'
     | '/projects/$projectId'
     | '/reports/sla'
     | '/settings/catalog'
@@ -345,6 +355,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/board'
     | '/notifications'
+    | '/setup/organization'
     | '/projects/$projectId'
     | '/reports/sla'
     | '/settings/catalog'
@@ -379,6 +390,7 @@ export interface FileRouteTypes {
     | '/_agent/projects'
     | '/_agent/reports'
     | '/_agent/settings'
+    | '/setup_/organization'
     | '/_agent/projects/$projectId'
     | '/_agent/reports/sla'
     | '/_agent/settings/catalog'
@@ -409,6 +421,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SelectOrganizationRoute: typeof SelectOrganizationRoute
   SetupRoute: typeof SetupRoute
+  SetupOrganizationRoute: typeof SetupOrganizationRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -517,6 +530,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings'
       preLoaderRoute: typeof AgentSettingsRouteImport
       parentRoute: typeof AgentRoute
+    }
+    '/setup_/organization': {
+      id: '/setup_/organization'
+      path: '/setup/organization'
+      fullPath: '/setup/organization'
+      preLoaderRoute: typeof SetupOrganizationRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_agent/projects/': {
       id: '/_agent/projects/'
@@ -742,6 +762,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SelectOrganizationRoute: SelectOrganizationRoute,
   SetupRoute: SetupRoute,
+  SetupOrganizationRoute: SetupOrganizationRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

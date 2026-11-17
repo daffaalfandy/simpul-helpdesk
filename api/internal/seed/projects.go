@@ -76,9 +76,9 @@ var demoProjects = []project{
 
 // seedProjects upserts the demo projects, their SLAs and Definitions of Done and returns IDs by client and name.
 // Each client's first project is made its default, so a re-run restores the demo defaults.
-func seedProjects(ctx context.Context, q *db.Queries, org uuid.UUID, clientIDs map[string]uuid.UUID) (map[string]map[string]uuid.UUID, error) {
+func seedProjects(ctx context.Context, q *db.Queries, org uuid.UUID, clientIDs map[string]uuid.UUID, list []project) (map[string]map[string]uuid.UUID, error) {
 	out := make(map[string]map[string]uuid.UUID)
-	for _, p := range demoProjects {
+	for _, p := range list {
 		clientID := clientIDs[p.client]
 		id, err := q.GetProjectByName(ctx, db.GetProjectByNameParams{ClientID: clientID, Name: p.name})
 		desc := p.description

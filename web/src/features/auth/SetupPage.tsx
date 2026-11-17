@@ -11,18 +11,17 @@ import { TextInput } from '../../components/TextInput'
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, paths } from '../../lib/constants'
 import { AuthLayout, authCard } from './AuthLayout'
 
-/** Limit matching the API (organization.MaxNameLen, users name). */
+/** Limit matching the API (users name). */
 const MAX_NAME_LENGTH = 200
 
 /**
- * First-run setup: name the organisation and create the first administrator. It works once;
- * the new admin lands in Settings › General to add the logo, prefix and time zone.
+ * First-run setup, step 1: the first administrator. It works once; the new administrator then
+ * creates the first organization (owner, 17 Nov: an install always has both).
  */
 export function SetupPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const setup = useCompleteSetup()
-  const [organizationName, setOrganizationName] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -31,8 +30,8 @@ export function SetupPage() {
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setup.mutate(
-      { organizationName: organizationName.trim(), name: name.trim(), email: email.trim(), password },
-      { onSuccess: () => void navigate({ to: paths.settingsGeneral, replace: true }) },
+      { name: name.trim(), email: email.trim(), password },
+      { onSuccess: () => void navigate({ to: paths.setupOrganization, replace: true }) },
     )
   }
 
@@ -40,17 +39,6 @@ export function SetupPage() {
     <AuthLayout title={t('setup.title')} intro={t('setup.intro')}>
       <Form onSubmit={onSubmit} className={authCard}>
         {setup.error && <Alert tone="error">{errorMessage(t, setup.error)}</Alert>}
-        <TextInput
-          name="organization"
-          autoComplete="organization"
-          isRequired
-          maxLength={MAX_NAME_LENGTH}
-          label={t('setup.organization')}
-          description={t('setup.organizationHint')}
-          value={organizationName}
-          onChange={setOrganizationName}
-          errorMessage={t('settings.general.nameRequired')}
-        />
         <TextInput
           name="name"
           autoComplete="name"
