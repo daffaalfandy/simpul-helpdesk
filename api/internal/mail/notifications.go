@@ -86,7 +86,8 @@ type QuoteData struct {
 	Author      string
 	FromSupport bool
 	Time        string
-	Body        string
+	Body        string            // Markdown, as written: the text email shows it as is
+	BodyHTML    htmltemplate.HTML // Body rendered by richtext.HTML for the HTML email
 }
 
 // TicketUpdateData fills the ticket_update template: one user's grouped changes to one ticket.

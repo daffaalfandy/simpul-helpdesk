@@ -35,6 +35,9 @@ const (
 	Retention = 90 * 24 * time.Hour
 	// QuoteMaxRunes caps the message excerpt an inbox item quotes.
 	QuoteMaxRunes = 280
+	// QuoteSourceRunes is how much of a Markdown body the inbox reads to make that excerpt:
+	// formatting marks take room, so it reads more than it shows.
+	QuoteSourceRunes = 4 * QuoteMaxRunes
 )
 
 // Digest period formats: one hourly summary per local hour, one daily summary per local day.

@@ -17,7 +17,7 @@
       {{- with .Quote}}
       <div style="margin:0 0 18px;padding:14px 16px;border-left:3px solid {{color "primary"}};background:{{color "bg"}};border-radius:0 12px 12px 0">
         <p style="margin:0 0 6px;font-size:13px;color:{{color "muted"}}"><b style="color:{{color "ink"}}">{{.Author}}</b>{{if .FromSupport}} · Support team{{end}} · {{.Time}}</p>
-        <p style="margin:0;font-size:14.5px;line-height:1.6;white-space:pre-line">{{.Body}}</p>
+        <div style="font-size:14.5px;line-height:1.6">{{.BodyHTML}}</div>
       </div>
       {{- end}}
       {{- with .UAT}}

@@ -4,9 +4,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/richtext"
 )
 
-const noValue = "<no value>"
+const (
+	noValue = "<no value>"
+	quoteMD = "The fix is on **the test server** now."
+)
 
 func TestTicketUpdateRenders(t *testing.T) {
 	left := 41
@@ -17,7 +22,8 @@ func TestTicketUpdateRenders(t *testing.T) {
 		Changes: []ChangeData{{Change: "assignee", Assignee: "Rina Pratiwi"}},
 		Others: []NoticeData{{Event: "reply", Portal: true, ActorName: "Rina Pratiwi", Time: "12:40"},
 			{Event: "sla", Kind: "at_risk", SLAClock: "resolution", SLAMinutesLeft: &left, Time: "12:41"}},
-		Quote:     &QuoteData{Author: "Rina Pratiwi", FromSupport: true, Time: "12:45", Body: "The fix is on the test server now."},
+		Quote: &QuoteData{Author: "Rina Pratiwi", FromSupport: true, Time: "12:45", Body: quoteMD,
+			BodyHTML: richtext.HTML(quoteMD)},
 		SLA:       &SLALineData{TargetValue: 4, TargetUnit: "h", PauseUAT: true},
 		TicketURL: "https://helpdesk.example/portal/tickets/HD-24871", SettingsURL: "https://helpdesk.example/portal/notifications#settings",
 	}
@@ -38,12 +44,14 @@ func TestTicketUpdateRenders(t *testing.T) {
 		"HD-24871 · P1 Critical · e-Office",
 		"Fix target: 4 hours · time waiting for your test doesn't count",
 		"Powered by SimDesk",
+		quoteMD,
 	} {
 		if !strings.Contains(msg.Text, want) {
 			t.Errorf("text lacks %q:\n%s", want, msg.Text)
 		}
 	}
-	for _, want := range []string{"Ready for your test", "View the ticket", data.SettingsURL, "Also changed"} {
+	for _, want := range []string{"Ready for your test", "View the ticket", data.SettingsURL, "Also changed",
+		"<strong>the test server</strong>"} {
 		if !strings.Contains(msg.HTML, want) {
 			t.Errorf("html lacks %q", want)
 		}

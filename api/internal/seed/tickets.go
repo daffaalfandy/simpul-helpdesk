@@ -214,12 +214,12 @@ var demoTickets = []demoTicket{
 		number: 24871, typ: ticket.TypeIncident, priority: sla.P1, channel: ticket.ChannelPortal,
 		client: RequesterClient, requester: emailHendra, creator: emailHendra, what: projectEOffice,
 		subject:     "e-Office login fails for all staff after this morning's update",
-		description: "Since 08:00 nobody can sign in to e-Office. The page says \"Session expired\" right after the password is entered. Every department is affected.",
+		description: "Since 08:00 nobody can sign in to e-Office. The page says **\"Session expired\"** right after the password is entered.\n\nWhat we tried:\n\n- clearing the browser cache\n- another browser (Chrome and Firefox)\n- a laptop outside the office network\n\nEvery department is affected.",
 		age:         3 * minutesPerHour,
 		steps:       []demoStep{{2, emailRina, emailRina, "", ""}, {38, emailRina, "", ticket.StatusInProgress, ""}},
 		messages: []demoMessage{
 			{8, emailRina, false, "Thanks Pak Hendra, we're on it. The problem started with this morning's single sign-on update. Next update within 30 minutes."},
-			{17, emailRina, true, "Matches last night's SSO patch: the token lifetime dropped to 5 minutes. Adi is preparing a revert."},
+			{17, emailRina, true, "Matches last night's SSO patch: `token_ttl` dropped to 5 minutes. Adi is preparing a revert to the old value (`8h`)."},
 		},
 		code: []demoCode{
 			{40, repoEOffice, "7c3d019b2a3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e",

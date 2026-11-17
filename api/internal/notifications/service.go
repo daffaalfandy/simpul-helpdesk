@@ -14,6 +14,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/richtext"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
@@ -87,7 +88,7 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f notification.Fi
 	}
 	q := s.store.Q()
 	rows, err := q.ListNotifications(ctx, db.ListNotificationsParams{
-		QuoteRunes: notification.QuoteMaxRunes + 1, UserID: p.UserID,
+		QuoteRunes: notification.QuoteSourceRunes, UserID: p.UserID,
 		OrganizationID: scope.OrganizationID, ScopeClientID: scope.ClientID, ScopeAgentID: scope.AgentID, Events: events,
 		UnreadOnly: f == notification.FilterUnread, Before: before, RowLimit: int32(limit + 1),
 	})
@@ -108,9 +109,10 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f notification.Fi
 		}
 		_ = json.Unmarshal(r.Data, &it.Data)
 		// Client staff only ever see public messages quoted.
-		if r.QuoteVisibility != nil && (scope.Staff || *r.QuoteVisibility == publicVisibility) && r.Quote != "" {
-			quote := cutQuote(r.Quote)
-			it.Quote = &quote
+		if r.QuoteVisibility != nil && (scope.Staff || *r.QuoteVisibility == publicVisibility) {
+			if quote := cutQuote(richtext.Line(r.Quote)); quote != "" {
+				it.Quote = &quote
+			}
 		}
 		page.Items = append(page.Items, it)
 	}
@@ -259,7 +261,7 @@ func audienceOf(p *auth.Principal) notification.Audience {
 	return notification.AudienceFor(!auth.Can(p.Role, auth.CapPortal))
 }
 
-// cutQuote trims a quote to notification.QuoteMaxRunes, marking the cut.
+// cutQuote trims a plain-text quote to notification.QuoteMaxRunes, marking the cut.
 func cutQuote(s string) string {
 	r := []rune(s)
 	if len(r) <= notification.QuoteMaxRunes {

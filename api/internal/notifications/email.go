@@ -20,6 +20,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/richtext"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
@@ -411,7 +412,7 @@ func (m *Mailer) quote(ctx context.Context, q *db.Queries, portal bool, main cla
 	}
 	return &mail.QuoteData{
 		Author: msg.AuthorName, FromSupport: auth.Role(msg.AuthorRole) != auth.RoleRequester,
-		Time: f.time(msg.CreatedAt), Body: msg.Body,
+		Time: f.time(msg.CreatedAt), Body: msg.Body, BodyHTML: richtext.HTML(msg.Body),
 	}, nil
 }
 
