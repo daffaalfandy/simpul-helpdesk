@@ -60,8 +60,9 @@ type Service struct {
 
 func NewService(st *store.Store, jobs JobInserter) *Service { return &Service{store: st, jobs: jobs} }
 
-// recompute queues the clock recompute in the edit's transaction.
-func (s *Service) recompute(ctx context.Context, tx store.Tx) error {
+// Recompute queues the clock recompute in the edit's transaction: calendar edits here, and a new
+// organisation time zone (internal/organization).
+func (s *Service) Recompute(ctx context.Context, tx store.Tx) error {
 	_, err := s.jobs.InsertTx(ctx, tx.PG, RecomputeArgs{}, nil)
 	return err
 }

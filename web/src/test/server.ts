@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 
-import type { Me, Organization, Problem } from '../api/client'
+import type { Me, Organization, OrganizationInput, Problem } from '../api/client'
 import { integrationsHandlers, resetIntegrations } from './integrationsApi'
 import { notificationsHandlers, resetNotifications } from './notificationsApi'
 import { projectsHandlers, resetProjects } from './projectsApi'
@@ -11,7 +11,13 @@ import { resetTickets, ticketsHandlers } from './ticketsApi'
 
 export const PASSWORD = 'correct-horse-battery'
 
-export const ORG: Organization = { name: 'Demo Vendor', timezone: 'Asia/Jakarta', footerNote: 'Data stored in Indonesia' }
+export const ORG: Organization = {
+  name: 'Demo Vendor', timezone: 'Asia/Jakarta', footerNote: 'Data stored in Indonesia', ticketPrefix: 'HD',
+  appUrl: 'https://helpdesk.demo-vendor.test', logoUrl: null, setupRequired: false,
+}
+
+/** The logo URL the fake API hands out after an upload. */
+export const LOGO_URL = '/api/v1/organization/logo?v=1'
 
 export const USERS: Record<string, Me> = {
   'rina@demo-vendor.test': {
@@ -45,16 +51,26 @@ export const USERS: Record<string, Me> = {
 }
 
 /** Fake API state shared by the handlers; reset after each test. */
-export const state: { me: Me | null; forgotRequests: string[]; resetBodies: unknown[] } = {
+export const state: {
+  me: Me | null
+  org: Organization
+  forgotRequests: string[]
+  resetBodies: unknown[]
+  orgBodies: unknown[]
+} = {
   me: null,
+  org: { ...ORG },
   forgotRequests: [],
   resetBodies: [],
+  orgBodies: [],
 }
 
 export function resetApi() {
   state.me = null
+  state.org = { ...ORG }
   state.forgotRequests = []
   state.resetBodies = []
+  state.orgBodies = []
   resetSettings()
   resetTickets()
   resetProjects()
@@ -69,7 +85,21 @@ export function problem(status: number, code: string, headers?: Record<string, s
 }
 
 const handlers = [
-  http.get('*/api/v1/organization', () => HttpResponse.json(ORG)),
+  http.get('*/api/v1/organization', () => HttpResponse.json(state.org)),
+  http.put('*/api/v1/organization', async ({ request }) => {
+    const body = (await request.json()) as OrganizationInput
+    state.orgBodies.push(body)
+    state.org = { ...state.org, ...body, ticketPrefix: body.ticketPrefix.toUpperCase() }
+    return HttpResponse.json(state.org)
+  }),
+  http.put('*/api/v1/organization/logo', () => {
+    state.org = { ...state.org, logoUrl: LOGO_URL }
+    return HttpResponse.json(state.org)
+  }),
+  http.delete('*/api/v1/organization/logo', () => {
+    state.org = { ...state.org, logoUrl: null }
+    return HttpResponse.json(state.org)
+  }),
   http.get('*/api/v1/auth/me', () => (state.me ? HttpResponse.json(state.me) : problem(401, 'unauthenticated'))),
   http.post('*/api/v1/auth/login', async ({ request }) => {
     const { email, password } = (await request.json()) as { email: string; password: string }

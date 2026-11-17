@@ -11,11 +11,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Public organisation branding for the sign-in page and footer */
+        /**
+         * Public organisation branding for the sign-in page and footer
+         * @description Also says whether first-run setup is still open (`setupRequired`).
+         */
         get: operations["getOrganization"];
-        put?: never;
+        /**
+         * Change the organisation's name, ticket prefix and time zone (admin only)
+         * @description A new prefix applies to new tickets; existing keys never change. A new time zone
+         *     recomputes open tickets' SLA clocks. Error code `invalid_organization` (400, with fields).
+         */
+        put: operations["updateOrganization"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organization/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The organisation's logo (public, for the sign-in page, portal and emails)
+         * @description `v` is the version in `logoUrl`; a new logo gets a new URL, so the image can be cached for good.
+         */
+        get: operations["getOrganizationLogo"];
+        /**
+         * Replace the logo (admin only)
+         * @description PNG, JPEG or WebP, up to 512 KB; no SVG. Error codes `logo_type_not_allowed` (400) and
+         *     `logo_too_large` (413).
+         */
+        put: operations["uploadOrganizationLogo"];
+        post?: never;
+        /** Remove the logo; the organisation's initials show instead (admin only) */
+        delete: operations["removeOrganizationLogo"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1397,9 +1431,26 @@ export interface components {
              * @example Asia/Jakarta
              */
             timezone: string;
-            logoUrl?: string | null;
+            /** @example HD */
+            ticketPrefix: string;
+            /**
+             * @description Where emails link to; set by the APP_URL environment variable on the server.
+             * @example https://helpdesk.example.co.id
+             */
+            appUrl: string;
+            /** @description The logo's versioned URL, relative to the site; null without a logo. */
+            logoUrl: string | null;
             /** @example Data stored in Indonesia · Personal data handled under UU PDP */
-            footerNote?: string | null;
+            footerNote: string | null;
+            /** @description First-run setup is still open (no administrator yet). */
+            setupRequired: boolean;
+        };
+        OrganizationInput: {
+            name: string;
+            /** @description Upper-cased when saved. */
+            ticketPrefix: string;
+            /** @example Asia/Jakarta */
+            timezone: string;
         };
         Me: {
             /** Format: uuid */
@@ -2540,6 +2591,116 @@ export interface operations {
                     "application/json": components["schemas"]["Organization"];
                 };
             };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationInput"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Organization"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOrganizationLogo: {
+        parameters: {
+            query?: {
+                v?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The logo */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    uploadOrganizationLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Organization"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeOrganizationLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Organization"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

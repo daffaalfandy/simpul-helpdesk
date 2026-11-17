@@ -7,20 +7,34 @@ package db
 
 import (
 	"context"
+	"time"
 )
 
+const completeSetup = `-- name: CompleteSetup :exec
+UPDATE organization SET setup_completed_at = coalesce(setup_completed_at, now()) WHERE id
+`
+
+// The first admin exists: first-run setup closes for good.
+func (q *Queries) CompleteSetup(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, completeSetup)
+	return err
+}
+
 const getOrganization = `-- name: GetOrganization :one
-SELECT name, logo_url, ticket_prefix, timezone, footer_note
+SELECT name, ticket_prefix, timezone, footer_note, logo_key, logo_content_type, logo_updated_at, setup_completed_at
 FROM organization
 WHERE id
 `
 
 type GetOrganizationRow struct {
-	Name         string
-	LogoUrl      *string
-	TicketPrefix string
-	Timezone     string
-	FooterNote   *string
+	Name             string
+	TicketPrefix     string
+	Timezone         string
+	FooterNote       *string
+	LogoKey          *string
+	LogoContentType  *string
+	LogoUpdatedAt    *time.Time
+	SetupCompletedAt *time.Time
 }
 
 func (q *Queries) GetOrganization(ctx context.Context) (GetOrganizationRow, error) {
@@ -28,12 +42,34 @@ func (q *Queries) GetOrganization(ctx context.Context) (GetOrganizationRow, erro
 	var i GetOrganizationRow
 	err := row.Scan(
 		&i.Name,
-		&i.LogoUrl,
 		&i.TicketPrefix,
 		&i.Timezone,
 		&i.FooterNote,
+		&i.LogoKey,
+		&i.LogoContentType,
+		&i.LogoUpdatedAt,
+		&i.SetupCompletedAt,
 	)
 	return i, err
+}
+
+const setOrganizationLogo = `-- name: SetOrganizationLogo :exec
+UPDATE organization
+SET logo_key = $1, logo_content_type = $2,
+    logo_updated_at = $3
+WHERE id
+`
+
+type SetOrganizationLogoParams struct {
+	LogoKey         *string
+	LogoContentType *string
+	LogoUpdatedAt   *time.Time
+}
+
+// A NULL key removes the logo.
+func (q *Queries) SetOrganizationLogo(ctx context.Context, arg SetOrganizationLogoParams) error {
+	_, err := q.db.Exec(ctx, setOrganizationLogo, arg.LogoKey, arg.LogoContentType, arg.LogoUpdatedAt)
+	return err
 }
 
 const updateOrganizationProfile = `-- name: UpdateOrganizationProfile :exec
@@ -47,7 +83,25 @@ type UpdateOrganizationProfileParams struct {
 	FooterNote *string
 }
 
+// Seed only: the demo organisation's name and footer.
 func (q *Queries) UpdateOrganizationProfile(ctx context.Context, arg UpdateOrganizationProfileParams) error {
 	_, err := q.db.Exec(ctx, updateOrganizationProfile, arg.Name, arg.FooterNote)
+	return err
+}
+
+const updateOrganizationSettings = `-- name: UpdateOrganizationSettings :exec
+UPDATE organization
+SET name = $1, ticket_prefix = $2, timezone = $3
+WHERE id
+`
+
+type UpdateOrganizationSettingsParams struct {
+	Name         string
+	TicketPrefix string
+	Timezone     string
+}
+
+func (q *Queries) UpdateOrganizationSettings(ctx context.Context, arg UpdateOrganizationSettingsParams) error {
+	_, err := q.db.Exec(ctx, updateOrganizationSettings, arg.Name, arg.TicketPrefix, arg.Timezone)
 	return err
 }

@@ -27,6 +27,7 @@ import {
   useLoadHolidayPreset,
   useUpdateBusinessHours,
 } from './queries'
+import { OrganizationCard } from './OrganizationCard'
 import { ErrorAlert, SectionHeader } from './shared'
 
 /** The API writes the end of the day as "24:00"; a time field shows it as 00:00. */
@@ -51,7 +52,12 @@ export function GeneralPage() {
     <>
       <SectionHeader section="general" />
       {flash && <Alert tone="success">{flash}</Alert>}
-      <BusinessHoursCard onFlash={setFlash} />
+      <div className="flex flex-wrap items-start gap-4">
+        <OrganizationCard onFlash={setFlash} />
+        <div className="flex min-w-0 flex-[1_1_320px] flex-col">
+          <BusinessHoursCard onFlash={setFlash} />
+        </div>
+      </div>
       <HolidaysCard onFlash={setFlash} />
     </>
   )

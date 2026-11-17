@@ -51,7 +51,7 @@ func (s *Service) UpdateBusinessHours(ctx context.Context, actor audit.Actor, in
 		})); err != nil {
 			return err
 		}
-		return s.recompute(ctx, tx)
+		return s.Recompute(ctx, tx)
 	})
 	if err != nil {
 		return Hours{}, err
@@ -122,7 +122,7 @@ func (s *Service) CreateHoliday(ctx context.Context, actor audit.Actor, date cal
 		})); err != nil {
 			return err
 		}
-		return s.recompute(ctx, tx)
+		return s.Recompute(ctx, tx)
 	})
 	if store.IsViolation(err, store.SQLStateUniqueViolation, constraintHolidayDate) {
 		return Holiday{}, apperr.Conflict(apperr.CodeHolidayDateTaken, "That date is already a holiday", date.String())
@@ -144,7 +144,7 @@ func (s *Service) DeleteHoliday(ctx context.Context, actor audit.Actor, id uuid.
 		})); err != nil {
 			return err
 		}
-		return s.recompute(ctx, tx)
+		return s.Recompute(ctx, tx)
 	})
 }
 
@@ -198,7 +198,7 @@ func (s *Service) LoadHolidayPreset(ctx context.Context, actor audit.Actor, year
 		})); err != nil {
 			return err
 		}
-		return s.recompute(ctx, tx)
+		return s.Recompute(ctx, tx)
 	})
 	if err != nil {
 		return PresetLoad{}, err

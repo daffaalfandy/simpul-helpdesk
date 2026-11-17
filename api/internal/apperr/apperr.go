@@ -77,6 +77,9 @@ const (
 	CodeRepositoryMismatch        = "repository_mismatch"
 	CodeInvalidSignature          = "invalid_signature"
 	CodeMonthInFuture             = "month_in_future"
+	CodeInvalidOrganization       = "invalid_organization"
+	CodeLogoTypeNotAllowed        = "logo_type_not_allowed"
+	CodeLogoTooLarge              = "logo_too_large"
 )
 
 // Error is a domain error with a stable machine-readable code.

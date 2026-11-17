@@ -148,14 +148,17 @@ type NotificationPreference struct {
 }
 
 type Organization struct {
-	ID           bool
-	Name         string
-	LogoUrl      *string
-	TicketPrefix string
-	Timezone     string
-	FooterNote   *string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID               bool
+	Name             string
+	TicketPrefix     string
+	Timezone         string
+	FooterNote       *string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	LogoKey          *string
+	LogoContentType  *string
+	LogoUpdatedAt    *time.Time
+	SetupCompletedAt *time.Time
 }
 
 type PasswordResetToken struct {
@@ -327,6 +330,16 @@ type User struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	EmailFrequency    string
+}
+
+type UserInvite struct {
+	ID        uuid.UUID
+	TokenHash []byte
+	UserID    uuid.UUID
+	InvitedBy *uuid.UUID
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	UsedAt    *time.Time
 }
 
 type WebhookDelivery struct {

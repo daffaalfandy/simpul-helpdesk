@@ -37,6 +37,7 @@ paths:
     get:
       operationId: getOrganization
       summary: Public organisation branding for the sign-in page and footer
+      description: Also says whether first-run setup is still open (`setupRequired`).
       tags: [organization]
       security: []
       responses:
@@ -45,6 +46,93 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Organization" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateOrganization
+      summary: Change the organisation's name, ticket prefix and time zone (admin only)
+      description: |
+        A new prefix applies to new tickets; existing keys never change. A new time zone
+        recomputes open tickets' SLA clocks. Error code `invalid_organization` (400, with fields).
+      tags: [organization]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /organization/logo:
+    get:
+      operationId: getOrganizationLogo
+      summary: The organisation's logo (public, for the sign-in page, portal and emails)
+      description: "`v` is the version in `logoUrl`; a new logo gets a new URL, so the image can be cached for good."
+      tags: [organization]
+      security: []
+      parameters:
+        - { name: v, in: query, required: false, schema: { type: string, maxLength: 20 } }
+      responses:
+        "200":
+          description: The logo
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: uploadOrganizationLogo
+      summary: Replace the logo (admin only)
+      description: |
+        PNG, JPEG or WebP, up to 512 KB; no SVG. Error codes `logo_type_not_allowed` (400) and
+        `logo_too_large` (413).
+      tags: [organization]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: removeOrganizationLogo
+      summary: Remove the logo; the organisation's initials show instead (admin only)
+      tags: [organization]
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
   /auth/login:
@@ -1855,18 +1943,40 @@ components:
 
     Organization:
       type: object
-      required: [name, timezone]
+      required: [name, timezone, ticketPrefix, appUrl, logoUrl, footerNote, setupRequired]
       properties:
         name: { type: string, example: Demo Vendor }
         timezone:
           type: string
           description: IANA time zone; times are shown in it.
           example: Asia/Jakarta
-        logoUrl: { type: string, nullable: true }
+        ticketPrefix: { type: string, example: HD }
+        appUrl:
+          type: string
+          description: Where emails link to; set by the APP_URL environment variable on the server.
+          example: https://helpdesk.example.co.id
+        logoUrl:
+          type: string
+          nullable: true
+          description: The logo's versioned URL, relative to the site; null without a logo.
         footerNote:
           type: string
           nullable: true
           example: Data stored in Indonesia · Personal data handled under UU PDP
+        setupRequired:
+          type: boolean
+          description: First-run setup is still open (no administrator yet).
+
+    OrganizationInput:
+      type: object
+      required: [name, ticketPrefix, timezone]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        ticketPrefix:
+          type: string
+          pattern: "^[A-Za-z][A-Za-z0-9]{0,9}$"
+          description: Upper-cased when saved.
+        timezone: { type: string, minLength: 1, maxLength: 64, example: Asia/Jakarta }
 
     Me:
       type: object

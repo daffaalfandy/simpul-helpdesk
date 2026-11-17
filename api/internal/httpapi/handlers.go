@@ -8,17 +8,6 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 )
 
-// GetOrganization returns public branding.
-func (s *server) GetOrganization(ctx context.Context, _ gen.GetOrganizationRequestObject) (gen.GetOrganizationResponseObject, error) {
-	org, err := s.store.Q().GetOrganization(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return gen.GetOrganization200JSONResponse{
-		Name: org.Name, LogoUrl: org.LogoUrl, FooterNote: org.FooterNote, Timezone: org.Timezone,
-	}, nil
-}
-
 // Login signs in and sets the session cookie.
 func (s *server) Login(ctx context.Context, req gen.LoginRequestObject) (gen.LoginResponseObject, error) {
 	p, sess, err := s.auth.Login(ctx, req.Body.Email, req.Body.Password)

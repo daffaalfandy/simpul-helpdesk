@@ -92,6 +92,7 @@ type QuoteData struct {
 // TicketUpdateData fills the ticket_update template: one user's grouped changes to one ticket.
 type TicketUpdateData struct {
 	OrgName      string
+	LogoURL      string // the organisation logo, absolute; empty without one
 	Portal       bool
 	Relation     Relation
 	TicketKey    string
@@ -123,6 +124,7 @@ type DigestTicket struct {
 // DigestData fills the digest template: one user's hourly or daily summary.
 type DigestData struct {
 	OrgName     string
+	LogoURL     string // the organisation logo, absolute; empty without one
 	Portal      bool
 	Daily       bool
 	Count       int
@@ -134,6 +136,7 @@ type DigestData struct {
 // told to the client's contact person (who may have no account).
 type PicBreachData struct {
 	OrgName      string
+	LogoURL      string // the organisation logo, absolute; empty without one
 	ClientName   string
 	TicketKey    string
 	Title        string

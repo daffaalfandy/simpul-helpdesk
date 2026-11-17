@@ -19,6 +19,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notification"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
@@ -309,7 +310,7 @@ func (m *Mailer) render(ctx context.Context, q *db.Queries, user *recipient, row
 	slices.SortStableFunc(rows, func(a, b claimedRow) int { return a.CreatedAt.Compare(b.CreatedAt) })
 
 	if digest {
-		data := mail.DigestData{OrgName: org.Name, Portal: portal, Count: len(rows), SettingsURL: settingsURL,
+		data := mail.DigestData{OrgName: org.Name, LogoURL: organization.LogoURL(m.appURL, org), Portal: portal, Count: len(rows), SettingsURL: settingsURL,
 			Daily: notification.Frequency(user.EmailFrequency) == notification.FrequencyDaily}
 		index := map[uuid.UUID]int{}
 		for _, r := range rows {
@@ -333,7 +334,7 @@ func (m *Mailer) render(ctx context.Context, q *db.Queries, user *recipient, row
 	t := byTicket[rows[0].TicketID]
 	main := mainRow(rows)
 	data := mail.TicketUpdateData{
-		OrgName: org.Name, Portal: portal, TicketKey: t.Key, Title: t.Subject, Priority: t.Priority, PriorityName: t.PriorityName,
+		OrgName: org.Name, LogoURL: organization.LogoURL(m.appURL, org), Portal: portal, TicketKey: t.Key, Title: t.Subject, Priority: t.Priority, PriorityName: t.PriorityName,
 		ProjectName: t.ProjectName, Main: f.notice(main), TicketURL: m.ticketURL(portal, t.Key), SettingsURL: settingsURL,
 		Relation: relation(user, t, main),
 	}
@@ -599,7 +600,7 @@ func (w *PicEmailWorker) Work(ctx context.Context, job *river.Job[notification.P
 		name = *c.PicName
 	}
 	msg, err := mail.Render(mail.TemplatePicBreach, *c.PicEmail, name, mail.PicBreachData{
-		OrgName: org.Name, ClientName: c.ClientName, TicketKey: c.Key, Title: c.Subject, Priority: c.Priority,
+		OrgName: org.Name, LogoURL: organization.LogoURL(w.m.appURL, org), ClientName: c.ClientName, TicketKey: c.Key, Title: c.Subject, Priority: c.Priority,
 		PriorityName: c.PriorityName, ProjectName: c.ProjectName, TargetValue: eff.Resolution.Value,
 		TargetUnit: string(eff.Resolution.Unit), PassedAt: f.time(*c.ResolutionBreachedAt), TicketURL: w.m.ticketURL(true, c.Key),
 	})

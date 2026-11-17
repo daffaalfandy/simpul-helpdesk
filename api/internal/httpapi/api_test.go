@@ -30,6 +30,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notifications"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/reports"
@@ -129,7 +130,7 @@ func newEnv(t *testing.T) *env {
 		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st), SLA: slaSvc,
 		Catalog: catalog.NewService(st), Projects: projects.NewService(st, slaSvc), Priorities: priorities.NewService(st),
 		Tickets: ticketSvc, Notifications: notifications.NewService(st), Connector: connectorSvc,
-		Reports: reports.NewService(st), Logger: log,
+		Reports: reports.NewService(st), Organization: organization.NewService(st, files, slaSvc), Logger: log,
 		WebUI: fstest.MapFS{"index.html": {Data: []byte(spaMarker)}, "assets/app.js": {Data: []byte("//js")}},
 	})
 	if err != nil {

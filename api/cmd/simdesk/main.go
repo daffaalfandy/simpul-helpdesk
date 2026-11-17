@@ -32,6 +32,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notifications"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/reports"
@@ -152,6 +153,7 @@ type app struct {
 	notifications *notifications.Service
 	connector     *connector.Service
 	reports       *reports.Service
+	organization  *organization.Service
 	files         storage.Store
 }
 
@@ -239,6 +241,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 		notifications: notifications.NewService(st),
 		connector:     connectorSvc,
 		reports:       reports.NewService(st),
+		organization:  organization.NewService(st, files, slaSvc),
 	}, nil
 }
 
@@ -264,7 +267,7 @@ func runServe(ctx context.Context, args []string) error {
 	handler, err := httpapi.New(httpapi.Deps{
 		Config: a.cfg, Store: a.store, Auth: a.auth, Clients: a.clients, SLA: a.sla, Catalog: a.catalog,
 		Projects: a.projects, Priorities: a.priorities, Tickets: a.tickets, Notifications: a.notifications,
-		Connector: a.connector, Reports: a.reports, Logger: a.log, WebUI: webui.FS(),
+		Connector: a.connector, Reports: a.reports, Organization: a.organization, Logger: a.log, WebUI: webui.FS(),
 	})
 	if err != nil {
 		return err

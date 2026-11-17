@@ -27,6 +27,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notifications"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/reports"
@@ -48,6 +49,7 @@ type Deps struct {
 	Notifications *notifications.Service
 	Connector     *connector.Service
 	Reports       *reports.Service
+	Organization  *organization.Service
 	Logger        *slog.Logger
 	WebUI         fs.FS // built SPA; may be empty in development
 }
@@ -65,6 +67,7 @@ type server struct {
 	notifications *notifications.Service
 	connector     *connector.Service
 	reports       *reports.Service
+	organization  *organization.Service
 	log           *slog.Logger
 	cookieName    string
 }
@@ -79,7 +82,7 @@ func New(d Deps) (http.Handler, error) {
 	s := &server{
 		cfg: d.Config, store: d.Store, auth: d.Auth, clients: d.Clients, sla: d.SLA, catalog: d.Catalog,
 		projects: d.Projects, priorities: d.Priorities, tickets: d.Tickets, notifications: d.Notifications,
-		connector: d.Connector, reports: d.Reports, log: d.Logger,
+		connector: d.Connector, reports: d.Reports, organization: d.Organization, log: d.Logger,
 		cookieName: cookieName(d.Config.CookieSecure),
 	}
 	raw := rawBodyRoutes(spec)

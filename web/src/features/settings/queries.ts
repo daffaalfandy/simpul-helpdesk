@@ -1,6 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import type { BusinessHoursInput, CatalogItemInput, ClientInput, PriorityLevel } from '../../api/client'
+import type { BusinessHoursInput, CatalogItemInput, ClientInput, OrganizationInput, PriorityLevel } from '../../api/client'
 import { api } from '../../api/client'
 import { clientsQueryOptions, queryKeys, useInvalidate } from '../../api/queries'
 import { unwrap } from '../../api/unwrap'
@@ -72,6 +72,45 @@ export function useSavePriorityLevels() {
   return useMutation({
     mutationFn: (levels: PriorityLevel[]) => unwrap(api.PUT('/priorities', { body: levels })),
     onSuccess: (levels) => queryClient.setQueryData(queryKeys.priorities, levels),
+  })
+}
+
+/** Saves Settings › General; the header, footer and portal read the organisation from the cache. */
+export function useUpdateOrganization() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: OrganizationInput) => unwrap(api.PUT('/organization', { body })),
+    onSuccess: (org) => queryClient.setQueryData(queryKeys.organization, org),
+  })
+}
+
+/** The multipart field the API reads the logo from. */
+const LOGO_FORM_FIELD = 'file'
+
+export function useUploadLogo() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) =>
+      unwrap(
+        api.PUT('/organization/logo', {
+          // openapi-typescript types `format: binary` as string; the serializer sends the real File.
+          body: { file: file as unknown as string },
+          bodySerializer: () => {
+            const form = new FormData()
+            form.append(LOGO_FORM_FIELD, file, file.name)
+            return form
+          },
+        }),
+      ),
+    onSuccess: (org) => queryClient.setQueryData(queryKeys.organization, org),
+  })
+}
+
+export function useRemoveLogo() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => unwrap(api.DELETE('/organization/logo')),
+    onSuccess: (org) => queryClient.setQueryData(queryKeys.organization, org),
   })
 }
 

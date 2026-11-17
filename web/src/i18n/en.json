@@ -396,7 +396,7 @@
     "sections": {
       "general": {
         "title": "General",
-        "description": "Business hours and holidays that SLA timers run on."
+        "description": "Organisation name, logo, app URL, time zone and business hours."
       },
       "members": {
         "title": "Members & roles",
@@ -719,6 +719,34 @@
         "github": "GitHub must be able to reach this address, so the install has to be reachable from the internet.",
         "gitlab": "Your GitLab must be able to reach this address."
       }
+    },
+    "general": {
+      "title": "Organisation",
+      "name": "Organisation name",
+      "nameRequired": "Enter the organisation's name.",
+      "appUrl": "App URL",
+      "appUrlHint": "Links in emails start here. Set by APP_URL on the server.",
+      "prefix": "Ticket ID prefix",
+      "prefixHint": "New tickets get it, e.g. HD-24871. Existing tickets keep their IDs.",
+      "prefixInvalid": "Use a letter, then up to 9 letters or digits.",
+      "timezone": "Time zone",
+      "timezoneHint": "Every time is shown in it, and business hours follow it.",
+      "noZone": "No time zone matches.",
+      "zones": {
+        "wib": "Asia/Jakarta (WIB, UTC+7)",
+        "wita": "Asia/Makassar (WITA, UTC+8)",
+        "wit": "Asia/Jayapura (WIT, UTC+9)"
+      },
+      "unsaved": "Unsaved changes to the organisation",
+      "saved": "Organisation saved.",
+      "noLogo": "Your logo",
+      "logoAlt": "{{name}} logo",
+      "uploadLogo": "Upload logo",
+      "replaceLogo": "Replace logo",
+      "removeLogo": "Remove",
+      "logoHint": "Shown on the sign-in page, the client portal and emails. PNG, JPEG or WebP, up to {{size}}.",
+      "logoSaved": "Logo saved.",
+      "logoRemoved": "Logo removed. Your organisation's initials show instead."
     }
   },
   "priority": {
@@ -823,7 +851,10 @@
     "dod_override_not_allowed": "This project doesn't let agents change a ticket's Definition of Done.",
     "uat_not_waiting": "This ticket isn't waiting for your test any more. Someone may have answered already.",
     "reopen_not_allowed": "This ticket can no longer be reopened. Report a new issue instead.",
-    "month_in_future": "That month hasn't started yet."
+    "month_in_future": "That month hasn't started yet.",
+    "invalid_organization": "Some settings aren't valid. Check the fields and try again.",
+    "logo_type_not_allowed": "Choose a PNG, JPEG or WebP image.",
+    "logo_too_large": "The logo is too large. Choose an image up to 512 KB."
   },
   "time": {
     "justNow": "Just now",
