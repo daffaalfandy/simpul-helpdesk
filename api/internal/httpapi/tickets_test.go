@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/testdb"
@@ -782,17 +783,22 @@ func TestCatalogAndIntake(t *testing.T) {
 func TestRequestersAndAssignees(t *testing.T) {
 	te := newTicketEnv(t)
 	base := "/clients/" + te.clientA.String()
-	r := decode[gen.Requester](t, te.agent.do(http.MethodPost, base+"/requesters", gen.RequesterInput{
-		Name: "Siti Rahma", Email: " Siti@Kominfo-Jambi.test "}), http.StatusCreated)
-	if r.Status != gen.UserStatusInvited || r.Email != "siti@kominfo-jambi.test" {
+	const siti = "siti@kominfo-jambi.test"
+	in := gen.RequesterInput{Name: "Siti Rahma", Email: " Siti@Kominfo-Jambi.test "}
+	// Only administrators invite requesters (owner, 17 Nov).
+	for _, s := range []session{te.agent, te.supervisor} {
+		expectProblem(t, s.do(http.MethodPost, base+"/requesters", in), http.StatusForbidden, apperr.CodeForbidden)
+	}
+	r := decode[gen.Requester](t, te.admin.do(http.MethodPost, base+"/requesters", in), http.StatusCreated)
+	if r.Status != gen.UserStatusInvited || r.Email != siti {
 		t.Fatalf("requester = %+v", r)
 	}
-	if rec := te.login("siti@kominfo-jambi.test", password); rec.Code != http.StatusUnauthorized {
+	if rec := te.login(siti, password); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("invited user signs in: %d", rec.Code)
 	}
-	expectProblem(t, te.agent.do(http.MethodPost, base+"/requesters", gen.RequesterInput{Name: "Again", Email: "siti@kominfo-jambi.test"}),
+	expectProblem(t, te.admin.do(http.MethodPost, base+"/requesters", gen.RequesterInput{Name: "Again", Email: siti}),
 		http.StatusConflict, "email_taken")
-	expectProblem(t, te.agent.do(http.MethodPost, base+"/requesters", gen.RequesterInput{Name: "No email", Email: "nope"}),
+	expectProblem(t, te.admin.do(http.MethodPost, base+"/requesters", gen.RequesterInput{Name: "No email", Email: "nope"}),
 		http.StatusBadRequest, "invalid_email")
 	list := decode[[]gen.Requester](t, te.agent.do(http.MethodGet, base+"/requesters", nil), http.StatusOK)
 	if len(list) != 2 {
@@ -800,6 +806,25 @@ func TestRequestersAndAssignees(t *testing.T) {
 	}
 	// A new requester can be named on a ticket straight away.
 	te.agent.logFor(t, te.clientA, r.Id, incident(te.projectA, "Phoned in"))
+
+	// The invite email sets their password and lands them on the portal as the client's staff.
+	accepted := te.acceptInvite(te.inviteToken(t, siti), invitePassword)
+	if accepted.code != http.StatusOK || !strings.Contains(accepted.body, `"role":"requester"`) {
+		t.Fatalf("accept: %d %s", accepted.code, accepted.body)
+	}
+
+	// Suspended requesters drop out of the picker; the administrator still sees them.
+	if rec := te.admin.do(http.MethodPost, "/members/"+r.Id.String()+"/suspend", nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("suspend: %d %s", rec.Code, rec.Body)
+	}
+	if got := decode[[]gen.Requester](t, te.agent.do(http.MethodGet, base+"/requesters", nil), http.StatusOK); len(got) != 1 {
+		t.Fatalf("picker after suspending = %+v", got)
+	}
+	expectProblem(t, te.agent.do(http.MethodGet, base+"/requesters?includeSuspended=true", nil), http.StatusForbidden, apperr.CodeForbidden)
+	all := decode[[]gen.Requester](t, te.admin.do(http.MethodGet, base+"/requesters?includeSuspended=true", nil), http.StatusOK)
+	if i := slices.IndexFunc(all, func(x gen.Requester) bool { return x.Id == r.Id }); len(all) != 2 || i < 0 || all[i].Status != gen.UserStatusSuspended {
+		t.Fatalf("admin list = %+v", all)
+	}
 
 	names := []string{}
 	for _, a := range decode[[]gen.Assignee](t, te.agent.do(http.MethodGet, base+"/assignees", nil), http.StatusOK) {

@@ -661,14 +661,17 @@ export const ticketsHandlers = [
     const a: Attachment = { id: newId('a'), filename: 'upload', contentType: upload.type, sizeBytes: upload.size, createdAt: new Date().toISOString() }
     return HttpResponse.json(a, { status: 201 })
   }),
-  http.get(`${API}/clients/:id/requesters`, ({ params }) => HttpResponse.json(tickets.requesters[String(params.id)] ?? [])),
+  http.get(`${API}/clients/:id/requesters`, ({ request, params }) => {
+    const all = new URL(request.url).searchParams.get('includeSuspended') === 'true'
+    return HttpResponse.json((tickets.requesters[String(params.id)] ?? []).filter((r) => all || r.status !== 'suspended'))
+  }),
   http.post(`${API}/clients/:id/requesters`, async ({ request, params }) => {
-    const body = (await record(request)) as { name: string; email: string }
+    const body = (await record(request)) as { name: string; email: string; jobTitle?: string | null }
     const list = (tickets.requesters[String(params.id)] ??= [])
     if (Object.values(tickets.requesters).flat().some((r) => r.email === body.email.toLowerCase())) {
       return problem(409, 'email_taken')
     }
-    const r: Requester = { id: newId('r'), name: body.name, email: body.email.toLowerCase(), jobTitle: null, status: 'invited' }
+    const r: Requester = { id: newId('r'), name: body.name, email: body.email.toLowerCase(), jobTitle: body.jobTitle ?? null, status: 'invited' }
     list.push(r)
     return HttpResponse.json(r, { status: 201 })
   }),

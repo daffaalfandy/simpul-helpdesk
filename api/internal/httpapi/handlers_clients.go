@@ -112,7 +112,7 @@ func (s *server) ListClientRequesters(ctx context.Context, req gen.ListClientReq
 	if err != nil {
 		return nil, err
 	}
-	list, err := s.clients.Requesters(ctx, p, req.ClientId)
+	list, err := s.clients.Requesters(ctx, p, req.ClientId, req.Params.IncludeSuspended != nil && *req.Params.IncludeSuspended)
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +123,13 @@ func (s *server) ListClientRequesters(ctx context.Context, req gen.ListClientReq
 	return out, nil
 }
 
-// CreateClientRequester adds an invited requester to a client.
+// CreateClientRequester invites a requester to a client (administrators).
 func (s *server) CreateClientRequester(ctx context.Context, req gen.CreateClientRequesterRequestObject) (gen.CreateClientRequesterResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapAgentApp)
+	p, err := auth.Require(ctx, auth.CapUsersManage)
 	if err != nil {
 		return nil, err
 	}
-	r, err := s.clients.CreateRequester(ctx, p, req.ClientId, clients.RequesterInput{
+	r, err := s.clients.InviteRequester(ctx, p, req.ClientId, clients.RequesterInput{
 		Name: req.Body.Name, Email: req.Body.Email, JobTitle: req.Body.JobTitle,
 	})
 	if err != nil {

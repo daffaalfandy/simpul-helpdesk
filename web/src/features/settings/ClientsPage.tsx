@@ -17,6 +17,7 @@ import { TextInput } from '../../components/TextInput'
 import { formatMonthYear, formatPeriod } from '../../lib/dates'
 import { Roles } from '../../lib/roles'
 import { clientsQueryOptions, useDeleteClient, usersQueryOptions, useSaveClient } from './queries'
+import { RequestersDialog } from './RequestersDialog'
 import { ErrorAlert, SectionHeader } from './shared'
 
 const ACTIVE = 'active'
@@ -26,6 +27,7 @@ export function ClientsPage() {
   const { data: clients } = useSuspenseQuery(clientsQueryOptions)
   const [flash, setFlash] = useState<string | null>(null)
   const [editing, setEditing] = useState<Client | 'new' | null>(null)
+  const [requestersOf, setRequestersOf] = useState<Client | null>(null)
 
   const open = (target: Client | 'new') => {
     setFlash(null)
@@ -50,9 +52,17 @@ export function ClientsPage() {
         </>
       ) : (
         <Card as="h3" title={t('settings.clients.cardTitle')} actions={addButton}>
-          <ClientsTable clients={clients} onEdit={open} />
+          <ClientsTable
+            clients={clients}
+            onEdit={open}
+            onRequesters={(c) => {
+              setFlash(null)
+              setRequestersOf(c)
+            }}
+          />
         </Card>
       )}
+      {requestersOf && <RequestersDialog client={requestersOf} onClose={() => setRequestersOf(null)} />}
       {editing && (
         <ClientDialog
           client={editing === 'new' ? null : editing}
@@ -67,7 +77,9 @@ export function ClientsPage() {
   )
 }
 
-function ClientsTable({ clients, onEdit }: { clients: Client[]; onEdit: (c: Client) => void }) {
+type ClientsTableProps = { clients: Client[]; onEdit: (c: Client) => void; onRequesters: (c: Client) => void }
+
+function ClientsTable({ clients, onEdit, onRequesters }: ClientsTableProps) {
   const { t } = useTranslation()
   const period = (c: Client) => {
     if (c.contractStart && c.contractEnd) return formatPeriod(c.contractStart, c.contractEnd)
@@ -106,14 +118,24 @@ function ClientsTable({ clients, onEdit }: { clients: Client[]; onEdit: (c: Clie
             <Td className="tabular-nums">{c.requesterCount}</Td>
             <Td>{c.picName ?? t('common.none')}</Td>
             <Td className="text-right">
-              <Button
-                variant="outline"
-                size="sm"
-                onPress={() => onEdit(c)}
-                aria-label={t('settings.clients.editLabel', { name: c.name })}
-              >
-                {t('common.edit')}
-              </Button>
+              <span className="inline-flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onPress={() => onRequesters(c)}
+                  aria-label={t('settings.clients.requestersLabel', { name: c.name })}
+                >
+                  {t('settings.clients.requestersButton')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onPress={() => onEdit(c)}
+                  aria-label={t('settings.clients.editLabel', { name: c.name })}
+                >
+                  {t('common.edit')}
+                </Button>
+              </span>
             </Td>
           </tr>
         ))}

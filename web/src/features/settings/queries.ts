@@ -7,6 +7,7 @@ import type {
   MemberInvite,
   OrganizationInput,
   PriorityLevel,
+  RequesterInput,
   StaffRole,
 } from '../../api/client'
 import { api } from '../../api/client'
@@ -145,6 +146,24 @@ export function useChangeMemberRole() {
 }
 
 /** What an admin can do to someone's access from the member list (or a client's requesters). */
+/** A client's requesters for the administrator: suspended ones too, so they can be let back in. */
+export const clientRequestersAdminQueryOptions = (clientId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.clientRequesters(clientId), 'withSuspended'] as const,
+    queryFn: () =>
+      unwrap(api.GET('/clients/{clientId}/requesters', { params: { path: { clientId }, query: { includeSuspended: true } } })),
+  })
+
+/** Invites a requester to a client; they get an email to set their password. */
+export function useInviteRequester(clientId: string) {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (body: RequesterInput) =>
+      unwrap(api.POST('/clients/{clientId}/requesters', { params: { path: { clientId } }, body })),
+    onSuccess: () => invalidate(queryKeys.clients),
+  })
+}
+
 export type MemberAction = 'suspend' | 'reactivate' | 'invite'
 
 export function useMemberAction() {

@@ -116,9 +116,8 @@ describe('Avatar', () => {
 })
 
 describe('SearchSelect', () => {
-  it('filters by any text and offers an action for new entries', async () => {
+  it('filters by any text', async () => {
     const user = userEvent.setup()
-    const onAction = vi.fn()
     const onChange = vi.fn()
     render(
       <SearchSelect
@@ -130,14 +129,12 @@ describe('SearchSelect', () => {
         ]}
         value={null}
         onChange={onChange}
-        action={{ label: (q) => `Add ${q}`, onAction }}
       />,
     )
     await user.type(screen.getByRole('combobox', { name: 'Requester' }), 'dian@')
     expect(await screen.findByRole('option', { name: 'Dian Puspita' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: 'Hendra Gunawan' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('option', { name: 'Add dian@' }))
-    expect(onAction).toHaveBeenCalledWith('dian@')
-    expect(onChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('option', { name: 'Dian Puspita' }))
+    expect(onChange).toHaveBeenCalledWith('d')
   })
 })

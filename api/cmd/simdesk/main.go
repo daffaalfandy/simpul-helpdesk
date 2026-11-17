@@ -230,10 +230,11 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	}
 	late.JobInserter = jobs
 	hasher := auth.NewHasher(auth.DefaultParams, auth.DefaultMaxConcurrentHashes)
+	authSvc := auth.NewService(st, hasher, jobs, opts, log)
 	return &app{
 		cfg: cfg, log: log, store: st, hasher: hasher, jobs: jobs, files: files,
-		auth:          auth.NewService(st, hasher, jobs, opts, log),
-		clients:       clients.NewService(st),
+		auth:          authSvc,
+		clients:       clients.NewService(st, authSvc),
 		sla:           slaSvc,
 		catalog:       catalog.NewService(st),
 		projects:      projects.NewService(st, slaSvc),

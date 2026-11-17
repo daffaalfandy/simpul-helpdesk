@@ -3,6 +3,7 @@ package clients
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -25,13 +26,15 @@ const (
 const (
 	dataRole   = "role"
 	dataClient = "client_id"
-	dataStatus = "status"
 )
 
 const constraintUserEmail = "users_email_key"
 
 // listedRequesterStatuses are the requesters a ticket can name: suspended people are left out.
 var listedRequesterStatuses = []string{string(auth.UserStatusActive), string(auth.UserStatusInvited)}
+
+// allRequesterStatuses adds the suspended, for the administrator managing a client's requesters.
+var allRequesterStatuses = append(slices.Clone(listedRequesterStatuses), string(auth.UserStatusSuspended))
 
 // Requester is a member of a client's staff who reports tickets.
 type Requester struct {
@@ -57,14 +60,22 @@ type Assignee struct {
 	OpenTickets int
 }
 
-// Requesters lists a client's active and invited requesters, by name.
-func (s *Service) Requesters(ctx context.Context, p *auth.Principal, clientID uuid.UUID) ([]Requester, error) {
+// Requesters lists a client's active and invited requesters, by name; with includeSuspended
+// (administrators only) the suspended ones too.
+func (s *Service) Requesters(ctx context.Context, p *auth.Principal, clientID uuid.UUID, includeSuspended bool) ([]Requester, error) {
+	statuses := listedRequesterStatuses
+	if includeSuspended {
+		if !auth.Can(p.Role, auth.CapUsersManage) {
+			return nil, apperr.Forbidden()
+		}
+		statuses = allRequesterStatuses
+	}
 	q := s.store.Q()
 	if _, err := get(ctx, q, clientID, AgentScope(p)); err != nil {
 		return nil, err
 	}
 	rows, err := q.ListClientRequesters(ctx, db.ListClientRequestersParams{
-		ClientID: &clientID, Role: string(auth.RoleRequester), Statuses: listedRequesterStatuses,
+		ClientID: &clientID, Role: string(auth.RoleRequester), Statuses: statuses,
 	})
 	if err != nil {
 		return nil, err
@@ -78,9 +89,9 @@ func (s *Service) Requesters(ctx context.Context, p *auth.Principal, clientID uu
 	return out, nil
 }
 
-// CreateRequester adds a requester to a client, for agents logging a call from someone new.
-// The user is invited without a password, so they can't sign in until an invite sets one.
-func (s *Service) CreateRequester(ctx context.Context, p *auth.Principal, clientID uuid.UUID, in RequesterInput) (Requester, error) {
+// InviteRequester adds a requester to a client and emails them the link to set their password.
+// Only administrators invite requesters (owner, 17 Nov); the handler checks that.
+func (s *Service) InviteRequester(ctx context.Context, p *auth.Principal, clientID uuid.UUID, in RequesterInput) (Requester, error) {
 	in, err := normalizeRequester(in)
 	if err != nil {
 		return Requester{}, err
@@ -98,9 +109,12 @@ func (s *Service) CreateRequester(ctx context.Context, p *auth.Principal, client
 			return err
 		}
 		out.ID = id
-		return audit.Write(ctx, tx.Q, p.AuditActor().Entry(auth.ActionUserCreated, auth.TargetUser, &id, map[string]any{
-			dataRole: auth.RoleRequester, dataClient: clientID, dataStatus: auth.UserStatusInvited,
-		}))
+		if err := audit.Write(ctx, tx.Q, p.AuditActor().Entry(auth.ActionUserInvited, auth.TargetUser, &id, map[string]any{
+			dataRole: auth.RoleRequester, dataClient: clientID,
+		})); err != nil {
+			return err
+		}
+		return s.inviter.QueueInvite(ctx, tx, id, &p.UserID)
 	})
 	if store.IsViolation(err, store.SQLStateUniqueViolation, constraintUserEmail) {
 		return Requester{}, apperr.Conflict(apperr.CodeEmailTaken, "Someone already uses this email address", "")

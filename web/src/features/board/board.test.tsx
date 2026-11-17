@@ -246,28 +246,13 @@ describe('board', () => {
     expect(screen.getByRole('link', { name: 'Open HD-24892' })).toHaveAttribute('href', '/tickets/HD-24892')
   })
 
-  it('adds a new requester inline', async () => {
+  it('points to the administrator for someone not listed', async () => {
     const { user, dialog } = await openDialog()
     await user.click(within(dialog).getByRole('button', { name: /Client$/ }))
     await user.click(await screen.findByRole('option', { name: /Dinas Kominfo Jambi/ }))
     await user.type(within(dialog).getByRole('combobox', { name: 'Requester' }), 'Siti Rahma')
-    await user.click(await screen.findByRole('option', { name: 'Add “Siti Rahma” as a new requester' }))
-
-    const group = within(dialog).getByRole('group', { name: 'New requester' })
-    expect(within(group).getByRole('textbox', { name: 'Name' })).toHaveValue('Siti Rahma')
-    const email = within(group).getByRole('textbox', { name: 'Email' })
-    await user.click(within(group).getByRole('button', { name: 'Add requester' }))
-    expect(await within(group).findByText('Enter a valid email address.')).toBeInTheDocument()
-
-    await user.type(email, 'hendra@kominfo-jambi.test')
-    await user.click(within(group).getByRole('button', { name: 'Add requester' }))
-    expect(await within(group).findByText('Someone already uses this email address.')).toBeInTheDocument()
-
-    await user.clear(email)
-    await user.type(email, 'siti@kominfo-jambi.test')
-    await user.click(within(group).getByRole('button', { name: 'Add requester' }))
-    await waitFor(() => expect(within(dialog).getByRole('combobox', { name: 'Requester' })).toHaveValue('Siti Rahma'))
-    expect(lastRequest('POST', `/clients/${IDS.jambi}/requesters`)?.body).toEqual({ name: 'Siti Rahma', email: 'siti@kominfo-jambi.test' })
+    expect(await screen.findByText('Not listed? Ask an administrator to invite them in Settings › Clients.')).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /Siti/ })).not.toBeInTheDocument()
   })
 
   it('clears the requester when the client changes', async () => {

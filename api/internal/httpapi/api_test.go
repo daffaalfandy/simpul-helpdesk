@@ -130,7 +130,7 @@ func newEnv(t *testing.T) *env {
 	late.JobInserter = jobs
 	svc := auth.NewService(st, auth.NewHasher(cheapParams, auth.DefaultMaxConcurrentHashes), jobs, auth.DefaultOptions(), log)
 	h, err := httpapi.New(httpapi.Deps{
-		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st), SLA: slaSvc,
+		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st, svc), SLA: slaSvc,
 		Catalog: catalog.NewService(st), Projects: projects.NewService(st, slaSvc), Priorities: priorities.NewService(st),
 		Tickets: ticketSvc, Notifications: notifications.NewService(st), Connector: connectorSvc,
 		Reports: reports.NewService(st), Organization: organization.NewService(st, files, slaSvc), Logger: log,

@@ -129,14 +129,7 @@
       "requester": "Requester",
       "requesterPlaceholder": "Name or email",
       "chooseClientFirst": "Choose a client first.",
-      "noRequesters": "No requester matches.",
-      "addRequester": "Add “{{query}}” as a new requester",
-      "newRequester": "New requester",
-      "newRequesterHelp": "They're added to the client's requesters and can be invited to the portal later.",
-      "newName": "Name",
-      "newEmail": "Email",
-      "addRequesterButton": "Add requester",
-      "pickExisting": "Pick an existing requester instead",
+      "noRequesters": "Not listed? Ask an administrator to invite them in Settings › Clients.",
       "channel": "Received via",
       "priority": "Priority",
       "priorityOption": "Reply {{response}} · fix {{fix}}",
@@ -153,8 +146,6 @@
       "errors": {
         "client": "Choose a client.",
         "requester": "Choose who reported this.",
-        "name": "Enter the requester's name.",
-        "email": "Enter a valid email address.",
         "system": "Choose a system.",
         "item": "Choose what they need.",
         "subject": "Enter a short subject.",
@@ -491,6 +482,8 @@
         "actions": "Actions"
       },
       "editLabel": "Edit {{name}}",
+      "requestersButton": "Requesters",
+      "requestersLabel": "Requesters of {{name}}",
       "from": "From {{date}}",
       "until": "Until {{date}}",
       "emptyTitle": "No clients yet",
@@ -514,7 +507,17 @@
       "created": "{{name}} added.",
       "saved": "{{name}} saved.",
       "deleted": "{{name}} deleted.",
-      "noProjects": "No projects yet"
+      "noProjects": "No projects yet",
+      "requesters": {
+        "title": "Requesters at {{name}}",
+        "subtitle": "Client staff who report and follow tickets on the portal. Only administrators invite them.",
+        "listLabel": "Requesters at {{name}}",
+        "empty": "No requesters yet. Invite the first one below.",
+        "inviteTitle": "Invite a requester",
+        "inviteHint": "They get an email with a link to set their password. The link works once, for 7 days.",
+        "jobTitleHint": "Optional, e.g. IT Officer.",
+        "suspendBody": "They are signed out at once and can’t sign in or be named on new tickets until reactivated. Their tickets stay as they are."
+      }
     },
     "catalog": {
       "items": {

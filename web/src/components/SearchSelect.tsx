@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Plus } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import { useState, type Key, type ReactNode } from 'react'
 import {
   Button,
@@ -30,15 +30,11 @@ type SearchSelectProps<K extends string> = {
   isRequired?: boolean
   isInvalid?: boolean
   errorMessage?: string
-  /** A last row that acts on the typed text, e.g. 'Add "Siti" as a new requester'. */
-  action?: { label: (query: string) => string; onAction: (query: string) => void }
   /** Called as the user types, for lists the server narrows. */
   onQueryChange?: (query: string) => void
 }
 
-const ACTION_KEY = '__search-select-action__'
-
-type Row = { id: string; label: string; description?: string; isAction?: boolean }
+type Row = { id: string; label: string; description?: string }
 
 /**
  * Searchable dropdown (React Aria ComboBox) for long lists such as a client's requesters.
@@ -56,7 +52,6 @@ export function SearchSelect<K extends string>({
   isRequired,
   isInvalid,
   errorMessage,
-  action,
   onQueryChange,
 }: SearchSelectProps<K>) {
   const selected = options.find((o) => o.id === value)
@@ -65,15 +60,8 @@ export function SearchSelect<K extends string>({
   const typed = query.trim()
   const showAll = typed === '' || typed === selected?.label
   const rows: Row[] = options.filter((o) => showAll || contains(o.searchText ?? o.label, typed))
-  if (action && typed !== '' && !showAll) rows.push({ id: ACTION_KEY, label: action.label(typed), isAction: true })
 
-  const select = (key: Key | null) => {
-    if (key === ACTION_KEY) {
-      action?.onAction(typed)
-      return
-    }
-    onChange(key === null ? null : (String(key) as K))
-  }
+  const select = (key: Key | null) => onChange(key === null ? null : (String(key) as K))
 
   return (
     <ComboBox
@@ -123,15 +111,11 @@ export function SearchSelect<K extends string>({
               className={cx(
                 'group/option flex min-h-(--control-h-md) cursor-pointer items-center justify-between gap-3',
                 'rounded-md px-3 py-2 text-ink outline-none data-focused:bg-surface-subtle data-selected:bg-primary-tint',
-                row.isAction && 'border-t border-border font-bold text-primary',
               )}
             >
-              <span className="flex items-center gap-2">
-                {row.isAction && <Plus aria-hidden="true" className="size-(--icon-md)" />}
-                <span className="flex flex-col">
-                  <span className={row.isAction ? '' : 'font-bold'}>{row.label}</span>
-                  {row.description && <span className="text-xs text-muted">{row.description}</span>}
-                </span>
+              <span className="flex flex-col">
+                <span className="font-bold">{row.label}</span>
+                {row.description && <span className="text-xs text-muted">{row.description}</span>}
               </span>
               <Check aria-hidden="true" className="hidden size-(--icon-md) shrink-0 text-primary group-data-selected/option:block" />
             </ListBoxItem>

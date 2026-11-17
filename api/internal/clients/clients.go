@@ -84,10 +84,19 @@ type Input struct {
 }
 
 type Service struct {
-	store *store.Store
+	store   *store.Store
+	inviter Inviter
 }
 
-func NewService(st *store.Store) *Service { return &Service{store: st} }
+// Inviter emails a new user the link to set their password, from inside the transaction that
+// created them (auth.Service).
+type Inviter interface {
+	QueueInvite(ctx context.Context, tx store.Tx, userID uuid.UUID, by *uuid.UUID) error
+}
+
+func NewService(st *store.Store, inviter Inviter) *Service {
+	return &Service{store: st, inviter: inviter}
+}
 
 // AgentScope returns the agent filter for p: nil when p sees every client. Anything scoped by
 // client (projects, tickets) filters on it the same way.

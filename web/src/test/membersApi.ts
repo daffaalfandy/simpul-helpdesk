@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
 
 import type { Member, MemberInvite, Members, StaffRole } from '../api/client'
+import { tickets } from './ticketsApi'
 
 const API = '*/api/v1'
 
@@ -74,8 +75,13 @@ export const membersHandlers = [
     members.actions.push(`role:${m.name}:${role}`)
     return new HttpResponse(null, { status: 204 })
   }),
+  // The actions work for client requesters too (Settings › Clients).
   http.post(`${API}/members/:id/:action`, ({ params }) => {
-    const m = members.team.find((x) => x.id === params.id)
+    const people: Array<Pick<Member, 'id' | 'name' | 'status'> & { lastLoginAt?: string | null; inviteSentAt?: string | null }> = [
+      ...members.team,
+      ...Object.values(tickets.requesters).flat(),
+    ]
+    const m = people.find((x) => x.id === params.id)
     if (!m) return problem(404, 'not_found')
     members.actions.push(`${String(params.action)}:${m.name}`)
     switch (params.action) {
@@ -83,7 +89,7 @@ export const membersHandlers = [
         m.status = 'suspended'
         break
       case 'reactivate':
-        m.status = m.lastLoginAt ? 'active' : 'invited'
+        m.status = m.lastLoginAt === null ? 'invited' : 'active'
         break
       case 'invite':
         if (m.status !== 'invited') return problem(409, 'not_invited')

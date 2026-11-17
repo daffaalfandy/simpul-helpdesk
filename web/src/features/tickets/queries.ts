@@ -2,7 +2,6 @@ import { infiniteQueryOptions, queryOptions, useMutation, useQueryClient } from 
 
 import type {
   Priority,
-  RequesterInput,
   Ticket,
   TicketAssigneeFilter,
   TicketInput,
@@ -131,15 +130,6 @@ export function useSetPriority(key: string) {
   return useTicketAction(key, (input: { priority: Priority; reason: string }) =>
     unwrap(api.PUT('/tickets/{ticketKey}/priority', { params: { path: { ticketKey: key } }, body: input })),
   )
-}
-
-export function useCreateRequester(clientId: string) {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: (body: RequesterInput) =>
-      unwrap(api.POST('/clients/{clientId}/requesters', { params: { path: { clientId } }, body })),
-    onSuccess: () => invalidate(queryKeys.clientRequesters(clientId)),
-  })
 }
 
 /** Colleagues following a ticket ("People notified", besides the requester). */

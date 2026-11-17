@@ -381,15 +381,16 @@ export interface paths {
         };
         /**
          * A client's active and invited requesters, by name
-         * @description Staff only; agents see only their assigned clients (404 otherwise).
+         * @description Staff only; agents see only their assigned clients (404 otherwise). Administrators can
+         *     add `includeSuspended=true` to manage suspended requesters too (403 for anyone else).
          */
         get: operations["listClientRequesters"];
         put?: never;
         /**
-         * Add a requester to a client
-         * @description For agents logging a call from someone new. The requester is `invited` and has no
-         *     password until an invite sets one. Error codes are `invalid_name`, `invalid_email` and
-         *     `email_taken` (409).
+         * Invite a requester to a client (admin only)
+         * @description The requester is `invited` and gets an email with a single-use link to set their
+         *     password. Resend, suspend and reactivate them with the `/members/{userId}` actions. Error
+         *     codes are `invalid_name`, `invalid_email` and `email_taken` (409).
          */
         post: operations["createClientRequester"];
         delete?: never;
@@ -3380,7 +3381,9 @@ export interface operations {
     };
     listClientRequesters: {
         parameters: {
-            query?: never;
+            query?: {
+                includeSuspended?: boolean;
+            };
             header?: never;
             path: {
                 clientId: components["parameters"]["ClientId"];
