@@ -18,6 +18,7 @@ const (
 	keyPrefixReset      = "reset:"
 	keyPrefixInviteIP   = "invite-ip:"
 	keyPrefixSetupIP    = "setup-ip:"
+	keyPrefixTokenIP    = "token-ip:"
 )
 
 // NewToken returns a random URL-safe token and its SHA-256 hash.

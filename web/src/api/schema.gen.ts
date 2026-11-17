@@ -142,6 +142,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The user's personal access tokens for the MCP server
+         * @description Tokens the user made in the active organization, newest first, expired ones included.
+         *     `mcpUrl` is the endpoint an AI client connects to. Vendor staff only.
+         */
+        get: operations["listMyTokens"];
+        put?: never;
+        /**
+         * Make a personal access token
+         * @description The token acts as the user in the active organization, read only or read and write,
+         *     until it expires. `secret` is shown in this response only. At most 20 unexpired tokens
+         *     per user and organization (`token_limit`). Vendor staff only.
+         */
+        post: operations["createMyToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tokenId: components["parameters"]["TokenId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a personal access token
+         * @description Clients using it are signed out at their next request. Vendor staff only.
+         */
+        delete: operations["revokeMyToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organization/logo": {
         parameters: {
             query?: never;
@@ -1801,6 +1850,42 @@ export interface components {
             /** @description Projects shown on the board and in ticket lists. Empty shows every project. */
             projectIds: string[];
         };
+        /**
+         * @description `read` lists and reads tickets; `write` also replies, adds notes and changes status, assignee and priority.
+         * @enum {string}
+         */
+        TokenAccess: "read" | "write";
+        PersonalToken: {
+            /** Format: uuid */
+            id: string;
+            /** @example Claude Code on my laptop */
+            name: string;
+            /** @description The token's last four characters. */
+            lastFour: string;
+            access: components["schemas"]["TokenAccess"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            lastUsedAt: string | null;
+        };
+        PersonalTokens: {
+            /** @example https://helpdesk.example/mcp */
+            mcpUrl: string;
+            items: components["schemas"]["PersonalToken"][];
+        };
+        PersonalTokenInput: {
+            name: string;
+            access: components["schemas"]["TokenAccess"];
+            /** @enum {integer} */
+            expiresInDays: 30 | 90 | 365;
+        };
+        CreatedPersonalToken: {
+            token: components["schemas"]["PersonalToken"];
+            /** @description The token itself, starting `simdesk_pat_`. Shown once; only its hash is kept. */
+            secret: string;
+        };
         OrganizationChoice: {
             /** Format: uuid */
             id: string;
@@ -2962,6 +3047,7 @@ export interface components {
         CatalogItemId: string;
         RepositoryId: string;
         UserId: string;
+        TokenId: string;
         NotificationId: string;
         /** @description A month such as `2026-11`; the current month when left out. */
         ReportMonth: string;
@@ -3205,6 +3291,84 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMyTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tokens and the MCP endpoint */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalTokens"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createMyToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalTokenInput"];
+            };
+        };
+        responses: {
+            /** @description The new token and its secret */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedPersonalToken"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeMyToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tokenId: components["parameters"]["TokenId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };

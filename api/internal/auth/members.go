@@ -253,6 +253,9 @@ func (s *Service) RemoveMember(ctx context.Context, actor *Principal, orgID, id 
 		if err := tx.Q.DeleteMembership(ctx, db.DeleteMembershipParams{UserID: id, OrganizationID: orgID}); err != nil {
 			return "", nil, err
 		}
+		if err := tx.Q.DeleteMemberTokens(ctx, db.DeleteMemberTokensParams{UserID: id, OrganizationID: orgID}); err != nil {
+			return "", nil, err
+		}
 		return ActionMemberRemoved, map[string]any{auditDataRole: from}, nil
 	})
 }
@@ -289,6 +292,9 @@ func (s *Service) Suspend(ctx context.Context, actor *Principal, orgID, id uuid.
 			return "", nil, err
 		}
 		if err := tx.Q.DeleteUserSessions(ctx, id); err != nil {
+			return "", nil, err
+		}
+		if err := tx.Q.DeleteUserTokens(ctx, id); err != nil {
 			return "", nil, err
 		}
 		if err := tx.Q.InvalidateUserInvites(ctx, id); err != nil {

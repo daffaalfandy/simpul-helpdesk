@@ -230,6 +230,66 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /me/tokens:
+    get:
+      operationId: listMyTokens
+      summary: The user's personal access tokens for the MCP server
+      description: |
+        Tokens the user made in the active organization, newest first, expired ones included.
+        `mcpUrl` is the endpoint an AI client connects to. Vendor staff only.
+      tags: [auth]
+      responses:
+        "200":
+          description: The tokens and the MCP endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonalTokens" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createMyToken
+      summary: Make a personal access token
+      description: |
+        The token acts as the user in the active organization, read only or read and write,
+        until it expires. `secret` is shown in this response only. At most 20 unexpired tokens
+        per user and organization (`token_limit`). Vendor staff only.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PersonalTokenInput" }
+      responses:
+        "201":
+          description: The new token and its secret
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedPersonalToken" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /me/tokens/{tokenId}:
+    parameters:
+      - $ref: "#/components/parameters/TokenId"
+    delete:
+      operationId: revokeMyToken
+      summary: Revoke a personal access token
+      description: Clients using it are signed out at their next request. Vendor staff only.
+      tags: [auth]
+      responses:
+        "204":
+          description: Revoked
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /organization/logo:
     get:
       operationId: getOrganizationLogo
@@ -2246,6 +2306,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    TokenId:
+      name: tokenId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     NotificationId:
       name: notificationId
       in: path
@@ -2412,6 +2477,44 @@ components:
           maxItems: 200
           description: Projects shown on the board and in ticket lists. Empty shows every project.
           items: { type: string, format: uuid }
+    TokenAccess:
+      type: string
+      enum: [read, write]
+      description: "`read` lists and reads tickets; `write` also replies, adds notes and changes status, assignee and priority."
+    PersonalToken:
+      type: object
+      required: [id, name, lastFour, access, createdAt, expiresAt, lastUsedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Claude Code on my laptop }
+        lastFour: { type: string, minLength: 4, maxLength: 4, description: The token's last four characters. }
+        access: { $ref: "#/components/schemas/TokenAccess" }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
+    PersonalTokens:
+      type: object
+      required: [mcpUrl, items]
+      properties:
+        mcpUrl: { type: string, example: https://helpdesk.example/mcp }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PersonalToken" }
+    PersonalTokenInput:
+      type: object
+      required: [name, access, expiresInDays]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        access: { $ref: "#/components/schemas/TokenAccess" }
+        expiresInDays: { type: integer, enum: [30, 90, 365] }
+    CreatedPersonalToken:
+      type: object
+      required: [token, secret]
+      properties:
+        token: { $ref: "#/components/schemas/PersonalToken" }
+        secret:
+          type: string
+          description: The token itself, starting `simdesk_pat_`. Shown once; only its hash is kept.
     OrganizationChoice:
       type: object
       required: [id, name, role, logoUrl]

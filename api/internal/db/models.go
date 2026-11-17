@@ -189,6 +189,19 @@ type PasswordResetToken struct {
 	UsedAt    *time.Time
 }
 
+type PersonalAccessToken struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	OrganizationID uuid.UUID
+	Name           string
+	TokenHash      []byte
+	LastFour       string
+	Access         string
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
+	LastUsedAt     *time.Time
+}
+
 type Priority struct {
 	Code           string
 	Name           string

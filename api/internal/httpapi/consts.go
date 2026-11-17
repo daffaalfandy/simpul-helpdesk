@@ -15,6 +15,8 @@ const (
 	specPath       = "/openapi.json"
 	specURL        = apiRoot + specPath
 	docsTitle      = "SimDesk API"
+	// mcpPath is the MCP endpoint under apiRoot (owner, 17 Nov), outside the versioned REST API.
+	mcpPath = "/mcp"
 )
 
 // Session cookie names. Browsers only accept the __Host- prefix on HTTPS.

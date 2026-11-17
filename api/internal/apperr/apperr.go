@@ -89,6 +89,7 @@ const (
 	CodeOrganizationRequired      = "organization_required"
 	CodeOtherOrganization         = "other_organization"
 	CodeMemberHasOpenTickets      = "member_has_open_tickets"
+	CodeTokenLimit                = "token_limit"
 )
 
 // Error is a domain error with a stable machine-readable code.

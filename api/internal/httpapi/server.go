@@ -26,6 +26,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/config"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/connector"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mcpserver"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/notifications"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/organization"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/priorities"
@@ -115,6 +116,12 @@ func New(d Deps) (http.Handler, error) {
 		if d.Config.DocsEnabled {
 			mountDocs(api, spec)
 		}
+		// The MCP endpoint signs in with personal tokens only, never the session cookie, so it
+		// sits beside /v1 rather than under its session middleware.
+		api.Handle(mcpPath, mcpserver.New(mcpserver.Deps{
+			Auth: d.Auth, Tickets: d.Tickets, Clients: d.Clients, AppURL: d.Config.AppURL,
+			MaxBodyBytes: maxJSONBodyBytes, Logger: d.Logger,
+		}))
 		api.Route(apiVersionPath, func(v1 chi.Router) {
 			v1.Use(s.session)
 			v1.Use(bodyLimits(raw))
