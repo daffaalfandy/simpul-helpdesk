@@ -164,14 +164,32 @@ export function useInviteRequester(clientId: string) {
   })
 }
 
-export type MemberAction = 'suspend' | 'reactivate' | 'invite'
+/** Row actions: resend an invite, suspend or reactivate the account, or take a member off the organization. */
+export type MemberAction = 'suspend' | 'reactivate' | 'invite' | 'remove'
 
 export function useMemberAction() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ userId, action }: { userId: string; action: MemberAction }) =>
-      unwrap(api.POST(`/members/{userId}/${action}`, { params: { path: { userId } } })),
-    onSuccess: () => invalidate(queryKeys.members, queryKeys.users, queryKeys.clients),
+      action === 'remove'
+        ? unwrap(api.DELETE('/members/{userId}', { params: { path: { userId } } }))
+        : unwrap(api.POST(`/members/{userId}/${action}`, { params: { path: { userId } } })),
+    onSuccess: () => invalidate(queryKeys.members, queryKeys.users, queryKeys.clients, queryKeys.me),
+  })
+}
+
+/** Every organization on the install (Settings › Organizations, admin only). */
+export const organizationsQueryOptions = queryOptions({
+  queryKey: queryKeys.organizations,
+  queryFn: () => unwrap(api.GET('/organizations')),
+})
+
+export function useCreateOrganization() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (body: OrganizationInput) => unwrap(api.POST('/organizations', { body })),
+    // The new organization joins every administrator's list of organizations.
+    onSuccess: () => invalidate(queryKeys.organizations, queryKeys.me),
   })
 }
 

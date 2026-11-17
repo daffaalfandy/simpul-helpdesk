@@ -31,7 +31,7 @@ export function Footer({ variant, org }: FooterProps) {
             <BrandMark size="sm" />
             {portal ? t('portal.support', { org: orgName }) : BRAND_NAME}
           </span>
-          <span>{portal ? t('footer.portalTagline', { org: orgName }) : t('footer.tagline', { org: orgName })}</span>
+          <span>{portal ? t('footer.portalTagline', { org: orgName }) : org ? t('footer.tagline', { org: orgName }) : t('footer.productTagline')}</span>
         </div>
         {links.length > 0 && (
           <nav aria-label={t('footer.linksLabel')} className="flex flex-wrap gap-x-4.5 gap-y-1">

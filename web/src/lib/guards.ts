@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { redirect, type ParsedLocation } from '@tanstack/react-router'
 
 import type { Me } from '../api/client'
-import { meQueryOptions, organizationQueryOptions } from '../api/queries'
+import { installQueryOptions, meQueryOptions } from '../api/queries'
 import { paths } from './constants'
 import { homePathFor, type OrgRole } from './roles'
 
@@ -19,8 +19,8 @@ export async function requireUser(queryClient: QueryClient, location: ParsedLoca
 
 /** Sends people to first-run setup while the install has no administrator. */
 export async function redirectToSetupIfOpen(queryClient: QueryClient): Promise<void> {
-  const org = await queryClient.ensureQueryData(organizationQueryOptions)
-  if (org.setupRequired) throw redirect({ to: paths.setup })
+  const install = await queryClient.ensureQueryData(installQueryOptions)
+  if (install.setupRequired) throw redirect({ to: paths.setup })
 }
 
 /** Sends users who may not see a page to their own start page. */

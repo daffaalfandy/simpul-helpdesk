@@ -38,19 +38,75 @@ tags:
   - name: reports
 
 paths:
-  /organization:
+  /install:
     get:
-      operationId: getOrganization
-      summary: Public organisation branding for the sign-in page and footer
-      description: Also says whether first-run setup is still open (`setupRequired`).
+      operationId: getInstall
+      summary: The install, for the sign-in and setup pages (public)
+      description: Whether first-run setup is still open, and where emails link to.
       tags: [organization]
       security: []
       responses:
         "200":
-          description: Organisation branding
+          description: The install
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Install" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /organizations:
+    get:
+      operationId: listOrganizations
+      summary: Every organization on the install (admin only)
+      tags: [organization]
+      responses:
+        "200":
+          description: Organizations, by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OrganizationSummary" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createOrganization
+      summary: Add a vendor organization (admin only)
+      description: |
+        It starts with the default priorities and business hours (Mon–Fri 08:00–17:00). Error
+        codes `invalid_organization` (400, with fields) and `ticket_prefix_taken` (409).
+      tags: [organization]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationSummary" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /organization:
+    get:
+      operationId: getOrganization
+      summary: The organization the request works in
+      description: Its name, logo, prefix and time zone, for the app header, the portal and the footer.
+      tags: [organization]
+      responses:
+        "200":
+          description: The organization
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Organization" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
     put:
       operationId: updateOrganization
@@ -376,6 +432,27 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    delete:
+      operationId: removeMember
+      summary: Take a supervisor or agent off the organization (admin only)
+      description: |
+        Their account stays, with any other organization they work in; their client links here
+        go. Refused with `member_has_open_tickets` (409) while open tickets here are assigned to
+        them: reassign those first. Administrators work in every organization (`invalid_role`).
+      tags: [users]
+      responses:
+        "204":
+          description: Removed
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
@@ -2192,10 +2269,34 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
 
+    Install:
+      type: object
+      required: [setupRequired, appUrl]
+      properties:
+        setupRequired:
+          type: boolean
+          description: First-run setup is still open (no administrator yet).
+        appUrl:
+          type: string
+          description: Where emails link to; set by the APP_URL environment variable on the server.
+
+    OrganizationSummary:
+      type: object
+      required: [id, name, ticketPrefix, timezone, logoUrl, memberCount, clientCount]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: PT Mitra Data }
+        ticketPrefix: { type: string, example: MD }
+        timezone: { type: string, example: Asia/Makassar }
+        logoUrl: { type: string, nullable: true }
+        memberCount: { type: integer, description: Supervisors and agents (administrators work everywhere). }
+        clientCount: { type: integer }
+
     Organization:
       type: object
-      required: [name, timezone, ticketPrefix, appUrl, logoUrl, footerNote, setupRequired]
+      required: [id, name, timezone, ticketPrefix, appUrl, logoUrl, footerNote]
       properties:
+        id: { type: string, format: uuid }
         name: { type: string, example: Demo Vendor }
         timezone:
           type: string
@@ -2214,9 +2315,6 @@ components:
           type: string
           nullable: true
           example: Data stored in Indonesia · Personal data handled under UU PDP
-        setupRequired:
-          type: boolean
-          description: First-run setup is still open (no administrator yet).
 
     OrganizationInput:
       type: object

@@ -64,10 +64,10 @@ describe('Settings › Clients › Requesters', () => {
     expect(await dialog.findByRole('status')).toHaveTextContent('A new invite is on its way to Dian Puspita.')
 
     await user.click(requesterRow(dialog, 'Hendra Gunawan').getByRole('button', { name: 'Actions for Hendra Gunawan' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Suspend' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Suspend account' }))
     const confirm = within(await screen.findByRole('alertdialog', { name: 'Suspend Hendra Gunawan?' }))
-    await user.click(confirm.getByRole('button', { name: 'Suspend' }))
-    expect(await dialog.findByRole('status')).toHaveTextContent('Hendra Gunawan is suspended and signed out everywhere.')
+    await user.click(confirm.getByRole('button', { name: 'Suspend account' }))
+    expect(await dialog.findByRole('status')).toHaveTextContent('Hendra Gunawan is suspended and signed out of every organization.')
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     // Still listed for the administrator, so they can be let back in.
     expect(await requesterRow(dialog, 'Hendra Gunawan').findByText('Suspended')).toBeInTheDocument()

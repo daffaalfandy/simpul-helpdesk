@@ -198,6 +198,57 @@ func (q *Queries) ListOrganizationIDs(ctx context.Context) ([]uuid.UUID, error) 
 	return items, nil
 }
 
+const listOrganizationSummaries = `-- name: ListOrganizationSummaries :many
+SELECT o.id, o.name, o.ticket_prefix, o.timezone, o.logo_key, o.logo_content_type, o.logo_updated_at,
+       (SELECT count(*) FROM organization_members m WHERE m.organization_id = o.id)::int AS member_count,
+       (SELECT count(*) FROM clients c WHERE c.organization_id = o.id)::int AS client_count
+FROM organizations o
+ORDER BY lower(o.name), o.id
+`
+
+type ListOrganizationSummariesRow struct {
+	ID              uuid.UUID
+	Name            string
+	TicketPrefix    string
+	Timezone        string
+	LogoKey         *string
+	LogoContentType *string
+	LogoUpdatedAt   *time.Time
+	MemberCount     int32
+	ClientCount     int32
+}
+
+// Settings › Organizations: each organization with how many members and clients it has.
+func (q *Queries) ListOrganizationSummaries(ctx context.Context) ([]ListOrganizationSummariesRow, error) {
+	rows, err := q.db.Query(ctx, listOrganizationSummaries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrganizationSummariesRow{}
+	for rows.Next() {
+		var i ListOrganizationSummariesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.TicketPrefix,
+			&i.Timezone,
+			&i.LogoKey,
+			&i.LogoContentType,
+			&i.LogoUpdatedAt,
+			&i.MemberCount,
+			&i.ClientCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setOrganizationLogo = `-- name: SetOrganizationLogo :exec
 UPDATE organizations
 SET logo_key = $1, logo_content_type = $2,

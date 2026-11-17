@@ -1,16 +1,15 @@
 import type { TFunction } from 'i18next'
-import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Form } from 'react-aria-components'
 
 import { ApiError, ErrorCode } from '../../api/client'
-import { organizationQueryOptions, useLogin } from '../../api/queries'
+import { useLogin } from '../../api/queries'
 import { Alert } from '../../components/Alert'
 import { Button } from '../../components/Button'
 import { TextInput } from '../../components/TextInput'
-import { paths, SECONDS_PER_MINUTE } from '../../lib/constants'
+import { BRAND_NAME, paths, SECONDS_PER_MINUTE } from '../../lib/constants'
 import { homePathFor } from '../../lib/roles'
 import { safeRedirect } from '../../lib/text'
 import { AuthLayout, authCard } from './AuthLayout'
@@ -18,7 +17,6 @@ import { AuthLayout, authCard } from './AuthLayout'
 export function LoginPage({ redirectTo }: { redirectTo?: string }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { data: org } = useQuery(organizationQueryOptions)
   const login = useLogin()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,7 +32,7 @@ export function LoginPage({ redirectTo }: { redirectTo?: string }) {
   }
 
   return (
-    <AuthLayout title={t('login.title', { org: org?.name ?? '' })} intro={window.location.host}>
+    <AuthLayout title={t('login.title', { org: BRAND_NAME })} intro={window.location.host}>
       <Form onSubmit={onSubmit} className={authCard}>
         {login.error && <Alert tone="error">{loginErrorMessage(login.error, t)}</Alert>}
         <TextInput

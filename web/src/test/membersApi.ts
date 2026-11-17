@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 
-import type { Member, MemberInvite, Members, StaffRole } from '../api/client'
+import type { Member, MemberInvite, Members, OrganizationInput, OrganizationSummary, StaffRole } from '../api/client'
 import { tickets } from './ticketsApi'
 
 const API = '*/api/v1'
@@ -31,7 +31,10 @@ function fixtures() {
       lastLoginAt: '2026-10-01T03:00:00Z', inviteSentAt: null,
     },
   ]
-  return { team, requesters: 46, actions: [] as string[] }
+  const organizations: OrganizationSummary[] = [
+    { id: '01a1cedf-0000-7000-8000-0000000000e9', name: 'Demo Vendor', ticketPrefix: 'HD', timezone: 'Asia/Jakarta', logoUrl: null, memberCount: 3, clientCount: 2 },
+  ]
+  return { team, requesters: 46, actions: [] as string[], organizations }
 }
 
 /** Fake team data; reset after each test. */
@@ -57,6 +60,21 @@ function list(): Members {
 }
 
 export const membersHandlers = [
+  http.get(`${API}/organizations`, () => HttpResponse.json(members.organizations)),
+  http.post(`${API}/organizations`, async ({ request }) => {
+    const body = (await request.json()) as OrganizationInput
+    if (members.organizations.some((o) => o.ticketPrefix === body.ticketPrefix)) return problem(409, 'ticket_prefix_taken')
+    const o: OrganizationSummary = { ...body, id: `01a1cedf-0000-7000-8000-0000000000f${members.organizations.length}`, logoUrl: null, memberCount: 0, clientCount: 0 }
+    members.organizations.push(o)
+    return HttpResponse.json(o, { status: 201 })
+  }),
+  http.delete(`${API}/members/:id`, ({ params }) => {
+    const m = members.team.find((x) => x.id === params.id)
+    if (!m) return problem(404, 'not_found')
+    members.actions.push(`remove:${m.name}`)
+    members.team = members.team.filter((x) => x !== m)
+    return new HttpResponse(null, { status: 204 })
+  }),
   http.get(`${API}/members`, () => HttpResponse.json(list())),
   http.post(`${API}/members`, async ({ request }) => {
     const body = (await request.json()) as MemberInvite

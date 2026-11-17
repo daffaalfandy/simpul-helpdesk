@@ -229,6 +229,34 @@ func (s *Service) ChangeRole(ctx context.Context, actor *Principal, orgID, id uu
 	})
 }
 
+// RemoveMember takes a supervisor or agent off the organization: their account stays, with any
+// other organization they work in, and their client links here go. Open tickets assigned to
+// them here must be handed on first.
+func (s *Service) RemoveMember(ctx context.Context, actor *Principal, orgID, id uuid.UUID, openStatuses []string) error {
+	return s.changeMember(ctx, actor, orgID, id, func(tx store.Tx, u db.GetUserForUpdateRow) (string, map[string]any, error) {
+		from, err := roleIn(ctx, tx, u, orgID)
+		if err != nil {
+			return "", nil, err
+		}
+		if from == RoleAdmin {
+			return "", nil, apperr.Invalid(apperr.CodeInvalidRole, "Administrators work in every organization", "")
+		}
+		n, err := tx.Q.CountOpenTicketsAssignedIn(ctx, db.CountOpenTicketsAssignedInParams{
+			OrganizationID: orgID, UserID: &id, OpenStatuses: openStatuses,
+		})
+		if err != nil {
+			return "", nil, err
+		}
+		if n > 0 {
+			return "", nil, apperr.Conflict(apperr.CodeMemberHasOpenTickets, "Reassign their open tickets first", "")
+		}
+		if err := tx.Q.DeleteMembership(ctx, db.DeleteMembershipParams{UserID: id, OrganizationID: orgID}); err != nil {
+			return "", nil, err
+		}
+		return ActionMemberRemoved, map[string]any{auditDataRole: from}, nil
+	})
+}
+
 // roleIn is the user's role in the organization: administrator, their membership's role, or
 // 404 for anyone else (requesters keep theirs).
 func roleIn(ctx context.Context, tx store.Tx, u db.GetUserForUpdateRow, orgID uuid.UUID) (Role, error) {

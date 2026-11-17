@@ -39,6 +39,25 @@ func (q *Queries) CountActiveAgentMembers(ctx context.Context, arg CountActiveAg
 	return column_1, err
 }
 
+const countOpenTicketsAssignedIn = `-- name: CountOpenTicketsAssignedIn :one
+SELECT count(*)::int FROM tickets
+WHERE organization_id = $1 AND assignee_id = $2 AND status = ANY($3::text[])
+`
+
+type CountOpenTicketsAssignedInParams struct {
+	OrganizationID uuid.UUID
+	UserID         *uuid.UUID
+	OpenStatuses   []string
+}
+
+// A member's open tickets in one organization: they must be handed on before the member leaves.
+func (q *Queries) CountOpenTicketsAssignedIn(ctx context.Context, arg CountOpenTicketsAssignedInParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countOpenTicketsAssignedIn, arg.OrganizationID, arg.UserID, arg.OpenStatuses)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const deleteMembership = `-- name: DeleteMembership :exec
 DELETE FROM organization_members WHERE user_id = $1 AND organization_id = $2
 `

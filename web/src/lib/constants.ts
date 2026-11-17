@@ -29,6 +29,7 @@ export const paths = {
   settingsClients: '/settings/clients',
   settingsIntegrations: '/settings/integrations',
   settingsCatalog: '/settings/catalog',
+  settingsOrganizations: '/settings/organizations',
   ticket: '/tickets/$key',
   portal: '/portal',
   portalNew: '/portal/new',

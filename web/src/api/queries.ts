@@ -7,7 +7,9 @@ import { unwrap } from './unwrap'
 
 export const queryKeys = {
   me: ['me'],
+  install: ['install'],
   organization: ['organization'],
+  organizations: ['organizations'],
   users: ['users'],
   clients: ['clients'],
   priorities: ['priorities'],
@@ -104,6 +106,18 @@ export const meQueryOptions = queryOptions({
   staleTime: ME_STALE_TIME_MS,
 })
 
+/** The install: whether first-run setup is open. Public, for the sign-in and setup pages. */
+export const installQueryOptions = queryOptions({
+  queryKey: queryKeys.install,
+  queryFn: async () => {
+    const { data, error, response } = await api.GET('/install')
+    if (error || !data) throw new ApiError(response, error)
+    return data
+  },
+  staleTime: Infinity,
+})
+
+/** The organization the user works in (signed in). */
 export const organizationQueryOptions = queryOptions({
   queryKey: queryKeys.organization,
   queryFn: async () => {

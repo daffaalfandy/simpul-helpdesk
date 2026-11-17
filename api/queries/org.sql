@@ -64,3 +64,11 @@ SELECT id FROM organizations ORDER BY created_at, id;
 -- name: GetOrganizationByPrefix :one
 -- The CLI names an organization by its ticket prefix, which is unique.
 SELECT id FROM organizations WHERE ticket_prefix = upper(@ticket_prefix);
+
+-- name: ListOrganizationSummaries :many
+-- Settings › Organizations: each organization with how many members and clients it has.
+SELECT o.id, o.name, o.ticket_prefix, o.timezone, o.logo_key, o.logo_content_type, o.logo_updated_at,
+       (SELECT count(*) FROM organization_members m WHERE m.organization_id = o.id)::int AS member_count,
+       (SELECT count(*) FROM clients c WHERE c.organization_id = o.id)::int AS client_count
+FROM organizations o
+ORDER BY lower(o.name), o.id;

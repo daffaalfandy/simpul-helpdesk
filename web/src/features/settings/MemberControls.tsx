@@ -19,10 +19,22 @@ export function MemberStatusPill({ status }: { status: UserStatus }) {
   return <Pill tone={STATUS_TONES[status]}>{t(`settings.members.status.${status}`)}</Pill>
 }
 
-/** A person's menu, for the team and for a client's requesters: resend an invite, suspend, or let them back in. */
-export function MemberActions({ name, status, onAction }: { name: string; status: UserStatus; onAction: (a: MemberAction) => void }) {
+type MemberActionsProps = {
+  name: string
+  status: UserStatus
+  /** A supervisor or agent can be taken off the organization; administrators work in every one. */
+  removable?: boolean
+  onAction: (a: MemberAction) => void
+}
+
+/**
+ * A person's menu, for the team and for a client's requesters: resend an invite, suspend the
+ * account or let them back in, and take a member off the organization.
+ */
+export function MemberActions({ name, status, removable = false, onAction }: MemberActionsProps) {
   const { t } = useTranslation()
-  const actions: MemberAction[] = status === 'suspended' ? ['reactivate'] : status === 'invited' ? ['invite', 'suspend'] : ['suspend']
+  const account: MemberAction[] = status === 'suspended' ? ['reactivate'] : status === 'invited' ? ['invite', 'suspend'] : ['suspend']
+  const actions: MemberAction[] = removable ? [...account, 'remove'] : account
   return (
     <MenuTrigger>
       <AriaButton

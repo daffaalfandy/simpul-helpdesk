@@ -14,14 +14,69 @@ import (
 // logoCache keeps a logo for good: a new logo gets a new versioned URL.
 const logoCache = "public, max-age=31536000, immutable"
 
-// GetOrganization returns public branding, and whether first-run setup is still open: the
-// signed-in user's organization, else the install's first (SimDesk's defaults before there is one).
-func (s *server) GetOrganization(ctx context.Context, _ gen.GetOrganizationRequestObject) (gen.GetOrganizationResponseObject, error) {
-	o, err := s.brandingOrganization(ctx)
+// GetInstall tells the sign-in and setup pages whether first-run setup is still open.
+func (s *server) GetInstall(ctx context.Context, _ gen.GetInstallRequestObject) (gen.GetInstallResponseObject, error) {
+	open, err := s.organization.SetupRequired(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return gen.GetOrganization200JSONResponse(s.apiOrganization(ctx, o)), nil
+	return gen.GetInstall200JSONResponse{SetupRequired: open, AppUrl: s.cfg.AppURL.String()}, nil
+}
+
+// GetOrganization returns the organization the request works in.
+func (s *server) GetOrganization(ctx context.Context, _ gen.GetOrganizationRequestObject) (gen.GetOrganizationResponseObject, error) {
+	p, err := signedInOrg(ctx)
+	if err != nil {
+		return nil, err
+	}
+	o, err := s.organization.Get(ctx, p.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	return gen.GetOrganization200JSONResponse(s.apiOrganization(o)), nil
+}
+
+// ListOrganizations lists every organization (admin only).
+func (s *server) ListOrganizations(ctx context.Context, _ gen.ListOrganizationsRequestObject) (gen.ListOrganizationsResponseObject, error) {
+	if _, err := auth.Require(ctx, auth.CapOrganizationsManage); err != nil {
+		return nil, err
+	}
+	list, err := s.organization.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(gen.ListOrganizations200JSONResponse, len(list))
+	for i, o := range list {
+		out[i] = apiOrganizationSummary(o)
+	}
+	return out, nil
+}
+
+// CreateOrganization adds a vendor organization (admin only).
+func (s *server) CreateOrganization(ctx context.Context, req gen.CreateOrganizationRequestObject) (gen.CreateOrganizationResponseObject, error) {
+	p, err := auth.Require(ctx, auth.CapOrganizationsManage)
+	if err != nil {
+		return nil, err
+	}
+	o, err := s.organization.Create(ctx, p.AuditActor(), organization.Input{
+		Name: req.Body.Name, TicketPrefix: req.Body.TicketPrefix, Timezone: req.Body.Timezone,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return gen.CreateOrganization201JSONResponse(apiOrganizationSummary(organization.Summary{Settings: o})), nil
+}
+
+func apiOrganizationSummary(o organization.Summary) gen.OrganizationSummary {
+	out := gen.OrganizationSummary{
+		Id: o.ID, Name: o.Name, TicketPrefix: o.TicketPrefix, Timezone: o.Timezone,
+		MemberCount: o.MemberCount, ClientCount: o.ClientCount,
+	}
+	if o.Logo != nil {
+		url := apiPrefix + o.Logo.Path(o.ID)
+		out.LogoUrl = &url
+	}
+	return out
 }
 
 func (s *server) brandingOrganization(ctx context.Context) (organization.Settings, error) {
@@ -48,7 +103,7 @@ func (s *server) UpdateOrganization(ctx context.Context, req gen.UpdateOrganizat
 	if err != nil {
 		return nil, err
 	}
-	return gen.UpdateOrganization200JSONResponse(s.apiOrganization(ctx, o)), nil
+	return gen.UpdateOrganization200JSONResponse(s.apiOrganization(o)), nil
 }
 
 // UploadOrganizationLogo reads the first multipart part, like attachments (the route skips the
@@ -73,7 +128,7 @@ func (s *server) UploadOrganizationLogo(ctx context.Context, req gen.UploadOrgan
 	if err != nil {
 		return nil, err
 	}
-	return gen.UploadOrganizationLogo200JSONResponse(s.apiOrganization(ctx, o)), nil
+	return gen.UploadOrganizationLogo200JSONResponse(s.apiOrganization(o)), nil
 }
 
 func (s *server) RemoveOrganizationLogo(ctx context.Context, _ gen.RemoveOrganizationLogoRequestObject) (gen.RemoveOrganizationLogoResponseObject, error) {
@@ -85,7 +140,7 @@ func (s *server) RemoveOrganizationLogo(ctx context.Context, _ gen.RemoveOrganiz
 	if err != nil {
 		return nil, err
 	}
-	return gen.RemoveOrganizationLogo200JSONResponse(s.apiOrganization(ctx, o)), nil
+	return gen.RemoveOrganizationLogo200JSONResponse(s.apiOrganization(o)), nil
 }
 
 // GetOrganizationLogoById serves an organization's logo inline with its own type, so the app
@@ -130,12 +185,10 @@ func (s *server) GetOrganizationLogo(ctx context.Context, _ gen.GetOrganizationL
 	}
 }
 
-func (s *server) apiOrganization(ctx context.Context, o organization.Settings) gen.Organization {
-	// A failed read leaves setupRequired false: the sign-in page still works.
-	setupRequired, _ := s.organization.SetupRequired(ctx)
+func (s *server) apiOrganization(o organization.Settings) gen.Organization {
 	out := gen.Organization{
-		Name: o.Name, Timezone: o.Timezone, TicketPrefix: o.TicketPrefix, FooterNote: o.FooterNote,
-		AppUrl: s.cfg.AppURL.String(), SetupRequired: setupRequired,
+		Id: o.ID, Name: o.Name, Timezone: o.Timezone, TicketPrefix: o.TicketPrefix, FooterNote: o.FooterNote,
+		AppUrl: s.cfg.AppURL.String(),
 	}
 	if o.Logo != nil {
 		url := apiPrefix + o.Logo.Path(o.ID)

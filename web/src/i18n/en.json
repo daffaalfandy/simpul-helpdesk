@@ -377,7 +377,8 @@
     "linksLabel": "SimDesk project links",
     "docs": "Documentation",
     "source": "Source code",
-    "bug": "Report a bug"
+    "bug": "Report a bug",
+    "productTagline": "Open-source service desk for IT vendors."
   },
   "notFound": {
     "title": "Page not found",
@@ -411,6 +412,10 @@
       "members": {
         "title": "Members & roles",
         "description": "Who can sign in and what each role can do."
+      },
+      "organizations": {
+        "title": "Organizations",
+        "description": "The vendor organizations on this install. Each has its own clients, projects, tickets and settings."
       },
       "priorities": {
         "title": "Priorities",
@@ -772,7 +777,7 @@
     },
     "members": {
       "invite": "Invite member",
-      "summary": "{{team}} team members and {{requesters}} client requesters. Client requesters are invited from each client.",
+      "summary": "{{team}} team members and {{requesters}} client requesters in this organization. Administrators work in every organization; client requesters are invited from each client.",
       "count_one": "{{count}} user",
       "count_other": "{{count}} users",
       "roles": {
@@ -828,17 +833,17 @@
       "actionsFor": "Actions for {{name}}",
       "actions": {
         "invite": "Resend invite",
-        "suspend": "Suspend",
-        "reactivate": "Reactivate"
+        "suspend": "Suspend account",
+        "reactivate": "Reactivate",
+        "remove": "Remove from organization"
       },
       "done": {
         "role": "{{name}}’s role changed.",
         "invite": "A new invite is on its way to {{name}}. Earlier links stop working.",
-        "suspend": "{{name}} is suspended and signed out everywhere.",
-        "reactivate": "{{name}} can sign in again."
+        "suspend": "{{name}} is suspended and signed out of every organization.",
+        "reactivate": "{{name}} can sign in again.",
+        "remove": "{{name}} no longer works in this organization."
       },
-      "suspendTitle": "Suspend {{name}}?",
-      "suspendBody": "They are signed out at once and can’t sign in until reactivated. Tickets assigned to them stay theirs; they lose their client links.",
       "inviteTitle": "Invite a team member",
       "inviteSubtitle": "They get an email with a link to set their password. The link works once, for 7 days.",
       "inviteSubmit": "Send invite",
@@ -849,7 +854,32 @@
       "role": "Role",
       "jobTitle": "Job title",
       "jobTitleHint": "Optional, e.g. L2 support. Shown beside their name.",
-      "invited": "Invite sent to {{email}}."
+      "invited": "Invite sent to {{email}}.",
+      "confirm": {
+        "suspend": {
+          "title": "Suspend {{name}}?",
+          "body": "They are signed out at once and can’t sign in to any organization until reactivated. Tickets assigned to them stay theirs; they lose their client links."
+        },
+        "remove": {
+          "title": "Remove {{name}} from this organization?",
+          "body": "Their account stays, with any other organization they work in. Reassign their open tickets here first; their client links here go."
+        }
+      }
+    },
+    "organizations": {
+      "add": "Add organization",
+      "cardTitle": "Organizations on this install",
+      "cols": {
+        "name": "Organization",
+        "prefix": "Ticket prefix",
+        "timezone": "Time zone",
+        "members": "Members",
+        "clients": "Clients"
+      },
+      "dialogTitle": "Add an organization",
+      "dialogSubtitle": "It starts with the default priorities and business hours (Mon–Fri 08:00–17:00). Add its members, clients and projects next.",
+      "prefixHint": "Its tickets get it, e.g. MD-24871. It must differ from every other organization’s.",
+      "created": "{{name}} added. Switch to it in the header to set it up."
     }
   },
   "priority": {
@@ -963,7 +993,10 @@
     "cannot_change_self": "You can’t change your own role or suspend yourself. Ask another administrator.",
     "not_invited": "This person has already set their password, so there is no invite to resend.",
     "setup_closed": "This install is already set up. Sign in instead.",
-    "weak_password": "Choose a password of at least 10 characters."
+    "weak_password": "Choose a password of at least 10 characters.",
+    "member_has_open_tickets": "Reassign their open tickets in this organization first.",
+    "ticket_prefix_taken": "Another organization uses this ticket prefix.",
+    "organization_required": "Choose an organization first."
   },
   "time": {
     "justNow": "Just now",

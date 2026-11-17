@@ -11,15 +11,15 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 )
 
-func (e *env) organization(t *testing.T) gen.Organization {
+func (e *env) install(t *testing.T) gen.Install {
 	t.Helper()
-	return decode[gen.Organization](t, e.do(request{method: http.MethodGet, path: apiBase + "/organization"}), http.StatusOK)
+	return decode[gen.Install](t, e.do(request{method: http.MethodGet, path: apiBase + "/install"}), http.StatusOK)
 }
 
 func TestFirstRunSetup(t *testing.T) {
 	e := newEnv(t)
 	// newEnv makes its admin with the CLI path, which closes setup like the form does.
-	if e.organization(t).SetupRequired {
+	if e.install(t).SetupRequired {
 		t.Fatal("setup still open after the CLI created an administrator")
 	}
 	in := gen.SetupRequest{OrganizationName: " PT Vendor Teknologi ", Name: "Dewi Wulandari", Email: "Dewi@Vendor.test", Password: invitePassword}
@@ -35,7 +35,7 @@ func TestFirstRunSetup(t *testing.T) {
 	if _, err := e.st.Pool().Exec(context.Background(), `UPDATE install SET setup_completed_at = NULL`); err != nil {
 		t.Fatal(err)
 	}
-	if !e.organization(t).SetupRequired {
+	if !e.install(t).SetupRequired {
 		t.Fatal("setup not open on a fresh install")
 	}
 	for _, bad := range []struct {
@@ -50,7 +50,7 @@ func TestFirstRunSetup(t *testing.T) {
 			t.Errorf("want %s: %d %s", bad.code, r.code, r.body)
 		}
 	}
-	if !e.organization(t).SetupRequired {
+	if !e.install(t).SetupRequired {
 		t.Fatal("a refused form closed setup")
 	}
 
@@ -58,8 +58,11 @@ func TestFirstRunSetup(t *testing.T) {
 	if r.code != http.StatusOK || !strings.Contains(r.cookie, "sd_session") || !strings.Contains(r.body, `"role":"admin"`) {
 		t.Fatalf("setup: %d %s", r.code, r.body)
 	}
-	org := e.organization(t)
-	if org.SetupRequired || org.Name != "PT Vendor Teknologi" {
+	if e.install(t).SetupRequired {
+		t.Fatal("setup still open after it ran")
+	}
+	admin := session{e: e, cookie: sessionCookie(t, e.login("dewi@vendor.test", invitePassword))}
+	if org := decode[gen.Organization](t, admin.do(http.MethodGet, "/organization", nil), http.StatusOK); org.Name != "PT Vendor Teknologi" {
 		t.Fatalf("organisation after setup = %+v", org)
 	}
 	if rec := e.login("dewi@vendor.test", invitePassword); rec.Code != http.StatusOK {

@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { Upload } from 'lucide-react'
-import { useId, useMemo, useState } from 'react'
+import { useId, useState } from 'react'
 import { FileTrigger } from 'react-aria-components'
 import { useTranslation } from 'react-i18next'
 
@@ -14,6 +14,7 @@ import { UnsavedBar } from '../../components/UnsavedBar'
 import { formatFileSize } from '../../lib/files'
 import { useRemoveLogo, useUpdateOrganization, useUploadLogo } from './queries'
 import { ErrorAlert } from './shared'
+import { useTimeZoneOptions } from './timeZones'
 
 // Limits, matching the API (api/internal/organization).
 const MAX_NAME_LENGTH = 200
@@ -21,13 +22,6 @@ const MAX_PREFIX_LENGTH = 10
 const PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,9}$/
 export const MAX_LOGO_BYTES = 512 * 1024
 const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp']
-
-/** Indonesia's three zones first (Settings mock), each with its local name; then every zone. */
-const INDONESIAN_ZONES = [
-  { id: 'Asia/Jakarta', key: 'wib' },
-  { id: 'Asia/Makassar', key: 'wita' },
-  { id: 'Asia/Jayapura', key: 'wit' },
-] as const
 
 function draftOf(org: Organization): OrganizationInput {
   return { name: org.name, ticketPrefix: org.ticketPrefix, timezone: org.timezone }
@@ -46,15 +40,7 @@ export function OrganizationCard({ onFlash }: { onFlash: (message: string | null
   const save = useUpdateOrganization()
   const titleId = useId()
 
-  const zones = useMemo(() => {
-    const known = new Set<string>(INDONESIAN_ZONES.map((z) => z.id))
-    const rest = Intl.supportedValuesOf('timeZone').filter((z) => !known.has(z))
-    if (!known.has(org.timezone) && !rest.includes(org.timezone)) rest.unshift(org.timezone)
-    return [
-      ...INDONESIAN_ZONES.map((z) => ({ id: z.id, label: t(`settings.general.zones.${z.key}`), searchText: z.id })),
-      ...rest.map((z) => ({ id: z, label: z })),
-    ]
-  }, [org.timezone, t])
+  const zones = useTimeZoneOptions(org.timezone)
 
   const nameInvalid = draft.name.trim() === ''
   const prefixInvalid = !PREFIX_PATTERN.test(draft.ticketPrefix)

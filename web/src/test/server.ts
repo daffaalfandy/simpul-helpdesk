@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 
-import type { Me, Organization, OrganizationInput, Problem } from '../api/client'
+import type { Install, Me, Organization, OrganizationInput, Problem } from '../api/client'
 import { integrationsHandlers, resetIntegrations } from './integrationsApi'
 import { membersHandlers, resetMembers } from './membersApi'
 import { notificationsHandlers, resetNotifications } from './notificationsApi'
@@ -14,7 +14,7 @@ export const PASSWORD = 'correct-horse-battery'
 
 export const ORG: Organization = {
   name: 'Demo Vendor', timezone: 'Asia/Jakarta', footerNote: 'Data stored in Indonesia', ticketPrefix: 'HD',
-  appUrl: 'https://helpdesk.demo-vendor.test', logoUrl: null, setupRequired: false,
+  id: '01a1cedf-0000-7000-8000-0000000000e9', appUrl: 'https://helpdesk.demo-vendor.test', logoUrl: null,
 }
 
 /** The organization every fake user works in. */
@@ -69,6 +69,7 @@ export const USERS: Record<string, Me> = {
 /** Fake API state shared by the handlers; reset after each test. */
 export const state: {
   me: Me | null
+  install: Install
   org: Organization
   forgotRequests: string[]
   resetBodies: unknown[]
@@ -77,6 +78,7 @@ export const state: {
   orgBodies: unknown[]
 } = {
   me: null,
+  install: { setupRequired: false, appUrl: ORG.appUrl },
   org: { ...ORG },
   forgotRequests: [],
   resetBodies: [],
@@ -87,6 +89,7 @@ export const state: {
 
 export function resetApi() {
   state.me = null
+  state.install = { setupRequired: false, appUrl: ORG.appUrl }
   state.org = { ...ORG }
   state.forgotRequests = []
   state.resetBodies = []
@@ -108,7 +111,8 @@ export function problem(status: number, code: string, headers?: Record<string, s
 }
 
 const handlers = [
-  http.get('*/api/v1/organization', () => HttpResponse.json(state.org)),
+  http.get('*/api/v1/install', () => HttpResponse.json(state.install)),
+  http.get('*/api/v1/organization', () => (state.me ? HttpResponse.json(state.org) : problem(401, 'unauthenticated'))),
   http.put('*/api/v1/organization', async ({ request }) => {
     const body = (await request.json()) as OrganizationInput
     state.orgBodies.push(body)
@@ -149,8 +153,9 @@ const handlers = [
   http.post('*/api/v1/setup', async ({ request }) => {
     const body = (await request.json()) as { organizationName: string; name: string; email: string }
     state.setupBodies.push(body)
-    if (!state.org.setupRequired) return problem(409, 'setup_closed')
-    state.org = { ...state.org, name: body.organizationName, setupRequired: false }
+    if (!state.install.setupRequired) return problem(409, 'setup_closed')
+    state.install = { ...state.install, setupRequired: false }
+    state.org = { ...state.org, name: body.organizationName }
     state.me = inOrg({ id: '01a1cedf-0000-7000-8000-0000000000f1', email: body.email, name: body.name, role: 'admin' })
     return HttpResponse.json(state.me)
   }),

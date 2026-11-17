@@ -5,6 +5,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
 // AcceptInvite sets the first password from an invite link and signs the person in.
@@ -119,4 +120,20 @@ func (s *server) CompleteSetup(ctx context.Context, req gen.CompleteSetupRequest
 	}
 	cookie := s.sessionCookie(sess.Token, sess.CookieExpires).String()
 	return gen.CompleteSetup200JSONResponse{Body: me, Headers: gen.CompleteSetup200ResponseHeaders{SetCookie: &cookie}}, nil
+}
+
+// RemoveMember takes a supervisor or agent off the organization (admin only).
+func (s *server) RemoveMember(ctx context.Context, req gen.RemoveMemberRequestObject) (gen.RemoveMemberResponseObject, error) {
+	p, err := requireOrg(ctx, auth.CapUsersManage)
+	if err != nil {
+		return nil, err
+	}
+	open := make([]string, len(ticket.OpenStatuses))
+	for i, st := range ticket.OpenStatuses {
+		open[i] = string(st)
+	}
+	if err := s.auth.RemoveMember(ctx, p, p.OrganizationID, req.UserId, open); err != nil {
+		return nil, err
+	}
+	return gen.RemoveMember204Response{}, nil
 }

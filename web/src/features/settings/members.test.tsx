@@ -21,7 +21,7 @@ describe('Settings › Members & roles', () => {
   it('counts each role and lists the team, with your own row read-only', async () => {
     renderApp('/settings/members')
     expect(
-      await screen.findByText('3 team members and 46 client requesters. Client requesters are invited from each client.'),
+      await screen.findByText('3 team members and 46 client requesters in this organization. Administrators work in every organization; client requesters are invited from each client.'),
     ).toBeInTheDocument()
     const agent = within(screen.getByRole('region', { name: 'Agent' }))
     expect(agent.getByText('2 users')).toBeInTheDocument()
@@ -86,15 +86,15 @@ describe('Settings › Members & roles', () => {
     renderApp('/settings/members')
 
     await user.click((await teamRow('Rina Pratiwi')).getByRole('button', { name: 'Actions for Rina Pratiwi' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Suspend' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Suspend account' }))
     const confirm = within(await screen.findByRole('alertdialog', { name: 'Suspend Rina Pratiwi?' }))
     expect(confirm.getByText(/Tickets assigned to them stay theirs/)).toBeInTheDocument()
-    await user.click(confirm.getByRole('button', { name: 'Suspend' }))
-    expect(await screen.findByRole('status')).toHaveTextContent('Rina Pratiwi is suspended and signed out everywhere.')
+    await user.click(confirm.getByRole('button', { name: 'Suspend account' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Rina Pratiwi is suspended and signed out of every organization.')
     expect((await teamRow('Rina Pratiwi')).getByText('Suspended')).toBeInTheDocument()
 
     await user.click((await teamRow('Bayu Nugroho')).getByRole('button', { name: 'Actions for Bayu Nugroho' }))
-    expect(screen.queryByRole('menuitem', { name: 'Suspend' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Suspend account' })).not.toBeInTheDocument()
     await user.click(await screen.findByRole('menuitem', { name: 'Reactivate' }))
     expect(await screen.findByRole('status')).toHaveTextContent('Bayu Nugroho can sign in again.')
 
@@ -103,5 +103,31 @@ describe('Settings › Members & roles', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('A new invite is on its way to Yoga Hidayat.')
 
     expect(members.actions).toEqual(['suspend:Rina Pratiwi', 'reactivate:Bayu Nugroho', 'invite:Yoga Hidayat'])
+  })
+})
+
+describe('Settings › Members & roles › removing', () => {
+  beforeEach(() => {
+    state.me = ADMIN
+  })
+
+  it('takes a member off the organization after confirming', async () => {
+    const user = userEvent.setup()
+    renderApp('/settings/members')
+    await user.click((await teamRow('Rina Pratiwi')).getByRole('button', { name: 'Actions for Rina Pratiwi' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Remove from organization' }))
+    const confirm = within(await screen.findByRole('alertdialog', { name: 'Remove Rina Pratiwi from this organization?' }))
+    await user.click(confirm.getByRole('button', { name: 'Remove from organization' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Rina Pratiwi no longer works in this organization.')
+    expect(members.actions).toEqual(['remove:Rina Pratiwi'])
+  })
+
+  it('never offers to remove an administrator', async () => {
+    const user = userEvent.setup()
+    members.team.push({ ...members.team[0]!, id: '01a1cedf-0000-7000-8000-0000000000a9', name: 'Second Admin', email: 'two@demo-vendor.test' })
+    renderApp('/settings/members')
+    await user.click((await teamRow('Second Admin')).getByRole('button', { name: 'Actions for Second Admin' }))
+    expect(await screen.findByRole('menuitem', { name: 'Suspend account' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Remove from organization' })).not.toBeInTheDocument()
   })
 })

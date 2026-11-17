@@ -226,17 +226,13 @@ func problemCode(t *testing.T, rec *httptest.ResponseRecorder) string {
 	return p.Code
 }
 
-func TestOrganizationIsPublic(t *testing.T) {
+// The sign-in page reads the install, not an organization: it shows SimDesk.
+func TestInstallIsPublicAndOrganizationIsNot(t *testing.T) {
 	e := newEnv(t)
-	rec := e.do(request{method: http.MethodGet, path: apiBase + "/organization"})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status %d", rec.Code)
+	if rec := e.do(request{method: http.MethodGet, path: apiBase + "/install"}); rec.Code != http.StatusOK {
+		t.Fatalf("install: %d", rec.Code)
 	}
-	var org gen.Organization
-	_ = json.Unmarshal(rec.Body.Bytes(), &org)
-	if org.Name == "" {
-		t.Fatal("organization name missing")
-	}
+	expectProblem(t, e.do(request{method: http.MethodGet, path: apiBase + "/organization"}), http.StatusUnauthorized, apperr.CodeUnauthenticated)
 }
 
 func TestLoginSetsSecureSessionCookie(t *testing.T) {

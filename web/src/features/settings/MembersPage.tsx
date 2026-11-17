@@ -18,6 +18,9 @@ import { MemberActions, MemberStatusPill } from './MemberControls'
 import { membersQueryOptions, useChangeMemberRole, useInviteMember, useMemberAction, type MemberAction } from './queries'
 import { ErrorAlert, SectionHeader } from './shared'
 
+/** The actions that ask before they run. */
+type ConfirmedAction = Extract<MemberAction, 'suspend' | 'remove'>
+
 /** The team's roles, as the invite dialog and each row offer them. */
 const STAFF_ROLES: readonly StaffRole[] = [Roles.Admin, Roles.Supervisor, Roles.Agent]
 
@@ -116,7 +119,8 @@ function TeamTable({ team, flash, onFlash }: { team: Member[]; flash: string | n
   const timeZone = useOrgTimeZone()
   const role = useChangeMemberRole()
   const action = useMemberAction()
-  const [suspending, setSuspending] = useState<Member | null>(null)
+  // Suspending and removing ask first.
+  const [confirming, setConfirming] = useState<{ member: Member; action: ConfirmedAction } | null>(null)
 
   const act = (m: Member, a: MemberAction) => {
     onFlash(null)
@@ -124,7 +128,7 @@ function TeamTable({ team, flash, onFlash }: { team: Member[]; flash: string | n
       { userId: m.id, action: a },
       {
         onSuccess: () => {
-          setSuspending(null)
+          setConfirming(null)
           onFlash(t(`settings.members.done.${a}`, { name: m.name }))
         },
       },
@@ -208,7 +212,12 @@ function TeamTable({ team, flash, onFlash }: { team: Member[]; flash: string | n
                 </Td>
                 <Td className="text-right">
                   {!self && (
-                    <MemberActions name={m.name} status={m.status} onAction={(a) => (a === 'suspend' ? setSuspending(m) : act(m, a))} />
+                    <MemberActions
+                      name={m.name}
+                      status={m.status}
+                      removable={m.role !== Roles.Admin}
+                      onAction={(a) => (a === 'suspend' || a === 'remove' ? setConfirming({ member: m, action: a }) : act(m, a))}
+                    />
                   )}
                 </Td>
               </tr>
@@ -216,22 +225,22 @@ function TeamTable({ team, flash, onFlash }: { team: Member[]; flash: string | n
           })}
         </tbody>
       </Table>
-      {suspending && (
+      {confirming && (
         <ConfirmDialog
           isOpen
           onOpenChange={(open) => {
             if (open) return
-            setSuspending(null)
+            setConfirming(null)
             action.reset()
           }}
           tone="danger"
-          title={t('settings.members.suspendTitle', { name: suspending.name })}
-          confirmLabel={t('settings.members.actions.suspend')}
+          title={t(`settings.members.confirm.${confirming.action}.title`, { name: confirming.member.name })}
+          confirmLabel={t(`settings.members.actions.${confirming.action}`)}
           isPending={action.isPending}
           error={<ErrorAlert error={action.error} />}
-          onConfirm={() => act(suspending, 'suspend')}
+          onConfirm={() => act(confirming.member, confirming.action)}
         >
-          {t('settings.members.suspendBody')}
+          {t(`settings.members.confirm.${confirming.action}.body`)}
         </ConfirmDialog>
       )}
     </section>

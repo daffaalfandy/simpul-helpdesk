@@ -16,9 +16,9 @@ async function signIn(email: string, password = PASSWORD) {
 }
 
 describe('sign in', () => {
-  it('shows the organisation name', async () => {
+  it('shows SimDesk, not an organization', async () => {
     renderApp('/login')
-    expect(await screen.findByRole('heading', { name: 'Sign in to Demo Vendor' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Sign in to SimDesk' })).toBeInTheDocument()
   })
 
   it('sends agents to the board', async () => {
@@ -183,14 +183,14 @@ describe('accepting an invite', () => {
 
 describe('first-run setup', () => {
   it('sends people to setup until the first administrator exists', async () => {
-    state.org = { ...state.org, setupRequired: true }
+    state.install = { ...state.install, setupRequired: true }
     const { router } = renderApp('/board')
     expect(await screen.findByRole('heading', { name: 'Set up SimDesk' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/setup')
   })
 
   it('names the organisation, creates the administrator and opens Settings › General', async () => {
-    state.org = { ...state.org, setupRequired: true }
+    state.install = { ...state.install, setupRequired: true }
     const { router } = renderApp('/login')
     const user = userEvent.setup()
     await user.type(await screen.findByLabelText('Organisation name'), 'PT Vendor Teknologi')
@@ -208,7 +208,7 @@ describe('first-run setup', () => {
 
   it('is closed once the install is set up', async () => {
     const { router } = renderApp('/setup')
-    expect(await screen.findByRole('heading', { name: 'Sign in to Demo Vendor' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Sign in to SimDesk' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
   })
 })

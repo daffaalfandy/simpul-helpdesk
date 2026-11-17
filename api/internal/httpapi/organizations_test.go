@@ -232,3 +232,47 @@ func TestInviteNamesTheOrganization(t *testing.T) {
 		t.Fatalf("accept: %d %s", r.code, r.body)
 	}
 }
+
+// Administrators list and add organizations; a new one starts with the defaults.
+func TestCreateOrganization(t *testing.T) {
+	e := newEnv(t)
+	admin := e.as(auth.RoleAdmin)
+	in := gen.OrganizationInput{Name: "PT Mitra Data", TicketPrefix: "md", Timezone: "Asia/Makassar"}
+	expectProblem(t, e.as(auth.RoleSupervisor).do(http.MethodPost, "/organizations", in), http.StatusForbidden, apperr.CodeForbidden)
+	created := decode[gen.OrganizationSummary](t, admin.do(http.MethodPost, "/organizations", in), http.StatusCreated)
+	if created.TicketPrefix != "MD" || created.Timezone != "Asia/Makassar" {
+		t.Fatalf("created = %+v", created)
+	}
+	expectProblem(t, admin.do(http.MethodPost, "/organizations", in), http.StatusConflict, apperr.CodeTicketPrefixTaken)
+	list := decode[[]gen.OrganizationSummary](t, admin.do(http.MethodGet, "/organizations", nil), http.StatusOK)
+	if len(list) != 2 {
+		t.Fatalf("organizations = %+v", list)
+	}
+	levels := decode[[]gen.PriorityLevel](t, admin.in(created.Id).do(http.MethodGet, "/priorities", nil), http.StatusOK)
+	hours := decode[gen.BusinessHours](t, admin.in(created.Id).do(http.MethodGet, "/business-hours", nil), http.StatusOK)
+	if len(levels) != 4 || len(hours.Weekdays) != 5 || hours.Timezone != "Asia/Makassar" {
+		t.Fatalf("defaults: %d priorities, hours %+v", len(levels), hours)
+	}
+}
+
+// Taking someone off an organization keeps their account; their open tickets there go first.
+func TestRemoveMember(t *testing.T) {
+	te := newTicketEnv(t)
+	b := te.secondOrganization(t, "PT Mitra Data", "MD")
+	te.member(t, auth.RoleAgent, b, auth.RoleAgent)
+	tk := te.requester.report(t, incident(te.projectA, "Printer offline"))
+	decode[gen.Ticket](t, te.admin.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+	path := "/members/" + te.agentID.String()
+
+	expectProblem(t, te.admin.do(http.MethodDelete, path, nil), http.StatusConflict, apperr.CodeMemberHasOpenTickets)
+	expectProblem(t, te.admin.do(http.MethodDelete, "/members/"+userID(t, te.env, auth.RoleAdmin).String(), nil),
+		http.StatusConflict, apperr.CodeCannotChangeSelf)
+	if rec := te.admin.in(b).do(http.MethodDelete, path, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("remove: %d %s", rec.Code, rec.Body)
+	}
+	me := te.agent.me(t)
+	if len(me.Organizations) != 1 || orgOf(me) != te.org {
+		t.Fatalf("after removal = %+v", me)
+	}
+	expectProblem(t, te.admin.in(b).do(http.MethodDelete, path, nil), http.StatusNotFound, apperr.CodeNotFound)
+}

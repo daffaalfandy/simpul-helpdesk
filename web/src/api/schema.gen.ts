@@ -4,6 +4,48 @@
  */
 
 export interface paths {
+    "/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The install, for the sign-in and setup pages (public)
+         * @description Whether first-run setup is still open, and where emails link to.
+         */
+        get: operations["getInstall"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every organization on the install (admin only) */
+        get: operations["listOrganizations"];
+        put?: never;
+        /**
+         * Add a vendor organization (admin only)
+         * @description It starts with the default priorities and business hours (Mon–Fri 08:00–17:00). Error
+         *     codes `invalid_organization` (400, with fields) and `ticket_prefix_taken` (409).
+         */
+        post: operations["createOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organization": {
         parameters: {
             query?: never;
@@ -12,8 +54,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Public organisation branding for the sign-in page and footer
-         * @description Also says whether first-run setup is still open (`setupRequired`).
+         * The organization the request works in
+         * @description Its name, logo, prefix and time zone, for the app header, the portal and the footer.
          */
         get: operations["getOrganization"];
         /**
@@ -254,6 +296,30 @@ export interface paths {
          */
         post: operations["inviteMember"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take a supervisor or agent off the organization (admin only)
+         * @description Their account stays, with any other organization they work in; their client links here
+         *     go. Refused with `member_has_open_tickets` (409) while open tickets here are assigned to
+         *     them: reassign those first. Administrators work in every organization (`invalid_role`).
+         */
+        delete: operations["removeMember"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1046,7 +1112,9 @@ export interface paths {
         };
         /**
          * One ticket
-         * @description 404 when the user may not see it.
+         * @description 404 when the user may not see it. A ticket of another organization the user works in
+         *     answers `other_organization` (409) with that organization's id as `detail`, so the app
+         *     can offer to switch (every operation on a ticket key does the same).
          */
         get: operations["getTicket"];
         put?: never;
@@ -1628,7 +1696,29 @@ export interface components {
             id: string;
             name: string;
         };
+        Install: {
+            /** @description First-run setup is still open (no administrator yet). */
+            setupRequired: boolean;
+            /** @description Where emails link to; set by the APP_URL environment variable on the server. */
+            appUrl: string;
+        };
+        OrganizationSummary: {
+            /** Format: uuid */
+            id: string;
+            /** @example PT Mitra Data */
+            name: string;
+            /** @example MD */
+            ticketPrefix: string;
+            /** @example Asia/Makassar */
+            timezone: string;
+            logoUrl: string | null;
+            /** @description Supervisors and agents (administrators work everywhere). */
+            memberCount: number;
+            clientCount: number;
+        };
         Organization: {
+            /** Format: uuid */
+            id: string;
             /** @example Demo Vendor */
             name: string;
             /**
@@ -1647,8 +1737,6 @@ export interface components {
             logoUrl: string | null;
             /** @example Data stored in Indonesia · Personal data handled under UU PDP */
             footerNote: string | null;
-            /** @description First-run setup is still open (no administrator yet). */
-            setupRequired: boolean;
         };
         OrganizationInput: {
             name: string;
@@ -2854,6 +2942,79 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getInstall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The install */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Install"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listOrganizations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organizations, by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSummary"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSummary"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
     getOrganization: {
         parameters: {
             query?: never;
@@ -2863,7 +3024,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Organisation branding */
+            /** @description The organization */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2872,6 +3033,8 @@ export interface operations {
                     "application/json": components["schemas"]["Organization"];
                 };
             };
+            401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };
@@ -3269,6 +3432,32 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
@@ -4606,6 +4795,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

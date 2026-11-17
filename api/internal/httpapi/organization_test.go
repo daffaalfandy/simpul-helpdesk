@@ -39,7 +39,7 @@ func TestOrganizationSettings(t *testing.T) {
 	e := newEnv(t)
 	admin := e.as(auth.RoleAdmin)
 
-	org := decode[gen.Organization](t, e.do(request{method: http.MethodGet, path: apiBase + "/organization"}), http.StatusOK)
+	org := decode[gen.Organization](t, admin.do(http.MethodGet, "/organization", nil), http.StatusOK)
 	if org.TicketPrefix != "HD" || !strings.HasPrefix(org.AppUrl, "http") || org.LogoUrl != nil {
 		t.Fatalf("organisation = %+v", org)
 	}

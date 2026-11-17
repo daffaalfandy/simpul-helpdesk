@@ -60,3 +60,8 @@ SELECT EXISTS (
 
 -- name: GetUserIDByEmail :one
 SELECT id, role FROM users WHERE email = @email;
+
+-- name: CountOpenTicketsAssignedIn :one
+-- A member's open tickets in one organization: they must be handed on before the member leaves.
+SELECT count(*)::int FROM tickets
+WHERE organization_id = @organization_id AND assignee_id = @user_id AND status = ANY(@open_statuses::text[]);

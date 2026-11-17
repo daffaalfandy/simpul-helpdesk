@@ -177,6 +177,30 @@ func (s *Service) First(ctx context.Context) (Settings, bool, error) {
 	return settingsOf(db.GetOrganizationRow(row)), true, nil
 }
 
+// Summary is an organization as Settings › Organizations lists it.
+type Summary struct {
+	Settings
+	MemberCount int
+	ClientCount int
+}
+
+// List returns every organization with its member and client counts, by name.
+func (s *Service) List(ctx context.Context) ([]Summary, error) {
+	rows, err := s.store.Q().ListOrganizationSummaries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Summary, len(rows))
+	for i, r := range rows {
+		out[i] = Summary{
+			Settings: Settings{ID: r.ID, Name: r.Name, TicketPrefix: r.TicketPrefix, Timezone: r.Timezone,
+				Logo: LogoOf(r.LogoKey, r.LogoContentType, r.LogoUpdatedAt)},
+			MemberCount: int(r.MemberCount), ClientCount: int(r.ClientCount),
+		}
+	}
+	return out, nil
+}
+
 // SetupRequired reports whether first-run setup is still open: until an administrator exists.
 func (s *Service) SetupRequired(ctx context.Context) (bool, error) {
 	done, err := s.store.Q().GetInstall(ctx)

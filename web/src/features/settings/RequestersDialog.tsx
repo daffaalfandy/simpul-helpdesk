@@ -140,7 +140,7 @@ export function RequestersDialog({ client, onClose }: { client: Client; onClose:
             action.reset()
           }}
           tone="danger"
-          title={t('settings.members.suspendTitle', { name: suspending.name })}
+          title={t('settings.members.confirm.suspend.title', { name: suspending.name })}
           confirmLabel={t('settings.members.actions.suspend')}
           isPending={action.isPending}
           error={<ErrorAlert error={action.error} />}

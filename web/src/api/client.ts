@@ -6,6 +6,9 @@ export const API_BASE_PATH = '/api/v1'
 
 export type Me = components['schemas']['Me']
 export type Organization = components['schemas']['Organization']
+export type OrganizationSummary = components['schemas']['OrganizationSummary']
+export type OrganizationChoice = components['schemas']['OrganizationChoice']
+export type Install = components['schemas']['Install']
 export type OrganizationInput = components['schemas']['OrganizationInput']
 export type Member = components['schemas']['Member']
 export type Members = components['schemas']['Members']

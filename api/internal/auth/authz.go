@@ -11,19 +11,20 @@ import (
 type Capability string
 
 const (
-	CapAgentApp       Capability = "app.agent"        // board, tickets, internal notes
-	CapPortal         Capability = "app.portal"       // client portal
-	CapProjectsManage Capability = "projects.manage"  // projects & DoD settings
-	CapReportsView    Capability = "reports.view"     // SLA reports
-	CapUsersManage    Capability = "users.manage"     // members & roles
-	CapSettingsManage Capability = "settings.manage"  // organisation, SLA, clients, integrations
-	CapClientsViewAll Capability = "clients.view_all" // every client and its tickets; agents see only assigned ones
+	CapAgentApp            Capability = "app.agent"            // board, tickets, internal notes
+	CapPortal              Capability = "app.portal"           // client portal
+	CapProjectsManage      Capability = "projects.manage"      // projects & DoD settings
+	CapReportsView         Capability = "reports.view"         // SLA reports
+	CapUsersManage         Capability = "users.manage"         // members & roles
+	CapSettingsManage      Capability = "settings.manage"      // organisation, SLA, clients, integrations
+	CapClientsViewAll      Capability = "clients.view_all"     // every client and its tickets; agents see only assigned ones
+	CapOrganizationsManage Capability = "organizations.manage" // the install's organizations
 )
 
 var roleCapabilities = map[Role]map[Capability]bool{
 	RoleAdmin: {
 		CapAgentApp: true, CapProjectsManage: true, CapReportsView: true,
-		CapUsersManage: true, CapSettingsManage: true, CapClientsViewAll: true,
+		CapUsersManage: true, CapSettingsManage: true, CapClientsViewAll: true, CapOrganizationsManage: true,
 	},
 	RoleSupervisor: {CapAgentApp: true, CapProjectsManage: true, CapReportsView: true, CapClientsViewAll: true},
 	RoleAgent:      {CapAgentApp: true},
