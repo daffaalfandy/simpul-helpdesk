@@ -1069,14 +1069,12 @@
       "mac": {
         "mod": "⌘",
         "shift": "⇧",
-        "alt": "⌥",
-        "join": ""
+        "alt": "⌥"
       },
       "other": {
         "mod": "Ctrl",
         "shift": "Shift",
-        "alt": "Alt",
-        "join": "+"
+        "alt": "Alt"
       }
     },
     "link": {

@@ -57,6 +57,8 @@ const linkKeys: Keys = { key: 'K' }
 const toolIds = [...markTools, ...blockTools].map((tool) => tool.id)
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
+/** How key names join in a shortcut: "⌘⇧8" on a Mac, "Ctrl+Shift+8" elsewhere. */
+const KEY_JOIN = { mac: '', other: '+' } as const
 
 /** Opens the link popover on Mod-K from inside the editor. */
 const LinkShortcut = Extension.create<{ onOpen: () => void }>({
@@ -86,7 +88,7 @@ function useShortcutLabel() {
     if (keys.shift) parts.push(t(`editor.keys.${platform}.shift`))
     if (keys.alt) parts.push(t(`editor.keys.${platform}.alt`))
     parts.push(keys.key)
-    return parts.join(t(`editor.keys.${platform}.join`))
+    return parts.join(KEY_JOIN[platform])
   }
 }
 
@@ -385,6 +387,9 @@ function LinkForm({ editor, isActive, onDone }: { editor: Editor; isActive: bool
 
   const save = (e: FormEvent) => {
     e.preventDefault()
+    // The popover is a portal, but React still bubbles its submit to the composer's own form,
+    // which would send the message.
+    e.stopPropagation()
     setTried(true)
     if (!href) return
     const chain = editor.chain().extendMarkRange('link')

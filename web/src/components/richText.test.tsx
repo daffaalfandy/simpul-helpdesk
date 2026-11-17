@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { writeRichText } from '../test/richText'
 import { RichText } from './RichText'
@@ -44,13 +44,19 @@ describe('RichText', () => {
   })
 })
 
-function Field({ maxLength, initial = '' }: { maxLength?: number; initial?: string }) {
+/** The field inside a form, like every composer: the link box must never submit it. */
+function Field({ maxLength, initial = '', onSubmit }: { maxLength?: number; initial?: string; onSubmit?: () => void }) {
   const [value, setValue] = useState(initial)
   return (
-    <>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        onSubmit?.()
+      }}
+    >
       <RichTextField label="Message" value={value} onChange={setValue} maxLength={maxLength} />
       <output data-testid="markdown">{value}</output>
-    </>
+    </form>
   )
 }
 
@@ -78,7 +84,8 @@ describe('RichTextField', () => {
 
   it('adds a link only for web and email addresses, and Escape closes the link box', async () => {
     const user = userEvent.setup()
-    render(<Field />)
+    const submitted = vi.fn()
+    render(<Field onSubmit={submitted} />)
     await user.click(screen.getByRole('button', { name: 'Link' }))
     const address = await screen.findByRole('textbox', { name: 'Link address' })
     await user.type(address, 'javascript:alert(1)')
@@ -92,6 +99,8 @@ describe('RichTextField', () => {
     await user.click(screen.getByRole('button', { name: 'Save link' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(markdown()).toBe('[https://example.com/help](https://example.com/help)')
+    // Saving a link (a form in a portal) must not send the message it sits in.
+    expect(submitted).not.toHaveBeenCalled()
   })
 
   it('says when the text is longer than the API takes', () => {
