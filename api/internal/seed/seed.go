@@ -162,6 +162,10 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 			}
 			userIDs[p.email] = id
 		}
+		// The demo has its administrator, so first-run setup is closed like on a real install.
+		if err := tx.Q.CompleteSetup(ctx); err != nil {
+			return err
+		}
 		for _, c := range clients {
 			ids := make([]uuid.UUID, 0, len(c.agents))
 			for _, email := range c.agents {

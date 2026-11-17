@@ -61,6 +61,7 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"users":               count(`SELECT count(*) FROM users`),
 		"clients":             count(`SELECT count(*) FROM clients`),
 		"agent links":         count(`SELECT count(*) FROM client_agents`),
+		"setup open":          count(`SELECT count(*) FROM organization WHERE setup_completed_at IS NULL`),
 		"holidays":            count(`SELECT count(*) FROM holidays`),
 		"invited":             count(`SELECT count(*) FROM users WHERE status = 'invited' AND password_hash IS NULL`),
 		"catalog items":       count(`SELECT count(*) FROM catalog_items`),
@@ -98,7 +99,7 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"code notifications":           count(`SELECT count(*) FROM notifications WHERE event_type = 'code'`),
 	}
 	want := map[string]int{
-		"users": 11, "clients": 8, "agent links": 7,
+		"users": 11, "clients": 8, "agent links": 7, "setup open": 0,
 		"holidays": presetDays, "invited": 4, "catalog items": 5,
 		"projects": 8, "tickets on projects": 12, "requests on default": 4, "project targets": 32, "default projects": 5, "e-Office P1 fix": 2,
 		"tickets": 12, "messages": 12, "internal notes": 1, "ticket history": 12, "next number": 24891,
