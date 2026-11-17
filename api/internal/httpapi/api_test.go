@@ -149,7 +149,7 @@ func newEnv(t *testing.T) *env {
 	}
 	e := &env{org: org, t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, invite: inviteWorker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, pic: pic, files: files, connector: connectorSvc, process: process, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
-		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r}
+		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r, OrganizationID: org}
 		if r == auth.RoleRequester {
 			in.ClientName, in.JobTitle = "Dinas Kominfo Jambi", "IT Officer"
 		}
@@ -251,7 +251,7 @@ func TestLoginSetsSecureSessionCookie(t *testing.T) {
 	}
 	var me gen.Me
 	_ = json.Unmarshal(rec.Body.Bytes(), &me)
-	if me.Role != gen.RoleAgent || me.Email != e.users[auth.RoleAgent] {
+	if me.Role == nil || *me.Role != gen.RoleAgent || me.Email != e.users[auth.RoleAgent] {
 		t.Fatalf("me = %+v", me)
 	}
 }
@@ -338,7 +338,7 @@ func TestMeIncludesClientForRequesters(t *testing.T) {
 	rec := e.do(request{method: http.MethodGet, path: apiBase + "/auth/me", cookie: e.sessionFor(auth.RoleRequester)})
 	var me gen.Me
 	_ = json.Unmarshal(rec.Body.Bytes(), &me)
-	if me.Role != gen.RoleRequester || me.Client == nil || me.Client.Name != "Dinas Kominfo Jambi" {
+	if me.Role == nil || *me.Role != gen.RoleRequester || me.Client == nil || me.Client.Name != "Dinas Kominfo Jambi" {
 		t.Fatalf("me = %+v", me)
 	}
 }
@@ -489,11 +489,13 @@ func TestCreateUserValidation(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	cases := map[string]auth.NewUser{
-		apperr.CodeClientRequired:   {Email: "r@x.test", Name: "R", Password: password, Role: auth.RoleRequester},
-		apperr.CodeClientNotAllowed: {Email: "a@x.test", Name: "A", Password: password, Role: auth.RoleAgent, ClientName: "Dinas Kominfo Jambi"},
-		apperr.CodeClientNotFound:   {Email: "q@x.test", Name: "Q", Password: password, Role: auth.RoleRequester, ClientName: "Nope"},
+		apperr.CodeClientRequired:   {Email: "r@x.test", Name: "R", Password: password, Role: auth.RoleRequester, OrganizationID: e.org},
+		apperr.CodeClientNotAllowed: {Email: "a@x.test", Name: "A", Password: password, Role: auth.RoleAgent, ClientName: "Dinas Kominfo Jambi", OrganizationID: e.org},
+		apperr.CodeClientNotFound:   {Email: "q@x.test", Name: "Q", Password: password, Role: auth.RoleRequester, ClientName: "Nope", OrganizationID: e.org},
 		apperr.CodeInvalidRole:      {Email: "o@x.test", Name: "O", Password: password, Role: "owner"},
 		apperr.CodeWeakPassword:     {Email: "w@x.test", Name: "W", Password: "short", Role: auth.RoleAgent},
+		// Supervisors and agents work in an organization; the CLI names it.
+		apperr.CodeOrganizationRequired: {Email: "n@x.test", Name: "N", Password: password, Role: auth.RoleAgent},
 	}
 	for code, in := range cases {
 		_, err := e.auth.CreateUser(ctx, in)

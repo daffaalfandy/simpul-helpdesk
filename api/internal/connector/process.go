@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/commitmsg"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
@@ -65,7 +66,7 @@ func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid
 		if len(keys) == 0 {
 			continue // most commits name no ticket; they aren't kept
 		}
-		author, err := s.staffByEmail(ctx, q, e.Author.Email)
+		author, err := s.staffByEmail(ctx, q, d.OrganizationID, e.Author.Email)
 		if err != nil {
 			return err
 		}
@@ -86,11 +87,14 @@ func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid
 	return q.MarkDeliveryProcessed(ctx, deliveryID)
 }
 
-func (s *Service) staffByEmail(ctx context.Context, q *db.Queries, email string) (*db.FindStaffByEmailRow, error) {
+// staffByEmail is the administrator or member of the organization who commits under email.
+func (s *Service) staffByEmail(ctx context.Context, q *db.Queries, orgID uuid.UUID, email string) (*db.FindStaffByEmailRow, error) {
 	if email == "" {
 		return nil, nil
 	}
-	u, err := q.FindStaffByEmail(ctx, email)
+	u, err := q.FindStaffByEmail(ctx, db.FindStaffByEmailParams{
+		Email: email, Status: string(auth.UserStatusActive), AdminRole: string(auth.RoleAdmin), OrganizationID: orgID,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

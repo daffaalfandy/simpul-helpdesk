@@ -106,8 +106,9 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 		if err != nil {
 			return err
 		}
-		p = principalOf(user)
-		p.OrganizationID = orgID
+		if p, err = principalOf(ctx, tx.Q, user); err != nil {
+			return err
+		}
 		sess, err = s.startSession(ctx, tx, p, info)
 		return err
 	})

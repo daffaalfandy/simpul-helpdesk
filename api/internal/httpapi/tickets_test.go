@@ -59,8 +59,8 @@ func newTicketEnv(t *testing.T) *ticketEnv {
 	te.projectA2 = testdb.Project(t, e.st, te.clientA, "Email", false)
 	te.projectB = testdb.Project(t, e.st, te.clientB, "Network & infra support", true)
 	for _, u := range []auth.NewUser{
-		{Email: otherAgentEmail, Name: "Unlinked Agent", Password: password, Role: auth.RoleAgent},
-		{Email: otherRequesterEmail, Name: "Sri Lestari", Password: password, Role: auth.RoleRequester, ClientName: otherClient},
+		{Email: otherAgentEmail, Name: "Unlinked Agent", Password: password, Role: auth.RoleAgent, OrganizationID: e.org},
+		{Email: otherRequesterEmail, Name: "Sri Lestari", Password: password, Role: auth.RoleRequester, ClientName: otherClient, OrganizationID: e.org},
 	} {
 		if _, err := e.auth.CreateUser(ctx, u); err != nil {
 			t.Fatal(err)

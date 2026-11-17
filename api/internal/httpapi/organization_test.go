@@ -88,7 +88,7 @@ func TestOrganizationLogo(t *testing.T) {
 	expectProblem(t, admin.uploadLogo("big.png", big), http.StatusRequestEntityTooLarge, apperr.CodeLogoTooLarge)
 
 	got := decode[gen.Organization](t, admin.uploadLogo("logo.png", pngBytes), http.StatusOK)
-	if got.LogoUrl == nil || !strings.HasPrefix(*got.LogoUrl, apiBase+"/organization/logo?v=") {
+	if got.LogoUrl == nil || !strings.HasPrefix(*got.LogoUrl, apiBase+"/organizations/"+e.org.String()+"/logo?v=") {
 		t.Fatalf("logoUrl = %v", got.LogoUrl)
 	}
 	// Public, inline, cached for good under its versioned URL.

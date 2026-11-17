@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,6 +37,8 @@ const (
 	ActionRoleChanged            = "user.role_changed"
 	ActionUserSuspended          = "user.suspended"
 	ActionUserReactivated        = "user.reactivated"
+	ActionMemberAdded            = "user.member_added"
+	ActionMemberRemoved          = "user.member_removed"
 
 	TargetUser    = "user"
 	auditDataRole = "role"
@@ -162,8 +165,13 @@ func (s *Service) Login(ctx context.Context, email, password string) (*Principal
 		}
 	}
 	p := &Principal{
-		UserID: user.ID, Email: user.Email, Name: user.Name, Role: Role(user.Role),
+		UserID: user.ID, Email: user.Email, Name: user.Name,
 		JobTitle: user.JobTitle, ClientID: user.ClientID, ClientName: user.ClientName,
+	}
+	if err := resolveOrganization(ctx, s.store.Q(), p, account{
+		role: Role(user.Role), clientOrg: user.ClientOrganizationID, lastOrg: user.LastOrganizationID,
+	}); err != nil {
+		return nil, NewSession{}, err
 	}
 	var sess NewSession
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
@@ -248,8 +256,9 @@ func (s *Service) checkLimit(ctx context.Context, key string, limit int, window 
 	return apperr.RateLimited(max(stats.Oldest.Add(window).Sub(now), minRetryAfter))
 }
 
-// Authenticate resolves a session token to the signed-in user.
-func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, error) {
+// Authenticate resolves a session token to the signed-in user, working in the organization
+// requested (nil: their last one).
+func (s *Service) Authenticate(ctx context.Context, token string, requested *uuid.UUID) (*Principal, error) {
 	if token == "" {
 		return nil, apperr.Unauthenticated()
 	}
@@ -278,30 +287,14 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Principal, e
 	}
 	p := &Principal{
 		SessionID: row.SessionID, UserID: row.UserID, Email: row.Email, Name: row.Name,
-		Role: Role(row.Role), JobTitle: row.JobTitle, ClientID: row.ClientID, ClientName: row.ClientName,
+		JobTitle: row.JobTitle, ClientID: row.ClientID, ClientName: row.ClientName,
 	}
-	if err := s.resolveOrganization(ctx, s.store.Q(), p, row.ClientOrganizationID); err != nil {
+	if err := resolveOrganization(ctx, s.store.Q(), p, account{
+		role: Role(row.Role), clientOrg: row.ClientOrganizationID, lastOrg: row.LastOrganizationID, requestedOrgs: requested,
+	}); err != nil {
 		return nil, err
 	}
 	return p, nil
-}
-
-// resolveOrganization sets the organization p works in: a requester's client's, otherwise the
-// install's only organization (none on a fresh install).
-func (s *Service) resolveOrganization(ctx context.Context, q *db.Queries, p *Principal, clientOrg *uuid.UUID) error {
-	if clientOrg != nil {
-		p.OrganizationID = *clientOrg
-		return nil
-	}
-	org, err := q.GetFirstOrganization(ctx)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	p.OrganizationID = org.ID
-	return nil
 }
 
 func (s *Service) Logout(ctx context.Context, p *Principal) error {
@@ -391,6 +384,9 @@ type NewUser struct {
 	Role       Role
 	ClientName string // required for requesters
 	JobTitle   string
+	// OrganizationID is where a supervisor or agent works, and where a requester's client is.
+	// Administrators work in every organization.
+	OrganizationID uuid.UUID
 }
 
 // CreateUser adds a user (used by the CLI; invites come later).
@@ -418,13 +414,12 @@ func (s *Service) CreateUser(ctx context.Context, in NewUser) (uuid.UUID, error)
 	}
 	var id uuid.UUID
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
+		if in.Role != RoleAdmin && in.OrganizationID == uuid.Nil {
+			return apperr.OrganizationRequired()
+		}
 		var clientID *uuid.UUID
 		if in.ClientName != "" {
-			first, err := tx.Q.GetFirstOrganization(ctx)
-			if err != nil {
-				return err
-			}
-			c, err := tx.Q.GetClientByName(ctx, db.GetClientByNameParams{OrganizationID: first.ID, Name: in.ClientName})
+			c, err := tx.Q.GetClientByName(ctx, db.GetClientByNameParams{OrganizationID: in.OrganizationID, Name: in.ClientName})
 			if errors.Is(err, pgx.ErrNoRows) {
 				return apperr.Invalid(apperr.CodeClientNotFound, "No client with that name", in.ClientName)
 			}
@@ -433,12 +428,21 @@ func (s *Service) CreateUser(ctx context.Context, in NewUser) (uuid.UUID, error)
 			}
 			clientID = &c.ID
 		}
+		account := in.Role
+		if slices.Contains(MemberRoles, in.Role) {
+			account = RoleStaff
+		}
 		id, err = tx.Q.CreateUser(ctx, db.CreateUserParams{
-			Email: in.Email, Name: in.Name, PasswordHash: &hash, Role: string(in.Role),
+			Email: in.Email, Name: in.Name, PasswordHash: &hash, Role: string(account),
 			ClientID: clientID, JobTitle: strPtr(in.JobTitle),
 		})
 		if err != nil {
 			return err
+		}
+		if account == RoleStaff {
+			if err := tx.Q.UpsertMembership(ctx, db.UpsertMembershipParams{UserID: id, OrganizationID: in.OrganizationID, Role: string(in.Role)}); err != nil {
+				return err
+			}
 		}
 		if err := audit.Write(ctx, tx.Q, audit.Entry{
 			ActorKind: audit.ActorSystem, ActorName: audit.ActorNameCLI, Action: ActionUserCreated,

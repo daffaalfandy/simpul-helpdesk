@@ -13,15 +13,20 @@ func (s *server) AcceptInvite(ctx context.Context, req gen.AcceptInviteRequestOb
 	if err != nil {
 		return nil, err
 	}
+	me, err := s.me(ctx, p)
+	if err != nil {
+		return nil, err
+	}
 	cookie := s.sessionCookie(sess.Token, sess.CookieExpires).String()
-	return gen.AcceptInvite200JSONResponse{Body: meFrom(p), Headers: gen.AcceptInvite200ResponseHeaders{SetCookie: &cookie}}, nil
+	return gen.AcceptInvite200JSONResponse{Body: me, Headers: gen.AcceptInvite200ResponseHeaders{SetCookie: &cookie}}, nil
 }
 
 func (s *server) ListMembers(ctx context.Context, _ gen.ListMembersRequestObject) (gen.ListMembersResponseObject, error) {
-	if _, err := auth.Require(ctx, auth.CapUsersManage); err != nil {
+	p, err := requireOrg(ctx, auth.CapUsersManage)
+	if err != nil {
 		return nil, err
 	}
-	m, err := s.auth.Members(ctx)
+	m, err := s.auth.Members(ctx, p.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +47,7 @@ func (s *server) ListMembers(ctx context.Context, _ gen.ListMembersRequestObject
 }
 
 func (s *server) InviteMember(ctx context.Context, req gen.InviteMemberRequestObject) (gen.InviteMemberResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapUsersManage)
+	p, err := requireOrg(ctx, auth.CapUsersManage)
 	if err != nil {
 		return nil, err
 	}
@@ -50,51 +55,51 @@ func (s *server) InviteMember(ctx context.Context, req gen.InviteMemberRequestOb
 	if req.Body.JobTitle != nil {
 		in.JobTitle = *req.Body.JobTitle
 	}
-	if _, err := s.auth.InviteMember(ctx, p, in); err != nil {
+	if _, err := s.auth.InviteMember(ctx, p, p.OrganizationID, in); err != nil {
 		return nil, err
 	}
 	return gen.InviteMember201Response{}, nil
 }
 
 func (s *server) ChangeMemberRole(ctx context.Context, req gen.ChangeMemberRoleRequestObject) (gen.ChangeMemberRoleResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapUsersManage)
+	p, err := requireOrg(ctx, auth.CapUsersManage)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.auth.ChangeRole(ctx, p, req.UserId, auth.Role(req.Body.Role)); err != nil {
+	if err := s.auth.ChangeRole(ctx, p, p.OrganizationID, req.UserId, auth.Role(req.Body.Role)); err != nil {
 		return nil, err
 	}
 	return gen.ChangeMemberRole204Response{}, nil
 }
 
 func (s *server) SuspendMember(ctx context.Context, req gen.SuspendMemberRequestObject) (gen.SuspendMemberResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapUsersManage)
+	p, err := requireOrg(ctx, auth.CapUsersManage)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.auth.Suspend(ctx, p, req.UserId); err != nil {
+	if err := s.auth.Suspend(ctx, p, p.OrganizationID, req.UserId); err != nil {
 		return nil, err
 	}
 	return gen.SuspendMember204Response{}, nil
 }
 
 func (s *server) ReactivateMember(ctx context.Context, req gen.ReactivateMemberRequestObject) (gen.ReactivateMemberResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapUsersManage)
+	p, err := requireOrg(ctx, auth.CapUsersManage)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.auth.Reactivate(ctx, p, req.UserId); err != nil {
+	if err := s.auth.Reactivate(ctx, p, p.OrganizationID, req.UserId); err != nil {
 		return nil, err
 	}
 	return gen.ReactivateMember204Response{}, nil
 }
 
 func (s *server) ResendInvite(ctx context.Context, req gen.ResendInviteRequestObject) (gen.ResendInviteResponseObject, error) {
-	p, err := auth.Require(ctx, auth.CapUsersManage)
+	p, err := requireOrg(ctx, auth.CapUsersManage)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.auth.ResendInvite(ctx, p, req.UserId); err != nil {
+	if err := s.auth.ResendInvite(ctx, p, p.OrganizationID, req.UserId); err != nil {
 		return nil, err
 	}
 	return gen.ResendInvite204Response{}, nil
@@ -108,6 +113,10 @@ func (s *server) CompleteSetup(ctx context.Context, req gen.CompleteSetupRequest
 	if err != nil {
 		return nil, err
 	}
+	me, err := s.me(ctx, p)
+	if err != nil {
+		return nil, err
+	}
 	cookie := s.sessionCookie(sess.Token, sess.CookieExpires).String()
-	return gen.CompleteSetup200JSONResponse{Body: meFrom(p), Headers: gen.CompleteSetup200ResponseHeaders{SetCookie: &cookie}}, nil
+	return gen.CompleteSetup200JSONResponse{Body: me, Headers: gen.CompleteSetup200ResponseHeaders{SetCookie: &cookie}}, nil
 }

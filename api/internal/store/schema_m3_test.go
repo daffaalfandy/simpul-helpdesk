@@ -51,7 +51,7 @@ func newTicketFixture(t *testing.T) *ticketFixture {
 	}
 	scan(&f.client, `INSERT INTO clients (organization_id, name) VALUES ((SELECT id FROM organizations), 'C') RETURNING id`)
 	scan(&f.requester, `INSERT INTO users (email, name, role, client_id) VALUES ('r@c.test', 'R', 'requester', $1) RETURNING id`, f.client)
-	scan(&f.agent, `INSERT INTO users (email, name, role) VALUES ('a@v.test', 'A', 'agent') RETURNING id`)
+	scan(&f.agent, `INSERT INTO users (email, name, role) VALUES ('a@v.test', 'A', 'staff') RETURNING id`)
 	f.project = testdb.Project(t, st, f.client, "e-Office", true)
 	scan(&f.catalogItem, `INSERT INTO catalog_items (organization_id, name) VALUES ((SELECT id FROM organizations), 'VPN') RETURNING id`)
 	return f

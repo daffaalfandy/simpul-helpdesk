@@ -69,7 +69,7 @@ func Fanout(ctx context.Context, q *db.Queries, log *slog.Logger, ticketID uuid.
 		return err
 	}
 	in.NotifySupervisorOnBreach = snap.NotifySupervisorOnBreach
-	if in.Supervisors, err = supervisorsFor(ctx, q, in); err != nil {
+	if in.Supervisors, err = supervisorsFor(ctx, q, t.OrganizationID, in); err != nil {
 		return err
 	}
 	if err := clientDeadlines(ctx, q, t.OrganizationID, in.Changes, t.DodConfig, t.DodOverride); err != nil {
@@ -178,10 +178,10 @@ func quoteLatestStaffReply(ctx context.Context, q *db.Queries, ticketID uuid.UUI
 	return nil
 }
 
-// supervisorsFor loads the active supervisors when a change concerns them: a breach the ticket's
+// supervisorsFor loads the organization's active supervisors when a change concerns them: a breach the ticket's
 // project alerts them about, a ticket resolved without its Definition of Done, or a ticket given
 // its own. The router decides which of them hears what.
-func supervisorsFor(ctx context.Context, q *db.Queries, in notification.Input) ([]uuid.UUID, error) {
+func supervisorsFor(ctx context.Context, q *db.Queries, orgID uuid.UUID, in notification.Input) ([]uuid.UUID, error) {
 	needed := false
 	for _, c := range in.Changes {
 		needed = needed || (c.Kind == notification.ChangeSLABreached && in.NotifySupervisorOnBreach) ||
@@ -190,8 +190,8 @@ func supervisorsFor(ctx context.Context, q *db.Queries, in notification.Input) (
 	if !needed {
 		return nil, nil
 	}
-	return q.ListActiveUserIDsByRole(ctx, db.ListActiveUserIDsByRoleParams{
-		Role: string(auth.RoleSupervisor), Status: string(auth.UserStatusActive),
+	return q.ListActiveSupervisorIDs(ctx, db.ListActiveSupervisorIDsParams{
+		OrganizationID: orgID, SupervisorRole: string(auth.RoleSupervisor), Status: string(auth.UserStatusActive),
 	})
 }
 

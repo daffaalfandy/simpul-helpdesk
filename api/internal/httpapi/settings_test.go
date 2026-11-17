@@ -26,13 +26,21 @@ const requesterClient = "Dinas Kominfo Jambi"
 type session struct {
 	e      *env
 	cookie *http.Cookie
+	org    *uuid.UUID // sent as X-Organization-Id when set
 }
+
+// in returns the session working in another organization, as a browser tab that picked it.
+func (s session) in(org uuid.UUID) session { s.org = &org; return s }
 
 func (e *env) as(role auth.Role) session { return session{e: e, cookie: e.sessionFor(role)} }
 
 func (s session) do(method, path string, body any) *httptest.ResponseRecorder {
 	s.e.t.Helper()
-	return s.e.do(request{method: method, path: apiBase + path, body: body, cookie: s.cookie})
+	r := request{method: method, path: apiBase + path, body: body, cookie: s.cookie}
+	if s.org != nil {
+		r.header = map[string]string{"X-Organization-Id": s.org.String()}
+	}
+	return s.e.do(r)
 }
 
 func decode[T any](t *testing.T, rec *httptest.ResponseRecorder, status int) T {

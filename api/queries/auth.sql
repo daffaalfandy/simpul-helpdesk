@@ -6,7 +6,8 @@ RETURNING id;
 -- name: GetSessionPrincipal :one
 SELECT s.id AS session_id, s.created_at AS session_created_at, s.last_seen_at, s.expires_at,
        u.id AS user_id, u.email, u.name, u.role, u.client_id, c.name AS client_name,
-       c.organization_id AS client_organization_id, u.job_title, u.status, u.password_changed_at
+       c.organization_id AS client_organization_id, u.job_title, u.status, u.password_changed_at,
+       u.last_organization_id
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 LEFT JOIN clients c ON c.id = u.client_id

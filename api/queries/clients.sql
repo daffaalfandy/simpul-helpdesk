@@ -91,10 +91,6 @@ INSERT INTO client_agents (organization_id, client_id, user_id)
 SELECT @organization_id, @client_id, unnest(@user_ids::uuid[])
 ON CONFLICT DO NOTHING;
 
--- name: CountUsersWithRoleAndStatus :one
-SELECT count(*)::int FROM users
-WHERE id = ANY(@ids::uuid[]) AND role = @role AND status = @status;
-
 -- name: CountClientTickets :one
 SELECT count(*)::int FROM tickets WHERE client_id = @client_id;
 

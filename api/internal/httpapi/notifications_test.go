@@ -98,6 +98,7 @@ func (te *ticketEnv) addColleague(t *testing.T) (session, uuid.UUID) {
 	ctx := context.Background()
 	if _, err := te.auth.CreateUser(ctx, auth.NewUser{
 		Email: colleagueEmail, Name: "Dian Pratama", Password: password, Role: auth.RoleRequester, ClientName: requesterClient,
+		OrganizationID: te.org,
 	}); err != nil {
 		t.Fatal(err)
 	}

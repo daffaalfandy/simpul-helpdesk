@@ -36,9 +36,11 @@ UNION
 SELECT DISTINCT split_part(t.key, '-', 1) FROM tickets t WHERE t.organization_id = @organization_id::uuid;
 
 -- name: FindStaffByEmail :one
--- The active staff member who writes code under this email.
-SELECT id, name FROM users
-WHERE email = lower(@email) AND role <> 'requester' AND status = 'active';
+-- The active administrator or member of the organization who writes code under this email.
+SELECT u.id, u.name FROM users u
+WHERE u.email = lower(@email) AND u.status = @status
+  AND (u.role = @admin_role
+       OR EXISTS (SELECT 1 FROM organization_members m WHERE m.user_id = u.id AND m.organization_id = @organization_id));
 
 -- name: UpsertCodeEvent :one
 -- A commit pushed again to another branch (the merge into main) keeps its row and adds the

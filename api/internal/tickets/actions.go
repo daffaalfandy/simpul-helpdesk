@@ -62,7 +62,7 @@ func (s *Service) SetAssignee(ctx context.Context, p *auth.Principal, key string
 		}
 		var to *clients.Ref
 		if assigneeID != nil {
-			ref, err := clients.Assignable(ctx, tx.Q, row.ClientID, *assigneeID)
+			ref, err := clients.Assignable(ctx, tx.Q, row.OrganizationID, row.ClientID, *assigneeID)
 			if errors.Is(err, clients.ErrNotAssignable) {
 				return errNotAssignable()
 			}

@@ -25,11 +25,14 @@ const (
 )
 
 const (
-	headerContentType     = "Content-Type"
-	headerCacheControl    = "Cache-Control"
-	headerRetryAfter      = "Retry-After"
-	headerForwardedFor    = "X-Forwarded-For"
-	headerRequestID       = "X-Request-Id"
+	headerContentType  = "Content-Type"
+	headerCacheControl = "Cache-Control"
+	headerRetryAfter   = "Retry-After"
+	headerForwardedFor = "X-Forwarded-For"
+	headerRequestID    = "X-Request-Id"
+	// headerOrganization names the organization a request works in (a per-tab choice in the web
+	// app); without it the API uses the user's last organization.
+	headerOrganization    = "X-Organization-Id"
 	headerCSP             = "Content-Security-Policy"
 	headerNoSniff         = "X-Content-Type-Options"
 	headerReferrerPolicy  = "Referrer-Policy"

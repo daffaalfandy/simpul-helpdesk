@@ -370,7 +370,7 @@ func runSeed(ctx context.Context) error {
 	return seed.Run(ctx, a.cfg.Env, a.store, a.hasher, box, os.Stdout)
 }
 
-const userCreateUsage = "usage: simdesk user create --email E --name N [--role admin] [--client NAME] [--job-title T] [--password-stdin]"
+const userCreateUsage = "usage: simdesk user create --email E --name N [--role admin] [--organization PREFIX] [--client NAME] [--job-title T] [--password-stdin]"
 
 func runUser(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != subUserCreate {
@@ -382,6 +382,7 @@ func runUser(ctx context.Context, args []string) error {
 	role := fs.String("role", string(auth.RoleAdmin), "admin, supervisor, agent or requester")
 	client := fs.String("client", "", "client name (requesters only)")
 	jobTitle := fs.String("job-title", "", "job title, e.g. L2")
+	prefix := fs.String(flagOrganization, "", flagOrganizationHelp+"; not for administrators")
 	fromStdin := fs.Bool("password-stdin", false, "read the password from standard input")
 	_ = fs.Parse(args[1:])
 	if *email == "" || *name == "" {
@@ -397,9 +398,15 @@ func runUser(ctx context.Context, args []string) error {
 		return err
 	}
 	defer a.close()
+	var org uuid.UUID
+	if auth.Role(*role) != auth.RoleAdmin {
+		if org, err = a.organizationByPrefix(ctx, *prefix); err != nil {
+			return err
+		}
+	}
 	id, err := a.auth.CreateUser(ctx, auth.NewUser{
 		Email: *email, Name: *name, Password: password, Role: auth.Role(*role),
-		ClientName: *client, JobTitle: *jobTitle,
+		ClientName: *client, JobTitle: *jobTitle, OrganizationID: org,
 	})
 	if err != nil {
 		return err

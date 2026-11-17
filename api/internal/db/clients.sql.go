@@ -35,24 +35,6 @@ func (q *Queries) CountClientUsers(ctx context.Context, clientID *uuid.UUID) (in
 	return column_1, err
 }
 
-const countUsersWithRoleAndStatus = `-- name: CountUsersWithRoleAndStatus :one
-SELECT count(*)::int FROM users
-WHERE id = ANY($1::uuid[]) AND role = $2 AND status = $3
-`
-
-type CountUsersWithRoleAndStatusParams struct {
-	Ids    []uuid.UUID
-	Role   string
-	Status string
-}
-
-func (q *Queries) CountUsersWithRoleAndStatus(ctx context.Context, arg CountUsersWithRoleAndStatusParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countUsersWithRoleAndStatus, arg.Ids, arg.Role, arg.Status)
-	var column_1 int32
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const createClient = `-- name: CreateClient :one
 INSERT INTO clients (organization_id, name, contract_no, contract_start, contract_end, pic_name, pic_email)
 VALUES ($1, $2, $3, $4, $5,

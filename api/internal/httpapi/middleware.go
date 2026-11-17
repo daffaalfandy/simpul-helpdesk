@@ -158,7 +158,7 @@ func (s *server) session(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		p, err := s.auth.Authenticate(r.Context(), c.Value)
+		p, err := s.auth.Authenticate(r.Context(), c.Value, requestedOrganization(r))
 		switch {
 		case err == nil:
 			r = r.WithContext(auth.WithPrincipal(r.Context(), p))
@@ -174,4 +174,14 @@ func (s *server) session(next http.Handler) http.Handler {
 func isUnauthenticated(err error) bool {
 	var ae *apperr.Error
 	return errors.As(err, &ae) && ae.Status == http.StatusUnauthorized
+}
+
+// requestedOrganization is the organization the request asks to work in; nil when it names none
+// (or not a valid id).
+func requestedOrganization(r *http.Request) *uuid.UUID {
+	id, err := uuid.Parse(r.Header.Get(headerOrganization))
+	if err != nil {
+		return nil
+	}
+	return &id
 }

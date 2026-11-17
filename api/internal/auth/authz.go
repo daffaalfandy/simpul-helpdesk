@@ -51,6 +51,9 @@ func Require(ctx context.Context, c Capability) (*Principal, error) {
 	if !ok {
 		return nil, apperr.Unauthenticated()
 	}
+	if p.Role == RoleNone {
+		return nil, apperr.OrganizationRequired()
+	}
 	if !Can(p.Role, c) {
 		return nil, apperr.Forbidden()
 	}

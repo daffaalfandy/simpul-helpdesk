@@ -183,7 +183,9 @@ func (s *Service) AcceptInvite(ctx context.Context, token, password string) (*Pr
 		if err != nil {
 			return err
 		}
-		p = principalOf(user)
+		if p, err = principalOf(ctx, tx.Q, user); err != nil {
+			return err
+		}
 		if err := audit.Write(ctx, tx.Q, p.AuditActor().Entry(ActionInviteAccepted, TargetUser, &userID, nil)); err != nil {
 			return err
 		}
@@ -204,9 +206,12 @@ func (s *Service) AcceptInvite(ctx context.Context, token, password string) (*Pr
 	return p, sess, nil
 }
 
-func principalOf(u db.GetUserByIDRow) *Principal {
-	return &Principal{
-		UserID: u.ID, Email: u.Email, Name: u.Name, Role: Role(u.Role),
+// principalOf is the principal a user signs in as, in their last (or first) organization.
+func principalOf(ctx context.Context, q *db.Queries, u db.GetUserByIDRow) (*Principal, error) {
+	p := &Principal{
+		UserID: u.ID, Email: u.Email, Name: u.Name,
 		JobTitle: u.JobTitle, ClientID: u.ClientID, ClientName: u.ClientName,
 	}
+	err := resolveOrganization(ctx, q, p, account{role: Role(u.Role), clientOrg: u.ClientOrganizationID, lastOrg: u.LastOrganizationID})
+	return p, err
 }

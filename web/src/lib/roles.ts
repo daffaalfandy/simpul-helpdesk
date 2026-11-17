@@ -8,18 +8,24 @@ export const Roles = {
   Requester: 'requester',
 } as const satisfies Record<string, Role>
 
+/**
+ * A role in the organization the user works in; null for staff who belong to no organization
+ * yet (they can only wait to be added to one).
+ */
+export type OrgRole = Role | null
+
 /** Mirrors the API's role table (api/internal/auth/authz.go, HANDOFF §3). */
 export const can = {
-  useAgentApp: (role: Role) => role !== Roles.Requester,
-  usePortal: (role: Role) => role === Roles.Requester,
+  useAgentApp: (role: OrgRole) => role !== Roles.Requester,
+  usePortal: (role: OrgRole) => role === Roles.Requester,
   /** Agents read the projects of their clients; supervisors and admins also change them. */
-  viewProjects: (role: Role) => role !== Roles.Requester,
-  manageProjects: (role: Role) => role === Roles.Admin || role === Roles.Supervisor,
-  viewReports: (role: Role) => role === Roles.Admin || role === Roles.Supervisor,
-  manageSettings: (role: Role) => role === Roles.Admin,
+  viewProjects: (role: OrgRole) => role !== null && role !== Roles.Requester,
+  manageProjects: (role: OrgRole) => role === Roles.Admin || role === Roles.Supervisor,
+  viewReports: (role: OrgRole) => role === Roles.Admin || role === Roles.Supervisor,
+  manageSettings: (role: OrgRole) => role === Roles.Admin,
 }
 
 /** Where each role lands after signing in. */
-export function homePathFor(role: Role): typeof paths.board | typeof paths.portal {
+export function homePathFor(role: OrgRole): typeof paths.board | typeof paths.portal {
   return can.usePortal(role) ? paths.portal : paths.board
 }

@@ -88,8 +88,27 @@ func (s *server) RemoveOrganizationLogo(ctx context.Context, _ gen.RemoveOrganiz
 	return gen.RemoveOrganizationLogo200JSONResponse(s.apiOrganization(ctx, o)), nil
 }
 
-// GetOrganizationLogo serves the logo inline with its own type, so the sign-in page, the portal
-// and emails can show it.
+// GetOrganizationLogoById serves an organization's logo inline with its own type, so the app
+// header, the portal and emails can show it.
+func (s *server) GetOrganizationLogoById(ctx context.Context, req gen.GetOrganizationLogoByIdRequestObject) (gen.GetOrganizationLogoByIdResponseObject, error) {
+	f, err := s.organization.OpenLogo(ctx, req.OrganizationId)
+	if err != nil {
+		return nil, err
+	}
+	cache := logoCache
+	headers := gen.GetOrganizationLogoById200ResponseHeaders{CacheControl: &cache}
+	switch f.ContentType {
+	case organization.LogoJPEG:
+		return gen.GetOrganizationLogoById200ImagejpegResponse{Body: f.Body, ContentLength: f.Size, Headers: headers}, nil
+	case organization.LogoWebP:
+		return gen.GetOrganizationLogoById200ImagewebpResponse{Body: f.Body, ContentLength: f.Size, Headers: headers}, nil
+	default:
+		return gen.GetOrganizationLogoById200ImagepngResponse{Body: f.Body, ContentLength: f.Size, Headers: headers}, nil
+	}
+}
+
+// GetOrganizationLogo serves the branding organization's logo: the address emails sent before
+// organizations existed point to.
 func (s *server) GetOrganizationLogo(ctx context.Context, _ gen.GetOrganizationLogoRequestObject) (gen.GetOrganizationLogoResponseObject, error) {
 	o, err := s.brandingOrganization(ctx)
 	if err != nil {
@@ -119,7 +138,7 @@ func (s *server) apiOrganization(ctx context.Context, o organization.Settings) g
 		AppUrl: s.cfg.AppURL.String(), SetupRequired: setupRequired,
 	}
 	if o.Logo != nil {
-		url := apiPrefix + o.Logo.Path()
+		url := apiPrefix + o.Logo.Path(o.ID)
 		out.LogoUrl = &url
 	}
 	return out

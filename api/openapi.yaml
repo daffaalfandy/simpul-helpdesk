@@ -9,6 +9,11 @@ info:
     named `sd_session` over plain HTTP (development) and `__Host-sd_session` over HTTPS.
     Every operation requires a session unless it is marked public (`security: []`).
 
+    An install holds one or more vendor organizations. A request works in the organization
+    named by the `X-Organization-Id` header (the web app keeps it per tab); without it, in the
+    user's last one. Organization data (clients, projects, tickets, settings) is always that
+    organization's. Staff who belong to no organization get `organization_required` (409).
+
     Errors use RFC 9457 problem details (`application/problem+json`).
   license:
     name: AGPL-3.0
@@ -68,6 +73,62 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /organizations/{organizationId}/logo:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      operationId: getOrganizationLogoById
+      summary: An organization's logo (public, for the app header, the portal and emails)
+      description: "`v` is the version in `logoUrl`; a new logo gets a new URL, so the image can be cached for good."
+      tags: [organization]
+      security: []
+      parameters:
+        - { name: v, in: query, required: false, schema: { type: string, maxLength: 20 } }
+      responses:
+        "200":
+          description: The logo
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /me/organization:
+    put:
+      operationId: setMyOrganization
+      summary: Remember the organization the user works in
+      description: |
+        The web app sends the chosen organization with every request (`X-Organization-Id`);
+        this makes it where the next sign-in starts. Requesters can't change theirs (403); an
+        organization the user doesn't belong to is a 404.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organizationId]
+              properties:
+                organizationId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The user, working in that organization
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
   /organization/logo:
@@ -2024,6 +2085,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     TicketKey:
       name: ticketKey
       in: path
@@ -2161,17 +2227,47 @@ components:
 
     Me:
       type: object
-      required: [id, email, name, role]
+      required: [id, email, name, role, isAdmin, organization, organizations]
       properties:
         id: { type: string, format: uuid }
         email: { type: string }
         name: { type: string }
-        role: { $ref: "#/components/schemas/Role" }
+        role:
+          allOf: [{ $ref: "#/components/schemas/Role" }]
+          nullable: true
+          description: |
+            The role in `organization`. Null for staff who belong to no organization yet: they can
+            only wait to be added to one.
+        isAdmin:
+          type: boolean
+          description: An administrator of the install, working in every organization.
+        organization:
+          allOf: [{ $ref: "#/components/schemas/OrganizationChoice" }]
+          nullable: true
+          description: |
+            The organization this request works in: the one `X-Organization-Id` names, else the
+            user's last one. Requesters always work in their client's.
+        organizations:
+          type: array
+          description: The organizations the user can work in, by name (every one for administrators).
+          items: { $ref: "#/components/schemas/OrganizationChoice" }
         jobTitle: { type: string, nullable: true, example: L2 }
         client:
           allOf: [{ $ref: "#/components/schemas/ClientRef" }]
           nullable: true
           description: Set for requesters only.
+
+    OrganizationChoice:
+      type: object
+      required: [id, name, role, logoUrl]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: PT Vendor Teknologi }
+        role: { $ref: "#/components/schemas/Role" }
+        logoUrl:
+          type: string
+          nullable: true
+          description: The organization's logo, versioned (see `GET /organizations/{organizationId}/logo`).
 
     User:
       type: object

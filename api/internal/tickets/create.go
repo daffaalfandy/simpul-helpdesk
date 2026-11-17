@@ -88,7 +88,7 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 		}
 		status, assignee := ticket.StatusNew, (*clients.Ref)(nil)
 		if in.AssignToMe {
-			me, err := clients.Assignable(ctx, tx.Q, clientID, p.UserID)
+			me, err := clients.Assignable(ctx, tx.Q, a.org, clientID, p.UserID)
 			if errors.Is(err, clients.ErrNotAssignable) {
 				return errNotAssignable()
 			}

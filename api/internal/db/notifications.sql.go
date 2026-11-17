@@ -386,35 +386,6 @@ func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotification
 	return err
 }
 
-const listActiveUserIDsByRole = `-- name: ListActiveUserIDsByRole :many
-SELECT id FROM users WHERE role = $1 AND status = $2 ORDER BY id
-`
-
-type ListActiveUserIDsByRoleParams struct {
-	Role   string
-	Status string
-}
-
-func (q *Queries) ListActiveUserIDsByRole(ctx context.Context, arg ListActiveUserIDsByRoleParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listActiveUserIDsByRole, arg.Role, arg.Status)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listDueEmails = `-- name: ListDueEmails :many
 
 SELECT n.id, n.user_id, n.ticket_id, n.urgent, n.created_at, u.email_frequency
@@ -498,21 +469,24 @@ func (q *Queries) ListDueEmails(ctx context.Context, arg ListDueEmailsParams) ([
 const listEmailTickets = `-- name: ListEmailTickets :many
 SELECT t.id, t.organization_id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id,
        t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
-       (u.role = ANY($1::text[])
-        OR (u.role = $2 AND (t.assignee_id = u.id
+       (u.role = $1
+        OR m.role = $2
+        OR (m.role = $3 AND (t.assignee_id = u.id
                                       OR EXISTS (SELECT 1 FROM client_agents ca
                                                  WHERE ca.client_id = t.client_id AND ca.user_id = u.id)))
-        OR (u.role = $3 AND u.client_id = t.client_id))::boolean AS visible,
+        OR (u.role = $4 AND u.client_id = t.client_id))::boolean AS visible,
        EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = u.id) AS watching
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 JOIN priorities pl ON pl.organization_id = t.organization_id AND pl.code = t.priority
-JOIN users u ON u.id = $4
-WHERE t.id = ANY($5::uuid[])
+JOIN users u ON u.id = $5
+LEFT JOIN organization_members m ON m.user_id = u.id AND m.organization_id = t.organization_id
+WHERE t.id = ANY($6::uuid[])
 `
 
 type ListEmailTicketsParams struct {
-	AllClientRoles []string
+	AdminRole      string
+	SupervisorRole string
 	AgentRole      string
 	RequesterRole  string
 	UserID         uuid.UUID
@@ -537,11 +511,12 @@ type ListEmailTicketsRow struct {
 }
 
 // What an email shows about each ticket, and whether the recipient may still see it (the same
-// rule as internal/tickets access: all for admins and supervisors, linked clients and tickets
-// assigned to them for agents, their own client for requesters).
+// rule as internal/tickets access: all for administrators and the organization's supervisors,
+// linked clients and tickets assigned to them for its agents, their own client for requesters).
 func (q *Queries) ListEmailTickets(ctx context.Context, arg ListEmailTicketsParams) ([]ListEmailTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listEmailTickets,
-		arg.AllClientRoles,
+		arg.AdminRole,
+		arg.SupervisorRole,
 		arg.AgentRole,
 		arg.RequesterRole,
 		arg.UserID,

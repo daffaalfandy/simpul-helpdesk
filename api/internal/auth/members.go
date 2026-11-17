@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,11 +26,12 @@ const (
 // ConstraintUserEmail is the unique email constraint (users_email_key).
 const ConstraintUserEmail = "users_email_key"
 
-// StaffRoles are the roles of the vendor's team, the ones Members & roles invites and changes.
-// Client staff (requesters) are invited on their client (owner, 17 Nov).
+// StaffRoles are the roles of the vendor's team, the ones Members & roles invites and changes:
+// install-wide administrators, and each organization's supervisors and agents. Client staff
+// (requesters) are invited on their client (owner, 17 Nov).
 var StaffRoles = []Role{RoleAdmin, RoleSupervisor, RoleAgent}
 
-// Member is one person on the team, as Members & roles lists them.
+// Member is one person on an organization's team, with their role there.
 type Member struct {
 	ID           uuid.UUID
 	Email        string
@@ -41,14 +43,15 @@ type Member struct {
 	InviteSentAt *time.Time // the latest invite; nil when none was sent
 }
 
-// Members is Settings › Members & roles: how many people hold each role (suspended accounts
-// left out) and the team.
+// Members is Settings › Members & roles for one organization: how many people hold each role
+// (suspended accounts left out) and the team.
 type Members struct {
 	Counts map[Role]int
 	Team   []Member
 }
 
-// NewMember is an invitation to the team.
+// NewMember is an invitation to an organization's team (or, for an administrator, to the
+// install).
 type NewMember struct {
 	Email    string
 	Name     string
@@ -56,23 +59,18 @@ type NewMember struct {
 	JobTitle string
 }
 
-func isStaff(r Role) bool {
-	for _, s := range StaffRoles {
-		if s == r {
-			return true
-		}
-	}
-	return false
-}
+func isStaff(r Role) bool { return slices.Contains(StaffRoles, r) }
 
-// Members lists the team and the role counts.
-func (s *Service) Members(ctx context.Context) (Members, error) {
+// Members lists an organization's team and its role counts.
+func (s *Service) Members(ctx context.Context, orgID uuid.UUID) (Members, error) {
 	q := s.store.Q()
-	rows, err := q.ListTeamMembers(ctx, string(RoleRequester))
+	rows, err := q.ListTeamMembers(ctx, db.ListTeamMembersParams{OrganizationID: orgID, AdminRole: string(RoleAdmin)})
 	if err != nil {
 		return Members{}, err
 	}
-	counts, err := q.CountUsersByRole(ctx, string(UserStatusSuspended))
+	counts, err := q.CountUsersByRole(ctx, db.CountUsersByRoleParams{
+		OrganizationID: orgID, Suspended: string(UserStatusSuspended), AdminRole: string(RoleAdmin),
+	})
 	if err != nil {
 		return Members{}, err
 	}
@@ -113,8 +111,10 @@ func ValidateNewUser(email, name, jobTitle string) error {
 	return nil
 }
 
-// InviteMember adds someone to the team without a password and emails them a link to set one.
-func (s *Service) InviteMember(ctx context.Context, actor *Principal, in NewMember) (uuid.UUID, error) {
+// InviteMember adds someone to the organization's team. A new email gets an account without a
+// password and a link to set one; a supervisor or agent who already works for another of the
+// install's organizations just joins this one.
+func (s *Service) InviteMember(ctx context.Context, actor *Principal, orgID uuid.UUID, in NewMember) (uuid.UUID, error) {
 	in.Email = NormalizeEmail(in.Email)
 	in.Name = strings.TrimSpace(in.Name)
 	in.JobTitle = strings.TrimSpace(in.JobTitle)
@@ -126,15 +126,27 @@ func (s *Service) InviteMember(ctx context.Context, actor *Principal, in NewMemb
 	}
 	var id uuid.UUID
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		var err error
-		id, err = tx.Q.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
-			Email: in.Email, Name: in.Name, Role: string(in.Role), JobTitle: strPtr(in.JobTitle), Status: string(UserStatusInvited),
-		})
-		if store.IsViolation(err, store.SQLStateUniqueViolation, ConstraintUserEmail) {
-			return apperr.Conflict(apperr.CodeEmailTaken, "Someone already uses this email", "")
-		}
-		if err != nil {
+		existing, err := tx.Q.GetUserIDByEmail(ctx, in.Email)
+		switch {
+		case err == nil:
+			id = existing.ID
+			return s.addExistingMember(ctx, tx, actor, orgID, existing, in.Role)
+		case !errors.Is(err, pgx.ErrNoRows):
 			return err
+		}
+		account := RoleStaff
+		if in.Role == RoleAdmin {
+			account = RoleAdmin
+		}
+		if id, err = tx.Q.CreateInvitedUser(ctx, db.CreateInvitedUserParams{
+			Email: in.Email, Name: in.Name, Role: string(account), JobTitle: strPtr(in.JobTitle), Status: string(UserStatusInvited),
+		}); err != nil {
+			return err
+		}
+		if account == RoleStaff {
+			if err := tx.Q.UpsertMembership(ctx, db.UpsertMembershipParams{UserID: id, OrganizationID: orgID, Role: string(in.Role)}); err != nil {
+				return err
+			}
 		}
 		if err := audit.Write(ctx, tx.Q, actor.AuditActor().Entry(ActionUserInvited, TargetUser, &id, map[string]any{auditDataRole: in.Role})); err != nil {
 			return err
@@ -144,41 +156,99 @@ func (s *Service) InviteMember(ctx context.Context, actor *Principal, in NewMemb
 	return id, err
 }
 
-// ChangeRole moves a team member to another staff role. An agent who stops being one is unlinked
-// from their clients; tickets assigned to them stay theirs (owner, 17 Nov).
-func (s *Service) ChangeRole(ctx context.Context, actor *Principal, id uuid.UUID, role Role) error {
+// addExistingMember lets a supervisor or agent of another organization join this one.
+// Administrators already work everywhere, and requesters belong to their client.
+func (s *Service) addExistingMember(ctx context.Context, tx store.Tx, actor *Principal, orgID uuid.UUID,
+	u db.GetUserIDByEmailRow, role Role) error {
+	if Role(u.Role) != RoleStaff || role == RoleAdmin {
+		return errEmailTaken()
+	}
+	if _, err := tx.Q.GetMembershipForUpdate(ctx, db.GetMembershipForUpdateParams{UserID: u.ID, OrganizationID: orgID}); err == nil {
+		return errEmailTaken()
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if err := tx.Q.UpsertMembership(ctx, db.UpsertMembershipParams{UserID: u.ID, OrganizationID: orgID, Role: string(role)}); err != nil {
+		return err
+	}
+	return audit.Write(ctx, tx.Q, actor.AuditActor().Entry(ActionMemberAdded, TargetUser, &u.ID, map[string]any{auditDataRole: role}))
+}
+
+func errEmailTaken() error {
+	return apperr.Conflict(apperr.CodeEmailTaken, "Someone already uses this email", "")
+}
+
+// ChangeRole moves a team member to another role: supervisor or agent in this organization, or
+// administrator of the install. An agent who stops being one is unlinked from this
+// organization's clients; tickets assigned to them stay theirs (owner, 17 Nov).
+func (s *Service) ChangeRole(ctx context.Context, actor *Principal, orgID, id uuid.UUID, role Role) error {
 	if !isStaff(role) {
 		return apperr.Invalid(apperr.CodeInvalidRole, "Choose administrator, supervisor or agent", string(role))
 	}
-	return s.changeMember(ctx, actor, id, func(tx store.Tx, u db.GetUserForUpdateRow) (string, map[string]any, error) {
-		from := Role(u.Role)
-		if !isStaff(from) {
-			return "", nil, apperr.Invalid(apperr.CodeInvalidRole, "Client staff keep their role", "")
+	return s.changeMember(ctx, actor, orgID, id, func(tx store.Tx, u db.GetUserForUpdateRow) (string, map[string]any, error) {
+		from, err := roleIn(ctx, tx, u, orgID)
+		if err != nil {
+			return "", nil, err
 		}
 		if from == role {
 			return "", nil, nil
 		}
-		if from == RoleAdmin && UserStatus(u.Status) == UserStatusActive {
-			if err := lastAdminGuard(ctx, tx); err != nil {
+		switch {
+		case from == RoleAdmin:
+			if UserStatus(u.Status) == UserStatusActive {
+				if err := lastAdminGuard(ctx, tx); err != nil {
+					return "", nil, err
+				}
+			}
+			if err := tx.Q.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: id, Role: string(RoleStaff)}); err != nil {
 				return "", nil, err
 			}
-		}
-		if err := tx.Q.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: id, Role: string(role)}); err != nil {
-			return "", nil, err
-		}
-		if from == RoleAgent {
-			if err := tx.Q.DeleteClientAgentsForUser(ctx, id); err != nil {
+			if err := tx.Q.UpsertMembership(ctx, db.UpsertMembershipParams{UserID: id, OrganizationID: orgID, Role: string(role)}); err != nil {
 				return "", nil, err
+			}
+		case role == RoleAdmin:
+			// Administrators work in every organization, so their memberships (and client
+			// links) go.
+			if err := tx.Q.UpdateUserRole(ctx, db.UpdateUserRoleParams{ID: id, Role: string(RoleAdmin)}); err != nil {
+				return "", nil, err
+			}
+			if err := tx.Q.DeleteMemberships(ctx, id); err != nil {
+				return "", nil, err
+			}
+		default:
+			if err := tx.Q.UpsertMembership(ctx, db.UpsertMembershipParams{UserID: id, OrganizationID: orgID, Role: string(role)}); err != nil {
+				return "", nil, err
+			}
+			if from == RoleAgent {
+				if err := tx.Q.DeleteClientAgentsForMember(ctx, db.DeleteClientAgentsForMemberParams{UserID: id, OrganizationID: orgID}); err != nil {
+					return "", nil, err
+				}
 			}
 		}
 		return ActionRoleChanged, map[string]any{auditDataRole: audit.Change{From: from, To: role}}, nil
 	})
 }
 
-// Suspend stops someone signing in, at once; their open sessions end. A suspended agent is
-// unlinked from their clients and keeps the tickets assigned to them.
-func (s *Service) Suspend(ctx context.Context, actor *Principal, id uuid.UUID) error {
-	return s.changeMember(ctx, actor, id, func(tx store.Tx, u db.GetUserForUpdateRow) (string, map[string]any, error) {
+// roleIn is the user's role in the organization: administrator, their membership's role, or
+// 404 for anyone else (requesters keep theirs).
+func roleIn(ctx context.Context, tx store.Tx, u db.GetUserForUpdateRow, orgID uuid.UUID) (Role, error) {
+	switch Role(u.Role) {
+	case RoleAdmin:
+		return RoleAdmin, nil
+	case RoleRequester:
+		return RoleNone, apperr.Invalid(apperr.CodeInvalidRole, "Client staff keep their role", "")
+	}
+	m, err := tx.Q.GetMembershipForUpdate(ctx, db.GetMembershipForUpdateParams{UserID: u.ID, OrganizationID: orgID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RoleNone, apperr.NotFound()
+	}
+	return Role(m), err
+}
+
+// Suspend stops someone signing in, at once and in every organization; their open sessions
+// end. A suspended agent is unlinked from their clients and keeps the tickets assigned to them.
+func (s *Service) Suspend(ctx context.Context, actor *Principal, orgID, id uuid.UUID) error {
+	return s.changeMember(ctx, actor, orgID, id, func(tx store.Tx, u db.GetUserForUpdateRow) (string, map[string]any, error) {
 		if UserStatus(u.Status) == UserStatusSuspended {
 			return "", nil, nil
 		}
@@ -205,8 +275,8 @@ func (s *Service) Suspend(ctx context.Context, actor *Principal, id uuid.UUID) e
 
 // Reactivate lets a suspended person back in: active when they have a password, else invited
 // (resend their invite next).
-func (s *Service) Reactivate(ctx context.Context, actor *Principal, id uuid.UUID) error {
-	return s.changeMember(ctx, actor, id, func(tx store.Tx, u db.GetUserForUpdateRow) (string, map[string]any, error) {
+func (s *Service) Reactivate(ctx context.Context, actor *Principal, orgID, id uuid.UUID) error {
+	return s.changeMember(ctx, actor, orgID, id, func(tx store.Tx, u db.GetUserForUpdateRow) (string, map[string]any, error) {
 		if UserStatus(u.Status) != UserStatusSuspended {
 			return "", nil, nil
 		}
@@ -223,8 +293,8 @@ func (s *Service) Reactivate(ctx context.Context, actor *Principal, id uuid.UUID
 
 // ResendInvite emails a new link to someone who hasn't set their password yet; earlier links
 // stop working when it goes out.
-func (s *Service) ResendInvite(ctx context.Context, actor *Principal, id uuid.UUID) error {
-	return s.changeMember(ctx, actor, id, func(tx store.Tx, u db.GetUserForUpdateRow) (string, map[string]any, error) {
+func (s *Service) ResendInvite(ctx context.Context, actor *Principal, orgID, id uuid.UUID) error {
+	return s.changeMember(ctx, actor, orgID, id, func(tx store.Tx, u db.GetUserForUpdateRow) (string, map[string]any, error) {
 		if UserStatus(u.Status) != UserStatusInvited {
 			return "", nil, apperr.Conflict(apperr.CodeNotInvited, "This person has already set their password", "")
 		}
@@ -232,9 +302,10 @@ func (s *Service) ResendInvite(ctx context.Context, actor *Principal, id uuid.UU
 	})
 }
 
-// changeMember locks the person (and, for the admin count, the organisation row), refuses
-// changes to one's own account, applies change, and audits it when it changed something.
-func (s *Service) changeMember(ctx context.Context, actor *Principal, id uuid.UUID,
+// changeMember locks the install (for the administrator count) and the person, refuses changes
+// to one's own account and to people outside the organization, applies change, and audits it
+// when it changed something.
+func (s *Service) changeMember(ctx context.Context, actor *Principal, orgID, id uuid.UUID,
 	change func(store.Tx, db.GetUserForUpdateRow) (string, map[string]any, error)) error {
 	if id == actor.UserID {
 		return apperr.Conflict(apperr.CodeCannotChangeSelf, "You can't change your own account here", "")
@@ -242,6 +313,13 @@ func (s *Service) changeMember(ctx context.Context, actor *Principal, id uuid.UU
 	return s.store.Tx(ctx, func(tx store.Tx) error {
 		if err := tx.Q.LockInstall(ctx); err != nil {
 			return err
+		}
+		in, err := tx.Q.UserInOrganization(ctx, db.UserInOrganizationParams{UserID: id, OrganizationID: orgID, AdminRole: string(RoleAdmin)})
+		if err != nil {
+			return err
+		}
+		if !in {
+			return apperr.NotFound()
 		}
 		u, err := tx.Q.GetUserForUpdate(ctx, id)
 		if errors.Is(err, pgx.ErrNoRows) {

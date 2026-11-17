@@ -67,7 +67,7 @@ func TestRequesterMustHaveClient(t *testing.T) {
 
 func TestEmailMustBeLowercase(t *testing.T) {
 	_, err := testdb.New(t).Pool().Exec(context.Background(),
-		`INSERT INTO users (email, name, role) VALUES ('Rina@X.test', 'R', 'agent')`)
+		`INSERT INTO users (email, name, role) VALUES ('Rina@X.test', 'R', 'staff')`)
 	if pgCode(err) != codeCheckViolation {
 		t.Fatalf("err = %v, want check violation", err)
 	}

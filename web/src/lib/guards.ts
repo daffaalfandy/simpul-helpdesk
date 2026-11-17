@@ -1,10 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { redirect, type ParsedLocation } from '@tanstack/react-router'
 
-import type { Me, Role } from '../api/client'
+import type { Me } from '../api/client'
 import { meQueryOptions, organizationQueryOptions } from '../api/queries'
 import { paths } from './constants'
-import { homePathFor } from './roles'
+import { homePathFor, type OrgRole } from './roles'
 
 /**
  * Returns the signed-in user or redirects to sign-in, remembering where they were going. On a
@@ -24,6 +24,6 @@ export async function redirectToSetupIfOpen(queryClient: QueryClient): Promise<v
 }
 
 /** Sends users who may not see a page to their own start page. */
-export function requireRole(me: Me, allowed: (role: Role) => boolean): void {
+export function requireRole(me: Me, allowed: (role: OrgRole) => boolean): void {
   if (!allowed(me.role)) throw redirect({ to: homePathFor(me.role) })
 }

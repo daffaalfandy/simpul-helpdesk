@@ -15,9 +15,8 @@ export function UserMenu({ me }: { me: Me }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const logout = useLogout()
-  const roleLine = me.jobTitle
-    ? t('roleWithTitle', { role: t(`roles.${me.role}`), title: me.jobTitle })
-    : t(`roles.${me.role}`)
+  const role = me.role ? t(`roles.${me.role}`) : t('roles.none')
+  const roleLine = me.jobTitle ? t('roleWithTitle', { role, title: me.jobTitle }) : role
 
   const onAction = (key: React.Key) => {
     if (key !== SIGN_OUT_ACTION) return

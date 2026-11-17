@@ -29,6 +29,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/organizations/{organizationId}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * An organization's logo (public, for the app header, the portal and emails)
+         * @description `v` is the version in `logoUrl`; a new logo gets a new URL, so the image can be cached for good.
+         */
+        get: operations["getOrganizationLogoById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Remember the organization the user works in
+         * @description The web app sends the chosen organization with every request (`X-Organization-Id`);
+         *     this makes it where the next sign-in starts. Requesters can't change theirs (403); an
+         *     organization the user doesn't belong to is a 404.
+         */
+        put: operations["setMyOrganization"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organization/logo": {
         parameters: {
             query?: never;
@@ -1618,11 +1662,33 @@ export interface components {
             id: string;
             email: string;
             name: string;
-            role: components["schemas"]["Role"];
+            /**
+             * @description The role in `organization`. Null for staff who belong to no organization yet: they can
+             *     only wait to be added to one.
+             */
+            role: components["schemas"]["Role"] | null;
+            /** @description An administrator of the install, working in every organization. */
+            isAdmin: boolean;
+            /**
+             * @description The organization this request works in: the one `X-Organization-Id` names, else the
+             *     user's last one. Requesters always work in their client's.
+             */
+            organization: components["schemas"]["OrganizationChoice"] | null;
+            /** @description The organizations the user can work in, by name (every one for administrators). */
+            organizations: components["schemas"]["OrganizationChoice"][];
             /** @example L2 */
             jobTitle?: string | null;
             /** @description Set for requesters only. */
             client?: components["schemas"]["ClientRef"] | null;
+        };
+        OrganizationChoice: {
+            /** Format: uuid */
+            id: string;
+            /** @example PT Vendor Teknologi */
+            name: string;
+            role: components["schemas"]["Role"];
+            /** @description The organization's logo, versioned (see `GET /organizations/{organizationId}/logo`). */
+            logoUrl: string | null;
         };
         User: {
             /** Format: uuid */
@@ -2770,6 +2836,7 @@ export interface components {
     };
     parameters: {
         ClientId: string;
+        OrganizationId: string;
         /** @description A ticket key such as HD-24871 (case-insensitive). */
         TicketKey: string;
         AttachmentId: string;
@@ -2833,6 +2900,66 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOrganizationLogoById: {
+        parameters: {
+            query?: {
+                v?: string;
+            };
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The logo */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            404: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setMyOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    organizationId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The user, working in that organization */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

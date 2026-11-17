@@ -144,8 +144,8 @@ func (s *Service) Assignees(ctx context.Context, p *auth.Principal, clientID uui
 		return nil, err
 	}
 	rows, err := q.ListAssignableUsers(ctx, db.ListAssignableUsersParams{
-		OpenStatuses: statusStrings(ticket.OpenStatuses), Status: string(auth.UserStatusActive),
-		AllClientRoles: roleStrings(auth.RolesWith(auth.CapClientsViewAll)), AgentRole: string(auth.RoleAgent),
+		OrganizationID: p.OrganizationID, OpenStatuses: statusStrings(ticket.OpenStatuses), Status: string(auth.UserStatusActive),
+		AdminRole: string(auth.RoleAdmin), SupervisorRole: string(auth.RoleSupervisor), AgentRole: string(auth.RoleAgent),
 		ClientID: clientID,
 	})
 	if err != nil {
@@ -163,12 +163,13 @@ func (s *Service) Assignees(ctx context.Context, p *auth.Principal, clientID uui
 // ErrNotAssignable means the user can't take the client's tickets.
 var ErrNotAssignable = errors.New("user can't take this client's tickets")
 
-// Assignable returns the user if they may take the client's tickets: an active user who sees
-// every client, or an active agent assigned to it. It runs on q to check inside a transaction.
-func Assignable(ctx context.Context, q *db.Queries, clientID, userID uuid.UUID) (Ref, error) {
+// Assignable returns the user if they may take the client's tickets: an active administrator,
+// a supervisor of the client's organization, or an agent of it linked to the client. It runs on
+// q to check inside a transaction.
+func Assignable(ctx context.Context, q *db.Queries, orgID, clientID, userID uuid.UUID) (Ref, error) {
 	r, err := q.GetAssignableUser(ctx, db.GetAssignableUserParams{
-		ID: userID, Status: string(auth.UserStatusActive),
-		AllClientRoles: roleStrings(auth.RolesWith(auth.CapClientsViewAll)), AgentRole: string(auth.RoleAgent),
+		OrganizationID: orgID, ID: userID, Status: string(auth.UserStatusActive),
+		AdminRole: string(auth.RoleAdmin), SupervisorRole: string(auth.RoleSupervisor), AgentRole: string(auth.RoleAgent),
 		ClientID: clientID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -193,14 +194,6 @@ func normalizeRequester(in RequesterInput) (RequesterInput, error) {
 		return in, apperr.Invalid(apperr.CodeInvalidRequest, "The job title is too long", "")
 	}
 	return in, nil
-}
-
-func roleStrings(roles []auth.Role) []string {
-	out := make([]string, len(roles))
-	for i, r := range roles {
-		out[i] = string(r)
-	}
-	return out
 }
 
 func statusStrings(statuses []ticket.Status) []string {

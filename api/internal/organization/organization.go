@@ -65,9 +65,10 @@ const (
 
 var LogoTypes = []string{LogoPNG, LogoJPEG, LogoWebP}
 
-// LogoPath is where the logo is served, versioned by when it changed so caches never show an
-// old one. It is relative to APIBasePath.
-const LogoPath = "/organization/logo"
+// LogoPath is where an organization's logo is served (its id fills the %s), versioned by when
+// it changed so caches never show an old one. It is relative to APIBasePath. The older
+// "/organization/logo" keeps serving the first organization's, for emails sent before.
+const LogoPath = "/organizations/%s/logo"
 
 // APIBasePath is the API's URL prefix, as the server mounts it (httpapi).
 const APIBasePath = "/api/v1"
@@ -113,7 +114,17 @@ type Logo struct {
 func (l Logo) Version() string { return strconv.FormatInt(l.UpdatedAt.UnixMilli(), 10) }
 
 // Path is the logo's URL path under the API base, with its version.
-func (l Logo) Path() string { return LogoPath + logoVersionParam + l.Version() }
+func (l Logo) Path(orgID uuid.UUID) string {
+	return fmt.Sprintf(LogoPath, orgID) + logoVersionParam + l.Version()
+}
+
+// LogoOf is an organization's stored logo; nil without one.
+func LogoOf(key, contentType *string, updatedAt *time.Time) *Logo {
+	if key == nil || contentType == nil || updatedAt == nil {
+		return nil
+	}
+	return &Logo{Key: *key, ContentType: *contentType, UpdatedAt: *updatedAt}
+}
 
 // LogoURL is the logo's absolute address under appURL, for emails; "" without a logo.
 func LogoURL(appURL *url.URL, row db.GetOrganizationRow) string {
@@ -121,7 +132,7 @@ func LogoURL(appURL *url.URL, row db.GetOrganizationRow) string {
 	if logo == nil || appURL == nil {
 		return ""
 	}
-	return strings.TrimSuffix(appURL.String(), "/") + APIBasePath + logo.Path()
+	return strings.TrimSuffix(appURL.String(), "/") + APIBasePath + logo.Path(row.ID)
 }
 
 // Input is what an admin changes in Settings › General.
@@ -176,9 +187,7 @@ func settingsOf(row db.GetOrganizationRow) Settings {
 	out := Settings{
 		ID: row.ID, Name: row.Name, TicketPrefix: row.TicketPrefix, Timezone: row.Timezone, FooterNote: row.FooterNote,
 	}
-	if row.LogoKey != nil && row.LogoContentType != nil && row.LogoUpdatedAt != nil {
-		out.Logo = &Logo{Key: *row.LogoKey, ContentType: *row.LogoContentType, UpdatedAt: *row.LogoUpdatedAt}
-	}
+	out.Logo = LogoOf(row.LogoKey, row.LogoContentType, row.LogoUpdatedAt)
 	return out
 }
 

@@ -51,15 +51,6 @@ const (
 	pathNotificationsUI = "notifications"
 )
 
-// allClientRoles see every client's tickets (the tickets package's CapClientsViewAll).
-var allClientRoles = func() []string {
-	var out []string
-	for _, r := range auth.RolesWith(auth.CapClientsViewAll) {
-		out = append(out, string(r))
-	}
-	return out
-}()
-
 // emailInsertOpts queue each email once per group or period.
 var emailInsertOpts = &river.InsertOpts{MaxAttempts: emailMaxAttempts, UniqueOpts: river.UniqueOpts{ByArgs: true}}
 
@@ -251,8 +242,9 @@ func (m *Mailer) deliver(ctx context.Context, user *recipient, rows []claimedRow
 		}
 	}
 	ts, err := q.ListEmailTickets(ctx, db.ListEmailTicketsParams{
-		AllClientRoles: allClientRoles, AgentRole: string(auth.RoleAgent), RequesterRole: string(auth.RoleRequester),
-		UserID: user.ID, TicketIds: ticketIDs,
+		AdminRole: string(auth.RoleAdmin), SupervisorRole: string(auth.RoleSupervisor), AgentRole: string(auth.RoleAgent),
+		RequesterRole: string(auth.RoleRequester),
+		UserID:        user.ID, TicketIds: ticketIDs,
 	})
 	if err != nil {
 		return err

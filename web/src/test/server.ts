@@ -17,44 +17,53 @@ export const ORG: Organization = {
   appUrl: 'https://helpdesk.demo-vendor.test', logoUrl: null, setupRequired: false,
 }
 
+/** The organization every fake user works in. */
+export const ORG_ID = '01a1cedf-0000-7000-8000-0000000000e9'
+
+/** A user working in the demo organization with role (an administrator there too). */
+function inOrg(user: Omit<Me, 'isAdmin' | 'organization' | 'organizations' | 'role'> & { role: NonNullable<Me['role']> }): Me {
+  const choice = { id: ORG_ID, name: ORG.name, role: user.role, logoUrl: null }
+  return { ...user, isAdmin: user.role === 'admin', organization: choice, organizations: [choice] }
+}
+
 /** The invite link token the fake API accepts. */
 export const INVITE_TOKEN = 'invite-token-0123456789abcdef'
 
 /** Someone who accepted their invite: the API signs them in. */
-export const INVITED_ME: Me = { id: '01a1cedf-0000-7000-8000-0000000000a1', email: 'yoga@demo-vendor.test', name: 'Yoga Hidayat', role: 'agent' }
+export const INVITED_ME: Me = inOrg({ id: '01a1cedf-0000-7000-8000-0000000000a1', email: 'yoga@demo-vendor.test', name: 'Yoga Hidayat', role: 'agent' })
 
 /** The logo URL the fake API hands out after an upload. */
 export const LOGO_URL = '/api/v1/organization/logo?v=1'
 
 export const USERS: Record<string, Me> = {
-  'rina@demo-vendor.test': {
+  'rina@demo-vendor.test': inOrg({
     id: '01a1cedf-0000-7000-8000-000000000001',
     email: 'rina@demo-vendor.test',
     name: 'Rina Pratiwi',
     role: 'agent',
     jobTitle: 'L2',
-  },
-  'admin@demo-vendor.test': {
+  }),
+  'admin@demo-vendor.test': inOrg({
     id: '01a1cedf-0000-7000-8000-000000000002',
     email: 'admin@demo-vendor.test',
     name: 'Demo Admin',
     role: 'admin',
-  },
-  'dewi@demo-vendor.test': {
+  }),
+  'dewi@demo-vendor.test': inOrg({
     id: '01a1cedf-0000-7000-8000-000000000004',
     email: 'dewi@demo-vendor.test',
     name: 'Dewi Wulandari',
     role: 'supervisor',
     jobTitle: 'Team lead',
-  },
-  'hendra@kominfo-jambi.test': {
+  }),
+  'hendra@kominfo-jambi.test': inOrg({
     id: '01a1cedf-0000-7000-8000-000000000003',
     email: 'hendra@kominfo-jambi.test',
     name: 'Hendra Gunawan',
     role: 'requester',
     jobTitle: 'IT Officer',
     client: { id: '01a1cedf-0000-7000-8000-0000000000c1', name: 'Dinas Kominfo Jambi' },
-  },
+  }),
 }
 
 /** Fake API state shared by the handlers; reset after each test. */
@@ -142,7 +151,7 @@ const handlers = [
     state.setupBodies.push(body)
     if (!state.org.setupRequired) return problem(409, 'setup_closed')
     state.org = { ...state.org, name: body.organizationName, setupRequired: false }
-    state.me = { id: '01a1cedf-0000-7000-8000-0000000000f1', email: body.email, name: body.name, role: 'admin' }
+    state.me = inOrg({ id: '01a1cedf-0000-7000-8000-0000000000f1', email: body.email, name: body.name, role: 'admin' })
     return HttpResponse.json(state.me)
   }),
   http.post('*/api/v1/auth/invite/accept', async ({ request }) => {

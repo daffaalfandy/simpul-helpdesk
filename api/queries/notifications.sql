@@ -10,9 +10,6 @@ WHERE t.id = @id;
 -- What the router needs about each user a change may concern.
 SELECT id, role, status FROM users WHERE id = ANY(@ids::uuid[]);
 
--- name: ListActiveUserIDsByRole :many
-SELECT id FROM users WHERE role = @role AND status = @status ORDER BY id;
-
 -- name: ListNotificationPreferences :many
 SELECT user_id, event_type, web, email
 FROM notification_preferences
@@ -162,12 +159,13 @@ SELECT id, email, name, role, status, client_id, email_frequency FROM users WHER
 
 -- name: ListEmailTickets :many
 -- What an email shows about each ticket, and whether the recipient may still see it (the same
--- rule as internal/tickets access: all for admins and supervisors, linked clients and tickets
--- assigned to them for agents, their own client for requesters).
+-- rule as internal/tickets access: all for administrators and the organization's supervisors,
+-- linked clients and tickets assigned to them for its agents, their own client for requesters).
 SELECT t.id, t.organization_id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id,
        t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
-       (u.role = ANY(@all_client_roles::text[])
-        OR (u.role = @agent_role AND (t.assignee_id = u.id
+       (u.role = @admin_role
+        OR m.role = @supervisor_role
+        OR (m.role = @agent_role AND (t.assignee_id = u.id
                                       OR EXISTS (SELECT 1 FROM client_agents ca
                                                  WHERE ca.client_id = t.client_id AND ca.user_id = u.id)))
         OR (u.role = @requester_role AND u.client_id = t.client_id))::boolean AS visible,
@@ -176,6 +174,7 @@ FROM tickets t
 JOIN projects p ON p.id = t.project_id
 JOIN priorities pl ON pl.organization_id = t.organization_id AND pl.code = t.priority
 JOIN users u ON u.id = @user_id
+LEFT JOIN organization_members m ON m.user_id = u.id AND m.organization_id = t.organization_id
 WHERE t.id = ANY(@ticket_ids::uuid[]);
 
 -- name: ListUserNames :many

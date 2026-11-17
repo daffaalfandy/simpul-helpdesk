@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"text/tabwriter"
 	"time"
 
@@ -141,8 +142,12 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 		}
 		userIDs := make(map[string]uuid.UUID, len(people))
 		for _, p := range people {
+			account := p.role
+			if slices.Contains(auth.MemberRoles, p.role) {
+				account = auth.RoleStaff
+			}
 			params := db.UpsertUserByEmailParams{
-				Email: p.email, Name: p.name, PasswordHash: &hash, Role: string(p.role),
+				Email: p.email, Name: p.name, PasswordHash: &hash, Role: string(account),
 				Status: string(auth.UserStatusActive),
 			}
 			if p.invited {
@@ -159,6 +164,11 @@ func Run(ctx context.Context, env string, st *store.Store, hasher *auth.Hasher, 
 			id, err := tx.Q.UpsertUserByEmail(ctx, params)
 			if err != nil {
 				return fmt.Errorf("user %s: %w", p.email, err)
+			}
+			if account == auth.RoleStaff {
+				if err := tx.Q.UpsertMembership(ctx, db.UpsertMembershipParams{UserID: id, OrganizationID: org, Role: string(p.role)}); err != nil {
+					return fmt.Errorf("member %s: %w", p.email, err)
+				}
 			}
 			userIDs[p.email] = id
 		}

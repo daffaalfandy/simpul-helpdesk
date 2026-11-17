@@ -10,13 +10,23 @@ import (
 
 type Role string
 
-// Roles, from HANDOFF §3. Values match the users.role CHECK constraint.
+// Roles, from HANDOFF §3: what a principal may do in the organization it works in. users.role
+// stores admin, requester or RoleStaff; a staff member's supervisor or agent role comes from
+// their membership in each organization (organization_members.role).
 const (
 	RoleAdmin      Role = "admin"
 	RoleSupervisor Role = "supervisor"
 	RoleAgent      Role = "agent"
 	RoleRequester  Role = "requester"
+
+	// RoleStaff is the account of a supervisor or agent, stored in users.role.
+	RoleStaff Role = "staff"
+	// RoleNone is a staff member with no organization to work in: no capabilities.
+	RoleNone Role = ""
 )
+
+// MemberRoles are the roles a membership gives.
+var MemberRoles = []Role{RoleSupervisor, RoleAgent}
 
 // Roles lists every role, most privileged first.
 var Roles = []Role{RoleAdmin, RoleSupervisor, RoleAgent, RoleRequester}

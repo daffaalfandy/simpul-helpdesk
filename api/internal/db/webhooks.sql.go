@@ -32,18 +32,32 @@ func (q *Queries) DeleteOldDeliveries(ctx context.Context, arg DeleteOldDeliveri
 }
 
 const findStaffByEmail = `-- name: FindStaffByEmail :one
-SELECT id, name FROM users
-WHERE email = lower($1) AND role <> 'requester' AND status = 'active'
+SELECT u.id, u.name FROM users u
+WHERE u.email = lower($1) AND u.status = $2
+  AND (u.role = $3
+       OR EXISTS (SELECT 1 FROM organization_members m WHERE m.user_id = u.id AND m.organization_id = $4))
 `
+
+type FindStaffByEmailParams struct {
+	Email          string
+	Status         string
+	AdminRole      string
+	OrganizationID uuid.UUID
+}
 
 type FindStaffByEmailRow struct {
 	ID   uuid.UUID
 	Name string
 }
 
-// The active staff member who writes code under this email.
-func (q *Queries) FindStaffByEmail(ctx context.Context, email string) (FindStaffByEmailRow, error) {
-	row := q.db.QueryRow(ctx, findStaffByEmail, email)
+// The active administrator or member of the organization who writes code under this email.
+func (q *Queries) FindStaffByEmail(ctx context.Context, arg FindStaffByEmailParams) (FindStaffByEmailRow, error) {
+	row := q.db.QueryRow(ctx, findStaffByEmail,
+		arg.Email,
+		arg.Status,
+		arg.AdminRole,
+		arg.OrganizationID,
+	)
 	var i FindStaffByEmailRow
 	err := row.Scan(&i.ID, &i.Name)
 	return i, err

@@ -173,6 +173,13 @@ type Organization struct {
 	UpdatedAt       time.Time
 }
 
+type OrganizationMember struct {
+	UserID         uuid.UUID
+	OrganizationID uuid.UUID
+	Role           string
+	CreatedAt      time.Time
+}
+
 type PasswordResetToken struct {
 	ID        uuid.UUID
 	TokenHash []byte
@@ -333,19 +340,20 @@ type TicketWatcher struct {
 }
 
 type User struct {
-	ID                uuid.UUID
-	Email             string
-	Name              string
-	PasswordHash      *string
-	Role              string
-	ClientID          *uuid.UUID
-	JobTitle          *string
-	Status            string
-	PasswordChangedAt time.Time
-	LastLoginAt       *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	EmailFrequency    string
+	ID                 uuid.UUID
+	Email              string
+	Name               string
+	PasswordHash       *string
+	Role               string
+	ClientID           *uuid.UUID
+	JobTitle           *string
+	Status             string
+	PasswordChangedAt  time.Time
+	LastLoginAt        *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	EmailFrequency     string
+	LastOrganizationID *uuid.UUID
 }
 
 type UserInvite struct {

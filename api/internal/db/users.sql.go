@@ -29,17 +29,30 @@ func (q *Queries) CountActiveAdmins(ctx context.Context, arg CountActiveAdminsPa
 }
 
 const countUsersByRole = `-- name: CountUsersByRole :many
-SELECT role, count(*)::int AS n FROM users WHERE status <> $1 GROUP BY role
+SELECT coalesce(m.role, u.role)::text AS role, count(*)::int AS n
+FROM users u
+LEFT JOIN organization_members m ON m.user_id = u.id AND m.organization_id = $1
+LEFT JOIN clients c ON c.id = u.client_id
+WHERE u.status <> $2
+  AND (u.role = $3 OR m.user_id IS NOT NULL OR c.organization_id = $1)
+GROUP BY 1
 `
+
+type CountUsersByRoleParams struct {
+	OrganizationID uuid.UUID
+	Suspended      string
+	AdminRole      string
+}
 
 type CountUsersByRoleRow struct {
 	Role string
 	N    int32
 }
 
-// People with access or an invite: suspended accounts aren't counted.
-func (q *Queries) CountUsersByRole(ctx context.Context, suspended string) ([]CountUsersByRoleRow, error) {
-	rows, err := q.db.Query(ctx, countUsersByRole, suspended)
+// An organization's people by role, with access or an invite (suspended accounts aren't
+// counted): the administrators, its members, and its clients' requesters.
+func (q *Queries) CountUsersByRole(ctx context.Context, arg CountUsersByRoleParams) ([]CountUsersByRoleRow, error) {
+	rows, err := q.db.Query(ctx, countUsersByRole, arg.OrganizationID, arg.Suspended, arg.AdminRole)
 	if err != nil {
 		return nil, err
 	}
@@ -117,12 +130,27 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (uuid.UU
 	return id, err
 }
 
+const deleteClientAgentsForMember = `-- name: DeleteClientAgentsForMember :exec
+DELETE FROM client_agents WHERE user_id = $1 AND organization_id = $2
+`
+
+type DeleteClientAgentsForMemberParams struct {
+	UserID         uuid.UUID
+	OrganizationID uuid.UUID
+}
+
+// An agent who stops being one in an organization is unlinked from its clients only.
+func (q *Queries) DeleteClientAgentsForMember(ctx context.Context, arg DeleteClientAgentsForMemberParams) error {
+	_, err := q.db.Exec(ctx, deleteClientAgentsForMember, arg.UserID, arg.OrganizationID)
+	return err
+}
+
 const deleteClientAgentsForUser = `-- name: DeleteClientAgentsForUser :exec
 DELETE FROM client_agents WHERE user_id = $1
 `
 
-// An agent who leaves (suspended, or another role) stops being linked to clients; the tickets
-// assigned to them stay theirs.
+// A suspended agent stops being linked to clients in every organization; the tickets assigned
+// to them stay theirs.
 func (q *Queries) DeleteClientAgentsForUser(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteClientAgentsForUser, userID)
 	return err
@@ -131,17 +159,21 @@ func (q *Queries) DeleteClientAgentsForUser(ctx context.Context, userID uuid.UUI
 const getAssignableUser = `-- name: GetAssignableUser :one
 SELECT u.id, u.name
 FROM users u
-WHERE u.id = $1
-  AND u.status = $2
-  AND (u.role = ANY($3::text[])
-       OR (u.role = $4
-           AND EXISTS (SELECT 1 FROM client_agents ca WHERE ca.client_id = $5 AND ca.user_id = u.id)))
+LEFT JOIN organization_members m ON m.user_id = u.id AND m.organization_id = $1
+WHERE u.id = $2
+  AND u.status = $3
+  AND (u.role = $4
+       OR m.role = $5
+       OR (m.role = $6
+           AND EXISTS (SELECT 1 FROM client_agents ca WHERE ca.client_id = $7 AND ca.user_id = u.id)))
 `
 
 type GetAssignableUserParams struct {
+	OrganizationID uuid.UUID
 	ID             uuid.UUID
 	Status         string
-	AllClientRoles []string
+	AdminRole      string
+	SupervisorRole string
 	AgentRole      string
 	ClientID       uuid.UUID
 }
@@ -154,9 +186,11 @@ type GetAssignableUserRow struct {
 // Same rule as ListAssignableUsers, for one user.
 func (q *Queries) GetAssignableUser(ctx context.Context, arg GetAssignableUserParams) (GetAssignableUserRow, error) {
 	row := q.db.QueryRow(ctx, getAssignableUser,
+		arg.OrganizationID,
 		arg.ID,
 		arg.Status,
-		arg.AllClientRoles,
+		arg.AdminRole,
+		arg.SupervisorRole,
 		arg.AgentRole,
 		arg.ClientID,
 	)
@@ -190,22 +224,24 @@ func (q *Queries) GetClientRequester(ctx context.Context, arg GetClientRequester
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT u.id, u.email, u.name, u.password_hash, u.role, u.client_id, c.name AS client_name,
-       u.job_title, u.status
+       c.organization_id AS client_organization_id, u.job_title, u.status, u.last_organization_id
 FROM users u
 LEFT JOIN clients c ON c.id = u.client_id
 WHERE u.email = $1
 `
 
 type GetUserByEmailRow struct {
-	ID           uuid.UUID
-	Email        string
-	Name         string
-	PasswordHash *string
-	Role         string
-	ClientID     *uuid.UUID
-	ClientName   *string
-	JobTitle     *string
-	Status       string
+	ID                   uuid.UUID
+	Email                string
+	Name                 string
+	PasswordHash         *string
+	Role                 string
+	ClientID             *uuid.UUID
+	ClientName           *string
+	ClientOrganizationID *uuid.UUID
+	JobTitle             *string
+	Status               string
+	LastOrganizationID   *uuid.UUID
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -219,28 +255,33 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Role,
 		&i.ClientID,
 		&i.ClientName,
+		&i.ClientOrganizationID,
 		&i.JobTitle,
 		&i.Status,
+		&i.LastOrganizationID,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT u.id, u.email, u.name, u.role, u.client_id, c.name AS client_name, u.job_title, u.status
+SELECT u.id, u.email, u.name, u.role, u.client_id, c.name AS client_name,
+       c.organization_id AS client_organization_id, u.job_title, u.status, u.last_organization_id
 FROM users u
 LEFT JOIN clients c ON c.id = u.client_id
 WHERE u.id = $1
 `
 
 type GetUserByIDRow struct {
-	ID         uuid.UUID
-	Email      string
-	Name       string
-	Role       string
-	ClientID   *uuid.UUID
-	ClientName *string
-	JobTitle   *string
-	Status     string
+	ID                   uuid.UUID
+	Email                string
+	Name                 string
+	Role                 string
+	ClientID             *uuid.UUID
+	ClientName           *string
+	ClientOrganizationID *uuid.UUID
+	JobTitle             *string
+	Status               string
+	LastOrganizationID   *uuid.UUID
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error) {
@@ -253,8 +294,10 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.Role,
 		&i.ClientID,
 		&i.ClientName,
+		&i.ClientOrganizationID,
 		&i.JobTitle,
 		&i.Status,
+		&i.LastOrganizationID,
 	)
 	return i, err
 }
@@ -290,21 +333,26 @@ func (q *Queries) GetUserForUpdate(ctx context.Context, id uuid.UUID) (GetUserFo
 }
 
 const listAssignableUsers = `-- name: ListAssignableUsers :many
-SELECT u.id, u.name, u.role, u.job_title,
+SELECT u.id, u.name, coalesce(m.role, u.role)::text AS role, u.job_title,
        (SELECT count(*) FROM tickets t
-        WHERE t.assignee_id = u.id AND t.status = ANY($1::text[]))::int AS open_ticket_count
+        WHERE t.assignee_id = u.id AND t.organization_id = $1
+          AND t.status = ANY($2::text[]))::int AS open_ticket_count
 FROM users u
-WHERE u.status = $2
-  AND (u.role = ANY($3::text[])
-       OR (u.role = $4
-           AND EXISTS (SELECT 1 FROM client_agents ca WHERE ca.client_id = $5 AND ca.user_id = u.id)))
+LEFT JOIN organization_members m ON m.user_id = u.id AND m.organization_id = $1
+WHERE u.status = $3
+  AND (u.role = $4
+       OR m.role = $5
+       OR (m.role = $6
+           AND EXISTS (SELECT 1 FROM client_agents ca WHERE ca.client_id = $7 AND ca.user_id = u.id)))
 ORDER BY lower(u.name), u.id
 `
 
 type ListAssignableUsersParams struct {
+	OrganizationID uuid.UUID
 	OpenStatuses   []string
 	Status         string
-	AllClientRoles []string
+	AdminRole      string
+	SupervisorRole string
 	AgentRole      string
 	ClientID       uuid.UUID
 }
@@ -317,13 +365,16 @@ type ListAssignableUsersRow struct {
 	OpenTicketCount int32
 }
 
-// Who can take a client's tickets: active users whose role sees every client, plus active
-// agents assigned to the client. open_statuses counts each person's open workload.
+// Who can take a client's tickets: active administrators, the organization's active
+// supervisors, and its active agents linked to the client. open_statuses counts each person's
+// open workload in the organization.
 func (q *Queries) ListAssignableUsers(ctx context.Context, arg ListAssignableUsersParams) ([]ListAssignableUsersRow, error) {
 	rows, err := q.db.Query(ctx, listAssignableUsers,
+		arg.OrganizationID,
 		arg.OpenStatuses,
 		arg.Status,
-		arg.AllClientRoles,
+		arg.AdminRole,
+		arg.SupervisorRole,
 		arg.AgentRole,
 		arg.ClientID,
 	)
@@ -429,11 +480,17 @@ func (q *Queries) ListLatestInvites(ctx context.Context) ([]ListLatestInvitesRow
 }
 
 const listTeamMembers = `-- name: ListTeamMembers :many
-SELECT u.id, u.email, u.name, u.role, u.job_title, u.status, u.last_login_at
+SELECT u.id, u.email, u.name, coalesce(m.role, u.role)::text AS role, u.job_title, u.status, u.last_login_at
 FROM users u
-WHERE u.role <> $1
+LEFT JOIN organization_members m ON m.user_id = u.id AND m.organization_id = $1
+WHERE u.role = $2 OR m.user_id IS NOT NULL
 ORDER BY lower(u.name), u.email
 `
+
+type ListTeamMembersParams struct {
+	OrganizationID uuid.UUID
+	AdminRole      string
+}
 
 type ListTeamMembersRow struct {
 	ID          uuid.UUID
@@ -445,9 +502,10 @@ type ListTeamMembersRow struct {
 	LastLoginAt *time.Time
 }
 
-// Everyone but client staff.
-func (q *Queries) ListTeamMembers(ctx context.Context, requesterRole string) ([]ListTeamMembersRow, error) {
-	rows, err := q.db.Query(ctx, listTeamMembers, requesterRole)
+// An organization's team: the administrators (every organization) and its members, with their
+// role there.
+func (q *Queries) ListTeamMembers(ctx context.Context, arg ListTeamMembersParams) ([]ListTeamMembersRow, error) {
+	rows, err := q.db.Query(ctx, listTeamMembers, arg.OrganizationID, arg.AdminRole)
 	if err != nil {
 		return nil, err
 	}
@@ -475,12 +533,19 @@ func (q *Queries) ListTeamMembers(ctx context.Context, requesterRole string) ([]
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT u.id, u.email, u.name, u.role, u.client_id, c.name AS client_name, u.job_title, u.status,
-       u.last_login_at
+SELECT u.id, u.email, u.name, coalesce(m.role, u.role)::text AS role, u.client_id, c.name AS client_name,
+       u.job_title, u.status, u.last_login_at
 FROM users u
+LEFT JOIN organization_members m ON m.user_id = u.id AND m.organization_id = $1
 LEFT JOIN clients c ON c.id = u.client_id
+WHERE u.role = $2 OR m.user_id IS NOT NULL OR c.organization_id = $1
 ORDER BY u.name, u.email
 `
+
+type ListUsersParams struct {
+	OrganizationID uuid.UUID
+	AdminRole      string
+}
 
 type ListUsersRow struct {
 	ID          uuid.UUID
@@ -494,8 +559,10 @@ type ListUsersRow struct {
 	LastLoginAt *time.Time
 }
 
-func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
-	rows, err := q.db.Query(ctx, listUsers)
+// The people of one organization: administrators, its members with their role there, and its
+// clients' requesters.
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error) {
+	rows, err := q.db.Query(ctx, listUsers, arg.OrganizationID, arg.AdminRole)
 	if err != nil {
 		return nil, err
 	}

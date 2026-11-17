@@ -212,7 +212,8 @@ func (s *Service) Delete(ctx context.Context, actor audit.Actor, orgID, id uuid.
 	return clientError(err)
 }
 
-// SetAgents replaces the agents assigned to a client. Every user must be an active agent.
+// SetAgents replaces the agents assigned to a client. Every user must be an active agent of the
+// client's organization.
 func (s *Service) SetAgents(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID, userIDs []uuid.UUID) (Client, error) {
 	ids := slices.Clone(userIDs)
 	slices.SortFunc(ids, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
@@ -221,8 +222,8 @@ func (s *Service) SetAgents(ctx context.Context, actor audit.Actor, orgID, id uu
 		if _, err := tx.Q.GetClientForUpdate(ctx, db.GetClientForUpdateParams{ID: id, OrganizationID: orgID}); err != nil {
 			return notFound(err)
 		}
-		n, err := tx.Q.CountUsersWithRoleAndStatus(ctx, db.CountUsersWithRoleAndStatusParams{
-			Ids: ids, Role: string(auth.RoleAgent), Status: string(auth.UserStatusActive),
+		n, err := tx.Q.CountActiveAgentMembers(ctx, db.CountActiveAgentMembersParams{
+			OrganizationID: orgID, Ids: ids, AgentRole: string(auth.RoleAgent), Status: string(auth.UserStatusActive),
 		})
 		if err != nil {
 			return err
