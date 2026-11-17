@@ -60,6 +60,7 @@ type env struct {
 	auth         *auth.Service
 	mailer       *mail.Recorder
 	worker       *auth.ResetEmailWorker
+	invite       *auth.InviteEmailWorker
 	fanoutWorker *notifications.FanoutWorker
 	dispatch     *notifications.DispatchWorker
 	ticketEmail  *notifications.TicketEmailWorker
@@ -86,6 +87,7 @@ func newEnv(t *testing.T) *env {
 	log := slog.New(slog.DiscardHandler)
 	mailer := &mail.Recorder{}
 	worker := auth.NewResetEmailWorker(st, mailer, u, auth.DefaultResetTokenTTL)
+	inviteWorker := auth.NewInviteEmailWorker(st, mailer, u, auth.DefaultInviteTTL)
 	fanout := notifications.NewFanoutWorker(st, log)
 	late := &notifications.LateInserter{}
 	slaSvc := sla.NewService(st, late)
@@ -94,6 +96,7 @@ func newEnv(t *testing.T) *env {
 	ticketEmail, digest := notifications.NewTicketEmailWorker(notifyMailer), notifications.NewDigestWorker(notifyMailer)
 	workers := river.NewWorkers()
 	river.AddWorker(workers, worker)
+	river.AddWorker(workers, inviteWorker)
 	river.AddWorker(workers, fanout)
 	river.AddWorker(workers, dispatch)
 	river.AddWorker(workers, ticketEmail)
@@ -139,7 +142,7 @@ func newEnv(t *testing.T) *env {
 	if _, err := st.Q().UpsertClient(ctx, "Dinas Kominfo Jambi"); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, pic: pic, files: files, connector: connectorSvc, process: process, users: map[auth.Role]string{}}
+	e := &env{t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, invite: inviteWorker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, pic: pic, files: files, connector: connectorSvc, process: process, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r}
 		if r == auth.RoleRequester {

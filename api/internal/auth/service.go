@@ -30,6 +30,12 @@ const (
 	ActionPasswordResetRequested = "auth.password_reset_requested"
 	ActionPasswordReset          = "auth.password_reset"
 	ActionUserCreated            = "user.created"
+	ActionUserInvited            = "user.invited"
+	ActionInviteSent             = "user.invite_sent"
+	ActionInviteAccepted         = "user.invite_accepted"
+	ActionRoleChanged            = "user.role_changed"
+	ActionUserSuspended          = "user.suspended"
+	ActionUserReactivated        = "user.reactivated"
 
 	TargetUser    = "user"
 	auditDataRole = "role"
@@ -114,7 +120,6 @@ type NewSession struct {
 func (s *Service) Login(ctx context.Context, email, password string) (*Principal, NewSession, error) {
 	email = NormalizeEmail(email)
 	info := reqinfo.From(ctx)
-	now := s.now()
 
 	type limit struct {
 		key string
@@ -156,46 +161,57 @@ func (s *Service) Login(ctx context.Context, email, password string) (*Principal
 			return nil, NewSession{}, err
 		}
 	}
-	raw, tokenHash, err := NewToken()
-	if err != nil {
-		return nil, NewSession{}, err
-	}
 	p := &Principal{
 		UserID: user.ID, Email: user.Email, Name: user.Name, Role: Role(user.Role),
 		JobTitle: user.JobTitle, ClientID: user.ClientID, ClientName: user.ClientName,
 	}
+	var sess NewSession
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		id, err := tx.Q.CreateSession(ctx, db.CreateSessionParams{
-			TokenHash: tokenHash,
-			UserID:    user.ID,
-			ExpiresAt: now.Add(min(s.opts.SessionIdle, s.opts.SessionAbsolute)),
-			Ip:        ipPtr(info),
-			UserAgent: strPtr(info.UserAgent),
-		})
-		if err != nil {
-			return err
-		}
-		p.SessionID = id
 		if newHash != "" {
 			if err := tx.Q.UpdateUserPasswordHash(ctx, db.UpdateUserPasswordHashParams{ID: user.ID, PasswordHash: &newHash}); err != nil {
 				return err
 			}
 		}
-		if err := tx.Q.TouchUserLogin(ctx, user.ID); err != nil {
-			return err
-		}
 		if err := tx.Q.ClearLoginAttempts(ctx, emailLimitKey); err != nil {
 			return err
 		}
-		return audit.Write(ctx, tx.Q, audit.Entry{
-			ActorUserID: &user.ID, ActorName: user.Name, Action: ActionLogin,
-			TargetType: TargetUser, TargetID: &user.ID,
-		})
+		sess, err = s.startSession(ctx, tx, p, info)
+		return err
 	})
 	if err != nil {
 		return nil, NewSession{}, err
 	}
-	return p, NewSession{Token: raw, CookieExpires: now.Add(s.opts.SessionAbsolute)}, nil
+	return p, sess, nil
+}
+
+// startSession signs p in inside tx: a new session row, the last sign-in time and the audit
+// entry. Sign-in, an accepted invite and first-run setup all start sessions this way.
+func (s *Service) startSession(ctx context.Context, tx store.Tx, p *Principal, info reqinfo.Info) (NewSession, error) {
+	raw, tokenHash, err := NewToken()
+	if err != nil {
+		return NewSession{}, err
+	}
+	now := s.now()
+	id, err := tx.Q.CreateSession(ctx, db.CreateSessionParams{
+		TokenHash: tokenHash,
+		UserID:    p.UserID,
+		ExpiresAt: now.Add(min(s.opts.SessionIdle, s.opts.SessionAbsolute)),
+		Ip:        ipPtr(info),
+		UserAgent: strPtr(info.UserAgent),
+	})
+	if err != nil {
+		return NewSession{}, err
+	}
+	p.SessionID = id
+	if err := tx.Q.TouchUserLogin(ctx, p.UserID); err != nil {
+		return NewSession{}, err
+	}
+	if err := audit.Write(ctx, tx.Q, audit.Entry{
+		ActorUserID: &p.UserID, ActorName: p.Name, Action: ActionLogin, TargetType: TargetUser, TargetID: &p.UserID,
+	}); err != nil {
+		return NewSession{}, err
+	}
+	return NewSession{Token: raw, CookieExpires: now.Add(s.opts.SessionAbsolute)}, nil
 }
 
 func (s *Service) loginFailed(ctx context.Context, keys []string, userKnown bool, userID uuid.UUID, name string) error {

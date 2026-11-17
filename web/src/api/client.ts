@@ -7,6 +7,10 @@ export const API_BASE_PATH = '/api/v1'
 export type Me = components['schemas']['Me']
 export type Organization = components['schemas']['Organization']
 export type OrganizationInput = components['schemas']['OrganizationInput']
+export type Member = components['schemas']['Member']
+export type Members = components['schemas']['Members']
+export type MemberInvite = components['schemas']['MemberInvite']
+export type StaffRole = components['schemas']['StaffRole']
 export type Problem = components['schemas']['Problem']
 export type Role = components['schemas']['Role']
 export type Client = components['schemas']['Client']
@@ -133,6 +137,10 @@ export const ErrorCode = {
   AttachmentTypeNotAllowed: 'attachment_type_not_allowed',
   InvalidRepositoryUrl: 'invalid_repository_url',
   RepositoryTaken: 'repository_taken',
+  LastAdmin: 'last_admin',
+  CannotChangeSelf: 'cannot_change_self',
+  NotInvited: 'not_invited',
+  SetupClosed: 'setup_closed',
 } as const
 
 export const HttpStatus = {

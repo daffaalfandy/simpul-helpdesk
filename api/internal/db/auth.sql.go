@@ -35,6 +35,27 @@ func (q *Queries) ConsumePasswordResetToken(ctx context.Context, tokenHash []byt
 	return user_id, err
 }
 
+const consumeUserInvite = `-- name: ConsumeUserInvite :one
+UPDATE user_invites i SET used_at = now()
+FROM users u
+WHERE i.token_hash = $1 AND i.used_at IS NULL AND i.expires_at > now()
+  AND u.id = i.user_id AND u.status = $2
+RETURNING i.user_id
+`
+
+type ConsumeUserInviteParams struct {
+	TokenHash []byte
+	Invited   string
+}
+
+// Single use, unexpired, and only while the account still waits for its first password.
+func (q *Queries) ConsumeUserInvite(ctx context.Context, arg ConsumeUserInviteParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, consumeUserInvite, arg.TokenHash, arg.Invited)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const createPasswordResetToken = `-- name: CreatePasswordResetToken :exec
 INSERT INTO password_reset_tokens (token_hash, user_id, expires_at)
 VALUES ($1, $2, $3)
@@ -76,6 +97,28 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (u
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const createUserInvite = `-- name: CreateUserInvite :exec
+INSERT INTO user_invites (token_hash, user_id, invited_by, expires_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type CreateUserInviteParams struct {
+	TokenHash []byte
+	UserID    uuid.UUID
+	InvitedBy *uuid.UUID
+	ExpiresAt time.Time
+}
+
+func (q *Queries) CreateUserInvite(ctx context.Context, arg CreateUserInviteParams) error {
+	_, err := q.db.Exec(ctx, createUserInvite,
+		arg.TokenHash,
+		arg.UserID,
+		arg.InvitedBy,
+		arg.ExpiresAt,
+	)
+	return err
 }
 
 const deleteSession = `-- name: DeleteSession :exec
@@ -141,6 +184,15 @@ func (q *Queries) GetSessionPrincipal(ctx context.Context, tokenHash []byte) (Ge
 		&i.PasswordChangedAt,
 	)
 	return i, err
+}
+
+const invalidateUserInvites = `-- name: InvalidateUserInvites :exec
+UPDATE user_invites SET used_at = now() WHERE user_id = $1 AND used_at IS NULL
+`
+
+func (q *Queries) InvalidateUserInvites(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, invalidateUserInvites, userID)
+	return err
 }
 
 const invalidateUserResetTokens = `-- name: InvalidateUserResetTokens :exec

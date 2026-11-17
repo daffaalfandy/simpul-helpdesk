@@ -146,6 +146,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/invite/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set the first password from an invite link and sign in
+         * @description The link works once and for 7 days, and only while the account waits for its first
+         *     password. Error codes are `invalid_token`, `weak_password` and `rate_limited` (429).
+         */
+        post: operations["acceptInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The team and how many people hold each role (admin only)
+         * @description Client staff are counted but not listed; they are managed on their client.
+         */
+        get: operations["listMembers"];
+        put?: never;
+        /**
+         * Invite someone to the team (admin only)
+         * @description Creates the account without a password and emails a link to set one. Error codes are
+         *     `email_taken` (409), `invalid_email`, `invalid_name` and `invalid_role`.
+         */
+        post: operations["inviteMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/members/{userId}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Move a team member to another role (admin only)
+         * @description An agent who stops being one is unlinked from their clients; tickets assigned to them stay
+         *     theirs. Error codes are `last_admin` and `cannot_change_self` (409).
+         */
+        put: operations["changeMemberRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/members/{userId}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop someone signing in, at once (admin only)
+         * @description Works for team members and client staff. Their sessions end; an agent is unlinked from
+         *     their clients and keeps their assigned tickets. Error codes are `last_admin` and
+         *     `cannot_change_self` (409).
+         */
+        post: operations["suspendMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/members/{userId}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Let a suspended person back in (admin only)
+         * @description Someone who never set a password goes back to invited; resend their invite.
+         */
+        post: operations["reactivateMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/members/{userId}/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a new invite link (admin only)
+         * @description Earlier links stop working. Error code `not_invited` (409) once the password is set.
+         */
+        post: operations["resendInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -2531,6 +2668,52 @@ export interface components {
              */
             avgFirstResponseMs: number | null;
         };
+        AcceptInviteRequest: {
+            token: string;
+            password: string;
+        };
+        /**
+         * @description The team's roles; client staff (requester) are invited on their client.
+         * @enum {string}
+         */
+        StaffRole: "admin" | "supervisor" | "agent";
+        MemberInvite: {
+            /** Format: email */
+            email: string;
+            name: string;
+            role: components["schemas"]["StaffRole"];
+            jobTitle?: string;
+        };
+        MemberRoleInput: {
+            role: components["schemas"]["StaffRole"];
+        };
+        Member: {
+            /** Format: uuid */
+            id: string;
+            email: string;
+            name: string;
+            role: components["schemas"]["Role"];
+            jobTitle: string | null;
+            status: components["schemas"]["UserStatus"];
+            /** Format: date-time */
+            lastLoginAt: string | null;
+            /**
+             * Format: date-time
+             * @description When the latest invite went out; null when none was sent (the CLI or seed made the account).
+             */
+            inviteSentAt: string | null;
+        };
+        /** @description People with access or an invite, per role; suspended accounts aren't counted. */
+        MemberCounts: {
+            admin: number;
+            supervisor: number;
+            agent: number;
+            requester: number;
+        };
+        Members: {
+            counts: components["schemas"]["MemberCounts"];
+            team: components["schemas"]["Member"][];
+        };
     };
     responses: {
         /** @description Error (RFC 9457 problem details) */
@@ -2820,6 +3003,190 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    acceptInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInviteRequest"];
+            };
+        };
+        responses: {
+            /** @description Password set and signed in. The session cookie is set. */
+            200: {
+                headers: {
+                    /** @description Session cookie (HttpOnly, SameSite=Lax). */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Members"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    inviteMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberInvite"];
+            };
+        };
+        responses: {
+            /** @description Invited */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    changeMemberRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberRoleInput"];
+            };
+        };
+        responses: {
+            /** @description Changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    suspendMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suspended */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    reactivateMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reactivated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    resendInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

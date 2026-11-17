@@ -12,6 +12,52 @@ import (
 	"github.com/google/uuid"
 )
 
+const countActiveAdmins = `-- name: CountActiveAdmins :one
+SELECT count(*)::int FROM users WHERE role = $1 AND status = $2
+`
+
+type CountActiveAdminsParams struct {
+	AdminRole string
+	Active    string
+}
+
+func (q *Queries) CountActiveAdmins(ctx context.Context, arg CountActiveAdminsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countActiveAdmins, arg.AdminRole, arg.Active)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countUsersByRole = `-- name: CountUsersByRole :many
+SELECT role, count(*)::int AS n FROM users WHERE status <> $1 GROUP BY role
+`
+
+type CountUsersByRoleRow struct {
+	Role string
+	N    int32
+}
+
+// People with access or an invite: suspended accounts aren't counted.
+func (q *Queries) CountUsersByRole(ctx context.Context, suspended string) ([]CountUsersByRoleRow, error) {
+	rows, err := q.db.Query(ctx, countUsersByRole, suspended)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountUsersByRoleRow{}
+	for rows.Next() {
+		var i CountUsersByRoleRow
+		if err := rows.Scan(&i.Role, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createInvitedUser = `-- name: CreateInvitedUser :one
 INSERT INTO users (email, name, role, client_id, job_title, status)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -69,6 +115,17 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (uuid.UU
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const deleteClientAgentsForUser = `-- name: DeleteClientAgentsForUser :exec
+DELETE FROM client_agents WHERE user_id = $1
+`
+
+// An agent who leaves (suspended, or another role) stops being linked to clients; the tickets
+// assigned to them stay theirs.
+func (q *Queries) DeleteClientAgentsForUser(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteClientAgentsForUser, userID)
+	return err
 }
 
 const getAssignableUser = `-- name: GetAssignableUser :one
@@ -202,6 +259,36 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 	return i, err
 }
 
+const getUserForUpdate = `-- name: GetUserForUpdate :one
+SELECT id, email, name, role, status, client_id, (password_hash IS NOT NULL)::boolean AS has_password
+FROM users WHERE id = $1 FOR UPDATE
+`
+
+type GetUserForUpdateRow struct {
+	ID          uuid.UUID
+	Email       string
+	Name        string
+	Role        string
+	Status      string
+	ClientID    *uuid.UUID
+	HasPassword bool
+}
+
+func (q *Queries) GetUserForUpdate(ctx context.Context, id uuid.UUID) (GetUserForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getUserForUpdate, id)
+	var i GetUserForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.Status,
+		&i.ClientID,
+		&i.HasPassword,
+	)
+	return i, err
+}
+
 const listAssignableUsers = `-- name: ListAssignableUsers :many
 SELECT u.id, u.name, u.role, u.job_title,
        (SELECT count(*) FROM tickets t
@@ -300,6 +387,82 @@ func (q *Queries) ListClientRequesters(ctx context.Context, arg ListClientReques
 			&i.Email,
 			&i.JobTitle,
 			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestInvites = `-- name: ListLatestInvites :many
+SELECT user_id, max(created_at)::timestamptz AS sent_at FROM user_invites GROUP BY user_id
+`
+
+type ListLatestInvitesRow struct {
+	UserID uuid.UUID
+	SentAt time.Time
+}
+
+// When each person's latest invite went out.
+func (q *Queries) ListLatestInvites(ctx context.Context) ([]ListLatestInvitesRow, error) {
+	rows, err := q.db.Query(ctx, listLatestInvites)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLatestInvitesRow{}
+	for rows.Next() {
+		var i ListLatestInvitesRow
+		if err := rows.Scan(&i.UserID, &i.SentAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeamMembers = `-- name: ListTeamMembers :many
+SELECT u.id, u.email, u.name, u.role, u.job_title, u.status, u.last_login_at
+FROM users u
+WHERE u.role <> $1
+ORDER BY lower(u.name), u.email
+`
+
+type ListTeamMembersRow struct {
+	ID          uuid.UUID
+	Email       string
+	Name        string
+	Role        string
+	JobTitle    *string
+	Status      string
+	LastLoginAt *time.Time
+}
+
+// Everyone but client staff.
+func (q *Queries) ListTeamMembers(ctx context.Context, requesterRole string) ([]ListTeamMembersRow, error) {
+	rows, err := q.db.Query(ctx, listTeamMembers, requesterRole)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTeamMembersRow{}
+	for rows.Next() {
+		var i ListTeamMembersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Role,
+			&i.JobTitle,
+			&i.Status,
+			&i.LastLoginAt,
 		); err != nil {
 			return nil, err
 		}
@@ -410,6 +573,20 @@ type UpdateUserPasswordHashParams struct {
 // Rehash with new parameters; the password itself is unchanged, so sessions stay valid.
 func (q *Queries) UpdateUserPasswordHash(ctx context.Context, arg UpdateUserPasswordHashParams) error {
 	_, err := q.db.Exec(ctx, updateUserPasswordHash, arg.PasswordHash, arg.ID)
+	return err
+}
+
+const updateUserRole = `-- name: UpdateUserRole :exec
+UPDATE users SET role = $1 WHERE id = $2
+`
+
+type UpdateUserRoleParams struct {
+	Role string
+	ID   uuid.UUID
+}
+
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error {
+	_, err := q.db.Exec(ctx, updateUserRole, arg.Role, arg.ID)
 	return err
 }
 

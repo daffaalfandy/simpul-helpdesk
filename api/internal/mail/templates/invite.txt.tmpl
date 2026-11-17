@@ -1,0 +1,12 @@
+{{define "invite.subject"}}You're invited to the {{.OrgName}} service desk{{end -}}
+{{define "invite.role"}}{{if eq .Role "admin"}}an administrator{{else if eq .Role "supervisor"}}a supervisor{{else if eq .Role "agent"}}an agent{{else}}{{.ClientName}} staff{{end}}{{end -}}
+Hello {{.Name}},
+
+{{if .InviterName}}{{.InviterName}} invited you{{else}}You're invited{{end}} to the {{.OrgName}} service desk as {{template "invite.role" .}}.
+
+Set your password here (the link works once and expires in {{.ExpiresIn}}):
+{{.Link}}
+
+Then sign in with this email address.
+
+The {{.OrgName}} support team

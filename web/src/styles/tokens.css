@@ -169,6 +169,8 @@
   --target-tick-w: 2px;        /* the target's mark on that bar */
   --target-tick-h: 16px;
   --org-field-min-w: 240px;    /* Settings › General fields, side by side (Settings mock) */
+  --role-card-min-w: 260px;    /* Members & roles cards, side by side (Settings mock) */
+  --member-role-w: 180px;      /* role dropdown in each team row */
 
   /* ---------- Focus & motion ---------- */
   --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);

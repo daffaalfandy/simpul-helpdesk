@@ -1,6 +1,14 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import type { BusinessHoursInput, CatalogItemInput, ClientInput, OrganizationInput, PriorityLevel } from '../../api/client'
+import type {
+  BusinessHoursInput,
+  CatalogItemInput,
+  ClientInput,
+  MemberInvite,
+  OrganizationInput,
+  PriorityLevel,
+  StaffRole,
+} from '../../api/client'
 import { api } from '../../api/client'
 import { clientsQueryOptions, queryKeys, useInvalidate } from '../../api/queries'
 import { unwrap } from '../../api/unwrap'
@@ -111,6 +119,40 @@ export function useRemoveLogo() {
   return useMutation({
     mutationFn: () => unwrap(api.DELETE('/organization/logo')),
     onSuccess: (org) => queryClient.setQueryData(queryKeys.organization, org),
+  })
+}
+
+export const membersQueryOptions = queryOptions({
+  queryKey: queryKeys.members,
+  queryFn: () => unwrap(api.GET('/members')),
+})
+
+export function useInviteMember() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (body: MemberInvite) => unwrap(api.POST('/members', { body })),
+    onSuccess: () => invalidate(queryKeys.members, queryKeys.users),
+  })
+}
+
+export function useChangeMemberRole() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: StaffRole }) =>
+      unwrap(api.PUT('/members/{userId}/role', { params: { path: { userId } }, body: { role } })),
+    onSuccess: () => invalidate(queryKeys.members, queryKeys.users),
+  })
+}
+
+/** What an admin can do to someone's access from the member list (or a client's requesters). */
+export type MemberAction = 'suspend' | 'reactivate' | 'invite'
+
+export function useMemberAction() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ userId, action }: { userId: string; action: MemberAction }) =>
+      unwrap(api.POST(`/members/{userId}/${action}`, { params: { path: { userId } } })),
+    onSuccess: () => invalidate(queryKeys.members, queryKeys.users, queryKeys.clients),
   })
 }
 

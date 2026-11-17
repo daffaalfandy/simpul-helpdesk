@@ -3,6 +3,7 @@ import { setupServer } from 'msw/node'
 
 import type { Me, Organization, OrganizationInput, Problem } from '../api/client'
 import { integrationsHandlers, resetIntegrations } from './integrationsApi'
+import { membersHandlers, resetMembers } from './membersApi'
 import { notificationsHandlers, resetNotifications } from './notificationsApi'
 import { projectsHandlers, resetProjects } from './projectsApi'
 import { reportsHandlers, resetReports } from './reportsApi'
@@ -15,6 +16,12 @@ export const ORG: Organization = {
   name: 'Demo Vendor', timezone: 'Asia/Jakarta', footerNote: 'Data stored in Indonesia', ticketPrefix: 'HD',
   appUrl: 'https://helpdesk.demo-vendor.test', logoUrl: null, setupRequired: false,
 }
+
+/** The invite link token the fake API accepts. */
+export const INVITE_TOKEN = 'invite-token-0123456789abcdef'
+
+/** Someone who accepted their invite: the API signs them in. */
+export const INVITED_ME: Me = { id: '01a1cedf-0000-7000-8000-0000000000a1', email: 'yoga@demo-vendor.test', name: 'Yoga Hidayat', role: 'agent' }
 
 /** The logo URL the fake API hands out after an upload. */
 export const LOGO_URL = '/api/v1/organization/logo?v=1'
@@ -56,12 +63,14 @@ export const state: {
   org: Organization
   forgotRequests: string[]
   resetBodies: unknown[]
+  acceptBodies: unknown[]
   orgBodies: unknown[]
 } = {
   me: null,
   org: { ...ORG },
   forgotRequests: [],
   resetBodies: [],
+  acceptBodies: [],
   orgBodies: [],
 }
 
@@ -70,8 +79,10 @@ export function resetApi() {
   state.org = { ...ORG }
   state.forgotRequests = []
   state.resetBodies = []
+  state.acceptBodies = []
   state.orgBodies = []
   resetSettings()
+  resetMembers()
   resetTickets()
   resetProjects()
   resetNotifications()
@@ -123,11 +134,19 @@ const handlers = [
       ? new HttpResponse(null, { status: 204 })
       : problem(400, 'invalid_token')
   }),
+  http.post('*/api/v1/auth/invite/accept', async ({ request }) => {
+    const body = (await request.json()) as { token: string }
+    state.acceptBodies.push(body)
+    if (body.token !== INVITE_TOKEN) return problem(400, 'invalid_token')
+    state.me = INVITED_ME
+    return HttpResponse.json(INVITED_ME)
+  }),
 ]
 
 export const server = setupServer(
   ...handlers,
   ...settingsHandlers,
+  ...membersHandlers,
   ...ticketsHandlers,
   ...projectsHandlers,
   ...notificationsHandlers,

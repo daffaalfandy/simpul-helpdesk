@@ -85,3 +85,33 @@ WHERE u.id = @id
   AND (u.role = ANY(@all_client_roles::text[])
        OR (u.role = @agent_role
            AND EXISTS (SELECT 1 FROM client_agents ca WHERE ca.client_id = @client_id AND ca.user_id = u.id)));
+
+-- name: ListTeamMembers :many
+-- Everyone but client staff.
+SELECT u.id, u.email, u.name, u.role, u.job_title, u.status, u.last_login_at
+FROM users u
+WHERE u.role <> @requester_role
+ORDER BY lower(u.name), u.email;
+
+-- name: ListLatestInvites :many
+-- When each person's latest invite went out.
+SELECT user_id, max(created_at)::timestamptz AS sent_at FROM user_invites GROUP BY user_id;
+
+-- name: CountUsersByRole :many
+-- People with access or an invite: suspended accounts aren't counted.
+SELECT role, count(*)::int AS n FROM users WHERE status <> @suspended GROUP BY role;
+
+-- name: GetUserForUpdate :one
+SELECT id, email, name, role, status, client_id, (password_hash IS NOT NULL)::boolean AS has_password
+FROM users WHERE id = @id FOR UPDATE;
+
+-- name: CountActiveAdmins :one
+SELECT count(*)::int FROM users WHERE role = @admin_role AND status = @active;
+
+-- name: UpdateUserRole :exec
+UPDATE users SET role = @role WHERE id = @id;
+
+-- name: DeleteClientAgentsForUser :exec
+-- An agent who leaves (suspended, or another role) stops being linked to clients; the tickets
+-- assigned to them stay theirs.
+DELETE FROM client_agents WHERE user_id = @user_id;

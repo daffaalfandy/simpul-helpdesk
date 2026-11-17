@@ -193,6 +193,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	opts := auth.DefaultOptions()
 	workers := river.NewWorkers()
 	river.AddWorker(workers, auth.NewResetEmailWorker(st, mailer, cfg.AppURL, opts.ResetTokenTTL))
+	river.AddWorker(workers, auth.NewInviteEmailWorker(st, mailer, cfg.AppURL, auth.DefaultInviteTTL))
 	river.AddWorker(workers, tickets.NewAttachmentSweeper(st, files))
 	river.AddWorker(workers, notifications.NewFanoutWorker(st, log))
 	// The River client needs its workers first, so workers and services that queue jobs get an

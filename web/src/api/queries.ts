@@ -43,6 +43,7 @@ export const queryKeys = {
   commitTest: (message: string) => ['integrations', 'commit-test', message] as const,
   ticketCode: (key: string) => ['tickets', 'code', key] as const,
   slaReport: (month: string | undefined) => ['reports', 'sla', month ?? 'current'] as const,
+  members: ['members'],
 } as const
 
 /** Invalidates queries by key prefix. */
@@ -150,6 +151,15 @@ export function useForgotPassword() {
       const { error, response } = await api.POST('/auth/password/forgot', { body: { email } })
       if (error) throw new ApiError(response, error)
     },
+  })
+}
+
+/** Sets the first password from an invite link; the person is signed in straight away. */
+export function useAcceptInvite() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { token: string; password: string }) => unwrap(api.POST('/auth/invite/accept', { body })),
+    onSuccess: (me) => queryClient.setQueryData(queryKeys.me, me),
   })
 }
 

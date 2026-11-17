@@ -223,6 +223,149 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /auth/invite/accept:
+    post:
+      operationId: acceptInvite
+      summary: Set the first password from an invite link and sign in
+      description: |
+        The link works once and for 7 days, and only while the account waits for its first
+        password. Error codes are `invalid_token`, `weak_password` and `rate_limited` (429).
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcceptInviteRequest" }
+      responses:
+        "200":
+          description: Password set and signed in. The session cookie is set.
+          headers:
+            Set-Cookie:
+              description: Session cookie (HttpOnly, SameSite=Lax).
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /members:
+    get:
+      operationId: listMembers
+      summary: The team and how many people hold each role (admin only)
+      description: Client staff are counted but not listed; they are managed on their client.
+      tags: [users]
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Members" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: inviteMember
+      summary: Invite someone to the team (admin only)
+      description: |
+        Creates the account without a password and emails a link to set one. Error codes are
+        `email_taken` (409), `invalid_email`, `invalid_name` and `invalid_role`.
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemberInvite" }
+      responses:
+        "201":
+          description: Invited
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /members/{userId}/role:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    put:
+      operationId: changeMemberRole
+      summary: Move a team member to another role (admin only)
+      description: |
+        An agent who stops being one is unlinked from their clients; tickets assigned to them stay
+        theirs. Error codes are `last_admin` and `cannot_change_self` (409).
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemberRoleInput" }
+      responses:
+        "204":
+          description: Changed
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /members/{userId}/suspend:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      operationId: suspendMember
+      summary: Stop someone signing in, at once (admin only)
+      description: |
+        Works for team members and client staff. Their sessions end; an agent is unlinked from
+        their clients and keeps their assigned tickets. Error codes are `last_admin` and
+        `cannot_change_self` (409).
+      tags: [users]
+      responses:
+        "204":
+          description: Suspended
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /members/{userId}/reactivate:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      operationId: reactivateMember
+      summary: Let a suspended person back in (admin only)
+      description: Someone who never set a password goes back to invited; resend their invite.
+      tags: [users]
+      responses:
+        "204":
+          description: Reactivated
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /members/{userId}/invite:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      operationId: resendInvite
+      summary: Email a new invite link (admin only)
+      description: Earlier links stop working. Error code `not_invited` (409) once the password is set.
+      tags: [users]
+      responses:
+        "204":
+          description: Sent
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /users:
     get:
       operationId: listUsers
@@ -3424,3 +3567,66 @@ components:
           description: |
             Mean first-response time of answered portal reports, on their SLA clocks. Tickets the
             team logs are answered when logged and are left out. Null when none.
+
+    AcceptInviteRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token: { type: string, minLength: 20, maxLength: 200 }
+        password: { type: string, minLength: 10, maxLength: 128 }
+
+    StaffRole:
+      type: string
+      description: The team's roles; client staff (requester) are invited on their client.
+      enum: [admin, supervisor, agent]
+
+    MemberInvite:
+      type: object
+      required: [email, name, role]
+      properties:
+        email: { type: string, format: email, maxLength: 200 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        role: { $ref: "#/components/schemas/StaffRole" }
+        jobTitle: { type: string, maxLength: 100 }
+
+    MemberRoleInput:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/StaffRole" }
+
+    Member:
+      type: object
+      required: [id, email, name, role, jobTitle, status, lastLoginAt, inviteSentAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        jobTitle: { type: string, nullable: true }
+        status: { $ref: "#/components/schemas/UserStatus" }
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+        inviteSentAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the latest invite went out; null when none was sent (the CLI or seed made the account).
+
+    MemberCounts:
+      type: object
+      description: People with access or an invite, per role; suspended accounts aren't counted.
+      required: [admin, supervisor, agent, requester]
+      properties:
+        admin: { type: integer }
+        supervisor: { type: integer }
+        agent: { type: integer }
+        requester: { type: integer }
+
+    Members:
+      type: object
+      required: [counts, team]
+      properties:
+        counts: { $ref: "#/components/schemas/MemberCounts" }
+        team:
+          type: array
+          items: { $ref: "#/components/schemas/Member" }

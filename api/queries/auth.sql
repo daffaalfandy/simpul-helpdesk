@@ -48,3 +48,18 @@ DELETE FROM login_attempts WHERE key = @key;
 
 -- name: PruneLoginAttempts :exec
 DELETE FROM login_attempts WHERE at < @before;
+
+-- name: CreateUserInvite :exec
+INSERT INTO user_invites (token_hash, user_id, invited_by, expires_at)
+VALUES (@token_hash, @user_id, sqlc.narg(invited_by), @expires_at);
+
+-- name: InvalidateUserInvites :exec
+UPDATE user_invites SET used_at = now() WHERE user_id = @user_id AND used_at IS NULL;
+
+-- name: ConsumeUserInvite :one
+-- Single use, unexpired, and only while the account still waits for its first password.
+UPDATE user_invites i SET used_at = now()
+FROM users u
+WHERE i.token_hash = @token_hash AND i.used_at IS NULL AND i.expires_at > now()
+  AND u.id = i.user_id AND u.status = @invited
+RETURNING i.user_id;

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { http } from 'msw'
 
 import { renderApp } from '../../test/renderApp'
-import { PASSWORD, problem, server, state, USERS } from '../../test/server'
+import { INVITE_TOKEN, PASSWORD, problem, server, state, USERS } from '../../test/server'
 
 async function signIn(email: string, password = PASSWORD) {
   const user = userEvent.setup()
@@ -147,5 +147,36 @@ describe('password reset', () => {
     await user.click(screen.getByRole('button', { name: 'Save new password' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('invalid or has expired')
     expect(screen.getByRole('link', { name: 'Request a new link' })).toHaveAttribute('href', '/forgot-password')
+  })
+})
+
+describe('accepting an invite', () => {
+  it('sets the first password from the emailed link and signs in', async () => {
+    window.history.replaceState(null, '', `/accept-invite#token=${INVITE_TOKEN}`)
+    const { router } = renderApp('/accept-invite')
+    const user = userEvent.setup()
+    expect(await screen.findByRole('heading', { name: 'Set your password' })).toBeInTheDocument()
+    expect(window.location.hash).toBe('')
+    await user.type(screen.getByLabelText('Password'), 'brand-new-password')
+    await user.type(screen.getByLabelText('Repeat password'), 'brand-new-password')
+    await user.click(screen.getByRole('button', { name: 'Set password and sign in' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/board'))
+    expect(state.acceptBodies).toEqual([{ token: INVITE_TOKEN, password: 'brand-new-password' }])
+  })
+
+  it('says when the link no longer works', async () => {
+    window.history.replaceState(null, '', '/accept-invite#token=used-token-0123456789abcdef')
+    renderApp('/accept-invite')
+    const user = userEvent.setup()
+    await user.type(await screen.findByLabelText('Password'), 'brand-new-password')
+    await user.type(screen.getByLabelText('Repeat password'), 'brand-new-password')
+    await user.click(screen.getByRole('button', { name: 'Set password and sign in' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ask your administrator to send a new one.')
+  })
+
+  it('asks for the emailed link when opened without one', async () => {
+    window.history.replaceState(null, '', '/accept-invite')
+    renderApp('/accept-invite')
+    expect(await screen.findByText('Open this page from the link in your invitation email.')).toBeInTheDocument()
   })
 })

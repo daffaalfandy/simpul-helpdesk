@@ -16,6 +16,8 @@ export const paths = {
   login: '/login',
   forgotPassword: '/forgot-password',
   resetPassword: '/reset-password',
+  acceptInvite: '/accept-invite',
+  setup: '/setup',
   board: '/board',
   projects: '/projects',
   reports: '/reports',

@@ -71,6 +71,15 @@
       "requestNew": "Request a new link"
     }
   },
+  "invite": {
+    "title": "Set your password",
+    "intro": "You were invited to the service desk. Choose a password to finish setting up your account.",
+    "password": "Password",
+    "confirm": "Repeat password",
+    "submit": "Set password and sign in",
+    "missingToken": "Open this page from the link in your invitation email.",
+    "invalidToken": "This invitation link is invalid, already used or has expired. Ask your administrator to send a new one."
+  },
   "nav": {
     "main": "Main",
     "board": "Board",
@@ -747,6 +756,87 @@
       "logoHint": "Shown on the sign-in page, the client portal and emails. PNG, JPEG or WebP, up to {{size}}.",
       "logoSaved": "Logo saved.",
       "logoRemoved": "Logo removed. Your organisation's initials show instead."
+    },
+    "members": {
+      "invite": "Invite member",
+      "summary": "{{team}} team members and {{requesters}} client requesters. Client requesters are invited from each client.",
+      "count_one": "{{count}} user",
+      "count_other": "{{count}} users",
+      "roles": {
+        "requester": {
+          "who": "Staff at a client organisation",
+          "can": {
+            "report": "Submit tickets on the portal",
+            "reply": "See and reply to their client’s tickets",
+            "reopen": "Reopen within 3 working days of resolution"
+          }
+        },
+        "agent": {
+          "who": "Vendor support staff (L1 / L2) and developers",
+          "can": {
+            "work": "Work tickets for their clients and tickets assigned to them",
+            "reply": "Reply, add internal notes, change status",
+            "override": "Override priority or the Definition of Done with a reason"
+          }
+        },
+        "supervisor": {
+          "who": "Vendor team lead",
+          "can": {
+            "agent": "Everything an agent can, for every client",
+            "reassign": "Reassign and escalate",
+            "reports": "See and export SLA reports"
+          }
+        },
+        "admin": {
+          "who": "Administrator of this installation",
+          "can": {
+            "members": "Manage members and organisation settings",
+            "settings": "Manage clients, SLA rules and integrations"
+          }
+        }
+      },
+      "teamTitle": "Team",
+      "cols": {
+        "name": "Name",
+        "role": "Role",
+        "status": "Status",
+        "lastSeen": "Last sign-in",
+        "actions": "Actions"
+      },
+      "you": " (you)",
+      "roleFor": "Role for {{name}}",
+      "status": {
+        "active": "Active",
+        "invited": "Invited",
+        "suspended": "Suspended"
+      },
+      "inviteSent": "Invite sent {{date}}",
+      "never": "Never",
+      "actionsFor": "Actions for {{name}}",
+      "actions": {
+        "invite": "Resend invite",
+        "suspend": "Suspend",
+        "reactivate": "Reactivate"
+      },
+      "done": {
+        "role": "{{name}}’s role changed.",
+        "invite": "A new invite is on its way to {{name}}. Earlier links stop working.",
+        "suspend": "{{name}} is suspended and signed out everywhere.",
+        "reactivate": "{{name}} can sign in again."
+      },
+      "suspendTitle": "Suspend {{name}}?",
+      "suspendBody": "They are signed out at once and can’t sign in until reactivated. Tickets assigned to them stay theirs; they lose their client links.",
+      "inviteTitle": "Invite a team member",
+      "inviteSubtitle": "They get an email with a link to set their password. The link works once, for 7 days.",
+      "inviteSubmit": "Send invite",
+      "name": "Name",
+      "nameRequired": "Enter their name.",
+      "email": "Work email",
+      "emailRequired": "Enter their work email.",
+      "role": "Role",
+      "jobTitle": "Job title",
+      "jobTitleHint": "Optional, e.g. L2 support. Shown beside their name.",
+      "invited": "Invite sent to {{email}}."
     }
   },
   "priority": {
@@ -854,7 +944,11 @@
     "month_in_future": "That month hasn't started yet.",
     "invalid_organization": "Some settings aren't valid. Check the fields and try again.",
     "logo_type_not_allowed": "Choose a PNG, JPEG or WebP image.",
-    "logo_too_large": "The logo is too large. Choose an image up to 512 KB."
+    "logo_too_large": "The logo is too large. Choose an image up to 512 KB.",
+    "invalid_role": "Choose administrator, supervisor or agent.",
+    "last_admin": "Keep at least one active administrator.",
+    "cannot_change_self": "You can’t change your own role or suspend yourself. Ask another administrator.",
+    "not_invited": "This person has already set their password, so there is no invite to resend."
   },
   "time": {
     "justNow": "Just now",

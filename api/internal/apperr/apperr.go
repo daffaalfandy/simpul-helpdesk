@@ -80,6 +80,10 @@ const (
 	CodeInvalidOrganization       = "invalid_organization"
 	CodeLogoTypeNotAllowed        = "logo_type_not_allowed"
 	CodeLogoTooLarge              = "logo_too_large"
+	CodeLastAdmin                 = "last_admin"
+	CodeCannotChangeSelf          = "cannot_change_self"
+	CodeNotInvited                = "not_invited"
+	CodeSetupClosed               = "setup_closed"
 )
 
 // Error is a domain error with a stable machine-readable code.

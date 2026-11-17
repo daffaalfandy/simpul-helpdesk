@@ -34,6 +34,7 @@ const (
 	TemplateTicketUpdate  = "ticket_update"
 	TemplateDigest        = "digest"
 	TemplatePicBreach     = "sla_breach_pic"
+	TemplateInvite        = "invite"
 )
 
 // Headers for automatic email: auto-responders stay quiet (RFC 3834, and Exchange's own
@@ -77,6 +78,18 @@ type PasswordResetData struct {
 	OrgName   string
 	Link      string
 	ExpiresIn string
+}
+
+// InviteData fills the invite template: a new account's set-password link.
+type InviteData struct {
+	Name        string
+	OrgName     string
+	LogoURL     string // the organisation logo, absolute; empty without one
+	InviterName string // empty when the system sent it
+	Role        string // admin | supervisor | agent | requester
+	ClientName  string // requesters' client
+	Link        string
+	ExpiresIn   string
 }
 
 type Message struct {
