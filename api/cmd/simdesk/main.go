@@ -212,6 +212,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 	river.AddWorker(workers, notifications.NewPicEmailWorker(notifyMailer))
 	ticketSvc := tickets.NewService(st, files, slaSvc, late)
 	river.AddWorker(workers, tickets.NewLifecycleScanner(ticketSvc, log))
+	river.AddWorker(workers, tickets.NewDoDBranchSyncer(ticketSvc, log))
 	connectorSvc := connector.NewService(st, box, cfg.AppURL, late, ticketSvc)
 	river.AddWorker(workers, connector.NewProcessWorker(connectorSvc, log))
 	river.AddWorker(workers, connector.NewPurgeWorker(st))
@@ -240,7 +241,7 @@ func newApp(ctx context.Context, runJobs bool) (*app, error) {
 		clients:       clients.NewService(st, authSvc),
 		sla:           slaSvc,
 		catalog:       catalog.NewService(st),
-		projects:      projects.NewService(st, slaSvc),
+		projects:      projects.NewService(st, slaSvc, jobs),
 		priorities:    priorities.NewService(st),
 		tickets:       ticketSvc,
 		notifications: notifications.NewService(st),

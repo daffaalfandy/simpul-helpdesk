@@ -58,14 +58,14 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
   const timeZone = useOrgTimeZone()
   const [logging, setLogging] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
-  // A drop into Resolved whose Definition of Done isn't met waits for a reason (Main mock).
+  // A drop into Resolved whose mandatory Definition of Done isn't met waits for a reason (Main mock).
   const [guard, setGuard] = useState<BoardCard | null>(null)
 
   const moveTo = (card: BoardCard, column: BoardColumnId, reason?: string) => {
     setDragging(null)
     setNotice(null)
     const status = dropStatus(column, card)
-    if (status === 'resolved' && reason === undefined && card.dodPending.length > 0) {
+    if (status === 'resolved' && reason === undefined && card.dodMandatory && card.dodPending.length > 0) {
       move.reset() // an earlier move's error isn't this card's
       setGuard(card)
       return

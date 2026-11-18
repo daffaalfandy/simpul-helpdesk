@@ -62,7 +62,7 @@ type messageInput struct {
 type statusInput struct {
 	Key    string `json:"key" jsonschema:"The ticket key, for example HD-24871"`
 	Status string `json:"status" jsonschema:"The new status; get_ticket lists the moves allowed from the current one"`
-	Reason string `json:"reason,omitempty" jsonschema:"Why, at most 500 characters. Needed to resolve a ticket whose Definition of Done isn't met yet"`
+	Reason string `json:"reason,omitempty" jsonschema:"Why, at most 500 characters. Needed to resolve a ticket whose Definition of Done isn't met yet, when it is mandatory (get_ticket says guidance only when it isn't)"`
 }
 
 type assignInput struct {

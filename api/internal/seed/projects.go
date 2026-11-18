@@ -41,6 +41,17 @@ func uatDoD(days int) dod.Config {
 	return c
 }
 
+// demoBranch is the branch e-Office's fixes merge into.
+const demoBranch = "main"
+
+// codeAndUATDoD asks for the fix on the branch, then a client test approved automatically after
+// days working days.
+func codeAndUATDoD(days int) dod.Config {
+	c := uatDoD(days)
+	c.CodeOnBranch = dod.CodeOnBranch{Enabled: true, Branch: demoBranch}
+	return c
+}
+
 // confirmDoD is support work with no code: the requester confirms the fix.
 func confirmDoD() dod.Config {
 	c := dod.None()
@@ -65,7 +76,7 @@ func fastSLA() sla.ProjectSLA {
 }
 
 var demoProjects = []project{
-	{RequesterClient, projectEOffice, "Letters, dispositions, archives", fastSLA(), uatDoD(dod.AutoApproveThreeDays)},
+	{RequesterClient, projectEOffice, "Letters, dispositions, archives", fastSLA(), codeAndUATDoD(dod.AutoApproveThreeDays)},
 	{RequesterClient, projectWebsite, "Public website", sla.DefaultProjectSLA(), dod.None()},
 	{RequesterClient, projectEmail, "Mailboxes and accounts", sla.DefaultProjectSLA(), dod.None()},
 	{clientBatam, projectNetwork, "Internet, Wi-Fi, remote access", sla.DefaultProjectSLA(), confirmDoD()},
@@ -99,7 +110,9 @@ func seedProjects(ctx context.Context, q *db.Queries, org uuid.UUID, clientIDs m
 		if err := projects.WriteSLA(ctx, q, id, p.sla); err != nil {
 			return nil, fmt.Errorf("project %s SLA: %w", p.name, err)
 		}
-		if err := q.UpdateProjectDoD(ctx, db.UpdateProjectDoDParams{ID: id, DodConfig: p.dod.JSON(), AllowTicketOverride: true}); err != nil {
+		if err := q.UpdateProjectDoD(ctx, db.UpdateProjectDoDParams{
+			ID: id, OrganizationID: org, DodConfig: p.dod.JSON(), DodMandatory: dod.DefaultMandatory, AllowTicketOverride: true,
+		}); err != nil {
 			return nil, fmt.Errorf("project %s DoD: %w", p.name, err)
 		}
 		if _, err := q.LinkClientRequestersToProject(ctx, db.LinkClientRequestersToProjectParams{

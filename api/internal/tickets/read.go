@@ -187,7 +187,10 @@ func (s *Service) getAs(ctx context.Context, p *auth.Principal, a access, key st
 		if err != nil {
 			return Ticket{}, err
 		}
-		d := ticketDoD(sd, r.DodOverrideReason, items, !t.Status.Locked() && canOverrideDoD(p, r.AllowTicketOverride))
+		d := ticketDoD(sd, dodView{
+			reason: r.DodOverrideReason, mandatory: r.DodMandatory, hasRepository: r.HasRepository,
+			canOverride: !t.Status.Locked() && canOverrideDoD(p, r.AllowTicketOverride),
+		}, items)
 		t.DoD = &d
 	}
 	return t, nil

@@ -752,12 +752,12 @@
         "branch": {
           "contains": "The same commit pushed to another branch",
           "example": "the merge into main",
-          "effect": "The ticket shows the new branch next to the commit, e.g. fix branch → main."
+          "effect": "The ticket shows the new branch next to the commit, e.g. fix branch → main. When it's the branch the project's Definition of Done names, the commit ticks \"Code reached a branch\"."
         },
         "words": {
           "contains": "Words like fix, close or reopen",
           "example": "Fixes {{prefix}}-24871: revert TTL",
-          "effect": "Just a link. The team moves tickets by hand; commits never change a status or the Definition of Done."
+          "effect": "Just a link. The team moves tickets by hand; commits never change a status."
         }
       },
       "tester": {
@@ -1037,6 +1037,7 @@
     "invalid_watcher": "Choose a colleague from your organisation.",
     "dod_unmet": "This ticket hasn't met its Definition of Done. Give a reason to resolve it anyway.",
     "invalid_dod": "Check the Definition of Done.",
+    "invalid_branch": "Enter a valid branch name, such as main or release/2026.11. Spaces and characters like ~ ^ : ? * [ aren't allowed.",
     "dod_override_not_allowed": "This project doesn't let agents change a ticket's Definition of Done.",
     "uat_not_waiting": "This ticket isn't waiting for your test any more. Someone may have answered already.",
     "reopen_not_allowed": "This ticket can no longer be reopened. Report a new issue instead.",
@@ -1305,13 +1306,19 @@
         "approvedAuto": "Approved automatically · {{time}}",
         "asked": "{{name}} asked to test",
         "askedAuto": "{{name}} asked to test · auto-approves {{date}}",
-        "later": "Asked of {{name}} when the ticket moves to In UAT"
+        "later": "Asked of {{name}} when the ticket moves to In UAT",
+        "reached": "reached {{branch}} · {{time}}",
+        "waitingCode": "Ticks when a commit naming {{key}} reaches {{branch}}",
+        "codeMissed": "No linked commit reached {{branch}}"
       },
+      "codePaused": "Code on {{branch}} doesn't apply: the project has no repository.",
       "foot": {
         "met": "Every condition is met.",
         "waiting": "It resolves when the client approves.",
         "waitingAuto": "It resolves when the client approves, or by itself on {{date}}.",
-        "askClient": "Move the ticket to In UAT when the fix is ready; the client is asked to test."
+        "askClient": "Move the ticket to In UAT when the fix is ready; the client is asked to test.",
+        "code": "Resolve it by hand once a commit naming it reaches {{branch}}.",
+        "guidance": "Guidance only: anyone can resolve this ticket without meeting it."
       },
       "dialog": {
         "title": "A Definition of Done for {{key}}",
@@ -1467,6 +1474,13 @@
       "save": "Save DoD",
       "saved": "Definition of Done saved. It applies to this project's open tickets now, except tickets with their own.",
       "conditionsLabel": "Conditions",
+      "codePaused": "Code on {{branch}} doesn't apply until a repository is linked to this project.",
+      "mandatory": {
+        "label": "Required before resolving",
+        "hint": "Resolving a ticket that hasn't met it needs a reason, saved to the audit log and sent to the supervisors. Off, it's guidance only."
+      },
+      "mandatoryOn": "Required before resolving: skipping it needs a reason, and the supervisors are told.",
+      "mandatoryOff": "Guidance only: anyone can resolve a ticket without meeting it.",
       "allowOverride": {
         "label": "Let agents set a different DoD on a single ticket",
         "hint": "For example a P1 hotfix that skips UAT. They must give a reason; it goes in the audit log."
@@ -1680,6 +1694,11 @@
   },
   "dod": {
     "items": {
+      "code_on_branch": {
+        "label": "Code reached a branch",
+        "hint": "Ticks when a commit naming the ticket reaches this branch, e.g. once the fix merges. It never moves the ticket.",
+        "noRepository": "Link a repository to this project first, in Settings › GitHub / GitLab."
+      },
       "uat_approved": {
         "label": "UAT approved by the client",
         "hint": "The ticket moves to In UAT; the client approves or rejects in the portal"
@@ -1689,7 +1708,10 @@
         "hint": "For support work with no code. Auto-confirms after 3 working days."
       }
     },
+    "branchLabel": "Branch",
+    "branchPlaceholder": "e.g. main",
     "short": {
+      "code_on_branch": "the fix reaching its branch",
       "uat_approved": "the client's UAT approval",
       "requester_confirmed": "the requester's confirmation"
     },
@@ -1710,6 +1732,7 @@
     "sentence": "{{conditions}}.",
     "nothing": "nothing automatic. An agent resolves each ticket by hand.",
     "conditions": {
+      "code": "a commit naming the ticket reaches {{branch}}",
       "uat": "the client approves UAT",
       "uatAuto_one": "the client approves UAT (auto-approved after {{count}} working day)",
       "uatAuto_other": "the client approves UAT (auto-approved after {{count}} working days)",
@@ -1723,12 +1746,14 @@
       "resolved": "Resolved"
     },
     "summary": {
+      "code": "Code on {{branch}}",
       "uat": "UAT",
       "confirm": "Requester confirms",
       "none": "Resolved by hand",
       "separator": " + "
     },
     "check": {
+      "code_on_branch": "Code reached {{branch}}",
       "uat_approved": "UAT approved by client",
       "requester_confirmed": "Requester confirmed it's fixed"
     }

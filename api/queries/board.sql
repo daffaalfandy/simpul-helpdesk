@@ -10,7 +10,8 @@
 WITH board AS (
   SELECT t.id, t.key, t.type, t.status, t.priority, t.subject, t.status_changed_at,
          t.client_id, c.name AS client_name, t.assignee_id, a.name AS assignee_name,
-         p.dod_config, o.config AS dod_override,
+         p.dod_config, p.dod_mandatory, (p.repository_id IS NOT NULL)::boolean AS has_repository,
+         o.config AS dod_override,
          coalesce((SELECT array_agg(i.item ORDER BY i.item) FROM ticket_dod_items i WHERE i.ticket_id = t.id),
                   '{}')::text[] AS dod_done,
          (@columns::text[])[array_position(@statuses::text[], t.status)]::text AS column_id,
@@ -54,7 +55,7 @@ WITH board AS (
   FROM board
 )
 SELECT id, key, type, status, priority, subject, client_id, client_name, assignee_id, assignee_name,
-       status_changed_at, dod_config, dod_override, dod_done,
+       status_changed_at, dod_config, dod_mandatory, has_repository, dod_override, dod_done,
        column_id, column_total::bigint AS column_total, sla_ticket_id,
        first_response_budget_ms, first_response_calendar, first_response_elapsed_ms,
        first_response_running_since, first_response_due_at, first_response_at_risk_flagged_at,

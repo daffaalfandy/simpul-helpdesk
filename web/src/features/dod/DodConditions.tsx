@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next'
 import type { AutoApproveDays, DodConfig } from '../../api/client'
 import { Checkbox } from '../../components/Checkbox'
 import { Dropdown } from '../../components/Dropdown'
+import { TextInput } from '../../components/TextInput'
+import { MAX_BRANCH_LENGTH } from '../../lib/constants'
 import { cx } from '../../lib/text'
 import { AUTO_APPROVE_DAYS, doneMeans, flowSteps } from './labels'
 
@@ -43,19 +45,44 @@ type DodConditionsProps = {
   dod: DodConfig
   onChange: (next: DodConfig) => void
   legend: string
+  /** The project reads commits from a repository; without one the code condition can't be on. */
+  hasRepository: boolean
+  /** The API refused the branch name: the field shows it. */
+  branchInvalid?: boolean
 }
 
 /**
- * The client's checks as rows that turn blue when ticked, with their settings (Projects mock,
- * without the code conditions: Git no longer ticks the Definition of Done, owner 17 Nov).
+ * The conditions as rows that turn blue when ticked, with their settings (Projects mock): the
+ * code reaching a branch (10b, owner 18 Nov: Git ticks it, never moves the ticket), then the
+ * client's checks.
  */
-export function DodConditions({ dod, onChange, legend }: DodConditionsProps) {
+export function DodConditions({ dod, onChange, legend, hasRepository, branchInvalid }: DodConditionsProps) {
   const { t } = useTranslation()
   const set = (next: Partial<DodConfig>) => onChange({ ...dod, ...next })
 
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="sr-only">{legend}</legend>
+      <ConditionRow
+        on={dod.codeOnBranch.enabled}
+        isDisabled={!hasRepository}
+        label={t('dod.items.code_on_branch.label')}
+        hint={t(hasRepository ? 'dod.items.code_on_branch.hint' : 'dod.items.code_on_branch.noRepository')}
+        onToggle={(on) => set({ codeOnBranch: { ...dod.codeOnBranch, enabled: on } })}
+        control={
+          <TextInput
+            label={t('dod.branchLabel')}
+            placeholder={t('dod.branchPlaceholder')}
+            value={dod.codeOnBranch.branch}
+            onChange={(branch) => set({ codeOnBranch: { ...dod.codeOnBranch, branch } })}
+            isDisabled={!hasRepository}
+            isInvalid={branchInvalid}
+            maxLength={MAX_BRANCH_LENGTH}
+            autoComplete="off"
+            spellCheck="false"
+          />
+        }
+      />
       <ConditionRow
         on={dod.uat.enabled}
         label={t('dod.items.uat_approved.label')}
@@ -89,12 +116,14 @@ type ConditionRowProps = {
   label: string
   hint: ReactNode
   onToggle: (on: boolean) => void
-  /** The condition's setting (auto-approve), kept while the condition is off. */
+  /** The condition's setting (branch, auto-approve), kept while the condition is off. */
   control?: ReactNode
+  /** The condition can't be turned on here (no repository); the hint says why. */
+  isDisabled?: boolean
 }
 
 /** One condition: a bordered row that turns primary when ticked (Projects mock). */
-function ConditionRow({ on, label, hint, onToggle, control }: ConditionRowProps) {
+function ConditionRow({ on, label, hint, onToggle, control, isDisabled }: ConditionRowProps) {
   return (
     <div
       className={cx(
@@ -103,7 +132,7 @@ function ConditionRow({ on, label, hint, onToggle, control }: ConditionRowProps)
         on ? 'border-primary bg-primary-tint' : 'border-border bg-surface',
       )}
     >
-      <Checkbox isSelected={on} onChange={onToggle} description={hint} className="flex-1">
+      <Checkbox isSelected={on} isDisabled={isDisabled} onChange={onToggle} description={hint} className="flex-1">
         {label}
       </Checkbox>
       {control && <div className="w-full sm:w-(--dod-control-w) sm:shrink-0">{control}</div>}

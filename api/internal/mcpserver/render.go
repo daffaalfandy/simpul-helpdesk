@@ -8,6 +8,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/slaengine"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
@@ -21,12 +22,15 @@ const (
 
 // Tool output is Markdown for the client's model. Times are UTC so every reader agrees.
 const (
-	timeLayout  = "2006-01-02 15:04 UTC"
-	nobody      = "nobody"
-	none        = "none"
-	listSep     = ", "
-	codeOther   = apperr.CodeOtherOrganization
-	detailOther = "This ticket belongs to another organization. A token works only in the organization it was made in."
+	timeLayout = "2006-01-02 15:04 UTC"
+	nobody     = "nobody"
+	none       = "none"
+	listSep    = ", "
+	// guidanceOnly follows a Definition of Done that isn't mandatory: resolving needs no reason.
+	guidanceOnly = " (guidance only)"
+	codeOnBranch = "code on %s"
+	codeOther    = apperr.CodeOtherOrganization
+	detailOther  = "This ticket belongs to another organization. A token works only in the organization it was made in."
 )
 
 // Fences around text people wrote (see quoted).
@@ -148,17 +152,24 @@ func clock(v slaengine.View) string {
 }
 
 func doneness(d *tickets.TicketDoD) string {
+	suffix := ""
+	if !d.Mandatory {
+		suffix = guidanceOnly
+	}
 	if d.Met {
-		return "met"
+		return "met" + suffix
 	}
 	pending := make([]string, len(d.Pending))
 	for i, p := range d.Pending {
 		pending[i] = string(p)
+		if p == dod.ItemCodeOnBranch {
+			pending[i] = fmt.Sprintf(codeOnBranch, d.Config.CodeOnBranch.Branch)
+		}
 	}
 	if len(pending) == 0 {
-		return "not met"
+		return "not met" + suffix
 	}
-	return "waiting for " + strings.Join(pending, listSep)
+	return "waiting for " + strings.Join(pending, listSep) + suffix
 }
 
 func messageHeading(m tickets.Message) string {

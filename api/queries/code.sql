@@ -12,11 +12,23 @@ VALUES (@code_event_id, sqlc.narg(ticket_id), @ticket_key, @outcome)
 ON CONFLICT DO NOTHING;
 
 -- name: GetTicketForCode :one
-SELECT t.id, t.organization_id, t.key, t.status, p.repository_id
+-- Locks the ticket; the project's Definition of Done and the override are read as they are.
+SELECT t.id, t.organization_id, t.key, t.status, p.repository_id, p.dod_config, o.config AS dod_override
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.id = @id
 FOR UPDATE OF t;
+
+-- name: FindLinkedCommitOnBranch :one
+-- The first commit linked to the ticket from @repository_id that has reached @branch.
+SELECT e.id
+FROM code_event_links l
+JOIN code_events e ON e.id = l.code_event_id
+WHERE l.ticket_id = @ticket_id AND l.outcome = @linked_outcome
+  AND e.repository_id = @repository_id AND @branch::text = ANY(e.branches)
+ORDER BY e.occurred_at, e.id
+LIMIT 1;
 
 -- name: ListTicketCodeLinks :many
 -- The code events that reached a ticket, ignored or not.

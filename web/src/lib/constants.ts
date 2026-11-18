@@ -89,6 +89,8 @@ export const MAX_REASON_LENGTH = 500
 export const MAX_MESSAGE_LENGTH = 20000
 /** A ticket's description (Markdown); API MaxDescriptionLen. */
 export const MAX_DESCRIPTION_LENGTH = 20000
+/** A branch a Definition of Done names; API dod.MaxBranchLen. */
+export const MAX_BRANCH_LENGTH = 255
 
 /** A personal access token's name; API MaxTokenNameLen. */
 export const MAX_TOKEN_NAME_LENGTH = 100

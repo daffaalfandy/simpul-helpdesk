@@ -40,10 +40,13 @@ type SeedTicket struct {
 	Code           []SeedCode
 }
 
-// SeedCode is a stored commit linked to the ticket: the link and its activity-log line.
+// SeedCode is a stored commit linked to the ticket: the link and its activity-log line. Branches
+// are every branch it reached; reaching the one the project's Definition of Done names meets
+// code on the branch, as ApplyCode would.
 type SeedCode struct {
-	At    time.Time
-	Event CodeEvent
+	At       time.Time
+	Event    CodeEvent
+	Branches []string
 }
 
 // SeedStep is a change after creation: an assignee change, a status change, or both. A move
@@ -71,8 +74,8 @@ type seedEntry struct {
 	actor  Ref
 	action string
 	data   map[string]any
-	git    bool // code activity: a git actor, the member when ID is set
-	system bool // the lifecycle scan
+	git    bool   // code activity: a git actor, the member when ID is set
+	system string // a system actor's name (the lifecycle scan, a commit reaching the branch)
 }
 
 // InsertSeed writes the ticket, its messages and its audit history. It reports false and
@@ -192,6 +195,14 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 			return false, err
 		}
 		entries = append(entries, code...)
+		ticked, err := seedCodeItem(ctx, q, t.OrganizationID, id, t.ProjectID, c)
+		if err != nil {
+			return false, err
+		}
+		if ticked {
+			entries = append(entries, seedEntry{at: c.At, system: ActorNameCodeBranch, action: ActionDoDItemsDone,
+				data: map[string]any{dataItems: []dod.Item{dod.ItemCodeOnBranch}, dataCodeEvent: c.Event.ID}})
+		}
 	}
 	for _, st := range approvals {
 		items, err := seedClientItems(ctx, q, t.OrganizationID, id, t.ProjectID, st)
@@ -217,8 +228,8 @@ func InsertSeed(ctx context.Context, q *db.Queries, t SeedTicket) (bool, error) 
 			return false, err
 		}
 		kind, actorID, actorName, target := audit.ActorUser, &e.actor.ID, e.actor.Name, TargetTicket
-		if e.system {
-			kind, actorID, actorName = audit.ActorSystem, nil, ActorNameLifecycle
+		if e.system != "" {
+			kind, actorID, actorName = audit.ActorSystem, nil, e.system
 		}
 		if e.git {
 			kind = audit.ActorGit
@@ -269,7 +280,7 @@ func seedClientItems(ctx context.Context, q *db.Queries, orgID, ticketID, projec
 	}
 	var items []string
 	for _, it := range dod.ClientRequired(p.DoD) {
-		if err := q.InsertSeedDoDItem(ctx, db.InsertSeedDoDItemParams{
+		if _, err := q.InsertSeedDoDItem(ctx, db.InsertSeedDoDItemParams{
 			TicketID: ticketID, Item: string(it), DoneAt: st.At, DoneBy: &st.Actor.ID,
 		}); err != nil {
 			return nil, err
@@ -279,12 +290,33 @@ func seedClientItems(ctx context.Context, q *db.Queries, orgID, ticketID, projec
 	return items, nil
 }
 
+// seedCodeItem meets code on the branch with the commit when it reached the branch the project's
+// Definition of Done names, and reports whether it did.
+func seedCodeItem(ctx context.Context, q *db.Queries, orgID, ticketID, projectID uuid.UUID, c SeedCode) (bool, error) {
+	p, err := projects.Load(ctx, q, orgID, projectID)
+	if err != nil {
+		return false, err
+	}
+	reached := slices.ContainsFunc(c.Branches, func(b string) bool { return dod.BranchReached(p.DoD, b) })
+	if p.Repository == nil || !reached {
+		return false, nil
+	}
+	n, err := q.InsertSeedDoDItem(ctx, db.InsertSeedDoDItemParams{
+		TicketID: ticketID, Item: string(dod.ItemCodeOnBranch), DoneAt: c.At, CodeEventID: &c.Event.ID,
+	})
+	return n > 0, err
+}
+
 func statusEntry(at time.Time, actor Ref, from, to ticket.Status, cause ticket.Cause) seedEntry {
 	data := map[string]any{dataStatus: audit.Change{From: from, To: to}}
 	if cause != "" {
 		data[dataCause] = cause
 	}
-	return seedEntry{at: at, actor: actor, action: ActionStatusChanged, data: data, system: cause == ticket.CauseAutoClosed}
+	e := seedEntry{at: at, actor: actor, action: ActionStatusChanged, data: data}
+	if cause == ticket.CauseAutoClosed {
+		e.system = ActorNameLifecycle
+	}
+	return e
 }
 
 func refDataPtr(r *Ref) any {

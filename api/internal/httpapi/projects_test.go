@@ -182,6 +182,7 @@ func TestProjectDoD(t *testing.T) {
 
 func apiDod(c dod.Config) gen.DodConfig {
 	return gen.DodConfig{
+		CodeOnBranch:      gen.DodCodeOnBranch{Enabled: c.CodeOnBranch.Enabled, Branch: c.CodeOnBranch.Branch},
 		Uat:               gen.DodUat{Enabled: c.UAT.Enabled, AutoApproveWorkingDays: gen.AutoApproveDays(c.UAT.AutoApproveWorkingDays)},
 		RequesterConfirms: c.RequesterConfirms,
 	}

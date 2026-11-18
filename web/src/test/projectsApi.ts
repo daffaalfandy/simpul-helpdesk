@@ -36,9 +36,13 @@ const fastSla: ProjectSla = {
 
 /** No conditions: an agent resolves each ticket by hand. */
 export const noDod: DodConfig = {
+  codeOnBranch: { enabled: false, branch: '' },
   uat: { enabled: false, autoApproveWorkingDays: 3 },
   requesterConfirms: false,
 }
+
+/** Roughly the API's branch-name check (dod.ValidBranch): no spaces, no Git-special characters. */
+const BRANCH_NAME = /^[^\s~^:?*[\\]+$/
 
 /** The client tests; approved automatically after 3 working days (a new project's default). */
 export const uatDod: DodConfig = { ...noDod, uat: { enabled: true, autoApproveWorkingDays: 3 } }
@@ -57,17 +61,17 @@ function fixtures() {
   const projects: Project[] = [
     {
       id: PROJECT_IDS.eOffice, client: JAMBI, name: 'e-Office', description: 'Letters, dispositions, archives',
-      isDefault: true, active: true, sla: fastSla, dod: uatDod, allowTicketOverride: true, repository: null,
+      isDefault: true, active: true, sla: fastSla, dod: uatDod, dodMandatory: true, allowTicketOverride: true, repository: null,
       openTicketCount: 2, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.email, client: JAMBI, name: 'Email', description: 'Mailboxes and accounts',
-      isDefault: false, active: true, sla: defaultSla, dod: noDod, allowTicketOverride: true, repository: null,
+      isDefault: false, active: true, sla: defaultSla, dod: noDod, dodMandatory: true, allowTicketOverride: true, repository: null,
       openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
     },
     {
       id: PROJECT_IDS.network, client: BATAM, name: 'Network & infra support', description: null,
-      isDefault: true, active: true, sla: defaultSla, dod: { ...noDod, requesterConfirms: true }, allowTicketOverride: true,
+      isDefault: true, active: true, sla: defaultSla, dod: { ...noDod, requesterConfirms: true }, dodMandatory: true, allowTicketOverride: true,
       repository: null, openTicketCount: 1, createdAt: STAMP, updatedAt: STAMP,
     },
   ]
@@ -135,7 +139,7 @@ export const projectsHandlers = [
     const project: Project = {
       id: newId(), client, name: body.name, description: body.description ?? null,
       isDefault: body.isDefault || first, active: body.active || first, sla: defaultSla, dod: uatDod,
-      allowTicketOverride: true, repository: null, openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
+      dodMandatory: true, allowTicketOverride: true, repository: null, openTicketCount: 0, createdAt: STAMP, updatedAt: STAMP,
     }
     projectsApi.projects.push(project)
     return HttpResponse.json(project, { status: 201 })
@@ -167,7 +171,10 @@ export const projectsHandlers = [
     const body = (await record(request)) as ProjectDodInput
     const p = find(String(params.id))
     if (!p) return problem(404, 'not_found')
+    if (body.dod.codeOnBranch.enabled && !p.repository) return problem(400, 'invalid_dod')
+    if (body.dod.codeOnBranch.enabled && !BRANCH_NAME.test(body.dod.codeOnBranch.branch)) return problem(400, 'invalid_branch')
     p.dod = body.dod
+    p.dodMandatory = body.mandatory
     p.allowTicketOverride = body.allowTicketOverride
     return HttpResponse.json(p)
   }),

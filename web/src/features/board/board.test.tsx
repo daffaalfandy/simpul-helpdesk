@@ -156,6 +156,19 @@ describe('board', () => {
     expect(keysIn('Resolved today')).toContain('HD-24871')
   })
 
+  it('resolves a card straight away when its Definition of Done is only guidance', async () => {
+    const t = tickets.tickets.find((x) => x.key === 'HD-24871')
+    if (!t?.dod) throw new Error('fixture missing')
+    t.dod = { ...t.dod, mandatory: false }
+    const user = userEvent.setup()
+    renderApp('/board')
+    await screen.findByRole('region', { name: 'Ticket board' })
+    await keyboardMove(user, 'HD-24871', 'Resolved today')
+    expect(await screen.findByText('HD-24871 moved to Resolved.')).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(lastRequest('PUT', '/tickets/HD-24871/status')?.body).toEqual({ status: 'resolved', from: 'in_progress' })
+  })
+
   it("shows which day of the client's test an In UAT card is on", async () => {
     renderApp('/board')
     await screen.findByRole('region', { name: 'Ticket board' })

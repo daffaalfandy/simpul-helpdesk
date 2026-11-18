@@ -191,6 +191,10 @@ func (q *Queries) RecordDeliveryError(ctx context.Context, arg RecordDeliveryErr
 }
 
 const upsertCodeEvent = `-- name: UpsertCodeEvent :one
+WITH prior AS (
+  SELECT branches FROM code_events
+  WHERE repository_id = $1 AND kind = $2 AND external_id = $3
+)
 INSERT INTO code_events (repository_id, kind, external_id, sha, title, branch, branches, url,
                          author_name, author_login, author_user_id, delivery_id, occurred_at)
 VALUES ($1, $2, $3, $4, $5, $6, ARRAY[$6::text], $7,
@@ -198,7 +202,7 @@ VALUES ($1, $2, $3, $4, $5, $6, ARRAY[$6::text], $7,
 ON CONFLICT (repository_id, kind, external_id) DO UPDATE
 SET branches = CASE WHEN EXCLUDED.branch = ANY(code_events.branches) THEN code_events.branches
                     ELSE code_events.branches || EXCLUDED.branch END
-RETURNING id
+RETURNING id, (NOT EXISTS (SELECT 1 FROM prior WHERE $6::text = ANY(prior.branches)))::boolean AS reached_branch
 `
 
 type UpsertCodeEventParams struct {
@@ -216,9 +220,16 @@ type UpsertCodeEventParams struct {
 	OccurredAt   time.Time
 }
 
+type UpsertCodeEventRow struct {
+	ID            uuid.UUID
+	ReachedBranch bool
+}
+
 // A commit pushed again to another branch (the merge into main) keeps its row and adds the
-// branch; a redelivery adds nothing.
-func (q *Queries) UpsertCodeEvent(ctx context.Context, arg UpsertCodeEventParams) (uuid.UUID, error) {
+// branch; a redelivery adds nothing. reached_branch is true when this push brought the commit
+// onto @branch: a new commit, or one seen before on other branches only. prior reads the row as
+// it was before this statement.
+func (q *Queries) UpsertCodeEvent(ctx context.Context, arg UpsertCodeEventParams) (UpsertCodeEventRow, error) {
 	row := q.db.QueryRow(ctx, upsertCodeEvent,
 		arg.RepositoryID,
 		arg.Kind,
@@ -233,7 +244,7 @@ func (q *Queries) UpsertCodeEvent(ctx context.Context, arg UpsertCodeEventParams
 		arg.DeliveryID,
 		arg.OccurredAt,
 	)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
+	var i UpsertCodeEventRow
+	err := row.Scan(&i.ID, &i.ReachedBranch)
+	return i, err
 }

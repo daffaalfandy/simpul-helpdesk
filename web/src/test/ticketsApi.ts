@@ -56,26 +56,36 @@ export const policy: AttachmentPolicy = { maxBytes: MAX_BYTES, maxPerMessage: 2,
 
 const ref = (id: string, name: string) => ({ id, name })
 
-/** The client items a configuration asks for, as the API's dod.Required (no code until M7). */
+/** The items a configuration asks for, as the API's dod.Required, code first. */
 function requiredItems(c: DodConfig): DodItem[] {
   const out: DodItem[] = []
+  if (c.codeOnBranch.enabled) out.push('code_on_branch')
   if (c.uat.enabled) out.push('uat_approved')
   if (c.requesterConfirms) out.push('requester_confirmed')
   return out
 }
 
-/** A ticket's Definition of Done as staff see it, with nothing met yet. */
-export function ticketDod(project: DodConfig, own?: { config: DodConfig; reason: string }): TicketDod {
+/** What a ticket's Definition of Done takes from its project besides the configuration. */
+type DodProject = { mandatory?: boolean; hasRepository?: boolean }
+
+/**
+ * A ticket's Definition of Done as staff see it, with nothing met yet. Mandatory unless the
+ * project says otherwise; code on a branch applies only with a repository, as in the API.
+ */
+export function ticketDod(project: DodConfig, own?: { config: DodConfig; reason: string }, from: DodProject = {}): TicketDod {
   const config = own?.config ?? project
-  const items = requiredItems(config)
+  const hasRepository = from.hasRepository ?? false
+  const items = requiredItems(hasRepository ? config : { ...config, codeOnBranch: { ...config.codeOnBranch, enabled: false } })
   return {
     source: own ? 'ticket' : 'project',
     config,
     projectConfig: project,
     overrideReason: own?.reason ?? null,
-    items: items.map((item) => ({ item, doneAt: null, doneBy: null })),
+    items: items.map((item) => ({ item, doneAt: null, doneBy: null, commit: null })),
     met: items.length === 0,
     pending: items,
+    mandatory: from.mandatory ?? true,
+    hasRepository,
     canOverride: true,
   }
 }
@@ -368,6 +378,7 @@ function boardCard(t: Ticket): BoardCard {
     allowedStatuses: allowedMoves(t),
     sla: tickets.cardSla[key] ?? null,
     dodPending: t.dod?.pending ?? [],
+    dodMandatory: t.dod?.mandatory ?? true,
     uat: tickets.cardUat[key] ?? null,
     code: tickets.cardCode[key] ?? null,
   }
@@ -615,7 +626,8 @@ export const ticketsHandlers = [
     if (!t) return problem(404, 'not_found')
     if (body.from !== undefined && body.from !== t.status) return problem(409, 'status_changed')
     if (body.status !== t.status && !allowedMoves(t).includes(body.status)) return problem(409, 'invalid_status_change')
-    const skipped = body.status === 'resolved' && t.dod != null && !t.dod.met
+    // A Definition of Done that is only guidance resolves as a plain move, whatever the reason.
+    const skipped = body.status === 'resolved' && t.dod != null && t.dod.mandatory && !t.dod.met
     if (skipped && !body.reason) return problem(409, 'dod_unmet')
     const { status } = body
     const from = t.status
@@ -637,7 +649,10 @@ export const ticketsHandlers = [
     if (!t?.dod) return problem(404, 'not_found')
     if (!t.dod.canOverride) return problem(403, 'dod_override_not_allowed')
     if (body.dod && !body.reason?.trim()) return problem(400, 'reason_required')
-    t.dod = body.dod ? ticketDod(t.dod.projectConfig, { config: body.dod, reason: body.reason ?? '' }) : ticketDod(t.dod.projectConfig)
+    const from = { mandatory: t.dod.mandatory, hasRepository: t.dod.hasRepository }
+    t.dod = body.dod
+      ? ticketDod(t.dod.projectConfig, { config: body.dod, reason: body.reason ?? '' }, from)
+      : ticketDod(t.dod.projectConfig, undefined, from)
     tickets.activity[t.key] = [
       ...(tickets.activity[t.key] ?? []),
       {

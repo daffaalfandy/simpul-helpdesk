@@ -70,6 +70,7 @@ type env struct {
 	recompute    *tickets.SLARecomputer
 	scan         *tickets.SLAScanner
 	lifecycle    *tickets.LifecycleScanner
+	branchSync   *tickets.DoDBranchSyncer
 	pic          *notifications.PicEmailWorker
 	files        *storage.FS
 	connector    *connector.Service
@@ -119,6 +120,8 @@ func newEnv(t *testing.T) *env {
 	ticketSvc := tickets.NewService(st, files, slaSvc, late)
 	lifecycle := tickets.NewLifecycleScanner(ticketSvc, log)
 	river.AddWorker(workers, lifecycle)
+	branchSync := tickets.NewDoDBranchSyncer(ticketSvc, log)
+	river.AddWorker(workers, branchSync)
 	box, err := secretbox.New(testEncryptionKey)
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +138,7 @@ func newEnv(t *testing.T) *env {
 	orgSvc := organization.NewService(st, files, slaSvc)
 	h, err := httpapi.New(httpapi.Deps{
 		Config: cfg, Store: st, Auth: svc, Clients: clients.NewService(st, svc), SLA: slaSvc,
-		Catalog: catalog.NewService(st), Projects: projects.NewService(st, slaSvc), Priorities: priorities.NewService(st),
+		Catalog: catalog.NewService(st), Projects: projects.NewService(st, slaSvc, jobs), Priorities: priorities.NewService(st),
 		Tickets: ticketSvc, Notifications: notifications.NewService(st), Connector: connectorSvc,
 		Reports: reports.NewService(st), Organization: orgSvc, Logger: log,
 		WebUI: fstest.MapFS{"index.html": {Data: []byte(spaMarker)}, "assets/app.js": {Data: []byte("//js")}},
@@ -147,7 +150,7 @@ func newEnv(t *testing.T) *env {
 	if _, err := st.Q().UpsertClient(ctx, db.UpsertClientParams{OrganizationID: org, Name: "Dinas Kominfo Jambi"}); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{org: org, t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, invite: inviteWorker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, pic: pic, files: files, connector: connectorSvc, process: process, users: map[auth.Role]string{}}
+	e := &env{org: org, t: t, st: st, handler: h, auth: svc, mailer: mailer, worker: worker, invite: inviteWorker, fanoutWorker: fanout, dispatch: dispatch, ticketEmail: ticketEmail, digest: digest, recompute: recompute, scan: scan, lifecycle: lifecycle, branchSync: branchSync, pic: pic, files: files, connector: connectorSvc, process: process, users: map[auth.Role]string{}}
 	for _, r := range []auth.Role{auth.RoleAdmin, auth.RoleSupervisor, auth.RoleAgent, auth.RoleRequester} {
 		in := auth.NewUser{Email: string(r) + "@example.test", Name: "User " + string(r), Password: password, Role: r, OrganizationID: org}
 		if r == auth.RoleRequester {

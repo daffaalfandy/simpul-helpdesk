@@ -228,6 +228,7 @@ type Project struct {
 	AllowTicketOverride         bool
 	RepositoryID                *uuid.UUID
 	OrganizationID              uuid.UUID
+	DodMandatory                bool
 }
 
 type ProjectSlaTarget struct {
@@ -307,10 +308,11 @@ type Ticket struct {
 }
 
 type TicketDodItem struct {
-	TicketID uuid.UUID
-	Item     string
-	DoneAt   time.Time
-	DoneBy   *uuid.UUID
+	TicketID    uuid.UUID
+	Item        string
+	DoneAt      time.Time
+	DoneBy      *uuid.UUID
+	CodeEventID *uuid.UUID
 }
 
 type TicketDodOverride struct {

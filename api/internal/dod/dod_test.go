@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,27 +51,39 @@ func uat(days int) func(*Config) {
 }
 func confirms(c *Config) { c.RequesterConfirms = true }
 
+func onBranch(name string) func(*Config) {
+	return func(c *Config) { c.CodeOnBranch = CodeOnBranch{Enabled: true, Branch: name} }
+}
+
 // TestStorageFormat pins the JSON stored in projects.dod_config and ticket_dod_overrides.
 func TestStorageFormat(t *testing.T) {
-	got, err := json.Marshal(with(uat(AutoApproveFiveDays), confirms))
+	full := with(onBranch("main"), uat(AutoApproveFiveDays), confirms)
+	got, err := json.Marshal(full)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"uat":{"enabled":true,"auto_approve_working_days":5},"requester_confirms":true}`
+	want := `{"code_on_branch":{"enabled":true,"branch":"main"},"uat":{"enabled":true,"auto_approve_working_days":5},` +
+		`"requester_confirms":true}`
 	if string(got) != want {
 		t.Fatalf("JSON = %s\nwant   %s", got, want)
 	}
-	if string(with(uat(AutoApproveFiveDays), confirms).JSON()) != want {
+	if string(full.JSON()) != want {
 		t.Fatal("JSON() differs from json.Marshal")
 	}
 	back, err := Parse(got)
-	if err != nil || back != with(uat(AutoApproveFiveDays), confirms) {
+	if err != nil || back != full {
 		t.Fatalf("round trip = %+v, %v", back, err)
 	}
 	if partial, err := Parse([]byte(`{"requester_confirms":true}`)); err != nil || partial != with(confirms) {
 		t.Fatalf("missing fields = %+v, %v", partial, err)
 	}
-	// JSON stored before the code conditions went still reads; the code keys are dropped.
+	// JSON stored before 10b has no code_on_branch: the condition is off.
+	stored := `{"uat":{"enabled":true,"auto_approve_working_days":3},"requester_confirms":false}`
+	if c, err := Parse([]byte(stored)); err != nil || c != with(uat(AutoApproveThreeDays)) || c.CodeOnBranch.Enabled {
+		t.Fatalf("10a JSON = %+v, %v", c, err)
+	}
+	// JSON stored before the code conditions went still reads; the old code keys are dropped and
+	// don't turn the branch condition on.
 	old := `{"merged":{"enabled":true,"branch":"release/*"},"ci_passed":true,"deployed_production":false,` +
 		`"uat":{"enabled":true,"auto_approve_working_days":3},"requester_confirms":false}`
 	if c, err := Parse([]byte(old)); err != nil || c != with(uat(AutoApproveThreeDays)) {
@@ -88,22 +101,170 @@ func TestDefaults(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
+	keptBranch := func(name string) func(*Config) {
+		return func(c *Config) { c.CodeOnBranch = CodeOnBranch{Branch: name} }
+	}
 	tests := []struct {
-		name string
-		c    Config
-		want error
+		name    string
+		c       Config
+		hasRepo bool
+		want    error
 	}{
-		{"nothing", None(), nil},
-		{"both client checks", with(uat(AutoApproveNever), confirms), nil},
-		{"four days", with(uat(4)), ErrAutoApproveDays},
-		{"days checked while UAT is off", with(func(c *Config) { c.UAT.AutoApproveWorkingDays = 4 }), ErrAutoApproveDays},
+		{"nothing", None(), false, nil},
+		{"both client checks", with(uat(AutoApproveNever), confirms), false, nil},
+		{"four days", with(uat(4)), false, ErrAutoApproveDays},
+		{"days checked while UAT is off", with(func(c *Config) { c.UAT.AutoApproveWorkingDays = 4 }), false, ErrAutoApproveDays},
+		{"code on main", with(onBranch("main"), uat(3)), true, nil},
+		{"code without a repository", with(onBranch("main")), false, ErrNeedsRepository},
+		{"no branch", with(onBranch("")), true, ErrInvalidBranch},
+		{"bad branch", with(onBranch("fix me")), true, ErrInvalidBranch},
+		{"bad branch without a repository", with(onBranch("a..b")), false, ErrInvalidBranch},
+		{"branch kept while off, no repository", with(keptBranch("main")), false, nil},
+		{"bad branch kept while off", with(keptBranch("main~1")), true, ErrInvalidBranch},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := Validate(tt.c); !errors.Is(err, tt.want) {
+			if err := Validate(tt.c, tt.hasRepo); !errors.Is(err, tt.want) {
 				t.Fatalf("Validate = %v, want %v", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeBranch(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"main", "main"},
+		{"  release/2026.11 ", "release/2026.11"},
+		{"refs/heads/main", "main"},
+		{" refs/heads/feature/x ", "feature/x"},
+		{"refs/tags/v1", "refs/tags/v1"},
+		{"Main", "Main"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := NormalizeBranch(tt.in); got != tt.want {
+			t.Errorf("NormalizeBranch(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+	if got := Normalize(with(onBranch(" refs/heads/main "))); got != with(onBranch("main")) {
+		t.Errorf("Normalize = %+v", got)
+	}
+}
+
+func TestValidBranch(t *testing.T) {
+	tests := []struct {
+		name string
+		ok   bool
+	}{
+		{"main", true},
+		{"release/2026.11", true},
+		{"feature/HD-24871-sso", true},
+		{"user@host", true},
+		{"rilis-ke-2", true},
+		{strings.Repeat("b", MaxBranchLen), true},
+		{"", false},
+		{strings.Repeat("b", MaxBranchLen+1), false},
+		{"fix me", false},
+		{"tab\tname", false},
+		{"bell\aname", false},
+		{"a~1", false},
+		{"a^", false},
+		{"a:b", false},
+		{"what?", false},
+		{"star*", false},
+		{"[x", false},
+		{"back\\slash", false},
+		{"a..b", false},
+		{"a//b", false},
+		{"a@{1}", false},
+		{"@", false},
+		{"-main", false},
+		{"/main", false},
+		{"main/", false},
+		{"main.", false},
+		{"main.lock", false},
+		{".hidden", false},
+		{"release/.x", false},
+	}
+	for _, tt := range tests {
+		if got := ValidBranch(tt.name); got != tt.ok {
+			t.Errorf("ValidBranch(%q) = %v, want %v", tt.name, got, tt.ok)
+		}
+	}
+}
+
+func TestForRepository(t *testing.T) {
+	c := with(onBranch("main"), uat(3))
+	if got := c.ForRepository(true); got != c {
+		t.Errorf("with a repository = %+v", got)
+	}
+	got := c.ForRepository(false)
+	if got.CodeOnBranch.Enabled || got.CodeOnBranch.Branch != "main" || !got.UAT.Enabled {
+		t.Errorf("without a repository = %+v", got)
+	}
+	if !slices.Equal(Required(got), []Item{ItemUATApproved}) {
+		t.Errorf("required without a repository = %v", Required(got))
+	}
+}
+
+func TestBranchReached(t *testing.T) {
+	tests := []struct {
+		name   string
+		c      Config
+		branch string
+		want   bool
+	}{
+		{"same branch", with(onBranch("main")), "main", true},
+		{"other branch", with(onBranch("main")), "fix/HD-1", false},
+		{"letter case differs", with(onBranch("main")), "Main", false},
+		{"condition off", with(func(c *Config) { c.CodeOnBranch.Branch = "main" }), "main", false},
+		{"no branch pushed", with(onBranch("main")), "", false},
+		{"folders match exactly", with(onBranch("release/2026.11")), "release/2026.11", true},
+	}
+	for _, tt := range tests {
+		if got := BranchReached(tt.c, tt.branch); got != tt.want {
+			t.Errorf("%s: BranchReached = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestBranchChanged(t *testing.T) {
+	off := with(func(c *Config) { c.CodeOnBranch.Branch = "main" })
+	tests := []struct {
+		name       string
+		prev, next Config
+		want       bool
+	}{
+		{"turned on", off, with(onBranch("main")), true},
+		{"turned on from nothing", None(), with(onBranch("main")), true},
+		{"other branch", with(onBranch("main")), with(onBranch("release")), true},
+		{"unchanged", with(onBranch("main")), with(onBranch("main"), uat(3)), false},
+		{"turned off", with(onBranch("main")), off, false},
+		{"branch changed while off", off, with(func(c *Config) { c.CodeOnBranch.Branch = "release" }), false},
+	}
+	for _, tt := range tests {
+		if got := BranchChanged(tt.prev, tt.next); got != tt.want {
+			t.Errorf("%s: BranchChanged = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestResolveNeedsReason(t *testing.T) {
+	tests := []struct {
+		name      string
+		mandatory bool
+		pending   []Item
+		want      bool
+	}{
+		{"mandatory, unmet", true, []Item{ItemUATApproved}, true},
+		{"mandatory, met", true, nil, false},
+		{"guidance only, unmet", false, []Item{ItemCodeOnBranch, ItemUATApproved}, false},
+		{"guidance only, met", false, []Item{}, false},
+	}
+	for _, tt := range tests {
+		if got := ResolveNeedsReason(tt.mandatory, tt.pending); got != tt.want {
+			t.Errorf("%s: ResolveNeedsReason = %v, want %v", tt.name, got, tt.want)
+		}
 	}
 }
 
@@ -115,8 +276,10 @@ func TestRequiredOrder(t *testing.T) {
 	}{
 		{"nothing", None(), nil},
 		{"UAT", with(uat(3)), []Item{ItemUATApproved}},
-		{"both", with(confirms, uat(0)), Items},
+		{"both", with(confirms, uat(0)), ClientItems},
 		{"requester confirms", with(confirms), []Item{ItemRequesterConfirmed}},
+		{"code first", with(confirms, onBranch("main"), uat(0)), Items},
+		{"code only", with(onBranch("main")), []Item{ItemCodeOnBranch}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -140,6 +303,8 @@ func TestEvaluate(t *testing.T) {
 		{"nothing done", eOffice, nil, false, []Item{ItemUATApproved}},
 		{"all done", eOffice, []Item{ItemUATApproved}, true, nil},
 		{"items outside the DoD don't count", with(confirms), []Item{ItemUATApproved}, false, []Item{ItemRequesterConfirmed}},
+		{"code pending", with(onBranch("main"), uat(3)), []Item{ItemUATApproved}, false, []Item{ItemCodeOnBranch}},
+		{"code and test done", with(onBranch("main"), uat(3)), []Item{ItemCodeOnBranch, ItemUATApproved}, true, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -250,6 +415,8 @@ func TestClientRequired(t *testing.T) {
 		{None(), nil},
 		{with(uat(3)), []Item{ItemUATApproved}},
 		{with(uat(0), confirms), []Item{ItemUATApproved, ItemRequesterConfirmed}},
+		{with(onBranch("main"), uat(3)), []Item{ItemUATApproved}},
+		{with(onBranch("main")), nil},
 	}
 	for _, tt := range tests {
 		if got := ClientRequired(tt.c); !slices.Equal(got, tt.want) {
@@ -276,13 +443,16 @@ func TestCleared(t *testing.T) {
 		from, to ticket.Status
 		want     []Item
 	}{
-		{ticket.StatusResolved, ticket.StatusInProgress, ClientItems},
-		{ticket.StatusResolved, ticket.StatusNew, ClientItems},
-		{ticket.StatusClosed, ticket.StatusInProgress, ClientItems},
+		{ticket.StatusResolved, ticket.StatusInProgress, []Item{ItemUATApproved, ItemRequesterConfirmed, ItemCodeOnBranch}},
+		{ticket.StatusResolved, ticket.StatusNew, []Item{ItemUATApproved, ItemRequesterConfirmed, ItemCodeOnBranch}},
+		{ticket.StatusClosed, ticket.StatusInProgress, []Item{ItemUATApproved, ItemRequesterConfirmed, ItemCodeOnBranch}},
 		{ticket.StatusResolved, ticket.StatusClosed, nil},
-		{ticket.StatusInUAT, ticket.StatusInProgress, nil},
+		{ticket.StatusInUAT, ticket.StatusInProgress, CodeItems},
+		{ticket.StatusInUAT, ticket.StatusWaitingOnClient, CodeItems},
 		{ticket.StatusInUAT, ticket.StatusResolved, nil},
 		{ticket.StatusNew, ticket.StatusAssigned, nil},
+		{ticket.StatusInProgress, ticket.StatusWaitingOnClient, nil},
+		{ticket.StatusWaitingOnClient, ticket.StatusInUAT, nil},
 	}
 	for _, tt := range tests {
 		if got := Cleared(tt.from, tt.to); !slices.Equal(got, tt.want) {

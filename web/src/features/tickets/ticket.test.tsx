@@ -2,12 +2,12 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { PROJECT_IDS } from '../../test/projectsApi'
+import { noDod, PROJECT_IDS, uatDod } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
 import { writeRichText } from '../../test/richText'
 import { state, USERS } from '../../test/server'
 import { IDS } from '../../test/settingsApi'
-import { tickets } from '../../test/ticketsApi'
+import { ticketDod, tickets } from '../../test/ticketsApi'
 
 const AGENT = USERS['rina@demo-vendor.test'] ?? null
 const SUPERVISOR = USERS['dewi@demo-vendor.test'] ?? null
@@ -201,6 +201,78 @@ describe('agent ticket detail', () => {
       await screen.findByText('Resolved by Rina Pratiwi without meeting the Definition of Done: Client confirmed by phone'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Resolve without DoD…' })).not.toBeInTheDocument()
+  })
+
+  it('resolves without the guard when the Definition of Done is only guidance', async () => {
+    const t = tickets.tickets.find((x) => x.key === 'HD-24871')
+    if (!t) throw new Error('fixture missing')
+    t.dod = ticketDod(uatDod, undefined, { mandatory: false })
+    const user = await open()
+    const card = screen.getByRole('region', { name: 'Definition of Done' })
+    expect(card).toHaveTextContent('0 of 1 done')
+    expect(card).toHaveTextContent('Guidance only: anyone can resolve this ticket without meeting it.')
+    expect(screen.queryByRole('button', { name: 'Resolve without DoD…' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Status$/ }))
+    await user.click(await screen.findByRole('option', { name: /^Resolved/ }))
+    await waitFor(() => expect(lastRequest('PUT', '/tickets/HD-24871/status')?.body).toEqual({ status: 'resolved', from: 'in_progress' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('shows the commit that put the code on the branch, and what is still waiting', async () => {
+    const t = tickets.tickets.find((x) => x.key === 'HD-24871')
+    if (!t) throw new Error('fixture missing')
+    const config = { ...uatDod, codeOnBranch: { enabled: true, branch: 'main' } }
+    const dod = ticketDod(config, undefined, { hasRepository: true })
+    const commitURL = 'https://github.com/vendor-id/eoffice-jambi/commit/a1f9c2e'
+    t.dod = {
+      ...dod,
+      items: dod.items.map((i) =>
+        i.item === 'code_on_branch' ? { ...i, doneAt: '2026-11-12T03:00:00Z', commit: { sha: 'a1f9c2e', url: commitURL } } : i,
+      ),
+      pending: ['uat_approved'],
+    }
+    await open()
+    const card = screen.getByRole('region', { name: 'Definition of Done' })
+    expect(card).toHaveTextContent('1 of 2 done')
+    expect(card).toHaveTextContent('Code on main + UAT')
+    const [code, uat] = within(within(card).getByRole('list', { name: 'Checklist' })).getAllByRole('listitem')
+    expect(code).toHaveTextContent('Code reached main')
+    expect(code).toHaveTextContent(/a1f9c2e.*reached main ·/)
+    expect(within(code!).getByRole('link', { name: /a1f9c2e/ })).toHaveAttribute('href', commitURL)
+    expect(within(code!).getByRole('img', { name: 'Done' })).toBeInTheDocument()
+    expect(uat).toHaveTextContent('UAT approved by client')
+  })
+
+  it('says what code on the branch waits for, and when it is paused', async () => {
+    const t = tickets.tickets.find((x) => x.key === 'HD-24871')
+    if (!t) throw new Error('fixture missing')
+    const config = { ...noDod, codeOnBranch: { enabled: true, branch: 'release/2026.11' } }
+    t.dod = ticketDod(config, undefined, { hasRepository: true })
+    const user = await open()
+    const card = screen.getByRole('region', { name: 'Definition of Done' })
+    expect(card).toHaveTextContent('Ticks when a commit naming HD-24871 reaches release/2026.11')
+    expect(card).toHaveTextContent('Resolve it by hand once a commit naming it reaches release/2026.11.')
+    // Mandatory: resolving before the code is there still needs the guard.
+    expect(screen.getByRole('button', { name: 'Resolve without DoD…' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Resolve without DoD…' }))
+    const guard = await screen.findByRole('alertdialog')
+    expect(guard).toHaveTextContent("This ticket's project needs the fix reaching its branch before it resolves.")
+  })
+
+  it("pauses code on the branch while the ticket's project has no repository", async () => {
+    const t = tickets.tickets.find((x) => x.key === 'HD-24871')
+    if (!t) throw new Error('fixture missing')
+    t.dod = ticketDod({ ...uatDod, codeOnBranch: { enabled: true, branch: 'main' } })
+    const user = await open()
+    const card = screen.getByRole('region', { name: 'Definition of Done' })
+    expect(card).toHaveTextContent('0 of 1 done')
+    expect(card).toHaveTextContent("Code on main doesn't apply: the project has no repository.")
+
+    await user.click(within(card).getByRole('radio', { name: /Custom for this ticket/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'A Definition of Done for HD-24871' })
+    expect(within(dialog).getByRole('checkbox', { name: /Code reached a branch/ })).toBeDisabled()
+    expect(within(dialog).getByRole('checkbox', { name: /Code reached a branch/ })).not.toBeChecked()
   })
 
   it('gives the ticket its own Definition of Done with a reason, and returns to the project one', async () => {

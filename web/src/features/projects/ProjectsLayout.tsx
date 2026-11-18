@@ -8,7 +8,7 @@ import type { Project } from '../../api/client'
 import { Pill } from '../../components/Badges'
 import { Button } from '../../components/Button'
 import { can } from '../../lib/roles'
-import { dodSummary } from '../dod/labels'
+import { dodSummary, forRepository } from '../dod/labels'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { ProjectDialog } from './ProjectDialog'
 import { projectsQueryOptions } from './queries'
@@ -78,7 +78,7 @@ function ProjectLink({ project }: { project: Project }) {
       <span className="text-xs text-muted">{project.client.name}</span>
       <span className="mt-1.5 flex flex-wrap gap-1.5">
         <Pill tone="code">{project.repository ? t(`code.providers.${project.repository.provider}`) : t('projects.chips.noRepo')}</Pill>
-        <Pill tone="neutral">{dodSummary(t, project.dod)}</Pill>
+        <Pill tone="neutral">{dodSummary(t, forRepository(project.dod, project.repository !== null))}</Pill>
         {project.isDefault && <Pill tone="info">{t('projects.chips.default')}</Pill>}
         {!project.active && <Pill tone="neutral">{t('projects.chips.hidden')}</Pill>}
       </span>

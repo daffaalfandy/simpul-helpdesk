@@ -51,6 +51,7 @@ const (
 	dataDeliver                  = "deliver"
 	dataCalendar                 = "calendar"
 	dataDoD                      = "dod"
+	dataDoDMandatory             = "dod_mandatory"
 	dataAllowTicketOverride      = "allow_ticket_override"
 	dataLinkedRequesters         = "linked_requester_ids"
 	// dataTargetField names one priority's field in audit data, e.g. "P1.resolve".
@@ -80,6 +81,9 @@ type Project struct {
 	Active      bool
 	SLA         sla.ProjectSLA
 	DoD         dod.Config
+	// DoDMandatory: resolving with the Definition of Done unmet needs a reason. Off, it is
+	// guidance only.
+	DoDMandatory bool
 	// AllowTicketOverride lets agents set a different Definition of Done on one ticket.
 	AllowTicketOverride bool
 	// Repository is where its tickets' commits are read from; nil without one.
@@ -107,9 +111,11 @@ type CreateInput struct {
 	Active      bool
 }
 
-// DoDInput replaces a project's Definition of Done and its per-ticket override switch.
+// DoDInput replaces a project's Definition of Done, whether it is mandatory, and its per-ticket
+// override switch.
 type DoDInput struct {
 	Config              dod.Config
+	Mandatory           bool
 	AllowTicketOverride bool
 }
 
@@ -124,10 +130,34 @@ type UpdateInput struct {
 type Service struct {
 	store *store.Store
 	sla   *sla.Service
+	jobs  sla.JobInserter
 }
 
-func NewService(st *store.Store, slaSvc *sla.Service) *Service {
-	return &Service{store: st, sla: slaSvc}
+// NewService takes the job inserter that queues DoDBranchSyncArgs.
+func NewService(st *store.Store, slaSvc *sla.Service, jobs sla.JobInserter) *Service {
+	return &Service{store: st, sla: slaSvc, jobs: jobs}
+}
+
+// DoDBranchSyncArgs re-checks a project's tickets after its Definition of Done started asking for
+// code on a branch, or on another branch: commits already linked to them may have reached it.
+// The worker reads the project's current Definition of Done, so a stale job does no harm.
+type DoDBranchSyncArgs struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ProjectID      uuid.UUID `json:"project_id"`
+}
+
+// JobKindDoDBranchSync is DoDBranchSyncArgs' job kind; the worker lives in internal/tickets.
+const JobKindDoDBranchSync = "dod_branch_sync"
+
+func (DoDBranchSyncArgs) Kind() string { return JobKindDoDBranchSync }
+
+// DoDError maps a Definition of Done the dod package refuses to an API error: a bad branch name
+// is invalid_branch, anything else (no repository, auto-approve days) invalid_dod.
+func DoDError(err error) error {
+	if errors.Is(err, dod.ErrInvalidBranch) {
+		return apperr.Invalid(apperr.CodeInvalidBranch, "Enter a valid branch name", err.Error())
+	}
+	return apperr.Invalid(apperr.CodeInvalidDoD, "Check the Definition of Done", err.Error())
 }
 
 // List returns the projects p may see, optionally for one client (404 if p can't see it).
@@ -196,7 +226,8 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, orgID uuid.UUID
 			return err
 		}
 		if err := tx.Q.UpdateProjectDoD(ctx, db.UpdateProjectDoDParams{
-			ID: id, DodConfig: dod.Default().JSON(), AllowTicketOverride: true,
+			ID: id, OrganizationID: orgID, DodConfig: dod.Default().JSON(), DodMandatory: dod.DefaultMandatory,
+			AllowTicketOverride: true,
 		}); err != nil {
 			return err
 		}
@@ -347,30 +378,41 @@ func (s *Service) UpdateSLA(ctx context.Context, actor audit.Actor, orgID, id uu
 }
 
 // UpdateDoD replaces a project's Definition of Done. It applies to the project's open tickets
-// at once, except tickets with a Definition of Done of their own.
+// at once, except tickets with a Definition of Done of their own. Asking for code on a branch it
+// didn't ask for before queues a re-check of the commits already linked to them, in the same
+// transaction.
 func (s *Service) UpdateDoD(ctx context.Context, actor audit.Actor, orgID, id uuid.UUID, in DoDInput) (Project, error) {
+	next := dod.Normalize(in.Config)
 	err := s.store.Tx(ctx, func(tx store.Tx) error {
 		old, err := tx.Q.GetProjectForUpdate(ctx, db.GetProjectForUpdateParams{ID: id, OrganizationID: orgID})
 		if err != nil {
 			return notFound(err)
 		}
-		if err := dod.Validate(in.Config); err != nil {
-			return apperr.Invalid(apperr.CodeInvalidDoD, "Check the Definition of Done", err.Error())
+		hasRepository := old.RepositoryID != nil
+		if err := dod.Validate(next, hasRepository); err != nil {
+			return DoDError(err)
 		}
 		prev, err := dod.Parse(old.DodConfig)
 		if err != nil {
 			return err
 		}
 		if err := tx.Q.UpdateProjectDoD(ctx, db.UpdateProjectDoDParams{
-			ID: id, DodConfig: in.Config.JSON(), AllowTicketOverride: in.AllowTicketOverride,
+			ID: id, OrganizationID: orgID, DodConfig: next.JSON(), DodMandatory: in.Mandatory,
+			AllowTicketOverride: in.AllowTicketOverride,
 		}); err != nil {
 			return err
 		}
 		changes := audit.Changes{}
-		audit.Track(changes, dataDoD, prev, in.Config)
+		audit.Track(changes, dataDoD, prev, next)
+		audit.Track(changes, dataDoDMandatory, old.DodMandatory, in.Mandatory)
 		audit.Track(changes, dataAllowTicketOverride, old.AllowTicketOverride, in.AllowTicketOverride)
 		if len(changes) == 0 {
 			return nil
+		}
+		if hasRepository && dod.BranchChanged(prev, next) {
+			if _, err := s.jobs.InsertTx(ctx, tx.PG, DoDBranchSyncArgs{OrganizationID: orgID, ProjectID: id}, nil); err != nil {
+				return err
+			}
 		}
 		return audit.Write(ctx, tx.Q, actor.Entry(ActionDoDUpdated, TargetProject, &id, changes))
 	})
@@ -520,7 +562,7 @@ func fromRow(r db.GetProjectRow, targets []sla.ProjectTarget) (Project, error) {
 			NotifySupervisorOnBreach: r.SlaNotifySupervisorOnBreach,
 			NotifyPicOnP1Breach:      r.SlaNotifyPicOnP1Breach,
 		}},
-		DoD: cfg, AllowTicketOverride: r.AllowTicketOverride, Repository: repositoryRef(r),
+		DoD: cfg, DoDMandatory: r.DodMandatory, AllowTicketOverride: r.AllowTicketOverride, Repository: repositoryRef(r),
 		OpenTicketCount: int(r.OpenTicketCount), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}, nil
 }

@@ -12,6 +12,7 @@ import (
 
 func apiDodConfig(c dod.Config) gen.DodConfig {
 	return gen.DodConfig{
+		CodeOnBranch:      gen.DodCodeOnBranch{Enabled: c.CodeOnBranch.Enabled, Branch: c.CodeOnBranch.Branch},
 		Uat:               gen.DodUat{Enabled: c.UAT.Enabled, AutoApproveWorkingDays: gen.AutoApproveDays(c.UAT.AutoApproveWorkingDays)},
 		RequesterConfirms: c.RequesterConfirms,
 	}
@@ -19,6 +20,7 @@ func apiDodConfig(c dod.Config) gen.DodConfig {
 
 func domainDodConfig(c gen.DodConfig) dod.Config {
 	return dod.Config{
+		CodeOnBranch:      dod.CodeOnBranch{Enabled: c.CodeOnBranch.Enabled, Branch: c.CodeOnBranch.Branch},
 		UAT:               dod.UAT{Enabled: c.Uat.Enabled, AutoApproveWorkingDays: int(c.Uat.AutoApproveWorkingDays)},
 		RequesterConfirms: c.RequesterConfirms,
 	}
@@ -50,10 +52,13 @@ func apiTicketDod(d tickets.TicketDoD) gen.TicketDod {
 	out := gen.TicketDod{
 		Source: gen.DodSource(d.Source), Config: apiDodConfig(d.Config), ProjectConfig: apiDodConfig(d.ProjectConfig),
 		OverrideReason: d.OverrideReason, Items: make([]gen.TicketDodItem, len(d.Items)), Met: d.Met,
-		Pending: apiDodItems(d.Pending), CanOverride: d.CanOverride,
+		Pending: apiDodItems(d.Pending), Mandatory: d.Mandatory, HasRepository: d.HasRepository, CanOverride: d.CanOverride,
 	}
 	for i, it := range d.Items {
 		out.Items[i] = gen.TicketDodItem{Item: gen.DodItem(it.Item), DoneAt: it.DoneAt, DoneBy: apiRefPtr(it.DoneBy)}
+		if it.Commit != nil {
+			out.Items[i].Commit = &gen.TicketDodCommit{Sha: it.Commit.SHA, Url: it.Commit.URL}
+		}
 	}
 	return out
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/gitevent"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
@@ -47,8 +48,11 @@ type CodeEvent struct {
 	Provider gitevent.Provider
 	Kind     gitevent.Kind
 	Ref      string // short commit sha
-	Branch   string // the branch it was first pushed to
-	At       time.Time
+	Branch   string // the branch this push went to
+	// ReachedBranch: this push brought the commit onto Branch (a new commit, or one seen on other
+	// branches only). A commit pushed to the same branch again reaches nothing new.
+	ReachedBranch bool
+	At            time.Time
 	// AuthorID is the staff member who wrote it, matched by email; AuthorName is their name, or
 	// else the provider's login or name.
 	AuthorID   *uuid.UUID
@@ -56,8 +60,10 @@ type CodeEvent struct {
 }
 
 // ApplyCode links commits to one ticket (HANDOFF §8), each once, with an audit entry that feeds
-// the activity log and the assignee's notification. Commits never change the ticket (owner,
-// 17 Nov). A closed ticket gets a log row and nothing else; a ticket whose project no longer
+// the activity log and the assignee's notification. Commits never change the ticket's status
+// (owner, 17 Nov). A commit that reaches the branch the ticket's Definition of Done names ticks
+// "code on the branch", even when it was linked before (the fix merging into main; 10b, owner
+// 18 Nov). A closed ticket gets a log row and nothing else; a ticket whose project no longer
 // reads repoID is left alone. Applying the same commits again changes nothing.
 func (s *Service) ApplyCode(ctx context.Context, ticketID, repoID uuid.UUID, events []CodeEvent) error {
 	slices.SortStableFunc(events, func(a, b CodeEvent) int { return a.At.Compare(b.At) })
@@ -72,18 +78,31 @@ func (s *Service) ApplyCode(ctx context.Context, ticketID, repoID uuid.UUID, eve
 		if row.RepositoryID == nil || *row.RepositoryID != repoID {
 			return nil
 		}
+		sd, err := parseDoD(row.DodConfig, row.DodOverride)
+		if err != nil {
+			return err
+		}
+		eff := sd.evaluated(true) // the project reads repoID
+		closed := ticket.Status(row.Status).Locked()
 		seen, err := tx.Q.ListTicketCodeLinks(ctx, &row.ID)
 		if err != nil {
 			return err
 		}
 		cs := newChangeSet(row.ID)
 		for _, e := range events {
-			if slices.Contains(seen, e.ID) {
-				continue
+			linked := slices.Contains(seen, e.ID)
+			if !linked {
+				seen = append(seen, e.ID)
+				if err := linkCode(ctx, tx.Q, cs, row.OrganizationID, row.Key, closed, e); err != nil {
+					return err
+				}
 			}
-			seen = append(seen, e.ID)
-			if err := linkCode(ctx, tx.Q, cs, row.OrganizationID, row.Key, ticket.Status(row.Status).Locked(), e); err != nil {
-				return err
+			// A commit linked before ticks only when this push brought it onto the branch: pushing
+			// it there again after the ticket went back to work needs a new fix.
+			if !closed && (!linked || e.ReachedBranch) && dod.BranchReached(eff, e.Branch) {
+				if err := tickCodeItem(ctx, tx.Q, cs, row.OrganizationID, e.ID); err != nil {
+					return err
+				}
 			}
 		}
 		return s.commit(ctx, tx, cs)

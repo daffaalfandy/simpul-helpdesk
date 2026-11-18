@@ -47,9 +47,12 @@ function assigneeChoices(t: TFunction, ticket: Ticket, me: Me, people: ReadonlyA
   return options
 }
 
-/** A move to resolved that needs the guard: the Definition of Done isn't met (staff only see it). */
+/**
+ * A move to resolved that needs the guard: a mandatory Definition of Done isn't met (staff only
+ * see it). One that is only guidance resolves freely.
+ */
 export function needsResolveGuard(ticket: Ticket): boolean {
-  return ticket.dod != null && !ticket.dod.met
+  return ticket.dod != null && ticket.dod.mandatory && !ticket.dod.met
 }
 
 type TicketPropertiesProps = {

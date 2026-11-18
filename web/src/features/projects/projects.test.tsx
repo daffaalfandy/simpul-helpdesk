@@ -118,10 +118,16 @@ describe('projects', () => {
 
   it('edits the Definition of Done with a live preview and saves it', async () => {
     const { user } = await openProjects()
+    expect(dodCard()).toHaveTextContent('Required before resolving: skipping it needs a reason, and the supervisors are told.')
     await user.click(within(dodCard()).getByRole('button', { name: 'Edit DoD' }))
-    // Only the client's checks: Git no longer ticks the Definition of Done.
-    expect(within(dodCard()).getAllByRole('checkbox').map((c) => c.closest('label')?.textContent ?? '')).toHaveLength(3)
+    // Code on a branch, the client's two checks, then the two switches. Without a repository the
+    // code condition can't be turned on, and the row says why.
+    expect(within(dodCard()).getAllByRole('checkbox')).toHaveLength(5)
     expect(within(dodCard()).queryByRole('checkbox', { name: /merged/i })).not.toBeInTheDocument()
+    expect(within(dodCard()).getByRole('checkbox', { name: /Code reached a branch/ })).toBeDisabled()
+    expect(within(dodCard()).getByRole('textbox', { name: 'Branch' })).toBeDisabled()
+    expect(dodCard()).toHaveTextContent('Link a repository to this project first, in Settings › GitHub / GitLab.')
+    expect(within(dodCard()).getByRole('checkbox', { name: /Required before resolving/ })).toBeChecked()
 
     await user.click(within(dodCard()).getByRole('checkbox', { name: /Requester confirms it's fixed/ }))
     await user.click(within(dodCard()).getByRole('button', { name: /Auto-approve if no answer/ }))
@@ -137,7 +143,54 @@ describe('projects', () => {
     expect(body.dod.requesterConfirms).toBe(true)
     expect(body.dod.uat).toEqual({ enabled: true, autoApproveWorkingDays: 0 })
     expect(body.allowTicketOverride).toBe(false)
+    expect(body.mandatory).toBe(true)
+    expect(body.dod.codeOnBranch.enabled).toBe(false)
     expect(dodCard()).toHaveTextContent('Only supervisors and admins may set a different Definition of Done on a ticket.')
+  })
+
+  it('asks for code on a branch when the project has a repository, and makes the DoD guidance only', async () => {
+    const eOffice = projectsApi.projects.find((p) => p.id === PROJECT_IDS.eOffice)
+    if (eOffice) {
+      eOffice.repository = { id: 'repo-1', provider: 'github', fullName: 'vendor-id/eoffice-jambi', webUrl: 'https://github.com/vendor-id/eoffice-jambi' }
+    }
+    const { user } = await openProjects()
+    await user.click(within(dodCard()).getByRole('button', { name: 'Edit DoD' }))
+    const code = within(dodCard()).getByRole('checkbox', { name: /Code reached a branch/ })
+    expect(code).toBeEnabled()
+    await user.click(code)
+    const branch = within(dodCard()).getByRole('textbox', { name: 'Branch' })
+
+    // A name Git refuses: the API says so and the field is marked.
+    await user.type(branch, 'fix me')
+    await user.click(within(dodCard()).getByRole('button', { name: 'Save DoD' }))
+    expect(await within(dodCard()).findByText(/Enter a valid branch name, such as main/)).toBeInTheDocument()
+    expect(branch).toHaveAttribute('aria-invalid', 'true')
+
+    await user.clear(branch)
+    await user.type(branch, 'main')
+    expect(dodCard()).toHaveTextContent('Done means: a commit naming the ticket reaches main and the client approves UAT')
+    await user.click(within(dodCard()).getByRole('checkbox', { name: /Required before resolving/ }))
+    await user.click(within(dodCard()).getByRole('button', { name: 'Save DoD' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Definition of Done saved.')
+    const body = lastRequest('PUT', `/projects/${PROJECT_IDS.eOffice}/dod`)?.body as ProjectDodInput
+    expect(body.dod.codeOnBranch).toEqual({ enabled: true, branch: 'main' })
+    expect(body.mandatory).toBe(false)
+    expect(dodCard()).toHaveTextContent('Guidance only: anyone can resolve a ticket without meeting it.')
+    const list = screen.getByRole('navigation', { name: 'Projects' })
+    expect(within(list).getByRole('link', { name: /e-Office/ })).toHaveTextContent('Code on main + UAT')
+  })
+
+  it('says when code on a branch is paused because the project lost its repository', async () => {
+    const eOffice = projectsApi.projects.find((p) => p.id === PROJECT_IDS.eOffice)
+    if (eOffice) eOffice.dod = { ...eOffice.dod, codeOnBranch: { enabled: true, branch: 'main' } }
+    const { user } = await openProjects()
+    expect(dodCard()).toHaveTextContent("Code on main doesn't apply until a repository is linked to this project.")
+    expect(dodCard()).not.toHaveTextContent('reaches main')
+    await user.click(within(dodCard()).getByRole('button', { name: 'Edit DoD' }))
+    // The form starts with it off, so saving other changes still works.
+    expect(within(dodCard()).getByRole('checkbox', { name: /Code reached a branch/ })).not.toBeChecked()
+    expect(within(dodCard()).getByRole('textbox', { name: 'Branch' })).toHaveValue('main')
   })
 
   it('adds a project and opens it', async () => {

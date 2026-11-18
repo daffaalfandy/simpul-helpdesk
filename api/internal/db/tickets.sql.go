@@ -161,7 +161,8 @@ SELECT t.id, t.organization_id, t.key, t.type, t.status, t.priority, t.channel, 
        t.created_by, cb.name AS created_by_name, cb.role AS created_by_role,
        t.project_id, p.name AS project_name,
        t.catalog_item_id, ci.name AS catalog_item_name,
-       t.status_changed_at, p.dod_config, p.allow_ticket_override,
+       t.status_changed_at, p.dod_config, p.dod_mandatory, p.allow_ticket_override,
+       (p.repository_id IS NOT NULL)::boolean AS has_repository,
        o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 JOIN clients c ON c.id = t.client_id
@@ -224,7 +225,9 @@ type GetTicketRow struct {
 	CatalogItemName     *string
 	StatusChangedAt     time.Time
 	DodConfig           []byte
+	DodMandatory        bool
 	AllowTicketOverride bool
+	HasRepository       bool
 	DodOverride         []byte
 	DodOverrideReason   *string
 }
@@ -270,7 +273,9 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 		&i.CatalogItemName,
 		&i.StatusChangedAt,
 		&i.DodConfig,
+		&i.DodMandatory,
 		&i.AllowTicketOverride,
+		&i.HasRepository,
 		&i.DodOverride,
 		&i.DodOverrideReason,
 	)
@@ -280,7 +285,8 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 const getTicketForUpdate = `-- name: GetTicketForUpdate :one
 SELECT t.id, t.organization_id, t.key, t.type, t.status, t.priority, t.client_id, t.project_id, t.requester_id,
        t.assignee_id, a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
-       p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason
+       p.dod_config, p.dod_mandatory, p.allow_ticket_override, p.repository_id,
+       o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 LEFT JOIN users a ON a.id = t.assignee_id
 JOIN projects p ON p.id = t.project_id
@@ -323,7 +329,9 @@ type GetTicketForUpdateRow struct {
 	ResolvedAt          *time.Time
 	StatusChangedAt     time.Time
 	DodConfig           []byte
+	DodMandatory        bool
 	AllowTicketOverride bool
+	RepositoryID        *uuid.UUID
 	DodOverride         []byte
 	DodOverrideReason   *string
 }
@@ -354,7 +362,9 @@ func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdate
 		&i.ResolvedAt,
 		&i.StatusChangedAt,
 		&i.DodConfig,
+		&i.DodMandatory,
 		&i.AllowTicketOverride,
+		&i.RepositoryID,
 		&i.DodOverride,
 		&i.DodOverrideReason,
 	)

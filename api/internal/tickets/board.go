@@ -41,10 +41,12 @@ type BoardCard struct {
 	AllowedStatuses []ticket.Status
 	SLA             *CardSLA // nil until the SLA engine has run for the ticket
 	// DoDPending is what an open ticket's Definition of Done still needs; resolving before then
-	// needs a reason. Empty for done tickets.
+	// needs a reason when DoDMandatory. Empty for done tickets.
 	DoDPending []dod.Item
-	UAT        *CardUAT  // set while the client tests
-	Code       *CardCode // set once code reached the ticket
+	// DoDMandatory is the project's switch; off, the Definition of Done is guidance only.
+	DoDMandatory bool
+	UAT          *CardUAT  // set while the client tests
+	Code         *CardCode // set once code reached the ticket
 }
 
 // CardUAT is how far into the client's test a ticket is: day Day of Days working days, or of
@@ -172,7 +174,7 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 			if err != nil {
 				return Board{}, fmt.Errorf("board: %s: %w", r.Key, err)
 			}
-			pending = pendingFor(sd, r.DodDone)
+			pending = pendingFor(sd, r.HasRepository, r.DodDone)
 			if status == ticket.StatusInUAT {
 				uat = cardUAT(sd, r.StatusChangedAt, schedules, now)
 			}
@@ -183,6 +185,7 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 			AllowedStatuses: ticket.AllowedMoves(status, r.AssigneeID != nil),
 			SLA:             cardSLA(r, status, schedules, now),
 			DoDPending:      pending,
+			DoDMandatory:    r.DodMandatory,
 			UAT:             uat,
 		})
 	}

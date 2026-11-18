@@ -91,28 +91,55 @@ func (q *Queries) GetTicketForLifecycle(ctx context.Context, id uuid.UUID) (GetT
 	return i, err
 }
 
-const insertSeedDoDItem = `-- name: InsertSeedDoDItem :exec
-INSERT INTO ticket_dod_items (ticket_id, item, done_at, done_by)
-VALUES ($1, $2, $3, $4)
+const insertSeedDoDItem = `-- name: InsertSeedDoDItem :execrows
+INSERT INTO ticket_dod_items (ticket_id, item, done_at, done_by, code_event_id)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (ticket_id, item) DO NOTHING
 `
 
 type InsertSeedDoDItemParams struct {
-	TicketID uuid.UUID
-	Item     string
-	DoneAt   time.Time
-	DoneBy   *uuid.UUID
+	TicketID    uuid.UUID
+	Item        string
+	DoneAt      time.Time
+	DoneBy      *uuid.UUID
+	CodeEventID *uuid.UUID
 }
 
-// Seed only: an item met at an explicit time.
-func (q *Queries) InsertSeedDoDItem(ctx context.Context, arg InsertSeedDoDItemParams) error {
-	_, err := q.db.Exec(ctx, insertSeedDoDItem,
+// Seed only: an item met at an explicit time, by a person or by a commit.
+func (q *Queries) InsertSeedDoDItem(ctx context.Context, arg InsertSeedDoDItemParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertSeedDoDItem,
 		arg.TicketID,
 		arg.Item,
 		arg.DoneAt,
 		arg.DoneBy,
+		arg.CodeEventID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const insertTicketCodeItem = `-- name: InsertTicketCodeItem :execrows
+INSERT INTO ticket_dod_items (ticket_id, item, code_event_id)
+VALUES ($1, $2, $3)
+ON CONFLICT (ticket_id, item) DO NOTHING
+`
+
+type InsertTicketCodeItemParams struct {
+	TicketID    uuid.UUID
+	Item        string
+	CodeEventID *uuid.UUID
+}
+
+// Git met an item (code_on_branch) with this commit; the system met it, so done_by stays NULL.
+// An item already met keeps its first commit.
+func (q *Queries) InsertTicketCodeItem(ctx context.Context, arg InsertTicketCodeItemParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertTicketCodeItem, arg.TicketID, arg.Item, arg.CodeEventID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertTicketDoDItems = `-- name: InsertTicketDoDItems :many
@@ -142,6 +169,65 @@ func (q *Queries) InsertTicketDoDItems(ctx context.Context, arg InsertTicketDoDI
 			return nil, err
 		}
 		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBranchSyncTickets = `-- name: ListBranchSyncTickets :many
+SELECT t.id
+FROM tickets t
+WHERE t.organization_id = $1 AND t.project_id = $2 AND t.status <> $3
+  AND NOT EXISTS (SELECT 1 FROM ticket_dod_overrides o WHERE o.ticket_id = t.id)
+  AND NOT EXISTS (SELECT 1 FROM ticket_dod_items i WHERE i.ticket_id = t.id AND i.item = $4)
+  AND EXISTS (SELECT 1 FROM code_event_links l JOIN code_events e ON e.id = l.code_event_id
+              WHERE l.ticket_id = t.id AND l.outcome = $5
+                AND e.repository_id = $6 AND $7::text = ANY(e.branches))
+  AND ($8::uuid IS NULL OR t.id > $8::uuid)
+ORDER BY t.id
+LIMIT $9
+`
+
+type ListBranchSyncTicketsParams struct {
+	OrganizationID uuid.UUID
+	ProjectID      uuid.UUID
+	ClosedStatus   string
+	Item           string
+	LinkedOutcome  string
+	RepositoryID   uuid.UUID
+	Branch         string
+	After          *uuid.UUID
+	RowLimit       int32
+}
+
+// A project's tickets that follow its Definition of Done (no override) and aren't closed, with a
+// commit linked from @repository_id that reached @branch and the item not met yet: the ones a
+// new branch condition may tick. Keyset pages by id.
+func (q *Queries) ListBranchSyncTickets(ctx context.Context, arg ListBranchSyncTicketsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listBranchSyncTickets,
+		arg.OrganizationID,
+		arg.ProjectID,
+		arg.ClosedStatus,
+		arg.Item,
+		arg.LinkedOutcome,
+		arg.RepositoryID,
+		arg.Branch,
+		arg.After,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -215,20 +301,25 @@ func (q *Queries) ListLifecycleCandidates(ctx context.Context, arg ListLifecycle
 }
 
 const listTicketDoDItems = `-- name: ListTicketDoDItems :many
-SELECT i.item, i.done_at, i.done_by, u.name AS done_by_name
+SELECT i.item, i.done_at, i.done_by, u.name AS done_by_name, i.code_event_id, e.sha AS commit_sha, e.url AS commit_url
 FROM ticket_dod_items i
 LEFT JOIN users u ON u.id = i.done_by
+LEFT JOIN code_events e ON e.id = i.code_event_id
 WHERE i.ticket_id = $1
 ORDER BY i.done_at, i.item
 `
 
 type ListTicketDoDItemsRow struct {
-	Item       string
-	DoneAt     time.Time
-	DoneBy     *uuid.UUID
-	DoneByName *string
+	Item        string
+	DoneAt      time.Time
+	DoneBy      *uuid.UUID
+	DoneByName  *string
+	CodeEventID *uuid.UUID
+	CommitSha   *string
+	CommitUrl   *string
 }
 
+// With the commit that met code_on_branch, while it is kept.
 func (q *Queries) ListTicketDoDItems(ctx context.Context, ticketID uuid.UUID) ([]ListTicketDoDItemsRow, error) {
 	rows, err := q.db.Query(ctx, listTicketDoDItems, ticketID)
 	if err != nil {
@@ -243,6 +334,9 @@ func (q *Queries) ListTicketDoDItems(ctx context.Context, ticketID uuid.UUID) ([
 			&i.DoneAt,
 			&i.DoneBy,
 			&i.DoneByName,
+			&i.CodeEventID,
+			&i.CommitSha,
+			&i.CommitUrl,
 		); err != nil {
 			return nil, err
 		}

@@ -36,7 +36,9 @@ describe('Settings › GitHub / GitLab', () => {
 
     const rules = screen.getByRole('table', { name: 'Commit message rules' })
     expect(within(rules).getByText('Fixes HD-24871: revert TTL')).toBeInTheDocument()
-    expect(within(rules).getByText(/commits never change a status or the Definition of Done/)).toBeInTheDocument()
+    expect(within(rules).getByText(/commits never change a status\./)).toBeInTheDocument()
+    // A commit reaching the Definition of Done's branch ticks it (10b), and still moves nothing.
+    expect(within(rules).getByText(/the commit ticks "Code reached a branch"/)).toBeInTheDocument()
 
     const log = card('Recent events')
     expect(await log.findByText(/Push a1f9c2e “Fix HD-24871: revert SSO token TTL” on fix\/HD-24871-sso → linked to/)).toBeInTheDocument()

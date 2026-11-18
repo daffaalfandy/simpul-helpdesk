@@ -45,7 +45,7 @@ func apiBoardCard(c tickets.BoardCard) gen.BoardCard {
 		Id: c.ID, Key: c.Key, Type: gen.TicketType(c.Type), Status: gen.TicketStatus(c.Status),
 		Priority: gen.Priority(c.Priority), Subject: c.Subject, Client: apiRef(c.Client), Assignee: apiRefPtr(c.Assignee),
 		AllowedStatuses: make([]gen.TicketStatus, len(c.AllowedStatuses)), DodPending: apiDodItems(c.DoDPending),
-		Uat: apiCardUat(c.UAT), Code: apiCardCode(c.Code),
+		DodMandatory: c.DoDMandatory, Uat: apiCardUat(c.UAT), Code: apiCardCode(c.Code),
 	}
 	for i, st := range c.AllowedStatuses {
 		out.AllowedStatuses[i] = gen.TicketStatus(st)

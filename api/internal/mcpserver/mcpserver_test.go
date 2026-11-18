@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
 )
@@ -125,5 +126,27 @@ func TestRenderTicketLabelsInternalNotes(t *testing.T) {
 	// Real headings carry the time; the one written into a message sits inside its fence.
 	if n := strings.Count(got, "never shown to the client), 2026"); n != 1 {
 		t.Errorf("renderTicket has %d internal note headings, want 1:\n%s", n, got)
+	}
+}
+
+func TestDoneness(t *testing.T) {
+	onMain := dod.None()
+	onMain.CodeOnBranch = dod.CodeOnBranch{Enabled: true, Branch: "main"}
+	tests := []struct {
+		name string
+		d    tickets.TicketDoD
+		want string
+	}{
+		{"met", tickets.TicketDoD{Met: true, Mandatory: true}, "met"},
+		{"waiting", tickets.TicketDoD{Mandatory: true, Pending: []dod.Item{dod.ItemUATApproved}}, "waiting for uat_approved"},
+		{"code names its branch", tickets.TicketDoD{Mandatory: true, Config: onMain,
+			Pending: []dod.Item{dod.ItemCodeOnBranch, dod.ItemUATApproved}}, "waiting for code on main, uat_approved"},
+		{"guidance only", tickets.TicketDoD{Pending: []dod.Item{dod.ItemUATApproved}}, "waiting for uat_approved (guidance only)"},
+		{"guidance only, met", tickets.TicketDoD{Met: true}, "met (guidance only)"},
+	}
+	for _, tt := range tests {
+		if got := doneness(&tt.d); got != tt.want {
+			t.Errorf("%s: doneness = %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }

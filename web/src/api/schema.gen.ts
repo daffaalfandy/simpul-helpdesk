@@ -776,7 +776,11 @@ export interface paths {
         /**
          * Replace a project's Definition of Done (supervisors and admins)
          * @description Applies at once to the project's open tickets, except tickets with a Definition of Done
-         *     of their own.
+         *     of their own. `mandatory` decides whether resolving with it unmet needs a reason.
+         *     Turning on "code reached a branch", or naming another branch, re-checks those tickets'
+         *     linked commits in the background. The branch must be a valid Git branch name
+         *     (`invalid_branch`, 400; `refs/heads/` is dropped) and the condition needs a repository
+         *     linked to the project (`invalid_dod`, 400).
          */
         put: operations["updateProjectDod"];
         post?: never;
@@ -1273,7 +1277,7 @@ export interface paths {
         /**
          * Move the ticket (staff)
          * @description Only the moves in the ticket's `allowedStatuses`; otherwise `invalid_status_change` or `ticket_closed` (409). With `from`, a ticket whose status is no longer `from` is left alone and the call fails with `status_changed` (409).
-         *     Resolving a ticket whose Definition of Done isn't met needs a `reason` (`dod_unmet`, 409); it goes to the audit log and the supervisors, never to the client.
+         *     Resolving a ticket whose Definition of Done isn't met needs a `reason` (`dod_unmet`, 409) when the project's Definition of Done is mandatory; it goes to the audit log and the supervisors, never to the client. When it isn't mandatory the Definition of Done is guidance only: the ticket resolves as a plain move and any `reason` is ignored.
          */
         put: operations["setTicketStatus"];
         post?: never;
@@ -1323,7 +1327,10 @@ export interface paths {
          * Give the ticket its own Definition of Done, or return it to the project's (staff)
          * @description Agents may when the project allows it (`dod_override_not_allowed`, 403); supervisors and
          *     admins always may. A ticket's own Definition of Done needs a reason (`reason_required`),
-         *     which goes to the audit log. `null` returns the ticket to the project's.
+         *     which goes to the audit log. `null` returns the ticket to the project's. Its conditions
+         *     follow the project's rules (`invalid_branch`, `invalid_dod`, 400); whether it is
+         *     mandatory stays the project's. A new branch condition re-checks the ticket's linked
+         *     commits at once.
          */
         put: operations["setTicketDod"];
         post?: never;
@@ -2121,17 +2128,34 @@ export interface components {
             autoApproveWorkingDays: components["schemas"]["AutoApproveDays"];
         };
         /**
+         * @description Met when a commit naming the ticket reaches `branch` (exact, letter case included). Git
+         *     ticks it and never moves the ticket. It stops applying while the project has no
+         *     repository. The branch is kept while the condition is off, and may be empty then.
+         */
+        DodCodeOnBranch: {
+            enabled: boolean;
+            /** @example main */
+            branch: string;
+        };
+        /**
          * @description A Definition of Done: every enabled condition must be met before a ticket counts as done.
-         *     Both are the client's check: the ticket waits In UAT and one answer meets both. The day
-         *     count is kept while UAT is off. Git never ticks them.
+         *     UAT and the requester's confirmation are the client's check: the ticket waits In UAT and
+         *     one answer meets both, even when the code hasn't reached its branch yet. The day count is
+         *     kept while UAT is off.
          */
         DodConfig: {
+            codeOnBranch: components["schemas"]["DodCodeOnBranch"];
             uat: components["schemas"]["DodUat"];
             /** @description For support work with no code; assumed after 3 working days without an answer. */
             requesterConfirms: boolean;
         };
         ProjectDodInput: {
             dod: components["schemas"]["DodConfig"];
+            /**
+             * @description Resolving a ticket whose Definition of Done isn't met needs a reason, recorded and
+             *     sent to the supervisors. Off, the Definition of Done is guidance only.
+             */
+            mandatory: boolean;
             /** @description Lets agents set a different Definition of Done on one ticket, with a reason. */
             allowTicketOverride: boolean;
         };
@@ -2152,6 +2176,8 @@ export interface components {
             active: boolean;
             sla: components["schemas"]["ProjectSla"];
             dod: components["schemas"]["DodConfig"];
+            /** @description Resolving with the Definition of Done unmet needs a reason; off, it is guidance only. */
+            dodMandatory: boolean;
             /** @description Agents may set a different Definition of Done on one ticket, with a reason. */
             allowTicketOverride: boolean;
             /** @description Where its tickets' commits are read from. */
@@ -2576,8 +2602,11 @@ export interface components {
          * @enum {string}
          */
         TicketStatusCause: "assignment" | "requester_reply" | "uat_approved" | "uat_rejected" | "uat_auto_approved" | "reopened" | "auto_closed" | "dod_skipped" | "code_activity" | "code_done" | "code_reopened";
-        /** @enum {string} */
-        DodItem: "uat_approved" | "requester_confirmed";
+        /**
+         * @description `code_on_branch` is ticked by Git; the others by the client's answer to the test.
+         * @enum {string}
+         */
+        DodItem: "code_on_branch" | "uat_approved" | "requester_confirmed";
         /**
          * @description `project` follows the project's Definition of Done; `ticket` has its own.
          * @enum {string}
@@ -2587,8 +2616,19 @@ export interface components {
             item: components["schemas"]["DodItem"];
             /** Format: date-time */
             doneAt: string | null;
-            /** @description Null when not done yet, or when the system met it. */
+            /** @description Null when not done yet, or when the system or Git met it. */
             doneBy: components["schemas"]["Ref"] | null;
+            /** @description The commit that met `code_on_branch`; null for other items. */
+            commit: components["schemas"]["TicketDodCommit"] | null;
+        };
+        TicketDodCommit: {
+            /**
+             * @description Short commit id.
+             * @example 9f3c1a2
+             */
+            sha: string;
+            /** @description The commit on GitHub or GitLab; empty when unknown. */
+            url: string;
         };
         CodeCommit: {
             provider: components["schemas"]["GitProvider"];
@@ -2661,6 +2701,13 @@ export interface components {
             met: boolean;
             /** @description Required items not met yet. */
             pending: components["schemas"]["DodItem"][];
+            /** @description The project's switch. Off, the Definition of Done is guidance only and resolving needs no reason. */
+            mandatory: boolean;
+            /**
+             * @description The project has a repository. Without one, "code reached a branch" doesn't apply and
+             *     is left off `items` and `pending`.
+             */
+            hasRepository: boolean;
             /** @description The viewer may set or reset the ticket's own Definition of Done. */
             canOverride: boolean;
         };
@@ -2772,8 +2819,10 @@ export interface components {
             assignee: components["schemas"]["Ref"] | null;
             /** @description The statuses the viewer may move this ticket to. */
             allowedStatuses: components["schemas"]["TicketStatus"][];
-            /** @description What an open ticket's Definition of Done still needs; resolving before then needs a reason. */
+            /** @description What an open ticket's Definition of Done still needs; resolving before then needs a reason when it is mandatory. */
             dodPending: components["schemas"]["DodItem"][];
+            /** @description The project's Definition of Done is mandatory; off, it is guidance only. */
+            dodMandatory: boolean;
             /** @description Set while the client tests. */
             uat: components["schemas"]["BoardCardUat"] | null;
             /** @description Set once code reached the ticket. */
@@ -2917,7 +2966,7 @@ export interface components {
         TicketStatusInput: {
             status: components["schemas"]["TicketStatus"];
             from?: components["schemas"]["TicketStatus"];
-            /** @description Needed to resolve a ticket whose Definition of Done isn't met. */
+            /** @description Needed to resolve a ticket whose mandatory Definition of Done isn't met; ignored otherwise. */
             reason?: string;
         };
         TicketAssigneeInput: {

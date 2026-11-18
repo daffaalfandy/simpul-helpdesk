@@ -140,6 +140,7 @@ export const ErrorCode = {
   ProjectIsDefault: 'project_is_default',
   ProjectInUse: 'project_in_use',
   DodUnmet: 'dod_unmet',
+  InvalidBranch: 'invalid_branch',
   UatNotWaiting: 'uat_not_waiting',
   ReopenNotAllowed: 'reopen_not_allowed',
   ClientHasNoProject: 'client_has_no_project',

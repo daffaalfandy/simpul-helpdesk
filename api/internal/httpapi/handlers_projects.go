@@ -97,7 +97,7 @@ func (s *server) UpdateProjectDod(ctx context.Context, req gen.UpdateProjectDodR
 		return nil, err
 	}
 	pr, err := s.projects.UpdateDoD(ctx, p.AuditActor(), p.OrganizationID, req.ProjectId, projects.DoDInput{
-		Config: domainDodConfig(req.Body.Dod), AllowTicketOverride: req.Body.AllowTicketOverride,
+		Config: domainDodConfig(req.Body.Dod), Mandatory: req.Body.Mandatory, AllowTicketOverride: req.Body.AllowTicketOverride,
 	})
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func apiProject(p projects.Project) gen.Project {
 	return gen.Project{
 		Id: p.ID, Client: gen.Ref{Id: p.Client.ID, Name: p.Client.Name}, Name: p.Name, Description: p.Description,
 		IsDefault: p.IsDefault, Active: p.Active, Sla: apiProjectSLA(p.SLA), Dod: apiDodConfig(p.DoD),
-		AllowTicketOverride: p.AllowTicketOverride, Repository: apiRepositoryRef(p.Repository),
+		DodMandatory: p.DoDMandatory, AllowTicketOverride: p.AllowTicketOverride, Repository: apiRepositoryRef(p.Repository),
 		OpenTicketCount: p.OpenTicketCount, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }

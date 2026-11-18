@@ -44,7 +44,13 @@ WHERE u.email = lower(@email) AND u.status = @status
 
 -- name: UpsertCodeEvent :one
 -- A commit pushed again to another branch (the merge into main) keeps its row and adds the
--- branch; a redelivery adds nothing.
+-- branch; a redelivery adds nothing. reached_branch is true when this push brought the commit
+-- onto @branch: a new commit, or one seen before on other branches only. prior reads the row as
+-- it was before this statement.
+WITH prior AS (
+  SELECT branches FROM code_events
+  WHERE repository_id = @repository_id AND kind = @kind AND external_id = @external_id
+)
 INSERT INTO code_events (repository_id, kind, external_id, sha, title, branch, branches, url,
                          author_name, author_login, author_user_id, delivery_id, occurred_at)
 VALUES (@repository_id, @kind, @external_id, @sha, @title, @branch, ARRAY[@branch::text], @url,
@@ -52,4 +58,4 @@ VALUES (@repository_id, @kind, @external_id, @sha, @title, @branch, ARRAY[@branc
 ON CONFLICT (repository_id, kind, external_id) DO UPDATE
 SET branches = CASE WHEN EXCLUDED.branch = ANY(code_events.branches) THEN code_events.branches
                     ELSE code_events.branches || EXCLUDED.branch END
-RETURNING id;
+RETURNING id, (NOT EXISTS (SELECT 1 FROM prior WHERE @branch::text = ANY(prior.branches)))::boolean AS reached_branch;

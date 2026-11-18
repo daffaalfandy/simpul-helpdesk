@@ -126,8 +126,7 @@ func seedCodeEvent(ctx context.Context, q *db.Queries, repos map[string]demoRepo
 	author := r.user(c.author)
 	var id uuid.UUID
 	for _, branch := range c.branches {
-		var err error
-		id, err = q.UpsertCodeEvent(ctx, db.UpsertCodeEventParams{
+		stored, err := q.UpsertCodeEvent(ctx, db.UpsertCodeEventParams{
 			RepositoryID: repo.id, Kind: string(gitevent.KindCommit), ExternalID: c.sha, Sha: c.sha,
 			Title: gitevent.FirstLine(title), Branch: branch, Url: repo.webURL + commitPath[repo.provider] + c.sha,
 			AuthorName: author.Name, AuthorLogin: gitLogins[c.author], AuthorUserID: &author.ID, OccurredAt: at,
@@ -135,6 +134,7 @@ func seedCodeEvent(ctx context.Context, q *db.Queries, repos map[string]demoRepo
 		if err != nil {
 			return tickets.CodeEvent{}, err
 		}
+		id = stored.ID
 	}
 	return tickets.CodeEvent{
 		ID: id, Provider: repo.provider, Kind: gitevent.KindCommit, Ref: c.sha[:tickets.ShortSHALen],

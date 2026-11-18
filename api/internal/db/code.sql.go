@@ -12,10 +12,41 @@ import (
 	"github.com/google/uuid"
 )
 
+const findLinkedCommitOnBranch = `-- name: FindLinkedCommitOnBranch :one
+SELECT e.id
+FROM code_event_links l
+JOIN code_events e ON e.id = l.code_event_id
+WHERE l.ticket_id = $1 AND l.outcome = $2
+  AND e.repository_id = $3 AND $4::text = ANY(e.branches)
+ORDER BY e.occurred_at, e.id
+LIMIT 1
+`
+
+type FindLinkedCommitOnBranchParams struct {
+	TicketID      *uuid.UUID
+	LinkedOutcome string
+	RepositoryID  uuid.UUID
+	Branch        string
+}
+
+// The first commit linked to the ticket from @repository_id that has reached @branch.
+func (q *Queries) FindLinkedCommitOnBranch(ctx context.Context, arg FindLinkedCommitOnBranchParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, findLinkedCommitOnBranch,
+		arg.TicketID,
+		arg.LinkedOutcome,
+		arg.RepositoryID,
+		arg.Branch,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getTicketForCode = `-- name: GetTicketForCode :one
-SELECT t.id, t.organization_id, t.key, t.status, p.repository_id
+SELECT t.id, t.organization_id, t.key, t.status, p.repository_id, p.dod_config, o.config AS dod_override
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
+LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.id = $1
 FOR UPDATE OF t
 `
@@ -26,8 +57,11 @@ type GetTicketForCodeRow struct {
 	Key            string
 	Status         string
 	RepositoryID   *uuid.UUID
+	DodConfig      []byte
+	DodOverride    []byte
 }
 
+// Locks the ticket; the project's Definition of Done and the override are read as they are.
 func (q *Queries) GetTicketForCode(ctx context.Context, id uuid.UUID) (GetTicketForCodeRow, error) {
 	row := q.db.QueryRow(ctx, getTicketForCode, id)
 	var i GetTicketForCodeRow
@@ -37,6 +71,8 @@ func (q *Queries) GetTicketForCode(ctx context.Context, id uuid.UUID) (GetTicket
 		&i.Key,
 		&i.Status,
 		&i.RepositoryID,
+		&i.DodConfig,
+		&i.DodOverride,
 	)
 	return i, err
 }

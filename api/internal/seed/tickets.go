@@ -328,7 +328,7 @@ func seedTickets(ctx context.Context, q *db.Queries, now time.Time, r refs, repo
 			if err != nil {
 				return fmt.Errorf("ticket %d code: %w", d.number, err)
 			}
-			t.Code = append(t.Code, tickets.SeedCode{At: at(c.after), Event: e})
+			t.Code = append(t.Code, tickets.SeedCode{At: at(c.after), Event: e, Branches: c.branches})
 		}
 		if _, err := tickets.InsertSeed(ctx, q, t); err != nil {
 			return fmt.Errorf("ticket %d: %w", d.number, err)

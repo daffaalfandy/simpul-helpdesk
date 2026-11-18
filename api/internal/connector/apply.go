@@ -58,7 +58,7 @@ func (s *Service) apply(ctx context.Context, provider gitevent.Provider, orgID, 
 func codeEvent(provider gitevent.Provider, e storedEvent) tickets.CodeEvent {
 	return tickets.CodeEvent{
 		ID: e.ID, Provider: provider, Kind: e.Event.Kind, Ref: shortSHA(e.Event.SHA), Branch: e.Event.Branch,
-		At: e.Event.OccurredAt, AuthorID: e.AuthorID, AuthorName: e.AuthorName,
+		ReachedBranch: e.ReachedBranch, At: e.Event.OccurredAt, AuthorID: e.AuthorID, AuthorName: e.AuthorName,
 	}
 }
 

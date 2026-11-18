@@ -38,6 +38,8 @@ type storedEvent struct {
 	Keys       []string
 	AuthorID   *uuid.UUID // the staff member who wrote it, matched by email
 	AuthorName string     // their name, else the provider's login or name
+	// ReachedBranch: this push brought the commit onto its branch (UpsertCodeEvent).
+	ReachedBranch bool
 }
 
 func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid.UUID) error {
@@ -75,11 +77,13 @@ func (s *Service) process(ctx context.Context, log *slog.Logger, deliveryID uuid
 		if author != nil {
 			authorID, name = &author.ID, author.Name
 		}
-		id, err := q.UpsertCodeEvent(ctx, codeEventParams(d.RepositoryID, deliveryID, e, authorID))
+		stored, err := q.UpsertCodeEvent(ctx, codeEventParams(d.RepositoryID, deliveryID, e, authorID))
 		if err != nil {
 			return err
 		}
-		events = append(events, storedEvent{ID: id, Event: e, Keys: keys, AuthorID: authorID, AuthorName: name})
+		events = append(events, storedEvent{
+			ID: stored.ID, Event: e, Keys: keys, AuthorID: authorID, AuthorName: name, ReachedBranch: stored.ReachedBranch,
+		})
 	}
 	if err := s.apply(ctx, gitevent.Provider(d.Provider), d.OrganizationID, d.RepositoryID, events); err != nil {
 		return err
