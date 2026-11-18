@@ -58,6 +58,7 @@ const (
 	CodeInvalidRequester          = "invalid_requester"
 	CodeInvalidChannel            = "invalid_channel"
 	CodeInvalidAssignee           = "invalid_assignee"
+	CodeAssigneeNotAllowed        = "assignee_not_allowed"
 	CodeReasonRequired            = "reason_required"
 	CodeInvalidStatusChange       = "invalid_status_change"
 	CodeTicketClosed              = "ticket_closed"

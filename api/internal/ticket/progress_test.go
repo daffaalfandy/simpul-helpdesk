@@ -15,10 +15,11 @@ func TestProgress(t *testing.T) {
 	}
 	none := -1
 	tests := []struct {
-		name    string
-		current Status
-		history []StatusChange
-		want    []st
+		name     string
+		current  Status
+		history  []StatusChange
+		assigned []int // minutes the ticket was given to someone
+		want     []st
 	}{
 		{
 			name: "just received", current: nw,
@@ -27,8 +28,8 @@ func TestProgress(t *testing.T) {
 		},
 		{
 			name: "assigned at creation", current: as,
-			history: []StatusChange{{as, at(0)}},
-			want:    []st{{StateDone, 0}, {StateCurrent, 0}, {StateUpcoming, none}, {StateUpcoming, none}, {StateUpcoming, none}},
+			history: []StatusChange{{as, at(0)}}, assigned: []int{0},
+			want: []st{{StateDone, 0}, {StateCurrent, 0}, {StateUpcoming, none}, {StateUpcoming, none}, {StateUpcoming, none}},
 		},
 		{
 			name: "in progress", current: ip,
@@ -39,6 +40,26 @@ func TestProgress(t *testing.T) {
 			name: "started without an assignee", current: ip,
 			history: []StatusChange{{nw, at(0)}, {ip, at(5)}},
 			want:    []st{{StateDone, 0}, {StateSkipped, none}, {StateCurrent, 5}, {StateUpcoming, none}, {StateUpcoming, none}},
+		},
+		{
+			name: "moved to waiting without an assignee, never assigned", current: wc,
+			history: []StatusChange{{nw, at(0)}, {wc, at(5)}},
+			want:    []st{{StateDone, 0}, {StateSkipped, none}, {StateCurrent, 5}, {StateUpcoming, none}, {StateUpcoming, none}},
+		},
+		{
+			name: "assigned after the move to waiting", current: wc,
+			history: []StatusChange{{nw, at(0)}, {wc, at(5)}}, assigned: []int{12},
+			want: []st{{StateDone, 0}, {StateDone, 12}, {StateCurrent, 5}, {StateUpcoming, none}, {StateUpcoming, none}},
+		},
+		{
+			name: "reassigned shows the latest assignment", current: wc,
+			history: []StatusChange{{nw, at(0)}, {wc, at(5)}}, assigned: []int{12, 30},
+			want: []st{{StateDone, 0}, {StateDone, 30}, {StateCurrent, 5}, {StateUpcoming, none}, {StateUpcoming, none}},
+		},
+		{
+			name: "unassigned back to new", current: nw,
+			history: []StatusChange{{nw, at(0)}, {as, at(2)}, {nw, at(9)}}, assigned: []int{2},
+			want: []st{{StateCurrent, 9}, {StateUpcoming, none}, {StateUpcoming, none}, {StateUpcoming, none}, {StateUpcoming, none}},
 		},
 		{
 			name: "waiting on client shows as in progress", current: wc,
@@ -67,7 +88,11 @@ func TestProgress(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		got := Progress(tt.current, t0, tt.history)
+		var assigned []time.Time
+		for _, m := range tt.assigned {
+			assigned = append(assigned, at(m))
+		}
+		got := Progress(tt.current, t0, tt.history, assigned)
 		if len(got) != len(Steps) {
 			t.Fatalf("%s: %d steps", tt.name, len(got))
 		}

@@ -73,10 +73,11 @@ func StatusAfterAssignment(cur Status, hasAssignee bool) Status {
 }
 
 // StatusAfterRequesterReply is the status once the requester posts a public reply. A reply
-// while the desk waits on the client hands the ticket back to the desk.
-func StatusAfterRequesterReply(cur Status) (Status, bool) {
+// while the desk waits on the client hands the ticket back to the desk: to its assignee, or to
+// the New queue when nobody is on it.
+func StatusAfterRequesterReply(cur Status, hasAssignee bool) (Status, bool) {
 	if cur == StatusWaitingOnClient {
-		return StatusInProgress, true
+		return backToWork(hasAssignee), true
 	}
 	return cur, false
 }

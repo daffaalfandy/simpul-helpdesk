@@ -21,6 +21,8 @@ export const can = {
   /** Agents read the projects of their clients; supervisors and admins also change them. */
   viewProjects: (role: OrgRole) => role !== null && role !== Roles.Requester,
   manageProjects: (role: OrgRole) => role === Roles.Admin || role === Roles.Supervisor,
+  /** Agents only take an unassigned ticket or release their own; supervisors and admins assign anyone. */
+  assignAnyone: (role: OrgRole) => role === Roles.Admin || role === Roles.Supervisor,
   viewReports: (role: OrgRole) => role === Roles.Admin || role === Roles.Supervisor,
   manageSettings: (role: OrgRole) => role === Roles.Admin,
 }

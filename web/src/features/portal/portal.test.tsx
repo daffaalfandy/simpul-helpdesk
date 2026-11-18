@@ -202,6 +202,28 @@ describe('requester ticket detail', () => {
     })
   })
 
+  it('says nobody is on a ticket that moved on before anyone was assigned', async () => {
+    tickets.tickets.push(
+      ticket({
+        id: 't-24880',
+        key: 'HD-24880',
+        subject: 'Scanner driver missing',
+        status: 'waiting_on_client',
+        progress: [
+          { step: 'received', state: 'done', at: '2026-11-12T01:14:00Z' },
+          { step: 'assigned', state: 'skipped', at: null },
+          { step: 'in_progress', state: 'current', at: '2026-11-12T01:20:00Z' },
+          { step: 'ready_for_test', state: 'upcoming', at: null },
+          { step: 'resolved', state: 'upcoming', at: null },
+        ],
+      }),
+    )
+    renderApp('/portal/tickets/HD-24880')
+    const tracker = await screen.findByRole('list', { name: 'Progress' })
+    const assigned = within(tracker).getAllByRole('listitem')[1]
+    expect(assigned).toHaveTextContent('AssignedSkippedNot assigned yet')
+  })
+
   it("can't open another client's ticket", async () => {
     renderApp('/portal/tickets/HD-24900')
     expect(await screen.findByRole('heading', { name: 'Ticket not found' })).toBeInTheDocument()

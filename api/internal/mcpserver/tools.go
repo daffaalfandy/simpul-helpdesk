@@ -67,7 +67,7 @@ type statusInput struct {
 
 type assignInput struct {
 	Key      string `json:"key" jsonschema:"The ticket key, for example HD-24871"`
-	Assignee string `json:"assignee" jsonschema:"me, none to unassign, or a person's id from list_assignees"`
+	Assignee string `json:"assignee" jsonschema:"me, none to unassign, or a person's id from list_assignees (supervisors and administrators only)"`
 }
 
 type priorityInput struct {
@@ -107,7 +107,8 @@ func (t *toolset) register(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{Name: toolSetStatus, Annotations: write, Description: "Move a ticket to another status, " +
 		"with the same rules as the board."}, t.setStatus)
 	mcp.AddTool(s, &mcp.Tool{Name: toolAssign, Annotations: write, Description: "Assign a ticket to yourself or " +
-		"someone else, or unassign it."}, t.assign)
+		"someone else, or unassign it. Agents can only take an unassigned ticket or release their own; supervisors " +
+		"and administrators can give it to anyone from list_assignees."}, t.assign)
 	mcp.AddTool(s, &mcp.Tool{Name: toolSetPriority, Annotations: write, Description: "Change a ticket's priority, " +
 		"which restarts its SLA targets for the new priority."}, t.setPriority)
 }
@@ -168,7 +169,7 @@ func (t *toolset) assignees(ctx context.Context, _ *mcp.CallToolRequest, in keyI
 	if err != nil {
 		return nil, nil, t.fail(ctx, toolAssignees, err)
 	}
-	return text(renderAssignees(tk.Key, tk.Assignee, people)), nil, nil
+	return text(renderAssignees(tk.Key, tk.Assignee, people, auth.Can(t.p().Role, auth.CapTicketsAssignAny))), nil, nil
 }
 
 func (t *toolset) attachment(ctx context.Context, _ *mcp.CallToolRequest, in attachmentInput) (*mcp.CallToolResult, any, error) {

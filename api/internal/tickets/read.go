@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -170,11 +171,11 @@ func (s *Service) getAs(ctx context.Context, p *auth.Principal, a access, key st
 			t.Attachments = append(t.Attachments, attachmentFromRow(f))
 		}
 	}
-	history, err := s.statusHistory(ctx, q, r.ID)
+	history, assigned, err := s.progressHistory(ctx, q, r.ID)
 	if err != nil {
 		return Ticket{}, err
 	}
-	t.Progress = ticket.Progress(t.Status, t.CreatedAt, history)
+	t.Progress = ticket.Progress(t.Status, t.CreatedAt, history, assigned)
 	if a.staff {
 		t.AllowedStatuses = ticket.AllowedMoves(t.Status, t.Assignee != nil)
 		sd, err := parseDoD(r.DodConfig, r.DodOverride)
@@ -221,29 +222,37 @@ func elsewhere(ctx context.Context, q *db.Queries, a access, key string) error {
 	return apperr.OtherOrganization(org.String())
 }
 
-// statusHistory reads the ticket's status changes from its audit entries: the status it was
-// created with, then each change.
-func (s *Service) statusHistory(ctx context.Context, q *db.Queries, ticketID uuid.UUID) ([]ticket.StatusChange, error) {
+// progressHistory reads what the requester's tracker is built from out of the ticket's audit
+// entries: the status it was created with and each change, and each time it was given to someone
+// (at creation or later). Releases don't count.
+func (s *Service) progressHistory(ctx context.Context, q *db.Queries, ticketID uuid.UUID) ([]ticket.StatusChange, []time.Time, error) {
 	rows, err := q.ListAuditByTarget(ctx, db.ListAuditByTargetParams{TargetType: &targetTicket, TargetID: &ticketID})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	out := []ticket.StatusChange{}
+	history, assigned := []ticket.StatusChange{}, []time.Time{}
 	for _, r := range rows {
 		data := map[string]json.RawMessage{}
 		_ = json.Unmarshal(r.Data, &data)
 		switch r.Action {
 		case ActionCreated:
 			if st := decode[ticket.Status](data, dataStatus); st != nil {
-				out = append(out, ticket.StatusChange{To: *st, At: r.At})
+				history = append(history, ticket.StatusChange{To: *st, At: r.At})
+			}
+			if a := decode[refJSON](data, dataAssignee); a != nil && a.ID != uuid.Nil {
+				assigned = append(assigned, r.At)
 			}
 		case ActionStatusChanged:
 			if c := decode[change[ticket.Status]](data, dataStatus); c != nil {
-				out = append(out, ticket.StatusChange{To: c.To, At: r.At})
+				history = append(history, ticket.StatusChange{To: c.To, At: r.At})
+			}
+		case ActionAssigneeChanged:
+			if c := decode[change[*refJSON]](data, dataAssignee); c != nil && c.To != nil {
+				assigned = append(assigned, r.At)
 			}
 		}
 	}
-	return out, nil
+	return history, assigned, nil
 }
 
 // Messages returns the ticket's conversation, oldest first. Requesters get public messages

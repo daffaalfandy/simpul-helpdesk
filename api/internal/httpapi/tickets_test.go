@@ -301,7 +301,7 @@ func TestTicketScope(t *testing.T) {
 	expectProblem(t, rec, http.StatusBadRequest, "client_not_found")
 
 	// Unlinking the agent takes the client's other tickets away at once; a ticket assigned to them
-	// stays theirs to work and hand on (owner, 17 Nov).
+	// stays theirs to work and release (owner, 17 Nov).
 	mine := te.requester.report(t, incident(te.projectA, "Printer offline"))
 	minePath := "/tickets/" + mine.Key
 	decode[gen.Ticket](t, te.admin.do(http.MethodPut, minePath+"/assignee", gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
@@ -321,10 +321,9 @@ func TestTicketScope(t *testing.T) {
 			t.Errorf("unlinked agent GET %s: %d", p, rec.Code)
 		}
 	}
-	supervisorID := userID(t, te.env, auth.RoleSupervisor)
-	decode[gen.Ticket](t, te.agent.do(http.MethodPut, minePath+"/assignee", gen.TicketAssigneeInput{AssigneeId: &supervisorID}), http.StatusOK)
+	decode[gen.Ticket](t, te.agent.assign(mine.Key, nil), http.StatusOK)
 	if rec := te.agent.do(http.MethodGet, minePath, nil); rec.Code != http.StatusNotFound {
-		t.Errorf("after handing it on: %d", rec.Code)
+		t.Errorf("after releasing it: %d", rec.Code)
 	}
 }
 
@@ -527,14 +526,14 @@ func TestTicketActions(t *testing.T) {
 	if got.Status != gen.TicketStatusNew || got.Assignee != nil {
 		t.Fatalf("after unassign: %+v", got)
 	}
-	expectProblem(t, assign(&te.requesterID), http.StatusBadRequest, "invalid_assignee")
+	expectProblem(t, te.supervisor.assign(tk.Key, &te.requesterID), http.StatusBadRequest, "invalid_assignee")
 	otherAgent := func() uuid.UUID {
 		u, _ := te.st.Q().GetUserByEmail(context.Background(), otherAgentEmail)
 		return u.ID
 	}()
-	expectProblem(t, assign(&otherAgent), http.StatusBadRequest, "invalid_assignee")
+	expectProblem(t, te.supervisor.assign(tk.Key, &otherAgent), http.StatusBadRequest, "invalid_assignee")
 	supervisor := userID(t, te.env, auth.RoleSupervisor)
-	decode[gen.Ticket](t, assign(&supervisor), http.StatusOK)
+	decode[gen.Ticket](t, te.supervisor.assign(tk.Key, &supervisor), http.StatusOK)
 
 	got = decode[gen.Ticket](t, status(gen.TicketStatusInProgress), http.StatusOK)
 	if !slices.Contains(got.AllowedStatuses, gen.TicketStatusWaitingOnClient) || slices.Contains(got.AllowedStatuses, gen.TicketStatusClosed) {
@@ -662,6 +661,9 @@ func TestMessagesAndFirstResponse(t *testing.T) {
 		t.Fatal("first response moved")
 	}
 
+	// The reply hands the ticket back to its assignee (TestRequesterReplyResumesTheTicket covers
+	// a ticket nobody is on).
+	decode[gen.Ticket](t, te.agent.assign(tk.Key, &te.agentID), http.StatusOK)
 	decode[gen.Ticket](t, te.agent.do(http.MethodPut, "/tickets/"+tk.Key+"/status",
 		gen.TicketStatusInput{Status: gen.TicketStatusWaitingOnClient}), http.StatusOK)
 	decode[gen.TicketMessage](t, te.requester.message(tk.Key, gen.MessageVisibilityPublic, "Restarted, still slow"), http.StatusCreated)

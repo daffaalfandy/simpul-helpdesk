@@ -6,9 +6,11 @@ import { PROJECT_IDS } from '../../test/projectsApi'
 import { renderApp } from '../../test/renderApp'
 import { writeRichText } from '../../test/richText'
 import { state, USERS } from '../../test/server'
+import { IDS } from '../../test/settingsApi'
 import { tickets } from '../../test/ticketsApi'
 
 const AGENT = USERS['rina@demo-vendor.test'] ?? null
+const SUPERVISOR = USERS['dewi@demo-vendor.test'] ?? null
 const REQUESTER = USERS['hendra@kominfo-jambi.test'] ?? null
 
 function lastRequest(method: string, path: string) {
@@ -86,6 +88,52 @@ describe('agent ticket detail', () => {
     await user.click(screen.getByRole('button', { name: /Assignee$/ }))
     await user.click(await screen.findByRole('option', { name: 'Unassigned' }))
     await waitFor(() => expect(lastRequest('PUT', '/tickets/HD-24871/assignee')?.body).toEqual({ assigneeId: null }))
+  })
+
+  it('lets an agent take an unassigned ticket, and offers no one else', async () => {
+    const user = userEvent.setup()
+    renderApp('/tickets/HD-24900')
+    await screen.findByRole('heading', { level: 1, name: 'SIPD export times out' })
+    await user.click(screen.getByRole('button', { name: /Assignee$/ }))
+    const options = await screen.findAllByRole('option')
+    expect(options.map((o) => o.textContent)).toEqual(['Unassigned', 'Assign to me'])
+    await user.click(screen.getByRole('option', { name: 'Assign to me' }))
+    await waitFor(() => expect(lastRequest('PUT', '/tickets/HD-24900/assignee')?.body).toEqual({ assigneeId: AGENT?.id }))
+    expect(await screen.findByRole('button', { name: /Rina Pratiwi.*Assignee$/ })).toBeEnabled()
+    expect(lastRequest('GET', '/assignees')).toBeUndefined()
+  })
+
+  it("leaves a colleague's ticket to supervisors", async () => {
+    renderApp('/tickets/HD-24910')
+    await screen.findByRole('heading', { level: 1, name: 'Router config backup' })
+    const field = screen.getByRole('button', { name: /Assignee$/ })
+    expect(field).toBeDisabled()
+    expect(field).toHaveTextContent('Adi Saputra')
+    expect(screen.getByText('A colleague has this ticket. Only a supervisor or administrator can reassign it.')).toBeInTheDocument()
+  })
+
+  it('says why when a colleague took the ticket first', async () => {
+    const user = userEvent.setup()
+    renderApp('/tickets/HD-24900')
+    await screen.findByRole('heading', { level: 1, name: 'SIPD export times out' })
+    const sipd = tickets.tickets.find((x) => x.key === 'HD-24900')
+    if (sipd) sipd.assignee = { id: IDS.adi, name: 'Adi Saputra' }
+    await user.click(screen.getByRole('button', { name: /Assignee$/ }))
+    await user.click(await screen.findByRole('option', { name: 'Assign to me' }))
+    expect(
+      await screen.findByText('You can take an unassigned ticket or release your own. Ask a supervisor to assign anyone else.'),
+    ).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Adi Saputra.*Assignee$/ })).toBeDisabled()
+  })
+
+  it('lets a supervisor give the ticket to anyone who works the client', async () => {
+    state.me = SUPERVISOR
+    const user = await open()
+    await user.click(screen.getByRole('button', { name: /Assignee$/ }))
+    expect(await screen.findByRole('option', { name: /Rina Pratiwi/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('option', { name: /Adi Saputra/ }))
+    await waitFor(() => expect(lastRequest('PUT', '/tickets/HD-24871/assignee')?.body).toEqual({ assigneeId: IDS.adi }))
+    expect(lastRequest('GET', '/assignees')).toBeDefined()
   })
 
   it('asks for a reason before changing priority', async () => {

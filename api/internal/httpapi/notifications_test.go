@@ -344,16 +344,15 @@ func TestInbox(t *testing.T) {
 	}
 
 	// An agent unlinked from the client keeps the items about the ticket still assigned to them
-	// (owner, 17 Nov); once it is handed on, they go.
+	// (owner, 17 Nov); once they release it, the items go.
 	decode[gen.Client](t, te.admin.do(http.MethodPut, "/clients/"+te.clientA.String()+"/agents",
 		gen.ClientAgentsInput{UserIds: []uuid.UUID{}}), http.StatusOK)
 	if got := te.agent.inbox(t, ""); len(got.Items) != 3 {
 		t.Fatalf("unlinked assignee inbox = %+v", got)
 	}
-	supervisorID := userID(t, te.env, auth.RoleSupervisor)
-	decode[gen.Ticket](t, te.agent.do(http.MethodPut, path+"/assignee", gen.TicketAssigneeInput{AssigneeId: &supervisorID}), http.StatusOK)
+	decode[gen.Ticket](t, te.agent.do(http.MethodPut, path+"/assignee", gen.TicketAssigneeInput{AssigneeId: nil}), http.StatusOK)
 	if got := te.agent.inbox(t, ""); len(got.Items) != 0 || got.UnreadCount != 0 {
-		t.Fatalf("inbox after handing the ticket on = %+v", got)
+		t.Fatalf("inbox after releasing the ticket = %+v", got)
 	}
 }
 

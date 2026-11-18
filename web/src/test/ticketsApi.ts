@@ -27,6 +27,7 @@ import type {
   TicketSummary,
 } from '../api/client'
 import { BOARD_COLUMNS } from '../features/board/columns'
+import { can } from '../lib/roles'
 import { allowedMoves, columnOf } from './lifecycle'
 import { state } from './server'
 import { defaultTargets, PROJECT_IDS, projectsApi, uatDod } from './projectsApi'
@@ -626,8 +627,13 @@ export const ticketsHandlers = [
     const { assigneeId } = (await record(request)) as { assigneeId: string | null }
     const t = find(params.key)
     if (!t) return problem(404, 'not_found')
+    // Like the API: agents only take an unassigned ticket or release their own.
+    const me = state.me
+    const current = t.assignee?.id ?? null
+    const selfOnly = (current === null && assigneeId === me?.id) || (assigneeId === null && current === me?.id)
+    if (assigneeId !== current && !can.assignAnyone(me?.role ?? null) && !selfOnly) return problem(403, 'assignee_not_allowed')
     const a = tickets.assignees.find((x) => x.id === assigneeId)
-    t.assignee = a ? ref(a.id, a.name) : null
+    t.assignee = a ? ref(a.id, a.name) : me && assigneeId === me.id ? ref(me.id, me.name) : null
     return HttpResponse.json(t)
   }),
   http.put(`${API}/tickets/:key/priority`, async ({ request, params }) => {
@@ -675,7 +681,10 @@ export const ticketsHandlers = [
     list.push(r)
     return HttpResponse.json(r, { status: 201 })
   }),
-  http.get(`${API}/clients/:id/assignees`, () => HttpResponse.json(tickets.assignees)),
+  http.get(`${API}/clients/:id/assignees`, async ({ request }) => {
+    await record(request)
+    return HttpResponse.json(tickets.assignees)
+  }),
   http.get(`${API}/catalog-items`, () => HttpResponse.json(tickets.catalogItems)),
   http.post(`${API}/catalog-items`, async ({ request }) => {
     const body = (await record(request)) as Omit<CatalogItem, 'id' | 'ticketCount'>

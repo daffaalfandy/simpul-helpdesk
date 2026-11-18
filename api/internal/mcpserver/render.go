@@ -217,7 +217,13 @@ func orNone(s *string) string {
 	return *s
 }
 
-func renderAssignees(key string, current *tickets.Ref, people []clients.Assignee) string {
+// noteSelfAssignOnly tells an agent what assign_ticket lets them do (ticket.SelfAssignment).
+const noteSelfAssignOnly = "\nAs an agent you can take this ticket while it is unassigned (assignee me) or release it " +
+	"while it is yours (assignee none). Only a supervisor or administrator can give it to someone else.\n"
+
+// renderAssignees lists who can work the ticket; canAssignAny is false for agents, who only take
+// or release.
+func renderAssignees(key string, current *tickets.Ref, people []clients.Assignee, canAssignAny bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s is assigned to %s. People who can take it:\n\n", key, refName(current))
 	if len(people) == 0 {
@@ -225,6 +231,9 @@ func renderAssignees(key string, current *tickets.Ref, people []clients.Assignee
 	}
 	for _, p := range people {
 		fmt.Fprintf(&b, "- %s%s, %s, %d open tickets, id %s\n", oneLine(p.Name), jobTitle(p.JobTitle), p.Role, p.OpenTickets, p.ID)
+	}
+	if !canAssignAny {
+		b.WriteString(noteSelfAssignOnly)
 	}
 	return b.String()
 }

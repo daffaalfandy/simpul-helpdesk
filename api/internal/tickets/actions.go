@@ -3,6 +3,7 @@ package tickets
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
@@ -55,11 +56,16 @@ func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, key string, 
 }
 
 // SetAssignee gives the ticket to someone, or takes it back with nil. Assigning a new ticket
-// makes it assigned; unassigning an assigned ticket makes it new again.
+// makes it assigned; unassigning an assigned ticket makes it new again. Agents may only take an
+// unassigned ticket or release their own (assignee_not_allowed); supervisors and admins assign
+// anyone who works the client.
 func (s *Service) SetAssignee(ctx context.Context, p *auth.Principal, key string, assigneeID *uuid.UUID) (Ticket, error) {
 	err := s.agentAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		if sameID(row.AssigneeID, assigneeID) {
 			return nil
+		}
+		if !auth.Can(p.Role, auth.CapTicketsAssignAny) && !ticket.SelfAssignment(row.AssigneeID, assigneeID, p.UserID) {
+			return errAssigneeNotAllowed()
 		}
 		var to *clients.Ref
 		if assigneeID != nil {
@@ -217,6 +223,12 @@ func (s *Service) writeStatus(ctx context.Context, tx store.Tx, cs *changeSet, a
 		return err
 	}
 	return clearItems(ctx, tx.Q, cs, actor, dod.Cleared(m.from, m.to))
+}
+
+func errAssigneeNotAllowed() error {
+	return &apperr.Error{Status: http.StatusForbidden, Code: apperr.CodeAssigneeNotAllowed,
+		Title:  "Agents can only take an unassigned ticket or release their own",
+		Detail: "Ask a supervisor to give it to someone else."}
 }
 
 func sameID(a, b *uuid.UUID) bool {

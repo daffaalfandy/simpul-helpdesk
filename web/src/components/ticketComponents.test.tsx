@@ -89,6 +89,7 @@ describe('ProgressTracker', () => {
       <ProgressTracker
         label="Progress"
         doneLabel="Completed"
+        skippedLabel="Skipped"
         steps={[
           { id: 'a', label: 'Received', state: 'done' },
           { id: 'b', label: 'Working', state: 'current' },
@@ -99,6 +100,27 @@ describe('ProgressTracker', () => {
     const items = within(screen.getByRole('list', { name: 'Progress' })).getAllByRole('listitem')
     expect(items.map((li) => li.getAttribute('aria-current'))).toEqual([null, 'step', null])
     expect(items[0]).toHaveTextContent('Completed')
+  })
+
+  it('draws a skipped step apart from the steps still to come', () => {
+    render(
+      <ProgressTracker
+        label="Progress"
+        doneLabel="Completed"
+        skippedLabel="Skipped"
+        steps={[
+          { id: 'a', label: 'Received', state: 'done' },
+          { id: 'b', label: 'Assigned', state: 'skipped', detail: 'Not assigned yet' },
+          { id: 'c', label: 'Working', state: 'current' },
+          { id: 'd', label: 'Resolved', state: 'upcoming' },
+        ]}
+      />,
+    )
+    const [, skipped, , upcoming] = within(screen.getByRole('list', { name: 'Progress' })).getAllByRole('listitem')
+    expect(skipped).toHaveTextContent('AssignedSkippedNot assigned yet')
+    expect(skipped).not.toHaveTextContent('2')
+    expect(upcoming).toHaveTextContent('4Resolved')
+    expect(upcoming).not.toHaveTextContent('Skipped')
   })
 })
 

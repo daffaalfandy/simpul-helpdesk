@@ -258,6 +258,33 @@ func TestMCPWorksTicketsAsTheUser(t *testing.T) {
 	}
 }
 
+// An agent's token follows the agent's assignment rule, and the tool says why it refuses.
+func TestMCPAssignFollowsTheAgentRule(t *testing.T) {
+	te := newTicketEnv(t)
+	tk := te.requester.report(t, incident(te.projectA, "Printer offline"))
+	supervisorID := userID(t, te.env, auth.RoleSupervisor)
+	const note = "Only a supervisor or administrator can give it to someone else"
+
+	agent := te.mcpClient(t, te.agent.tokenFor(t, gen.TokenAccessWrite).Secret)
+	if out := mustCall(t, agent, "list_assignees", map[string]any{"key": tk.Key}); !strings.Contains(out, note) {
+		t.Errorf("list_assignees for an agent lacks the rule:\n%s", out)
+	}
+	out, isErr := call(t, agent, "assign_ticket", map[string]any{"key": tk.Key, "assignee": supervisorID.String()})
+	if !isErr || !strings.Contains(out, apperr.CodeAssigneeNotAllowed) || !strings.Contains(out, "Ask a supervisor") {
+		t.Fatalf("agent assigns a colleague: %v %s", isErr, out)
+	}
+	mustCall(t, agent, "assign_ticket", map[string]any{"key": tk.Key, "assignee": "me"})
+
+	supervisor := te.mcpClient(t, te.supervisor.tokenFor(t, gen.TokenAccessWrite).Secret)
+	if out := mustCall(t, supervisor, "list_assignees", map[string]any{"key": tk.Key}); strings.Contains(out, note) {
+		t.Errorf("list_assignees for a supervisor:\n%s", out)
+	}
+	mustCall(t, supervisor, "assign_ticket", map[string]any{"key": tk.Key, "assignee": supervisorID.String()})
+	if got := te.admin.ticket(t, tk.Key); got.Assignee == nil || got.Assignee.Id != supervisorID {
+		t.Fatalf("after the supervisor's tool: %+v", got.Assignee)
+	}
+}
+
 func TestMCPResolveExplainsTheDoD(t *testing.T) {
 	te := newTicketEnv(t)
 	testdb.SetProjectDoD(t, te.st, te.projectA, uatDoD())

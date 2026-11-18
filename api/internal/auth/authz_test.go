@@ -13,13 +13,14 @@ import (
 func TestCapabilitiesMatchHandoffRoleTable(t *testing.T) {
 	// HANDOFF §3: who may do what.
 	want := map[Capability][]Role{
-		CapAgentApp:       {RoleAdmin, RoleSupervisor, RoleAgent},
-		CapPortal:         {RoleRequester},
-		CapProjectsManage: {RoleAdmin, RoleSupervisor},
-		CapReportsView:    {RoleAdmin, RoleSupervisor},
-		CapUsersManage:    {RoleAdmin},
-		CapSettingsManage: {RoleAdmin},
-		CapClientsViewAll: {RoleAdmin, RoleSupervisor},
+		CapAgentApp:         {RoleAdmin, RoleSupervisor, RoleAgent},
+		CapPortal:           {RoleRequester},
+		CapProjectsManage:   {RoleAdmin, RoleSupervisor},
+		CapReportsView:      {RoleAdmin, RoleSupervisor},
+		CapUsersManage:      {RoleAdmin},
+		CapSettingsManage:   {RoleAdmin},
+		CapClientsViewAll:   {RoleAdmin, RoleSupervisor},
+		CapTicketsAssignAny: {RoleAdmin, RoleSupervisor},
 	}
 	all := []Role{RoleAdmin, RoleSupervisor, RoleAgent, RoleRequester}
 	for c, allowed := range want {

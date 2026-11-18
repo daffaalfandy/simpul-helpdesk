@@ -67,7 +67,7 @@ func (s *Service) AddMessage(ctx context.Context, p *auth.Principal, key string,
 			return err
 		}
 		cs := newChangeSet(row.ID)
-		if err := s.recordMessage(ctx, tx, cs, p.AuditActor(), a.staff, from, created.ID, in.Visibility, ids); err != nil {
+		if err := s.recordMessage(ctx, tx, cs, p.AuditActor(), a.staff, from, row.AssigneeID != nil, created.ID, in.Visibility, ids); err != nil {
 			return err
 		}
 		return s.commit(ctx, tx, cs)
@@ -79,9 +79,10 @@ func (s *Service) AddMessage(ctx context.Context, p *auth.Principal, key string,
 }
 
 // recordMessage writes what a new message changed: its audit entry, and for public messages the
-// ticket's update time, the first response or the resumed status.
+// ticket's update time, the first response or the resumed status (hasAssignee: someone is on the
+// ticket to resume it).
 func (s *Service) recordMessage(ctx context.Context, tx store.Tx, cs *changeSet, actor audit.Actor, staff bool,
-	from ticket.Status, messageID uuid.UUID, visibility ticket.Visibility, attachmentIDs []uuid.UUID) error {
+	from ticket.Status, hasAssignee bool, messageID uuid.UUID, visibility ticket.Visibility, attachmentIDs []uuid.UUID) error {
 	if err := cs.write(ctx, tx.Q, actor.Entry(ActionMessageAdded, TargetTicket, &cs.ticketID, map[string]any{
 		dataMessageID: messageID, dataVisibility: visibility, dataAttachmentIDs: nonNilIDs(attachmentIDs),
 	})); err != nil {
@@ -102,7 +103,7 @@ func (s *Service) recordMessage(ctx context.Context, tx store.Tx, cs *changeSet,
 			dataMessageID: messageID,
 		}))
 	}
-	if to, changed := ticket.StatusAfterRequesterReply(from); changed {
+	if to, changed := ticket.StatusAfterRequesterReply(from, hasAssignee); changed {
 		return s.writeStatus(ctx, tx, cs, actor, statusMove{from: from, to: to, cause: ticket.CauseRequesterReply})
 	}
 	return nil

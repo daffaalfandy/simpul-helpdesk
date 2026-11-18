@@ -71,6 +71,8 @@ export function PortalTicketPage({ ticketKey, answer, onAnswerShown }: PortalTic
       return t('portal.ticket.waitingForYou')
     }
     if (p.step === 'ready_for_test' && p.state === 'current') return t('portal.uat.trackerWaiting')
+    // Work started with nobody on the ticket yet.
+    if (p.step === 'assigned' && p.state === 'skipped' && !ticket.assignee) return t('portal.ticket.notAssigned')
     if (!p.at) return undefined
     if (p.step === 'assigned' && ticket.assignee) {
       return t('portal.ticket.assignedTo', { name: ticket.assignee.name, when: stamp(p.at) })
@@ -121,6 +123,7 @@ export function PortalTicketPage({ ticketKey, answer, onAnswerShown }: PortalTic
         <ProgressTracker
           label={t('portal.ticket.progress')}
           doneLabel={t('common.completed')}
+          skippedLabel={t('common.skipped')}
           steps={ticket.progress.map((p) => ({
             id: p.step,
             label: t(`portal.ticket.steps.${p.step}`),

@@ -18,17 +18,20 @@ const (
 	CapUsersManage         Capability = "users.manage"         // members & roles
 	CapSettingsManage      Capability = "settings.manage"      // organisation, SLA, clients, integrations
 	CapClientsViewAll      Capability = "clients.view_all"     // every client and its tickets; agents see only assigned ones
+	CapTicketsAssignAny    Capability = "tickets.assign_any"   // give a ticket to anyone; agents only take or release their own
 	CapOrganizationsManage Capability = "organizations.manage" // the install's organizations
 )
 
 var roleCapabilities = map[Role]map[Capability]bool{
 	RoleAdmin: {
-		CapAgentApp: true, CapProjectsManage: true, CapReportsView: true,
-		CapUsersManage: true, CapSettingsManage: true, CapClientsViewAll: true, CapOrganizationsManage: true,
+		CapAgentApp: true, CapProjectsManage: true, CapReportsView: true, CapUsersManage: true,
+		CapSettingsManage: true, CapClientsViewAll: true, CapTicketsAssignAny: true, CapOrganizationsManage: true,
 	},
-	RoleSupervisor: {CapAgentApp: true, CapProjectsManage: true, CapReportsView: true, CapClientsViewAll: true},
-	RoleAgent:      {CapAgentApp: true},
-	RoleRequester:  {CapPortal: true},
+	RoleSupervisor: {
+		CapAgentApp: true, CapProjectsManage: true, CapReportsView: true, CapClientsViewAll: true, CapTicketsAssignAny: true,
+	},
+	RoleAgent:     {CapAgentApp: true},
+	RoleRequester: {CapPortal: true},
 }
 
 func Can(role Role, c Capability) bool {

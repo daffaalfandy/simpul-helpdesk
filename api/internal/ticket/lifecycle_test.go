@@ -97,15 +97,19 @@ func TestStatusAfterAssignment(t *testing.T) {
 }
 
 func TestStatusAfterRequesterReply(t *testing.T) {
+	// A reply hands a ticket waiting on the client back: to its assignee, else to the New queue.
+	resumed := map[bool]Status{true: ip, false: nw}
 	for _, cur := range Statuses {
-		got, changed := StatusAfterRequesterReply(cur)
-		wantChanged := cur == wc
-		want := cur
-		if wantChanged {
-			want = ip
-		}
-		if got != want || changed != wantChanged {
-			t.Errorf("StatusAfterRequesterReply(%s) = %s, %v", cur, got, changed)
+		for _, hasAssignee := range []bool{false, true} {
+			got, changed := StatusAfterRequesterReply(cur, hasAssignee)
+			wantChanged := cur == wc
+			want := cur
+			if wantChanged {
+				want = resumed[hasAssignee]
+			}
+			if got != want || changed != wantChanged {
+				t.Errorf("StatusAfterRequesterReply(%s, %v) = %s, %v", cur, hasAssignee, got, changed)
+			}
 		}
 	}
 }

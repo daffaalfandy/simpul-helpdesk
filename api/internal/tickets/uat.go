@@ -85,7 +85,7 @@ func (s *Service) AnswerUAT(ctx context.Context, p *auth.Principal, key string, 
 		if err != nil {
 			return err
 		}
-		if err := s.recordMessage(ctx, tx, cs, actor, false, from, created.ID, ticket.VisibilityPublic, nil); err != nil {
+		if err := s.recordMessage(ctx, tx, cs, actor, false, from, row.AssigneeID != nil, created.ID, ticket.VisibilityPublic, nil); err != nil {
 			return err
 		}
 		move.cause, move.messageID = ticket.CauseUATRejected, &created.ID

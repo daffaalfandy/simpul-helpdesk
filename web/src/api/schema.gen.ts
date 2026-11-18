@@ -1267,7 +1267,9 @@ export interface paths {
         get?: never;
         /**
          * Assign or unassign the ticket (staff)
-         * @description Error codes are `invalid_assignee` and `ticket_closed` (409).
+         * @description Supervisors and admins assign anyone who works the client. Agents may only take an
+         *     unassigned ticket for themselves or release their own (`assignee_not_allowed`, 403).
+         *     Other error codes are `invalid_assignee` and `ticket_closed` (409).
          */
         put: operations["setTicketAssignee"];
         post?: never;

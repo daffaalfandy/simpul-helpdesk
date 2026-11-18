@@ -55,12 +55,19 @@ func StepOf(s Status) Step {
 	return StepReceived
 }
 
-// Progress builds the tracker from the status history (oldest first, creation included). Earlier
-// steps are done or skipped, later ones upcoming; a reopen makes later steps upcoming again.
-func Progress(current Status, createdAt time.Time, history []StatusChange) []ProgressStep {
+// Progress builds the tracker from the status history (oldest first, creation included) and the
+// times the ticket was given to someone. Earlier steps are done or skipped, later ones upcoming; a
+// reopen makes later steps upcoming again. A ticket can move on from New with nobody on it and be
+// assigned later without ever being Assigned, so the latest assignment also fills that step.
+func Progress(current Status, createdAt time.Time, history []StatusChange, assigned []time.Time) []ProgressStep {
 	entered := map[Step]time.Time{StepReceived: createdAt}
 	for _, c := range history {
 		entered[StepOf(c.To)] = c.At
+	}
+	for _, at := range assigned {
+		if prev, ok := entered[StepAssigned]; !ok || at.After(prev) {
+			entered[StepAssigned] = at
+		}
 	}
 	cur := StepOf(current)
 	out := make([]ProgressStep, 0, len(Steps))
