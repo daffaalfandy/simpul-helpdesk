@@ -84,17 +84,22 @@ WHERE a.id = $1
   AND t.organization_id = $3
   AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
   AND ($5::uuid IS NULL
+       OR t.requester_id = $5::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = $5::uuid AND rp.project_id = t.project_id))
+  AND ($6::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
-       OR t.assignee_id = $5::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid)
+       OR t.assignee_id = $6::uuid)
 `
 
 type GetAttachmentForDownloadParams struct {
-	ID             uuid.UUID
-	Visibility     *string
-	OrganizationID uuid.UUID
-	ScopeClientID  *uuid.UUID
-	ScopeAgentID   *uuid.UUID
+	ID               uuid.UUID
+	Visibility       *string
+	OrganizationID   uuid.UUID
+	ScopeClientID    *uuid.UUID
+	ScopeRequesterID *uuid.UUID
+	ScopeAgentID     *uuid.UUID
 }
 
 type GetAttachmentForDownloadRow struct {
@@ -112,6 +117,7 @@ func (q *Queries) GetAttachmentForDownload(ctx context.Context, arg GetAttachmen
 		arg.Visibility,
 		arg.OrganizationID,
 		arg.ScopeClientID,
+		arg.ScopeRequesterID,
 		arg.ScopeAgentID,
 	)
 	var i GetAttachmentForDownloadRow

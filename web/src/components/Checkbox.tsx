@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import {
   Checkbox as AriaCheckbox,
   CheckboxGroup as AriaCheckboxGroup,
+  FieldError,
   Label,
   Text,
   type CheckboxGroupProps as AriaCheckboxGroupProps,
@@ -10,6 +11,7 @@ import {
 } from 'react-aria-components'
 
 import { cx } from '../lib/text'
+import { fieldError } from './fieldStyles'
 
 type CheckboxProps = Omit<AriaCheckboxProps, 'children' | 'className'> & {
   children: ReactNode
@@ -49,13 +51,15 @@ export function Checkbox({ children, description, className, ...props }: Checkbo
 type CheckboxGroupProps = Omit<AriaCheckboxGroupProps, 'children' | 'className'> & {
   label: ReactNode
   description?: ReactNode
+  /** Shown below the options while isInvalid. */
+  errorMessage?: ReactNode
   children: ReactNode
   /** Lay options out in a row that wraps (e.g. weekdays). */
   inline?: boolean
   className?: string
 }
 
-export function CheckboxGroup({ label, description, children, inline, className, ...props }: CheckboxGroupProps) {
+export function CheckboxGroup({ label, description, errorMessage, children, inline, className, ...props }: CheckboxGroupProps) {
   return (
     <AriaCheckboxGroup {...props} className={cx('flex flex-col gap-1.5', className)}>
       <Label className="text-sm font-bold text-ink">{label}</Label>
@@ -65,6 +69,7 @@ export function CheckboxGroup({ label, description, children, inline, className,
         </Text>
       )}
       <div className={inline ? 'flex flex-wrap gap-x-5 gap-y-1' : 'flex flex-col'}>{children}</div>
+      <FieldError className={fieldError}>{errorMessage}</FieldError>
     </AriaCheckboxGroup>
   )
 }

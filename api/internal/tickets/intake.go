@@ -33,15 +33,17 @@ type IntakeItem struct {
 // Intake is what a report form needs for one client: its active projects with their targets,
 // the project service requests go to, the working hours, and the visible catalogue items.
 type Intake struct {
-	ClientID         uuid.UUID
-	Hours            sla.Hours
-	Projects         []IntakeProject
-	DefaultProjectID *uuid.UUID // nil while the client has no project
+	ClientID uuid.UUID
+	Hours    sla.Hours
+	Projects []IntakeProject
+	// DefaultProjectID is nil while the client has no project, and for a requester not linked
+	// to it: they can't send service requests.
+	DefaultProjectID *uuid.UUID
 	CatalogItems     []IntakeItem
 }
 
-// Intake returns the report form's choices. Requesters always get their own client; staff
-// name a client they may see.
+// Intake returns the report form's choices. Requesters always get their own client, and only
+// the projects they are linked to; staff name a client they may see.
 func (s *Service) Intake(ctx context.Context, p *auth.Principal, clientID *uuid.UUID) (Intake, error) {
 	a, err := accessFor(p)
 	if err != nil {
@@ -64,7 +66,9 @@ func (s *Service) Intake(ctx context.Context, p *auth.Principal, clientID *uuid.
 	if out.Hours, err = s.sla.BusinessHours(ctx, a.org); err != nil {
 		return Intake{}, err
 	}
-	rows, err := q.ListActiveClientProjects(ctx, id)
+	rows, err := q.ListActiveClientProjects(ctx, db.ListActiveClientProjectsParams{
+		OrganizationID: a.org, ClientID: id, RequesterID: a.scopeRequesterID,
+	})
 	if err != nil {
 		return Intake{}, err
 	}
@@ -79,7 +83,13 @@ func (s *Service) Intake(ctx context.Context, p *auth.Principal, clientID *uuid.
 	def, err := q.GetClientDefaultProject(ctx, id)
 	switch {
 	case err == nil:
-		out.DefaultProjectID = &def.ID
+		linked, err := requesterMayUse(ctx, q, a, def.ID)
+		if err != nil {
+			return Intake{}, err
+		}
+		if linked {
+			out.DefaultProjectID = &def.ID
+		}
 	case !errors.Is(err, pgx.ErrNoRows):
 		return Intake{}, err
 	}
@@ -93,4 +103,14 @@ func (s *Service) Intake(ctx context.Context, p *auth.Principal, clientID *uuid.
 		out.CatalogItems = append(out.CatalogItems, IntakeItem{ID: r.ID, Name: r.Name, Description: r.Description})
 	}
 	return out, nil
+}
+
+// requesterMayUse reports whether a's requester is linked to the project; staff always may.
+func requesterMayUse(ctx context.Context, q *db.Queries, a access, projectID uuid.UUID) (bool, error) {
+	if a.scopeRequesterID == nil {
+		return true, nil
+	}
+	return q.IsRequesterOnProject(ctx, db.IsRequesterOnProjectParams{
+		UserID: *a.scopeRequesterID, ProjectID: projectID, OrganizationID: a.org,
+	})
 }

@@ -287,7 +287,7 @@
       "back": "Back to my tickets",
       "noProject": {
         "title": "Reporting isn't set up yet",
-        "body": "Your organisation has no system to report on yet. Please contact our support team by phone or email."
+        "body": "There's no system you can report on yet. Please contact our support team by phone or email."
       },
       "title": "How can we help?",
       "hours": "Our team works {{hours}}, {{days}}.",
@@ -572,7 +572,23 @@
         "inviteTitle": "Invite a requester",
         "inviteHint": "They get an email with a link to set their password. The link works once, for 7 days.",
         "jobTitleHint": "Optional, e.g. IT Officer.",
-        "suspendBody": "They are signed out at once and can’t sign in or be named on new tickets until reactivated. Their tickets stay as they are."
+        "suspendBody": "They are signed out at once and can’t sign in or be named on new tickets until reactivated. Their tickets stay as they are.",
+        "projects": "Projects",
+        "projectsHint": "They report issues on these projects and see all their tickets, as well as any ticket they reported themselves.",
+        "projectsRequired": "Choose at least one project.",
+        "noClientProjects": "This client has no projects yet. Its first project will include every requester.",
+        "reportsOn": "Reports on {{projects}}",
+        "noProjects": "No projects",
+        "ownOnly": "Sees only the tickets they reported",
+        "projectsButton": "Projects",
+        "projectsLabel": "Projects of {{name}}",
+        "projectsTitle": "Projects for {{name}}",
+        "projectsSubtitle": "{{name}} reports issues on these projects and sees all their tickets. They always see the tickets they reported themselves.",
+        "projectsSave": "Save projects",
+        "projectsSaved": "Projects for {{name}} saved.",
+        "removeAllTitle": "Take {{name}} off every project?",
+        "removeAllBody": "They won't be able to report new issues, and they'll see only the tickets they already reported.",
+        "removeAllConfirm": "Remove all projects"
       }
     },
     "catalog": {

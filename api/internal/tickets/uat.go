@@ -124,7 +124,8 @@ func (s *Service) Reopen(ctx context.Context, p *auth.Principal, key string) (Ti
 }
 
 // UATRequests lists the tests waiting on a requester: tickets of their client In UAT that they
-// reported or follow, oldest first. Colleagues' other tests stay answerable from their pages.
+// reported, or follow on a project they are linked to, oldest first. Colleagues' other tests
+// stay answerable from their pages.
 func (s *Service) UATRequests(ctx context.Context, p *auth.Principal) ([]UATRequest, error) {
 	a, err := clientAccess(p)
 	if err != nil {
@@ -132,7 +133,8 @@ func (s *Service) UATRequests(ctx context.Context, p *auth.Principal) ([]UATRequ
 	}
 	q := s.store.Q()
 	rows, err := q.ListUATRequests(ctx, db.ListUATRequestsParams{
-		ClientID: *a.scopeClientID, Status: string(ticket.StatusInUAT), UserID: p.UserID, RowLimit: MaxUATRequests,
+		OrganizationID: a.org, ClientID: *a.scopeClientID, Status: string(ticket.StatusInUAT), UserID: p.UserID,
+		RowLimit: MaxUATRequests,
 	})
 	if err != nil || len(rows) == 0 {
 		return []UATRequest{}, err

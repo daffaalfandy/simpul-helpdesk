@@ -803,8 +803,10 @@ paths:
       summary: Invite a requester to a client (admin only)
       description: |
         The requester is `invited` and gets an email with a single-use link to set their
-        password. Resend, suspend and reactivate them with the `/members/{userId}` actions. Error
-        codes are `invalid_name`, `invalid_email` and `email_taken` (409).
+        password. `projectIds` names the client's projects they report on and see tickets of; at
+        least one is required while the client has projects. Resend, suspend and reactivate them
+        with the `/members/{userId}` actions. Error codes are `invalid_name`, `invalid_email`,
+        `invalid_project` and `email_taken` (409).
       tags: [clients]
       requestBody:
         required: true
@@ -822,6 +824,36 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /clients/{clientId}/requesters/{userId}/projects:
+    parameters:
+      - $ref: "#/components/parameters/ClientId"
+      - $ref: "#/components/parameters/UserId"
+    put:
+      operationId: setRequesterProjects
+      summary: Set which of the client's projects a requester reports on (admin only)
+      description: |
+        Replaces the requester's projects. They report on, and see, the tickets of these projects,
+        and always the tickets they reported themselves. An empty list leaves them only their own
+        tickets. Every id must be a project of this client (`invalid_project`); someone who isn't
+        a requester of the client gives 404.
+      tags: [clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequesterProjectsInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Requester" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
   /clients/{clientId}/assignees:
@@ -1192,8 +1224,8 @@ paths:
       description: |
         The client's active projects with their SLA targets ("Which system?"), the project that
         takes service requests, the working hours, and the visible catalogue items.
-        Requesters always get their own client and leave `clientId` out; staff must pass a client
-        they may see (`client_required`, 404).
+        Requesters always get their own client and leave `clientId` out, and only the projects
+        they are linked to; staff must pass a client they may see (`client_required`, 404).
       tags: [tickets]
       parameters:
         - name: clientId
@@ -1549,8 +1581,9 @@ paths:
       operationId: listTickets
       summary: Tickets the user may see, newest first
       description: |
-        Requesters see their client's tickets; agents the tickets of their assigned clients;
-        supervisors and admins every ticket. Page with `before` = the last id of the previous page.
+        Requesters see the tickets they reported and those of their client's projects they are
+        linked to; agents the tickets of their assigned clients; supervisors and admins every
+        ticket. Page with `before` = the last id of the previous page.
       tags: [tickets]
       parameters:
         - name: status
@@ -1601,8 +1634,8 @@ paths:
         Requesters report for themselves (channel `portal`); the staff-only fields are ignored.
         Staff log a ticket for a client's requester and must give `clientId`, `requesterId` and a
         non-portal `channel`. Incidents name one of the client's active projects (`projectId`);
-        service requests go to the client's default project. The ticket keeps a copy of that
-        project's SLA. Error codes are `invalid_subject`, `invalid_description`,
+        service requests go to the client's default project. A requester must be linked to that
+        project (`invalid_project` otherwise). The ticket keeps a copy of that project's SLA. Error codes are `invalid_subject`, `invalid_description`,
         `text_too_complex` (more table cells or deeper nesting than rich text allows), `invalid_project`, `invalid_catalog_item`, `client_has_no_project`, `client_required`,
         `client_not_found`, `invalid_requester`, `invalid_channel`, `invalid_assignee`,
         `invalid_attachment` and `too_many_attachments`.
@@ -1919,8 +1952,8 @@ paths:
       operationId: addTicketWatcher
       summary: Add a colleague to the ticket (requesters)
       description: |
-        The colleague must be another active or invited requester of the ticket's client;
-        otherwise `invalid_watcher`. Adding someone already following changes nothing. Staff get
+        The colleague must be another active or invited requester of the ticket's client, linked
+        to the ticket's project; otherwise `invalid_watcher`. Adding someone already following changes nothing. Staff get
         403; a closed ticket gives `ticket_closed` (409). Returns the updated list.
       tags: [tickets]
       requestBody:
@@ -1966,7 +1999,9 @@ paths:
     get:
       operationId: listTicketWatcherCandidates
       summary: The client's other requesters who could follow the ticket (requesters)
-      description: At most 20, by name; `q` narrows by name. Staff get 403.
+      description: |
+        Those linked to the ticket's project, at most 20, by name; `q` narrows by name. Staff get
+        403.
       tags: [tickets]
       parameters:
         - name: q
@@ -3218,13 +3253,17 @@ components:
 
     Requester:
       type: object
-      required: [id, name, email, jobTitle, status]
+      required: [id, name, email, jobTitle, status, projectIds]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, example: Hendra Gunawan }
         email: { type: string }
         jobTitle: { type: string, nullable: true, example: IT Officer }
         status: { $ref: "#/components/schemas/UserStatus" }
+        projectIds:
+          type: array
+          description: The client's projects they report on and see tickets of.
+          items: { type: string, format: uuid }
 
     RequesterInput:
       type: object
@@ -3233,6 +3272,20 @@ components:
         name: { type: string, minLength: 1, maxLength: 200 }
         email: { type: string, minLength: 3, maxLength: 254 }
         jobTitle: { type: string, nullable: true, maxLength: 200 }
+        projectIds:
+          type: array
+          description: The client's projects they report on; at least one while the client has projects.
+          maxItems: 200
+          items: { type: string, format: uuid }
+
+    RequesterProjectsInput:
+      type: object
+      required: [projectIds]
+      properties:
+        projectIds:
+          type: array
+          maxItems: 200
+          items: { type: string, format: uuid }
 
     Assignee:
       type: object
@@ -3293,13 +3346,15 @@ components:
         businessHours: { $ref: "#/components/schemas/BusinessHours" }
         projects:
           type: array
-          description: The client's active projects, by name.
+          description: The client's active projects, by name; for a requester, those they are linked to.
           items: { $ref: "#/components/schemas/IntakeProject" }
         defaultProjectId:
           type: string
           format: uuid
           nullable: true
-          description: The project service requests go to; null while the client has no project.
+          description: |
+            The project service requests go to; null while the client has no project, and for a
+            requester not linked to it (they can't send service requests).
         catalogItems:
           type: array
           items: { $ref: "#/components/schemas/IntakeCatalogItem" }

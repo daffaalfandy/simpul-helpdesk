@@ -4,28 +4,42 @@ import { useTranslation } from 'react-i18next'
 
 import type { Client, Requester } from '../../api/client'
 import { Alert } from '../../components/Alert'
+import { Pill } from '../../components/Badges'
+import { Button } from '../../components/Button'
+import { Checkbox, CheckboxGroup } from '../../components/Checkbox'
 import { ConfirmDialog, FormDialog } from '../../components/Dialog'
 import { TextInput } from '../../components/TextInput'
+import { DATE_LOCALE } from '../../i18n/locale'
 import { MemberActions, MemberStatusPill } from './MemberControls'
 import { clientRequestersAdminQueryOptions, useInviteRequester, useMemberAction, type MemberAction } from './queries'
+import { RequesterProjectsDialog } from './RequesterProjectsDialog'
 import { ErrorAlert } from './shared'
+
+const list = new Intl.ListFormat(DATE_LOCALE, { type: 'conjunction' })
 
 /**
  * A client's requesters (Settings › Clients): only administrators invite them (owner, 17 Nov).
- * The list sits above the invite form; resend, suspend and reactivate work as for the team.
+ * The list sits above the invite form; resend, suspend and reactivate work as for the team. Each
+ * requester reports on, and sees tickets of, the projects they are linked to (owner, 18 Nov).
  */
 export function RequestersDialog({ client, onClose }: { client: Client; onClose: () => void }) {
   const { t } = useTranslation()
   const requesters = useQuery(clientRequestersAdminQueryOptions(client.id))
   const invite = useInviteRequester(client.id)
   const action = useMemberAction()
+  // With one project there is nothing to choose.
+  const initialProjects = client.projects.length === 1 ? client.projects.map((p) => p.id) : []
   const [flash, setFlash] = useState<string | null>(null)
   const [suspending, setSuspending] = useState<Requester | null>(null)
+  const [editingProjects, setEditingProjects] = useState<Requester | null>(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [jobTitle, setJobTitle] = useState('')
+  const [projectIds, setProjectIds] = useState<string[]>(initialProjects)
   const [tried, setTried] = useState(false)
   const inviteId = useId()
+  const missingProject = client.projects.length > 0 && projectIds.length === 0
+  const projectNames = (r: Requester) => client.projects.filter((p) => r.projectIds.includes(p.id)).map((p) => p.name)
 
   const act = (r: Requester, a: MemberAction) => {
     setFlash(null)
@@ -42,17 +56,19 @@ export function RequestersDialog({ client, onClose }: { client: Client; onClose:
   const submit = () => {
     setTried(true)
     setFlash(null)
-    if (name.trim() === '' || email.trim() === '') return
+    if (name.trim() === '' || email.trim() === '' || missingProject) return
     const body = {
       name: name.trim(),
       email: email.trim(),
       jobTitle: jobTitle.trim() || null,
+      projectIds,
     }
     invite.mutate(body, {
       onSuccess: () => {
         setName('')
         setEmail('')
         setJobTitle('')
+        setProjectIds(initialProjects)
         setTried(false)
         setFlash(t('settings.members.invited', { email: body.email }))
       },
@@ -84,18 +100,43 @@ export function RequestersDialog({ client, onClose }: { client: Client; onClose:
             })}
             className="flex flex-col divide-y divide-border-subtle"
           >
-            {requesters.data?.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5">
-                <span className="flex min-w-0 flex-col">
-                  <span className="font-bold">{r.name}</span>
-                  <span className="truncate text-sm text-muted">{[r.email, r.jobTitle].filter(Boolean).join(t('common.separator'))}</span>
-                </span>
-                <span className="flex items-center gap-2">
-                  <MemberStatusPill status={r.status} />
-                  <MemberActions name={r.name} status={r.status} onAction={(a) => (a === 'suspend' ? setSuspending(r) : act(r, a))} />
-                </span>
-              </li>
-            ))}
+            {requesters.data?.map((r) => {
+              const names = projectNames(r)
+              return (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5">
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-bold">{r.name}</span>
+                    <span className="truncate text-sm text-muted">{[r.email, r.jobTitle].filter(Boolean).join(t('common.separator'))}</span>
+                    {client.projects.length > 0 &&
+                      (names.length > 0 ? (
+                        <span className="text-sm text-ink-2">{t('settings.clients.requesters.reportsOn', { projects: list.format(names) })}</span>
+                      ) : (
+                        <span className="flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
+                          <Pill tone="warning">{t('settings.clients.requesters.noProjects')}</Pill>
+                          {t('settings.clients.requesters.ownOnly')}
+                        </span>
+                      ))}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {client.projects.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={t('settings.clients.requesters.projectsLabel', { name: r.name })}
+                        onPress={() => {
+                          setFlash(null)
+                          setEditingProjects(r)
+                        }}
+                      >
+                        {t('settings.clients.requesters.projectsButton')}
+                      </Button>
+                    )}
+                    <MemberStatusPill status={r.status} />
+                    <MemberActions name={r.name} status={r.status} onAction={(a) => (a === 'suspend' ? setSuspending(r) : act(r, a))} />
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         )}
         <div role="group" aria-labelledby={inviteId} className="flex flex-col gap-3 border-t border-border-subtle pt-4">
@@ -128,8 +169,37 @@ export function RequestersDialog({ client, onClose }: { client: Client; onClose:
             onChange={setJobTitle}
             description={t('settings.clients.requesters.jobTitleHint')}
           />
+          {client.projects.length > 0 ? (
+            <CheckboxGroup
+              label={t('settings.clients.requesters.projects')}
+              description={t('settings.clients.requesters.projectsHint')}
+              value={projectIds}
+              onChange={setProjectIds}
+              isInvalid={tried && missingProject}
+              errorMessage={t('settings.clients.requesters.projectsRequired')}
+            >
+              {client.projects.map((p) => (
+                <Checkbox key={p.id} value={p.id}>
+                  {p.name}
+                </Checkbox>
+              ))}
+            </CheckboxGroup>
+          ) : (
+            <p className="text-sm text-muted">{t('settings.clients.requesters.noClientProjects')}</p>
+          )}
         </div>
       </FormDialog>
+      {editingProjects && (
+        <RequesterProjectsDialog
+          client={client}
+          requester={editingProjects}
+          onClose={() => setEditingProjects(null)}
+          onSaved={(message) => {
+            setEditingProjects(null)
+            setFlash(message)
+          }}
+        />
+      )}
       {/* Outside the form: a portal's submit would bubble to the invite form through React. */}
       {suspending && (
         <ConfirmDialog

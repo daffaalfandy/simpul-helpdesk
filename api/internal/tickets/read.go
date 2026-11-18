@@ -64,7 +64,8 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f ListFilter) ([]
 		return nil, err
 	}
 	params := db.ListTicketsParams{
-		OrganizationID: a.org, ProjectIds: filter, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID, Statuses: statusStrings(statuses),
+		OrganizationID: a.org, ProjectIds: filter, ScopeClientID: a.scopeClientID, ScopeRequesterID: a.scopeRequesterID, ScopeAgentID: a.scopeAgentID,
+		Statuses: statusStrings(statuses),
 		ClientID: f.ClientID, Unassigned: f.Assignee == AssigneeUnassigned, Before: f.Before,
 		RowLimit: int32(pageSize(f.Limit)),
 	}
@@ -197,7 +198,9 @@ func (s *Service) getRow(ctx context.Context, q *db.Queries, a access, key strin
 	if !ticket.ValidKey(key) {
 		return db.GetTicketRow{}, notFound(pgx.ErrNoRows)
 	}
-	r, err := q.GetTicket(ctx, db.GetTicketParams{Key: key, OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID})
+	r, err := q.GetTicket(ctx, db.GetTicketParams{
+		Key: key, OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeRequesterID: a.scopeRequesterID, ScopeAgentID: a.scopeAgentID,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, elsewhere(ctx, q, a, key)
 	}

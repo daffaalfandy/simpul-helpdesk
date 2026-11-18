@@ -206,10 +206,17 @@ function fixtures() {
     { id: TICKET_IDS.vpn, name: 'VPN / remote access', description: null, sortOrder: 10, active: true, ticketCount: 1 },
     { id: TICKET_IDS.account, name: 'New email account', description: null, sortOrder: 20, active: true, ticketCount: 0 },
   ]
+  const jambiProjects = [PROJECT_IDS.eOffice, PROJECT_IDS.email]
   const requesters: Record<string, Requester[]> = {
     [IDS.jambi]: [
-      { id: TICKET_IDS.hendra, name: 'Hendra Gunawan', email: 'hendra@kominfo-jambi.test', jobTitle: 'IT Officer', status: 'active' },
-      { id: TICKET_IDS.dian, name: 'Dian Puspita', email: 'dian@kominfo-jambi.test', jobTitle: null, status: 'invited' },
+      {
+        id: TICKET_IDS.hendra, name: 'Hendra Gunawan', email: 'hendra@kominfo-jambi.test', jobTitle: 'IT Officer', status: 'active',
+        projectIds: [...jambiProjects],
+      },
+      {
+        id: TICKET_IDS.dian, name: 'Dian Puspita', email: 'dian@kominfo-jambi.test', jobTitle: null, status: 'invited',
+        projectIds: [...jambiProjects],
+      },
     ],
   }
   const assignees: Assignee[] = [
@@ -276,9 +283,19 @@ async function record(request: Request, body?: unknown) {
 
 const isRequester = () => state.me?.role === 'requester'
 
-/** What the signed-in user may see, like the API's scope (requesters: their client only). */
+/** The projects a requester reports on (owner, 18 Nov). */
+function linkedProjects(userId: string): string[] {
+  return Object.values(tickets.requesters).flat().find((r) => r.id === userId)?.projectIds ?? []
+}
+
+/**
+ * What the signed-in user may see, like the API's scope: requesters see their client's tickets
+ * that they reported or that belong to a project they are linked to.
+ */
 function visible(t: Ticket) {
-  return !isRequester() || t.client.id === state.me?.client?.id
+  if (!isRequester()) return true
+  const me = state.me?.id ?? ''
+  return t.client.id === state.me?.client?.id && (t.requester.id === me || linkedProjects(me).includes(t.project.id))
 }
 
 function find(key: unknown) {
@@ -325,6 +342,10 @@ let nextId = 0
 const newId = (prefix: string) => `${prefix}-${++nextId}`
 
 /** The project a new ticket lands in: the incident's system, or the client's default. */
+function clientProjectIds(clientId: string): string[] {
+  return projectsApi.projects.filter((p) => p.client.id === clientId).map((p) => p.id)
+}
+
 function projectOf(body: Record<string, unknown>) {
   const clientId = (body.clientId as string | undefined) ?? IDS.jambi
   const p =
@@ -392,11 +413,11 @@ function board(assignee: string | null, q: string, slaFilter: string | null): Bo
   }
 }
 
-/** The ticket's client's other requesters, as colleagues who could follow it. */
+/** The ticket's client's other requesters linked to its project, as colleagues who could follow it. */
 function colleaguesFor(t: Ticket): Colleague[] {
   const following = tickets.watchers[t.key] ?? []
   return (tickets.requesters[t.client.id] ?? [])
-    .filter((r) => r.id !== t.requester.id && !following.some((w) => w.id === r.id))
+    .filter((r) => r.id !== t.requester.id && r.projectIds.includes(t.project.id) && !following.some((w) => w.id === r.id))
     .map((r) => ({ id: r.id, name: r.name, jobTitle: r.jobTitle }))
 }
 
@@ -499,7 +520,9 @@ export const ticketsHandlers = [
   http.get(`${API}/intake`, async ({ request }) => {
     await record(request)
     const clientId = new URL(request.url).searchParams.get('clientId') ?? IDS.jambi
-    const projects = projectsApi.projects.filter((p) => p.client.id === clientId)
+    // Requesters get only the projects they are linked to.
+    const linked = isRequester() ? linkedProjects(state.me?.id ?? '') : null
+    const projects = projectsApi.projects.filter((p) => p.client.id === clientId && (!linked || linked.includes(p.id)))
     const intake: Intake = {
       clientId,
       businessHours: settings.hours,
@@ -531,6 +554,8 @@ export const ticketsHandlers = [
     const body = (await record(request)) as Record<string, unknown>
     const me = state.me
     const staff = !isRequester()
+    const project = projectOf(body)
+    if (!staff && !linkedProjects(me?.id ?? '').includes(project.id)) return problem(400, 'invalid_project')
     const t = ticket({
       id: newId('t'),
       key: `HD-${tickets.nextNumber++}`,
@@ -543,7 +568,7 @@ export const ticketsHandlers = [
       createdBy: ref(me?.id ?? '', me?.name ?? ''),
       status: body.assignToMe ? 'assigned' : 'new',
       assignee: body.assignToMe && me ? ref(me.id, me.name) : null,
-      project: projectOf(body),
+      project,
       sla: {
         priority: body.priority as Ticket['priority'],
         firstResponse: { value: 30, unit: 'min' },
@@ -672,14 +697,31 @@ export const ticketsHandlers = [
     return HttpResponse.json((tickets.requesters[String(params.id)] ?? []).filter((r) => all || r.status !== 'suspended'))
   }),
   http.post(`${API}/clients/:id/requesters`, async ({ request, params }) => {
-    const body = (await record(request)) as { name: string; email: string; jobTitle?: string | null }
+    const body = (await record(request)) as { name: string; email: string; jobTitle?: string | null; projectIds?: string[] }
     const list = (tickets.requesters[String(params.id)] ??= [])
     if (Object.values(tickets.requesters).flat().some((r) => r.email === body.email.toLowerCase())) {
       return problem(409, 'email_taken')
     }
-    const r: Requester = { id: newId('r'), name: body.name, email: body.email.toLowerCase(), jobTitle: body.jobTitle ?? null, status: 'invited' }
+    const projectIds = body.projectIds ?? []
+    const own = clientProjectIds(String(params.id))
+    if (!projectIds.every((id) => own.includes(id)) || (own.length > 0 && projectIds.length === 0)) {
+      return problem(400, 'invalid_project')
+    }
+    const r: Requester = {
+      id: newId('r'), name: body.name, email: body.email.toLowerCase(), jobTitle: body.jobTitle ?? null, status: 'invited', projectIds,
+    }
     list.push(r)
     return HttpResponse.json(r, { status: 201 })
+  }),
+  http.put(`${API}/clients/:id/requesters/:userId/projects`, async ({ request, params }) => {
+    const body = (await record(request)) as { projectIds: string[] }
+    if (state.me?.role !== 'admin') return problem(403, 'forbidden')
+    const r = (tickets.requesters[String(params.id)] ?? []).find((x) => x.id === params.userId)
+    if (!r) return problem(404, 'not_found')
+    const own = clientProjectIds(String(params.id))
+    if (!body.projectIds.every((id) => own.includes(id))) return problem(400, 'invalid_project')
+    r.projectIds = [...new Set(body.projectIds)]
+    return HttpResponse.json(r)
   }),
   http.get(`${API}/clients/:id/assignees`, async ({ request }) => {
     await record(request)

@@ -129,13 +129,29 @@ func (s *server) CreateClientRequester(ctx context.Context, req gen.CreateClient
 	if err != nil {
 		return nil, err
 	}
-	r, err := s.clients.InviteRequester(ctx, p, req.ClientId, clients.RequesterInput{
-		Name: req.Body.Name, Email: req.Body.Email, JobTitle: req.Body.JobTitle,
-	})
+	in := clients.RequesterInput{Name: req.Body.Name, Email: req.Body.Email, JobTitle: req.Body.JobTitle}
+	if req.Body.ProjectIds != nil {
+		in.ProjectIDs = *req.Body.ProjectIds
+	}
+	r, err := s.clients.InviteRequester(ctx, p, req.ClientId, in)
 	if err != nil {
 		return nil, err
 	}
 	return gen.CreateClientRequester201JSONResponse(apiRequester(r)), nil
+}
+
+// SetRequesterProjects replaces which of the client's projects a requester reports on
+// (administrators).
+func (s *server) SetRequesterProjects(ctx context.Context, req gen.SetRequesterProjectsRequestObject) (gen.SetRequesterProjectsResponseObject, error) {
+	p, err := requireOrg(ctx, auth.CapUsersManage)
+	if err != nil {
+		return nil, err
+	}
+	r, err := s.clients.SetRequesterProjects(ctx, p, req.ClientId, req.UserId, req.Body.ProjectIds)
+	if err != nil {
+		return nil, err
+	}
+	return gen.SetRequesterProjects200JSONResponse(apiRequester(r)), nil
 }
 
 func (s *server) ListClientAssignees(ctx context.Context, req gen.ListClientAssigneesRequestObject) (gen.ListClientAssigneesResponseObject, error) {
@@ -155,5 +171,7 @@ func (s *server) ListClientAssignees(ctx context.Context, req gen.ListClientAssi
 }
 
 func apiRequester(r clients.Requester) gen.Requester {
-	return gen.Requester{Id: r.ID, Name: r.Name, Email: r.Email, JobTitle: r.JobTitle, Status: gen.UserStatus(r.Status)}
+	return gen.Requester{
+		Id: r.ID, Name: r.Name, Email: r.Email, JobTitle: r.JobTitle, Status: gen.UserStatus(r.Status), ProjectIds: r.ProjectIDs,
+	}
 }

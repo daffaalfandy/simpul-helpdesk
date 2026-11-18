@@ -599,10 +599,38 @@ export interface paths {
         /**
          * Invite a requester to a client (admin only)
          * @description The requester is `invited` and gets an email with a single-use link to set their
-         *     password. Resend, suspend and reactivate them with the `/members/{userId}` actions. Error
-         *     codes are `invalid_name`, `invalid_email` and `email_taken` (409).
+         *     password. `projectIds` names the client's projects they report on and see tickets of; at
+         *     least one is required while the client has projects. Resend, suspend and reactivate them
+         *     with the `/members/{userId}` actions. Error codes are `invalid_name`, `invalid_email`,
+         *     `invalid_project` and `email_taken` (409).
          */
         post: operations["createClientRequester"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clients/{clientId}/requesters/{userId}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set which of the client's projects a requester reports on (admin only)
+         * @description Replaces the requester's projects. They report on, and see, the tickets of these projects,
+         *     and always the tickets they reported themselves. An empty list leaves them only their own
+         *     tickets. Every id must be a project of this client (`invalid_project`); someone who isn't
+         *     a requester of the client gives 404.
+         */
+        put: operations["setRequesterProjects"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -869,8 +897,8 @@ export interface paths {
          * What a report form offers for one client
          * @description The client's active projects with their SLA targets ("Which system?"), the project that
          *     takes service requests, the working hours, and the visible catalogue items.
-         *     Requesters always get their own client and leave `clientId` out; staff must pass a client
-         *     they may see (`client_required`, 404).
+         *     Requesters always get their own client and leave `clientId` out, and only the projects
+         *     they are linked to; staff must pass a client they may see (`client_required`, 404).
          */
         get: operations["getIntake"];
         put?: never;
@@ -1154,8 +1182,9 @@ export interface paths {
         };
         /**
          * Tickets the user may see, newest first
-         * @description Requesters see their client's tickets; agents the tickets of their assigned clients;
-         *     supervisors and admins every ticket. Page with `before` = the last id of the previous page.
+         * @description Requesters see the tickets they reported and those of their client's projects they are
+         *     linked to; agents the tickets of their assigned clients; supervisors and admins every
+         *     ticket. Page with `before` = the last id of the previous page.
          */
         get: operations["listTickets"];
         put?: never;
@@ -1164,8 +1193,8 @@ export interface paths {
          * @description Requesters report for themselves (channel `portal`); the staff-only fields are ignored.
          *     Staff log a ticket for a client's requester and must give `clientId`, `requesterId` and a
          *     non-portal `channel`. Incidents name one of the client's active projects (`projectId`);
-         *     service requests go to the client's default project. The ticket keeps a copy of that
-         *     project's SLA. Error codes are `invalid_subject`, `invalid_description`,
+         *     service requests go to the client's default project. A requester must be linked to that
+         *     project (`invalid_project` otherwise). The ticket keeps a copy of that project's SLA. Error codes are `invalid_subject`, `invalid_description`,
          *     `text_too_complex` (more table cells or deeper nesting than rich text allows), `invalid_project`, `invalid_catalog_item`, `client_has_no_project`, `client_required`,
          *     `client_not_found`, `invalid_requester`, `invalid_channel`, `invalid_assignee`,
          *     `invalid_attachment` and `too_many_attachments`.
@@ -1436,8 +1465,8 @@ export interface paths {
         put?: never;
         /**
          * Add a colleague to the ticket (requesters)
-         * @description The colleague must be another active or invited requester of the ticket's client;
-         *     otherwise `invalid_watcher`. Adding someone already following changes nothing. Staff get
+         * @description The colleague must be another active or invited requester of the ticket's client, linked
+         *     to the ticket's project; otherwise `invalid_watcher`. Adding someone already following changes nothing. Staff get
          *     403; a closed ticket gives `ticket_closed` (409). Returns the updated list.
          */
         post: operations["addTicketWatcher"];
@@ -1483,7 +1512,8 @@ export interface paths {
         };
         /**
          * The client's other requesters who could follow the ticket (requesters)
-         * @description At most 20, by name; `q` narrows by name. Staff get 403.
+         * @description Those linked to the ticket's project, at most 20, by name; `q` narrows by name. Staff get
+         *     403.
          */
         get: operations["listTicketWatcherCandidates"];
         put?: never;
@@ -2401,11 +2431,18 @@ export interface components {
             /** @example IT Officer */
             jobTitle: string | null;
             status: components["schemas"]["UserStatus"];
+            /** @description The client's projects they report on and see tickets of. */
+            projectIds: string[];
         };
         RequesterInput: {
             name: string;
             email: string;
             jobTitle?: string | null;
+            /** @description The client's projects they report on; at least one while the client has projects. */
+            projectIds?: string[];
+        };
+        RequesterProjectsInput: {
+            projectIds: string[];
         };
         Assignee: {
             /** Format: uuid */
@@ -2453,11 +2490,12 @@ export interface components {
             /** Format: uuid */
             clientId: string;
             businessHours: components["schemas"]["BusinessHours"];
-            /** @description The client's active projects, by name. */
+            /** @description The client's active projects, by name; for a requester, those they are linked to. */
             projects: components["schemas"]["IntakeProject"][];
             /**
              * Format: uuid
-             * @description The project service requests go to; null while the client has no project.
+             * @description The project service requests go to; null while the client has no project, and for a
+             *     requester not linked to it (they can't send service requests).
              */
             defaultProjectId: string | null;
             catalogItems: components["schemas"]["IntakeCatalogItem"][];
@@ -4063,6 +4101,38 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setRequesterProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: components["parameters"]["ClientId"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequesterProjectsInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requester"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

@@ -29,9 +29,9 @@ VALUES (@user_id, @ticket_id, @event_type, sqlc.narg(actor_user_id), @source_id,
         @data, @web, @email, @urgent, @created_at)
 ON CONFLICT (source_id, user_id) DO NOTHING;
 
--- Inbox queries are scoped like tickets.sql: scope_client_id and scope_agent_id come from
--- internal/tickets access rules (tickets.ScopeFor), so a user stops seeing items about tickets
--- they lose access to.
+-- Inbox queries are scoped like tickets.sql: scope_client_id, scope_requester_id and
+-- scope_agent_id come from internal/tickets access rules (tickets.ScopeFor), so a user stops
+-- seeing items about tickets they lose access to.
 
 -- name: ListNotifications :many
 -- Newest first; before pages on (created_at, id). The quote is cut to quote_runes characters;
@@ -46,6 +46,10 @@ LEFT JOIN ticket_messages m ON m.id = n.message_id
 WHERE n.user_id = @user_id AND n.web
   AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
+  AND (sqlc.narg(scope_requester_id)::uuid IS NULL
+       OR t.requester_id = sqlc.narg(scope_requester_id)::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = sqlc.narg(scope_requester_id)::uuid AND rp.project_id = t.project_id))
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
@@ -65,6 +69,10 @@ JOIN tickets t ON t.id = n.ticket_id
 WHERE n.user_id = @user_id AND n.web AND n.read_at IS NULL
   AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
+  AND (sqlc.narg(scope_requester_id)::uuid IS NULL
+       OR t.requester_id = sqlc.narg(scope_requester_id)::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = sqlc.narg(scope_requester_id)::uuid AND rp.project_id = t.project_id))
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
@@ -77,6 +85,10 @@ FROM tickets t
 WHERE n.id = @id AND n.user_id = @user_id AND n.web AND t.id = n.ticket_id
   AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
+  AND (sqlc.narg(scope_requester_id)::uuid IS NULL
+       OR t.requester_id = sqlc.narg(scope_requester_id)::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = sqlc.narg(scope_requester_id)::uuid AND rp.project_id = t.project_id))
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
@@ -89,6 +101,10 @@ FROM tickets t
 WHERE n.user_id = @user_id AND n.web AND n.read_at IS NULL AND t.id = n.ticket_id
   AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
+  AND (sqlc.narg(scope_requester_id)::uuid IS NULL
+       OR t.requester_id = sqlc.narg(scope_requester_id)::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = sqlc.narg(scope_requester_id)::uuid AND rp.project_id = t.project_id))
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
@@ -165,16 +181,22 @@ SELECT id, email, name, role, status, client_id, email_frequency FROM users WHER
 -- name: ListEmailTickets :many
 -- What an email shows about each ticket, and whether the recipient may still see it (the same
 -- rule as internal/tickets access: all for administrators and the organization's supervisors,
--- linked clients and tickets assigned to them for its agents, their own client for requesters).
+-- linked clients and tickets assigned to them for its agents, and for requesters the tickets of
+-- their client they reported or that belong to a project they are linked to).
 -- member_role is the recipient's role in the ticket's organization (NULL: not a member).
 SELECT t.id, t.organization_id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id,
        t.sla_snapshot, pl.name AS priority_name, p.name AS project_name, m.role AS member_role,
-       (u.role = @admin_role
-        OR m.role = @supervisor_role
-        OR (m.role = @agent_role AND (t.assignee_id = u.id
-                                      OR EXISTS (SELECT 1 FROM client_agents ca
-                                                 WHERE ca.client_id = t.client_id AND ca.user_id = u.id)))
-        OR (u.role = @requester_role AND u.client_id = t.client_id))::boolean AS visible,
+       -- coalesce: m.role is NULL for non-members, which would leave a refusal NULL.
+       coalesce(u.role = @admin_role
+                OR m.role = @supervisor_role
+                OR (m.role = @agent_role AND (t.assignee_id = u.id
+                                              OR EXISTS (SELECT 1 FROM client_agents ca
+                                                         WHERE ca.client_id = t.client_id AND ca.user_id = u.id)))
+                OR (u.role = @requester_role AND u.client_id = t.client_id
+                    AND (t.requester_id = u.id
+                         OR EXISTS (SELECT 1 FROM requester_projects rp
+                                    WHERE rp.user_id = u.id AND rp.project_id = t.project_id))),
+                false)::boolean AS visible,
        EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = u.id) AS watching
 FROM tickets t
 JOIN projects p ON p.id = t.project_id

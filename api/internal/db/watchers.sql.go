@@ -32,7 +32,11 @@ func (q *Queries) AddTicketWatcher(ctx context.Context, arg AddTicketWatcherPara
 }
 
 const listTicketWatcherIDs = `-- name: ListTicketWatcherIDs :many
-SELECT user_id FROM ticket_watchers WHERE ticket_id = $1
+SELECT w.user_id
+FROM ticket_watchers w
+JOIN tickets t ON t.id = w.ticket_id
+WHERE w.ticket_id = $1
+  AND EXISTS (SELECT 1 FROM requester_projects rp WHERE rp.user_id = w.user_id AND rp.project_id = t.project_id)
 `
 
 func (q *Queries) ListTicketWatcherIDs(ctx context.Context, ticketID uuid.UUID) ([]uuid.UUID, error) {
@@ -56,10 +60,13 @@ func (q *Queries) ListTicketWatcherIDs(ctx context.Context, ticketID uuid.UUID) 
 }
 
 const listTicketWatchers = `-- name: ListTicketWatchers :many
+
 SELECT u.id, u.name, u.job_title
 FROM ticket_watchers w
+JOIN tickets t ON t.id = w.ticket_id
 JOIN users u ON u.id = w.user_id
 WHERE w.ticket_id = $1
+  AND EXISTS (SELECT 1 FROM requester_projects rp WHERE rp.user_id = w.user_id AND rp.project_id = t.project_id)
 ORDER BY lower(u.name), u.id
 `
 
@@ -69,6 +76,9 @@ type ListTicketWatchersRow struct {
 	JobTitle *string
 }
 
+// Followers are requesters of the ticket's client. Only those linked to the ticket's project
+// count: one unlinked from it keeps the row (linked again, they follow again) but is neither
+// listed nor told about the ticket.
 func (q *Queries) ListTicketWatchers(ctx context.Context, ticketID uuid.UUID) ([]ListTicketWatchersRow, error) {
 	rows, err := q.db.Query(ctx, listTicketWatchers, ticketID)
 	if err != nil {
@@ -94,17 +104,19 @@ SELECT u.id, u.name, u.job_title
 FROM users u
 WHERE u.client_id = $1
   AND u.role = $2
-  AND u.status = ANY($3::text[])
-  AND u.id <> $4
-  AND NOT EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = $5 AND w.user_id = u.id)
-  AND ($6::text IS NULL OR u.name ILIKE $6::text)
+  AND EXISTS (SELECT 1 FROM requester_projects rp WHERE rp.user_id = u.id AND rp.project_id = $3)
+  AND u.status = ANY($4::text[])
+  AND u.id <> $5
+  AND NOT EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = $6 AND w.user_id = u.id)
+  AND ($7::text IS NULL OR u.name ILIKE $7::text)
 ORDER BY lower(u.name), u.id
-LIMIT $7
+LIMIT $8
 `
 
 type ListWatcherCandidatesParams struct {
 	ClientID    *uuid.UUID
 	Role        string
+	ProjectID   uuid.UUID
 	Statuses    []string
 	RequesterID uuid.UUID
 	TicketID    uuid.UUID
@@ -118,12 +130,14 @@ type ListWatcherCandidatesRow struct {
 	JobTitle *string
 }
 
-// The client's other requesters who could follow the ticket: not its requester, not already
-// following, not suspended. pattern is an escaped ILIKE pattern over the name, or NULL.
+// The client's other requesters who could follow the ticket: linked to its project, not its
+// requester, not already following, not suspended. pattern is an escaped ILIKE pattern over the
+// name, or NULL.
 func (q *Queries) ListWatcherCandidates(ctx context.Context, arg ListWatcherCandidatesParams) ([]ListWatcherCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, listWatcherCandidates,
 		arg.ClientID,
 		arg.Role,
+		arg.ProjectID,
 		arg.Statuses,
 		arg.RequesterID,
 		arg.TicketID,

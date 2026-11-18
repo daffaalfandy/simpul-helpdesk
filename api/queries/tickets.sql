@@ -1,6 +1,7 @@
--- Scoped queries take the organization (always), scope_client_id (requesters: their client) and
--- scope_agent_id (agents: their assigned clients and tickets); both are NULL for supervisors and
--- admins. Only internal/tickets/access.go sets them.
+-- Scoped queries take the organization (always), scope_client_id and scope_requester_id
+-- (requesters: their client, and there the tickets they reported or of a project they are linked
+-- to) and scope_agent_id (agents: their assigned clients and tickets); all are NULL for
+-- supervisors and admins. Only internal/tickets/access.go sets them.
 
 -- name: NextTicketNumber :one
 SELECT nextval('ticket_number_seq')::bigint;
@@ -26,6 +27,10 @@ JOIN users r ON r.id = t.requester_id
 LEFT JOIN users a ON a.id = t.assignee_id
 WHERE t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
+  AND (sqlc.narg(scope_requester_id)::uuid IS NULL
+       OR t.requester_id = sqlc.narg(scope_requester_id)::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = sqlc.narg(scope_requester_id)::uuid AND rp.project_id = t.project_id))
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
@@ -65,6 +70,10 @@ LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.key = @key
   AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
+  AND (sqlc.narg(scope_requester_id)::uuid IS NULL
+       OR t.requester_id = sqlc.narg(scope_requester_id)::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = sqlc.narg(scope_requester_id)::uuid AND rp.project_id = t.project_id))
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
@@ -72,8 +81,8 @@ WHERE t.key = @key
 
 -- name: GetTicketForUpdate :one
 -- Locks the ticket only; the project's Definition of Done and the override are read as they are.
-SELECT t.id, t.organization_id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
-       a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
+SELECT t.id, t.organization_id, t.key, t.type, t.status, t.priority, t.client_id, t.project_id, t.requester_id,
+       t.assignee_id, a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
        p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 LEFT JOIN users a ON a.id = t.assignee_id
@@ -82,6 +91,10 @@ LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
 WHERE t.key = @key
   AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
+  AND (sqlc.narg(scope_requester_id)::uuid IS NULL
+       OR t.requester_id = sqlc.narg(scope_requester_id)::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = sqlc.narg(scope_requester_id)::uuid AND rp.project_id = t.project_id))
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)

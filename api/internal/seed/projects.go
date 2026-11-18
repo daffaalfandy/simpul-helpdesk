@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/projects"
@@ -75,7 +76,8 @@ var demoProjects = []project{
 }
 
 // seedProjects upserts the demo projects, their SLAs and Definitions of Done and returns IDs by client and name.
-// Each client's first project is made its default, so a re-run restores the demo defaults.
+// Each client's first project is made its default, so a re-run restores the demo defaults. Every
+// requester of the client, seeded before, reports on every project, as after migration 00023.
 func seedProjects(ctx context.Context, q *db.Queries, org uuid.UUID, clientIDs map[string]uuid.UUID, list []project) (map[string]map[string]uuid.UUID, error) {
 	out := make(map[string]map[string]uuid.UUID)
 	for _, p := range list {
@@ -99,6 +101,11 @@ func seedProjects(ctx context.Context, q *db.Queries, org uuid.UUID, clientIDs m
 		}
 		if err := q.UpdateProjectDoD(ctx, db.UpdateProjectDoDParams{ID: id, DodConfig: p.dod.JSON(), AllowTicketOverride: true}); err != nil {
 			return nil, fmt.Errorf("project %s DoD: %w", p.name, err)
+		}
+		if _, err := q.LinkClientRequestersToProject(ctx, db.LinkClientRequestersToProjectParams{
+			ProjectID: id, ClientID: &clientID, OrganizationID: org, Role: string(auth.RoleRequester),
+		}); err != nil {
+			return nil, fmt.Errorf("project %s requesters: %w", p.name, err)
 		}
 		if out[p.client] == nil {
 			out[p.client] = make(map[string]uuid.UUID)

@@ -19,7 +19,8 @@ const MaxWatcherCandidates = 20
 // getting emails.
 var watcherStatuses = []string{string(auth.UserStatusActive), string(auth.UserStatusInvited)}
 
-// Colleague is a requester of the ticket's client: someone following it, or who could.
+// Colleague is a requester of the ticket's client linked to its project: someone following it,
+// or who could.
 type Colleague struct {
 	ID       uuid.UUID
 	Name     string
@@ -27,6 +28,7 @@ type Colleague struct {
 }
 
 // Watchers lists the colleagues following a ticket ("People notified", besides the requester).
+// Followers since unlinked from the ticket's project aren't listed.
 func (s *Service) Watchers(ctx context.Context, p *auth.Principal, key string) ([]Colleague, error) {
 	a, err := accessFor(p)
 	if err != nil {
@@ -40,8 +42,8 @@ func (s *Service) Watchers(ctx context.Context, p *auth.Principal, key string) (
 	return listWatchers(ctx, q, t.ID)
 }
 
-// WatcherCandidates lists the client's other requesters who could follow the ticket, by name.
-// Only client staff manage who follows their tickets.
+// WatcherCandidates lists the client's other requesters linked to the ticket's project who
+// could follow it, by name. Only client staff manage who follows their tickets.
 func (s *Service) WatcherCandidates(ctx context.Context, p *auth.Principal, key, query string) ([]Colleague, error) {
 	a, err := clientAccess(p)
 	if err != nil {
@@ -54,7 +56,7 @@ func (s *Service) WatcherCandidates(ctx context.Context, p *auth.Principal, key,
 	}
 	_, pattern := searchParams(query)
 	rows, err := q.ListWatcherCandidates(ctx, db.ListWatcherCandidatesParams{
-		ClientID: &t.ClientID, Role: string(auth.RoleRequester), Statuses: watcherStatuses,
+		ClientID: &t.ClientID, Role: string(auth.RoleRequester), ProjectID: t.ProjectID, Statuses: watcherStatuses,
 		RequesterID: t.RequesterID, TicketID: t.ID, Pattern: pattern, RowLimit: MaxWatcherCandidates,
 	})
 	if err != nil {
@@ -67,8 +69,8 @@ func (s *Service) WatcherCandidates(ctx context.Context, p *auth.Principal, key,
 	return out, nil
 }
 
-// AddWatcher adds a colleague of the requester to the ticket's "People notified". Adding
-// someone already there changes nothing.
+// AddWatcher adds a colleague of the requester, linked to the ticket's project, to the ticket's
+// "People notified". Adding someone already there changes nothing.
 func (s *Service) AddWatcher(ctx context.Context, p *auth.Principal, key string, userID uuid.UUID) ([]Colleague, error) {
 	var ticketID uuid.UUID
 	err := s.clientAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
@@ -83,6 +85,15 @@ func (s *Service) AddWatcher(ctx context.Context, p *auth.Principal, key string,
 			return lookupError(err, apperr.CodeInvalidWatcher, errInvalidWatcherTitle)
 		}
 		if auth.UserStatus(r.Status) == auth.UserStatusSuspended {
+			return errInvalidWatcher()
+		}
+		linked, err := tx.Q.IsRequesterOnProject(ctx, db.IsRequesterOnProjectParams{
+			UserID: userID, ProjectID: row.ProjectID, OrganizationID: row.OrganizationID,
+		})
+		if err != nil {
+			return err
+		}
+		if !linked {
 			return errInvalidWatcher()
 		}
 		n, err := tx.Q.AddTicketWatcher(ctx, db.AddTicketWatcherParams{TicketID: row.ID, UserID: userID, AddedBy: p.UserID})

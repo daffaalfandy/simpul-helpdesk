@@ -287,8 +287,20 @@ func (q *Queries) GetProjectForUpdate(ctx context.Context, arg GetProjectForUpda
 }
 
 const listActiveClientProjects = `-- name: ListActiveClientProjects :many
-SELECT id, name, description FROM projects WHERE client_id = $1 AND active ORDER BY lower(name)
+SELECT p.id, p.name, p.description
+FROM projects p
+WHERE p.organization_id = $1 AND p.client_id = $2 AND p.active
+  AND ($3::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = $3::uuid AND rp.project_id = p.id))
+ORDER BY lower(p.name)
 `
+
+type ListActiveClientProjectsParams struct {
+	OrganizationID uuid.UUID
+	ClientID       uuid.UUID
+	RequesterID    *uuid.UUID
+}
 
 type ListActiveClientProjectsRow struct {
 	ID          uuid.UUID
@@ -296,9 +308,10 @@ type ListActiveClientProjectsRow struct {
 	Description *string
 }
 
-// The report form's "Which system?" choices.
-func (q *Queries) ListActiveClientProjects(ctx context.Context, clientID uuid.UUID) ([]ListActiveClientProjectsRow, error) {
-	rows, err := q.db.Query(ctx, listActiveClientProjects, clientID)
+// The report form's "Which system?" choices; requester_id narrows them to the projects that
+// requester is linked to.
+func (q *Queries) ListActiveClientProjects(ctx context.Context, arg ListActiveClientProjectsParams) ([]ListActiveClientProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveClientProjects, arg.OrganizationID, arg.ClientID, arg.RequesterID)
 	if err != nil {
 		return nil, err
 	}

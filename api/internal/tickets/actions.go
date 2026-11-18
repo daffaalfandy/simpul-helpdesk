@@ -184,7 +184,7 @@ func lockTicket(ctx context.Context, q *db.Queries, a access, key string) (db.Ge
 		return db.GetTicketForUpdateRow{}, apperr.NotFound()
 	}
 	row, err := q.GetTicketForUpdate(ctx, db.GetTicketForUpdateParams{
-		Key: key, OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeAgentID: a.scopeAgentID,
+		Key: key, OrganizationID: a.org, ScopeClientID: a.scopeClientID, ScopeRequesterID: a.scopeRequesterID, ScopeAgentID: a.scopeAgentID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row, elsewhere(ctx, q, a, key)

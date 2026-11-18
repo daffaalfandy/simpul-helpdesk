@@ -151,16 +151,21 @@ WHERE n.user_id = $1 AND n.web AND n.read_at IS NULL
   AND t.organization_id = $2
   AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
   AND ($4::uuid IS NULL
+       OR t.requester_id = $4::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = $4::uuid AND rp.project_id = t.project_id))
+  AND ($5::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
-       OR t.assignee_id = $4::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
+       OR t.assignee_id = $5::uuid)
 `
 
 type CountUnreadNotificationsParams struct {
-	UserID         uuid.UUID
-	OrganizationID uuid.UUID
-	ScopeClientID  *uuid.UUID
-	ScopeAgentID   *uuid.UUID
+	UserID           uuid.UUID
+	OrganizationID   uuid.UUID
+	ScopeClientID    *uuid.UUID
+	ScopeRequesterID *uuid.UUID
+	ScopeAgentID     *uuid.UUID
 }
 
 func (q *Queries) CountUnreadNotifications(ctx context.Context, arg CountUnreadNotificationsParams) (int32, error) {
@@ -168,6 +173,7 @@ func (q *Queries) CountUnreadNotifications(ctx context.Context, arg CountUnreadN
 		arg.UserID,
 		arg.OrganizationID,
 		arg.ScopeClientID,
+		arg.ScopeRequesterID,
 		arg.ScopeAgentID,
 	)
 	var column_1 int32
@@ -469,12 +475,17 @@ func (q *Queries) ListDueEmails(ctx context.Context, arg ListDueEmailsParams) ([
 const listEmailTickets = `-- name: ListEmailTickets :many
 SELECT t.id, t.organization_id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id,
        t.sla_snapshot, pl.name AS priority_name, p.name AS project_name, m.role AS member_role,
-       (u.role = $1
-        OR m.role = $2
-        OR (m.role = $3 AND (t.assignee_id = u.id
-                                      OR EXISTS (SELECT 1 FROM client_agents ca
-                                                 WHERE ca.client_id = t.client_id AND ca.user_id = u.id)))
-        OR (u.role = $4 AND u.client_id = t.client_id))::boolean AS visible,
+       -- coalesce: m.role is NULL for non-members, which would leave a refusal NULL.
+       coalesce(u.role = $1
+                OR m.role = $2
+                OR (m.role = $3 AND (t.assignee_id = u.id
+                                              OR EXISTS (SELECT 1 FROM client_agents ca
+                                                         WHERE ca.client_id = t.client_id AND ca.user_id = u.id)))
+                OR (u.role = $4 AND u.client_id = t.client_id
+                    AND (t.requester_id = u.id
+                         OR EXISTS (SELECT 1 FROM requester_projects rp
+                                    WHERE rp.user_id = u.id AND rp.project_id = t.project_id))),
+                false)::boolean AS visible,
        EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = u.id) AS watching
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
@@ -513,7 +524,8 @@ type ListEmailTicketsRow struct {
 
 // What an email shows about each ticket, and whether the recipient may still see it (the same
 // rule as internal/tickets access: all for administrators and the organization's supervisors,
-// linked clients and tickets assigned to them for its agents, their own client for requesters).
+// linked clients and tickets assigned to them for its agents, and for requesters the tickets of
+// their client they reported or that belong to a project they are linked to).
 // member_role is the recipient's role in the ticket's organization (NULL: not a member).
 func (q *Queries) ListEmailTickets(ctx context.Context, arg ListEmailTicketsParams) ([]ListEmailTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listEmailTickets,
@@ -609,28 +621,33 @@ WHERE n.user_id = $2 AND n.web
   AND t.organization_id = $3
   AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
   AND ($5::uuid IS NULL
+       OR t.requester_id = $5::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = $5::uuid AND rp.project_id = t.project_id))
+  AND ($6::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
-       OR t.assignee_id = $5::uuid)
-  AND (cardinality($6::text[]) = 0 OR n.event_type = ANY($6::text[]))
-  AND (NOT $7::boolean OR n.read_at IS NULL)
-  AND ($8::uuid IS NULL
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid)
+       OR t.assignee_id = $6::uuid)
+  AND (cardinality($7::text[]) = 0 OR n.event_type = ANY($7::text[]))
+  AND (NOT $8::boolean OR n.read_at IS NULL)
+  AND ($9::uuid IS NULL
        OR (n.created_at, n.id) < (SELECT b.created_at, b.id FROM notifications b
-                                  WHERE b.id = $8::uuid AND b.user_id = $2))
+                                  WHERE b.id = $9::uuid AND b.user_id = $2))
 ORDER BY n.created_at DESC, n.id DESC
-LIMIT $9
+LIMIT $10
 `
 
 type ListNotificationsParams struct {
-	QuoteRunes     int32
-	UserID         uuid.UUID
-	OrganizationID uuid.UUID
-	ScopeClientID  *uuid.UUID
-	ScopeAgentID   *uuid.UUID
-	Events         []string
-	UnreadOnly     bool
-	Before         *uuid.UUID
-	RowLimit       int32
+	QuoteRunes       int32
+	UserID           uuid.UUID
+	OrganizationID   uuid.UUID
+	ScopeClientID    *uuid.UUID
+	ScopeRequesterID *uuid.UUID
+	ScopeAgentID     *uuid.UUID
+	Events           []string
+	UnreadOnly       bool
+	Before           *uuid.UUID
+	RowLimit         int32
 }
 
 type ListNotificationsRow struct {
@@ -648,9 +665,9 @@ type ListNotificationsRow struct {
 	Quote           string
 }
 
-// Inbox queries are scoped like tickets.sql: scope_client_id and scope_agent_id come from
-// internal/tickets access rules (tickets.ScopeFor), so a user stops seeing items about tickets
-// they lose access to.
+// Inbox queries are scoped like tickets.sql: scope_client_id, scope_requester_id and
+// scope_agent_id come from internal/tickets access rules (tickets.ScopeFor), so a user stops
+// seeing items about tickets they lose access to.
 // Newest first; before pages on (created_at, id). The quote is cut to quote_runes characters;
 // the service shows it only for public messages unless the user is staff.
 func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error) {
@@ -659,6 +676,7 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 		arg.UserID,
 		arg.OrganizationID,
 		arg.ScopeClientID,
+		arg.ScopeRequesterID,
 		arg.ScopeAgentID,
 		arg.Events,
 		arg.UnreadOnly,
@@ -805,16 +823,21 @@ WHERE n.user_id = $1 AND n.web AND n.read_at IS NULL AND t.id = n.ticket_id
   AND t.organization_id = $2
   AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
   AND ($4::uuid IS NULL
+       OR t.requester_id = $4::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = $4::uuid AND rp.project_id = t.project_id))
+  AND ($5::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
-       OR t.assignee_id = $4::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
+       OR t.assignee_id = $5::uuid)
 `
 
 type MarkAllNotificationsReadParams struct {
-	UserID         uuid.UUID
-	OrganizationID uuid.UUID
-	ScopeClientID  *uuid.UUID
-	ScopeAgentID   *uuid.UUID
+	UserID           uuid.UUID
+	OrganizationID   uuid.UUID
+	ScopeClientID    *uuid.UUID
+	ScopeRequesterID *uuid.UUID
+	ScopeAgentID     *uuid.UUID
 }
 
 func (q *Queries) MarkAllNotificationsRead(ctx context.Context, arg MarkAllNotificationsReadParams) error {
@@ -822,6 +845,7 @@ func (q *Queries) MarkAllNotificationsRead(ctx context.Context, arg MarkAllNotif
 		arg.UserID,
 		arg.OrganizationID,
 		arg.ScopeClientID,
+		arg.ScopeRequesterID,
 		arg.ScopeAgentID,
 	)
 	return err
@@ -859,18 +883,23 @@ WHERE n.id = $2 AND n.user_id = $3 AND n.web AND t.id = n.ticket_id
   AND t.organization_id = $4
   AND ($5::uuid IS NULL OR t.client_id = $5::uuid)
   AND ($6::uuid IS NULL
+       OR t.requester_id = $6::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = $6::uuid AND rp.project_id = t.project_id))
+  AND ($7::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $6::uuid)
-       OR t.assignee_id = $6::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $7::uuid)
+       OR t.assignee_id = $7::uuid)
 `
 
 type SetNotificationReadParams struct {
-	Read           bool
-	ID             uuid.UUID
-	UserID         uuid.UUID
-	OrganizationID uuid.UUID
-	ScopeClientID  *uuid.UUID
-	ScopeAgentID   *uuid.UUID
+	Read             bool
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	OrganizationID   uuid.UUID
+	ScopeClientID    *uuid.UUID
+	ScopeRequesterID *uuid.UUID
+	ScopeAgentID     *uuid.UUID
 }
 
 func (q *Queries) SetNotificationRead(ctx context.Context, arg SetNotificationReadParams) (int64, error) {
@@ -880,6 +909,7 @@ func (q *Queries) SetNotificationRead(ctx context.Context, arg SetNotificationRe
 		arg.UserID,
 		arg.OrganizationID,
 		arg.ScopeClientID,
+		arg.ScopeRequesterID,
 		arg.ScopeAgentID,
 	)
 	if err != nil {

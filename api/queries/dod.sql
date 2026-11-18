@@ -26,17 +26,18 @@ SET config = EXCLUDED.config, reason = EXCLUDED.reason, set_by = EXCLUDED.set_by
 DELETE FROM ticket_dod_overrides WHERE ticket_id = @ticket_id;
 
 -- name: ListUATRequests :many
--- The tests waiting on a requester: their client's tickets In UAT that they reported or follow,
--- oldest first.
+-- The tests waiting on a requester: their client's tickets In UAT that they reported, or follow
+-- on a project they are linked to, oldest first.
 SELECT t.id, t.key, t.subject, t.status_changed_at, t.project_id, p.name AS project_name,
        p.dod_config, o.config AS dod_override, t.requester_id, r.name AS requester_name
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
 JOIN users r ON r.id = t.requester_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
-WHERE t.client_id = @client_id AND t.status = @status
+WHERE t.organization_id = @organization_id AND t.client_id = @client_id AND t.status = @status
   AND (t.requester_id = @user_id
-       OR EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = @user_id))
+       OR (EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = @user_id)
+           AND EXISTS (SELECT 1 FROM requester_projects rp WHERE rp.user_id = @user_id AND rp.project_id = t.project_id)))
 ORDER BY t.status_changed_at, t.id
 LIMIT @row_limit;
 

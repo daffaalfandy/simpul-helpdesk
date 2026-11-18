@@ -819,19 +819,26 @@ func TestRequestersAndAssignees(t *testing.T) {
 	for _, s := range []session{te.agent, te.supervisor} {
 		expectProblem(t, s.do(http.MethodPost, base+"/requesters", in), http.StatusForbidden, apperr.CodeForbidden)
 	}
+	// They report on at least one of the client's projects (owner, 18 Nov).
+	for _, ids := range []*[]uuid.UUID{nil, {}, {te.projectB}, {te.projectA, uuid.New()}} {
+		in.ProjectIds = ids
+		expectProblem(t, te.admin.do(http.MethodPost, base+"/requesters", in), http.StatusBadRequest, apperr.CodeInvalidProject)
+	}
+	in.ProjectIds = &[]uuid.UUID{te.projectA, te.projectA}
 	r := decode[gen.Requester](t, te.admin.do(http.MethodPost, base+"/requesters", in), http.StatusCreated)
-	if r.Status != gen.UserStatusInvited || r.Email != siti {
+	if r.Status != gen.UserStatusInvited || r.Email != siti || !slices.Equal(r.ProjectIds, []uuid.UUID{te.projectA}) {
 		t.Fatalf("requester = %+v", r)
 	}
 	if rec := te.login(siti, password); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("invited user signs in: %d", rec.Code)
 	}
-	expectProblem(t, te.admin.do(http.MethodPost, base+"/requesters", gen.RequesterInput{Name: "Again", Email: siti}),
+	expectProblem(t, te.admin.do(http.MethodPost, base+"/requesters", gen.RequesterInput{Name: "Again", Email: siti, ProjectIds: in.ProjectIds}),
 		http.StatusConflict, "email_taken")
 	expectProblem(t, te.admin.do(http.MethodPost, base+"/requesters", gen.RequesterInput{Name: "No email", Email: "nope"}),
 		http.StatusBadRequest, "invalid_email")
 	list := decode[[]gen.Requester](t, te.agent.do(http.MethodGet, base+"/requesters", nil), http.StatusOK)
-	if len(list) != 2 {
+	if i := slices.IndexFunc(list, func(x gen.Requester) bool { return x.Id == te.requesterID }); len(list) != 2 || i < 0 ||
+		!sameIDs(list[i].ProjectIds, te.projectA, te.projectA2) {
 		t.Fatalf("requesters = %+v", list)
 	}
 	// A new requester can be named on a ticket straight away.

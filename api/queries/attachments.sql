@@ -39,6 +39,10 @@ WHERE a.id = @id
   AND (sqlc.narg(visibility)::text IS NULL OR a.message_id IS NULL OR m.visibility = sqlc.narg(visibility)::text)
   AND t.organization_id = @organization_id
   AND (sqlc.narg(scope_client_id)::uuid IS NULL OR t.client_id = sqlc.narg(scope_client_id)::uuid)
+  AND (sqlc.narg(scope_requester_id)::uuid IS NULL
+       OR t.requester_id = sqlc.narg(scope_requester_id)::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = sqlc.narg(scope_requester_id)::uuid AND rp.project_id = t.project_id))
   AND (sqlc.narg(scope_agent_id)::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
                   WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)

@@ -175,16 +175,21 @@ WHERE t.key = $1
   AND t.organization_id = $2
   AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
   AND ($4::uuid IS NULL
+       OR t.requester_id = $4::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = $4::uuid AND rp.project_id = t.project_id))
+  AND ($5::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
-       OR t.assignee_id = $4::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
+       OR t.assignee_id = $5::uuid)
 `
 
 type GetTicketParams struct {
-	Key            string
-	OrganizationID uuid.UUID
-	ScopeClientID  *uuid.UUID
-	ScopeAgentID   *uuid.UUID
+	Key              string
+	OrganizationID   uuid.UUID
+	ScopeClientID    *uuid.UUID
+	ScopeRequesterID *uuid.UUID
+	ScopeAgentID     *uuid.UUID
 }
 
 type GetTicketRow struct {
@@ -229,6 +234,7 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 		arg.Key,
 		arg.OrganizationID,
 		arg.ScopeClientID,
+		arg.ScopeRequesterID,
 		arg.ScopeAgentID,
 	)
 	var i GetTicketRow
@@ -272,8 +278,8 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 }
 
 const getTicketForUpdate = `-- name: GetTicketForUpdate :one
-SELECT t.id, t.organization_id, t.key, t.type, t.status, t.priority, t.client_id, t.requester_id, t.assignee_id,
-       a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
+SELECT t.id, t.organization_id, t.key, t.type, t.status, t.priority, t.client_id, t.project_id, t.requester_id,
+       t.assignee_id, a.name AS assignee_name, t.first_response_at, t.resolved_at, t.status_changed_at,
        p.dod_config, p.allow_ticket_override, o.config AS dod_override, o.reason AS dod_override_reason
 FROM tickets t
 LEFT JOIN users a ON a.id = t.assignee_id
@@ -283,17 +289,22 @@ WHERE t.key = $1
   AND t.organization_id = $2
   AND ($3::uuid IS NULL OR t.client_id = $3::uuid)
   AND ($4::uuid IS NULL
+       OR t.requester_id = $4::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = $4::uuid AND rp.project_id = t.project_id))
+  AND ($5::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
-       OR t.assignee_id = $4::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $5::uuid)
+       OR t.assignee_id = $5::uuid)
 FOR UPDATE OF t
 `
 
 type GetTicketForUpdateParams struct {
-	Key            string
-	OrganizationID uuid.UUID
-	ScopeClientID  *uuid.UUID
-	ScopeAgentID   *uuid.UUID
+	Key              string
+	OrganizationID   uuid.UUID
+	ScopeClientID    *uuid.UUID
+	ScopeRequesterID *uuid.UUID
+	ScopeAgentID     *uuid.UUID
 }
 
 type GetTicketForUpdateRow struct {
@@ -304,6 +315,7 @@ type GetTicketForUpdateRow struct {
 	Status              string
 	Priority            string
 	ClientID            uuid.UUID
+	ProjectID           uuid.UUID
 	RequesterID         uuid.UUID
 	AssigneeID          *uuid.UUID
 	AssigneeName        *string
@@ -322,6 +334,7 @@ func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdate
 		arg.Key,
 		arg.OrganizationID,
 		arg.ScopeClientID,
+		arg.ScopeRequesterID,
 		arg.ScopeAgentID,
 	)
 	var i GetTicketForUpdateRow
@@ -333,6 +346,7 @@ func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdate
 		&i.Status,
 		&i.Priority,
 		&i.ClientID,
+		&i.ProjectID,
 		&i.RequesterID,
 		&i.AssigneeID,
 		&i.AssigneeName,
@@ -509,36 +523,41 @@ LEFT JOIN users a ON a.id = t.assignee_id
 WHERE t.organization_id = $1
   AND ($2::uuid IS NULL OR t.client_id = $2::uuid)
   AND ($3::uuid IS NULL
+       OR t.requester_id = $3::uuid
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = $3::uuid AND rp.project_id = t.project_id))
+  AND ($4::uuid IS NULL
        OR EXISTS (SELECT 1 FROM client_agents ca
-                  WHERE ca.client_id = t.client_id AND ca.user_id = $3::uuid)
-       OR t.assignee_id = $3::uuid)
-  AND t.status = ANY($4::text[])
-  AND (coalesce(cardinality($5::uuid[]), 0) = 0 OR t.project_id = ANY($5::uuid[]))
-  AND ($6::uuid IS NULL OR t.client_id = $6::uuid)
-  AND ($7::uuid IS NULL OR t.assignee_id = $7::uuid)
-  AND (NOT $8::boolean OR t.assignee_id IS NULL)
-  AND ($9::text IS NULL
-       OR t.key = $10::text
-       OR t.subject ILIKE $9::text
-       OR c.name ILIKE $9::text)
-  AND ($11::uuid IS NULL OR t.id < $11::uuid)
+                  WHERE ca.client_id = t.client_id AND ca.user_id = $4::uuid)
+       OR t.assignee_id = $4::uuid)
+  AND t.status = ANY($5::text[])
+  AND (coalesce(cardinality($6::uuid[]), 0) = 0 OR t.project_id = ANY($6::uuid[]))
+  AND ($7::uuid IS NULL OR t.client_id = $7::uuid)
+  AND ($8::uuid IS NULL OR t.assignee_id = $8::uuid)
+  AND (NOT $9::boolean OR t.assignee_id IS NULL)
+  AND ($10::text IS NULL
+       OR t.key = $11::text
+       OR t.subject ILIKE $10::text
+       OR c.name ILIKE $10::text)
+  AND ($12::uuid IS NULL OR t.id < $12::uuid)
 ORDER BY t.id DESC
-LIMIT $12
+LIMIT $13
 `
 
 type ListTicketsParams struct {
-	OrganizationID uuid.UUID
-	ScopeClientID  *uuid.UUID
-	ScopeAgentID   *uuid.UUID
-	Statuses       []string
-	ProjectIds     []uuid.UUID
-	ClientID       *uuid.UUID
-	AssigneeID     *uuid.UUID
-	Unassigned     bool
-	SearchPattern  *string
-	SearchKey      *string
-	Before         *uuid.UUID
-	RowLimit       int32
+	OrganizationID   uuid.UUID
+	ScopeClientID    *uuid.UUID
+	ScopeRequesterID *uuid.UUID
+	ScopeAgentID     *uuid.UUID
+	Statuses         []string
+	ProjectIds       []uuid.UUID
+	ClientID         *uuid.UUID
+	AssigneeID       *uuid.UUID
+	Unassigned       bool
+	SearchPattern    *string
+	SearchKey        *string
+	Before           *uuid.UUID
+	RowLimit         int32
 }
 
 type ListTicketsRow struct {
@@ -566,6 +585,7 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 	rows, err := q.db.Query(ctx, listTickets,
 		arg.OrganizationID,
 		arg.ScopeClientID,
+		arg.ScopeRequesterID,
 		arg.ScopeAgentID,
 		arg.Statuses,
 		arg.ProjectIds,
@@ -628,9 +648,10 @@ const nextTicketNumber = `-- name: NextTicketNumber :one
 SELECT nextval('ticket_number_seq')::bigint
 `
 
-// Scoped queries take the organization (always), scope_client_id (requesters: their client) and
-// scope_agent_id (agents: their assigned clients and tickets); both are NULL for supervisors and
-// admins. Only internal/tickets/access.go sets them.
+// Scoped queries take the organization (always), scope_client_id and scope_requester_id
+// (requesters: their client, and there the tickets they reported or of a project they are linked
+// to) and scope_agent_id (agents: their assigned clients and tickets); all are NULL for
+// supervisors and admins. Only internal/tickets/access.go sets them.
 func (q *Queries) NextTicketNumber(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, nextTicketNumber)
 	var column_1 int64

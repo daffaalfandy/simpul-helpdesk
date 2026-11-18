@@ -261,18 +261,20 @@ FROM tickets t
 JOIN projects p ON p.id = t.project_id
 JOIN users r ON r.id = t.requester_id
 LEFT JOIN ticket_dod_overrides o ON o.ticket_id = t.id
-WHERE t.client_id = $1 AND t.status = $2
-  AND (t.requester_id = $3
-       OR EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = $3))
+WHERE t.organization_id = $1 AND t.client_id = $2 AND t.status = $3
+  AND (t.requester_id = $4
+       OR (EXISTS (SELECT 1 FROM ticket_watchers w WHERE w.ticket_id = t.id AND w.user_id = $4)
+           AND EXISTS (SELECT 1 FROM requester_projects rp WHERE rp.user_id = $4 AND rp.project_id = t.project_id)))
 ORDER BY t.status_changed_at, t.id
-LIMIT $4
+LIMIT $5
 `
 
 type ListUATRequestsParams struct {
-	ClientID uuid.UUID
-	Status   string
-	UserID   uuid.UUID
-	RowLimit int32
+	OrganizationID uuid.UUID
+	ClientID       uuid.UUID
+	Status         string
+	UserID         uuid.UUID
+	RowLimit       int32
 }
 
 type ListUATRequestsRow struct {
@@ -288,10 +290,11 @@ type ListUATRequestsRow struct {
 	RequesterName   string
 }
 
-// The tests waiting on a requester: their client's tickets In UAT that they reported or follow,
-// oldest first.
+// The tests waiting on a requester: their client's tickets In UAT that they reported, or follow
+// on a project they are linked to, oldest first.
 func (q *Queries) ListUATRequests(ctx context.Context, arg ListUATRequestsParams) ([]ListUATRequestsRow, error) {
 	rows, err := q.db.Query(ctx, listUATRequests,
+		arg.OrganizationID,
 		arg.ClientID,
 		arg.Status,
 		arg.UserID,

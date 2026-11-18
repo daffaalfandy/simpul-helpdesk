@@ -261,6 +261,14 @@ type Repository struct {
 	OrganizationID uuid.UUID
 }
 
+type RequesterProject struct {
+	UserID         uuid.UUID
+	ProjectID      uuid.UUID
+	ClientID       uuid.UUID
+	OrganizationID uuid.UUID
+	CreatedAt      time.Time
+}
+
 type Session struct {
 	ID         uuid.UUID
 	TokenHash  []byte

@@ -111,5 +111,12 @@ SELECT id, name FROM projects WHERE id = @id AND client_id = @client_id AND acti
 SELECT id, name FROM projects WHERE client_id = @client_id AND is_default;
 
 -- name: ListActiveClientProjects :many
--- The report form's "Which system?" choices.
-SELECT id, name, description FROM projects WHERE client_id = @client_id AND active ORDER BY lower(name);
+-- The report form's "Which system?" choices; requester_id narrows them to the projects that
+-- requester is linked to.
+SELECT p.id, p.name, p.description
+FROM projects p
+WHERE p.organization_id = @organization_id AND p.client_id = @client_id AND p.active
+  AND (sqlc.narg(requester_id)::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM requester_projects rp
+                  WHERE rp.user_id = sqlc.narg(requester_id)::uuid AND rp.project_id = p.id))
+ORDER BY lower(p.name);

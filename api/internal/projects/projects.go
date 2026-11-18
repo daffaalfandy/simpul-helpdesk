@@ -52,6 +52,7 @@ const (
 	dataCalendar                 = "calendar"
 	dataDoD                      = "dod"
 	dataAllowTicketOverride      = "allow_ticket_override"
+	dataLinkedRequesters         = "linked_requester_ids"
 	// dataTargetField names one priority's field in audit data, e.g. "P1.resolve".
 	dataTargetField = "%s.%s"
 )
@@ -207,9 +208,18 @@ func (s *Service) Create(ctx context.Context, actor audit.Actor, orgID uuid.UUID
 				return err
 			}
 		}
-		return audit.Write(ctx, tx.Q, actor.Entry(ActionCreated, TargetProject, &id, map[string]any{
-			dataClient: in.ClientID, dataName: name, dataActive: active,
-		}))
+		data := map[string]any{dataClient: in.ClientID, dataName: name, dataActive: active}
+		// A client's first project takes all its requesters: until now they could report on nothing.
+		if n == 0 {
+			linked, err := tx.Q.LinkClientRequestersToProject(ctx, db.LinkClientRequestersToProjectParams{
+				ProjectID: id, ClientID: &in.ClientID, OrganizationID: orgID, Role: string(auth.RoleRequester),
+			})
+			if err != nil {
+				return err
+			}
+			data[dataLinkedRequesters] = linked
+		}
+		return audit.Write(ctx, tx.Q, actor.Entry(ActionCreated, TargetProject, &id, data))
 	})
 	if err != nil {
 		return Project{}, projectError(err)

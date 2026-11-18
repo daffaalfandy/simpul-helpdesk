@@ -11,11 +11,16 @@ import (
 )
 
 // insertProject adds a project with the four targets its deferred rule needs, in one statement.
+// The client's requesters report on it, as migration 00023 linked them to every project, so
+// tests keep whole-client access unless they narrow it.
 const insertProject = `
 WITH p AS (
   INSERT INTO projects (organization_id, client_id, name, is_default)
   SELECT organization_id, id, $2, $3 FROM clients WHERE id = $1
-  RETURNING id, organization_id
+  RETURNING id, client_id, organization_id
+), linked AS (
+  INSERT INTO requester_projects (user_id, project_id, client_id, organization_id)
+  SELECT u.id, p.id, p.client_id, p.organization_id FROM p JOIN users u ON u.client_id = p.client_id
 )
 INSERT INTO project_sla_targets (project_id, priority, first_response_value, first_response_unit,
                                  resolve_value, resolve_unit, deliver_value, deliver_unit, calendar)
@@ -34,8 +39,8 @@ SELECT p.id, pr.code, 1, 'h', 4, 'h', 4, 'h', 'business_hours' FROM p, prioritie
 RETURNING project_id`
 
 // Project inserts a project for clientID with simple targets (1 h response, 4 h resolve and
-// deliver) and no Definition of Done conditions, and returns its id. Pass isDefault for a
-// client's first project.
+// deliver) and no Definition of Done conditions, links the client's requesters to it, and
+// returns its id. Pass isDefault for a client's first project.
 func Project(tb testing.TB, st *store.Store, clientID uuid.UUID, name string, isDefault bool) uuid.UUID {
 	tb.Helper()
 	return project(tb, st, insertProject, clientID, name, isDefault)

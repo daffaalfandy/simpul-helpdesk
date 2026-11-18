@@ -164,6 +164,18 @@ export function useInviteRequester(clientId: string) {
   })
 }
 
+/** Replaces which of the client's projects a requester reports on and sees tickets of. */
+export function useSetRequesterProjects(clientId: string) {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ userId, projectIds }: { userId: string; projectIds: string[] }) =>
+      unwrap(
+        api.PUT('/clients/{clientId}/requesters/{userId}/projects', { params: { path: { clientId, userId } }, body: { projectIds } }),
+      ),
+    onSuccess: () => invalidate(queryKeys.clientRequesters(clientId)),
+  })
+}
+
 /** Row actions: resend an invite, suspend or reactivate the account, or take a member off the organization. */
 export type MemberAction = 'suspend' | 'reactivate' | 'invite' | 'remove'
 

@@ -7,7 +7,7 @@ import { renderApp } from '../../test/renderApp'
 import { writeRichText } from '../../test/richText'
 import { PASSWORD, state, USERS } from '../../test/server'
 import { IDS } from '../../test/settingsApi'
-import { ticket, tickets } from '../../test/ticketsApi'
+import { TICKET_IDS, ticket, tickets } from '../../test/ticketsApi'
 
 const REQUESTER = USERS['hendra@kominfo-jambi.test'] ?? null
 const AGENT = USERS['rina@demo-vendor.test'] ?? null
@@ -163,6 +163,62 @@ describe('report an issue without a project', () => {
     renderApp('/portal/new')
     expect(await screen.findByRole('heading', { name: "Reporting isn't set up yet" })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Submit ticket' })).not.toBeInTheDocument()
+  })
+})
+
+describe("report an issue on the requester's projects", () => {
+  beforeEach(() => {
+    state.me = REQUESTER
+  })
+
+  /** Links Pak Hendra to these projects only, as an administrator would. */
+  function linkTo(...projectIds: string[]) {
+    const hendra = tickets.requesters[IDS.jambi]?.find((r) => r.id === REQUESTER?.id)
+    if (!hendra) throw new Error('no Hendra')
+    hendra.projectIds = projectIds
+  }
+
+  it('offers only incidents on their systems without the project that takes service requests', async () => {
+    linkTo(PROJECT_IDS.email)
+    const user = userEvent.setup()
+    renderApp('/portal/new')
+    expect(await screen.findByRole('heading', { name: 'How can we help?' })).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /I need something new/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /Something isn't working/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /What do you need\?/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Which system\?/ }))
+    expect(await screen.findByRole('option', { name: /Email/ })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /e-Office/ })).not.toBeInTheDocument()
+  })
+
+  it('offers both types with the project that takes service requests', async () => {
+    linkTo(PROJECT_IDS.eOffice)
+    renderApp('/portal/new')
+    expect(await screen.findByRole('radio', { name: /I need something new/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Something isn't working/ })).toBeChecked()
+  })
+
+  it('explains that reporting is not set up for a requester on no project', async () => {
+    linkTo()
+    renderApp('/portal/new')
+    expect(await screen.findByRole('heading', { name: "Reporting isn't set up yet" })).toBeInTheDocument()
+    expect(screen.getByText("There's no system you can report on yet. Please contact our support team by phone or email.")).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Submit ticket' })).not.toBeInTheDocument()
+  })
+
+  it("hides a colleague's ticket on a project they aren't linked to, but keeps their own", async () => {
+    tickets.tickets.push(
+      ticket({
+        id: 't-24950', key: 'HD-24950', subject: 'Shared mailbox is full', requester: { id: TICKET_IDS.dian, name: 'Dian Puspita' },
+        project: { id: PROJECT_IDS.email, name: 'Email' },
+      }),
+      ticket({ id: 't-24951', key: 'HD-24951', subject: 'My signature is missing', project: { id: PROJECT_IDS.email, name: 'Email' } }),
+    )
+    linkTo(PROJECT_IDS.eOffice)
+    renderApp('/portal')
+    const card = (await screen.findByRole('heading', { name: 'My tickets' })).closest('section') as HTMLElement
+    expect(await within(card).findByText('My signature is missing')).toBeInTheDocument()
+    expect(within(card).queryByText('Shared mailbox is full')).not.toBeInTheDocument()
   })
 })
 

@@ -70,7 +70,7 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 				return err
 			}
 		}
-		projectID, err := ticketProject(ctx, tx.Q, clientID, in)
+		projectID, err := ticketProject(ctx, tx.Q, a, clientID, in)
 		if err != nil {
 			return err
 		}
@@ -160,8 +160,9 @@ func (s *Service) Create(ctx context.Context, p *auth.Principal, in CreateInput)
 }
 
 // ticketProject picks the ticket's project: the incident's chosen system, or the client's
-// default project for a service request. A client without a project can't take tickets.
-func ticketProject(ctx context.Context, q *db.Queries, clientID uuid.UUID, in CreateInput) (uuid.UUID, error) {
+// default project for a service request. A client without a project can't take tickets, and a
+// requester reports only on projects they are linked to.
+func ticketProject(ctx context.Context, q *db.Queries, a access, clientID uuid.UUID, in CreateInput) (uuid.UUID, error) {
 	def, err := q.GetClientDefaultProject(ctx, clientID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, apperr.Invalid(apperr.CodeClientHasNoProject, "This client has no project yet",
@@ -170,14 +171,25 @@ func ticketProject(ctx context.Context, q *db.Queries, clientID uuid.UUID, in Cr
 	if err != nil {
 		return uuid.Nil, err
 	}
-	if in.Type == ticket.TypeRequest {
-		return def.ID, nil
+	id := def.ID
+	if in.Type != ticket.TypeRequest {
+		p, err := q.GetActiveClientProject(ctx, db.GetActiveClientProjectParams{ID: *in.ProjectID, ClientID: clientID})
+		if err != nil {
+			return uuid.Nil, lookupError(err, apperr.CodeInvalidProject, "Choose one of the client's systems")
+		}
+		id = p.ID
 	}
-	p, err := q.GetActiveClientProject(ctx, db.GetActiveClientProjectParams{ID: *in.ProjectID, ClientID: clientID})
-	if err != nil {
-		return uuid.Nil, lookupError(err, apperr.CodeInvalidProject, "Choose one of the client's systems")
+	linked, err := requesterMayUse(ctx, q, a, id)
+	switch {
+	case err != nil:
+		return uuid.Nil, err
+	case linked:
+		return id, nil
+	case in.Type == ticket.TypeRequest:
+		return uuid.Nil, apperr.Invalid(apperr.CodeInvalidProject, "Service requests aren't open to you",
+			"Ask the support team to link you to the project that takes them.")
 	}
-	return p.ID, nil
+	return uuid.Nil, apperr.Invalid(apperr.CodeInvalidProject, "Choose one of your systems", "")
 }
 
 // checkStaffTarget checks an agent may log tickets for the client and that the requester

@@ -13,15 +13,17 @@ import (
 )
 
 // access is what one user may see. It fills the scope parameters of every ticket query, so
-// requesters get their client's tickets and public messages, and agents their clients' tickets
+// requesters get the tickets of their client's projects they are linked to, the tickets they
+// reported themselves, and public messages (owner, 18 Nov); agents get their clients' tickets
 // plus any ticket assigned to them (they keep it after being unlinked; owner, 17 Nov).
 type access struct {
-	org           uuid.UUID  // the organization the request works in; every query filters on it
-	user          uuid.UUID  // who asks: a key of another organization they work in gets a 409
-	scopeClientID *uuid.UUID // requesters: their client
-	scopeAgentID  *uuid.UUID // agents: clients they are assigned to, and tickets assigned to them
-	visibility    *string    // requesters: public messages only
-	staff         bool       // vendor staff: internal notes, agent actions
+	org              uuid.UUID  // the organization the request works in; every query filters on it
+	user             uuid.UUID  // who asks: a key of another organization they work in gets a 409
+	scopeClientID    *uuid.UUID // requesters: their client (defence in depth beside scopeRequesterID)
+	scopeRequesterID *uuid.UUID // requesters: their own tickets and their projects' tickets
+	scopeAgentID     *uuid.UUID // agents: clients they are assigned to, and tickets assigned to them
+	visibility       *string    // requesters: public messages only
+	staff            bool       // vendor staff: internal notes, agent actions
 }
 
 var publicOnly = string(ticket.VisibilityPublic)
@@ -37,8 +39,10 @@ func accessFor(p *auth.Principal) (access, error) {
 		if p.ClientID == nil {
 			return access{}, apperr.Forbidden()
 		}
-		client := *p.ClientID
-		return access{org: p.OrganizationID, scopeClientID: &client, visibility: &publicOnly}, nil // never switches
+		client, requester := *p.ClientID, p.UserID
+		return access{ // never switches
+			org: p.OrganizationID, scopeClientID: &client, scopeRequesterID: &requester, visibility: &publicOnly,
+		}, nil
 	case auth.Can(p.Role, auth.CapClientsViewAll):
 		return access{org: p.OrganizationID, user: p.UserID, staff: true}, nil
 	case auth.Can(p.Role, auth.CapAgentApp):
@@ -49,7 +53,7 @@ func accessFor(p *auth.Principal) (access, error) {
 }
 
 // projectFilter is the viewer's saved project filter for the board and ticket lists. Requesters
-// have none: they see every ticket of their client.
+// have none: their scope already holds their projects.
 func projectFilter(ctx context.Context, q *db.Queries, a access) ([]uuid.UUID, error) {
 	if !a.staff {
 		return nil, nil
@@ -82,10 +86,12 @@ func clientAccess(p *auth.Principal) (access, error) {
 }
 
 // Scope is a user's ticket scope for queries outside this package (the notification inbox).
-// It is accessFor's rule: those queries take the same scope_client_id and scope_agent_id.
+// It is accessFor's rule: those queries take the same scope_client_id, scope_requester_id and
+// scope_agent_id.
 type Scope struct {
 	OrganizationID uuid.UUID
 	ClientID       *uuid.UUID
+	RequesterID    *uuid.UUID
 	AgentID        *uuid.UUID
 	Staff          bool
 }
@@ -96,5 +102,7 @@ func ScopeFor(p *auth.Principal) (Scope, error) {
 	if err != nil {
 		return Scope{}, err
 	}
-	return Scope{OrganizationID: a.org, ClientID: a.scopeClientID, AgentID: a.scopeAgentID, Staff: a.staff}, nil
+	return Scope{
+		OrganizationID: a.org, ClientID: a.scopeClientID, RequesterID: a.scopeRequesterID, AgentID: a.scopeAgentID, Staff: a.staff,
+	}, nil
 }

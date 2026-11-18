@@ -76,11 +76,20 @@ function useWorkingHours(intake: Intake, targets: ReadonlyArray<ProjectTarget> |
   return { hours, days, always }
 }
 
+/**
+ * The ticket types the requester can report: incidents on the projects they are linked to, and
+ * service requests when they are linked to the project that takes them (owner, 18 Nov).
+ */
+function usableTypes(intake: Intake): TicketType[] {
+  return TYPES.filter((k) => (k === 'incident' ? intake.projects.length > 0 : intake.defaultProjectId !== null))
+}
+
 function ReportForm({ onCreated }: { onCreated: (t: Ticket) => void }) {
   const { data: intake } = useSuspenseQuery(intakeQueryOptions(null))
-  // Every ticket belongs to a project; without one the client can't report yet.
-  if (intake.defaultProjectId === null) return <NoProject />
-  return <ReportFormFields intake={intake} onCreated={onCreated} />
+  // Every ticket belongs to a project; without one they can't report yet.
+  const types = usableTypes(intake)
+  if (types.length === 0) return <NoProject />
+  return <ReportFormFields intake={intake} types={types} onCreated={onCreated} />
 }
 
 function NoProject() {
@@ -95,13 +104,15 @@ function NoProject() {
   )
 }
 
-function ReportFormFields({ intake, onCreated }: { intake: Intake; onCreated: (t: Ticket) => void }) {
+type ReportFormFieldsProps = { intake: Intake; types: readonly TicketType[]; onCreated: (t: Ticket) => void }
+
+function ReportFormFields({ intake, types, onCreated }: ReportFormFieldsProps) {
   const { t } = useTranslation()
   const { data: policy } = useSuspenseQuery(attachmentPolicyQueryOptions)
   const create = useCreateTicket()
   const uploads = useAttachmentUploads(policy)
 
-  const [type, setType] = useState<TicketType>('incident')
+  const [type, setType] = useState<TicketType>(types[0] ?? 'incident')
   const [subject, setSubject] = useState('')
   // With one system there is nothing to choose.
   const [projectId, setProjectId] = useState<string | null>(intake.projects.length === 1 ? (intake.projects[0]?.id ?? null) : null)
@@ -156,14 +167,17 @@ function ReportFormFields({ intake, onCreated }: { intake: Intake; onCreated: (t
             </p>
           </div>
 
-          <OptionCardGroup label={t('portal.new.typeLegend')} value={type} onChange={setType}>
-            {TYPES.map((k) => (
-              <OptionCard key={k} value={k}>
-                <span className="font-extrabold">{t(`portal.new.${k}.title`)}</span>
-                <span className="text-sm text-muted">{t(`portal.new.${k}.description`)}</span>
-              </OptionCard>
-            ))}
-          </OptionCardGroup>
+          {/* A single type needs no choice: the form below is for it. */}
+          {types.length > 1 && (
+            <OptionCardGroup label={t('portal.new.typeLegend')} value={type} onChange={setType}>
+              {types.map((k) => (
+                <OptionCard key={k} value={k}>
+                  <span className="font-extrabold">{t(`portal.new.${k}.title`)}</span>
+                  <span className="text-sm text-muted">{t(`portal.new.${k}.description`)}</span>
+                </OptionCard>
+              ))}
+            </OptionCardGroup>
+          )}
 
           <TextInput
             label={t('portal.new.subject')}

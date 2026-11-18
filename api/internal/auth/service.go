@@ -39,6 +39,7 @@ const (
 	ActionUserReactivated        = "user.reactivated"
 	ActionMemberAdded            = "user.member_added"
 	ActionMemberRemoved          = "user.member_removed"
+	ActionProjectsChanged        = "user.projects_changed"
 
 	TargetUser    = "user"
 	auditDataRole = "role"
@@ -510,6 +511,14 @@ func (s *Service) CreateUser(ctx context.Context, in NewUser) (uuid.UUID, error)
 		}
 		if account == RoleStaff {
 			if err := tx.Q.UpsertMembership(ctx, db.UpsertMembershipParams{UserID: id, OrganizationID: in.OrganizationID, Role: string(in.Role)}); err != nil {
+				return err
+			}
+		}
+		// A requester from the command line reports on every project of their client.
+		if clientID != nil {
+			if err := tx.Q.LinkRequesterToClientProjects(ctx, db.LinkRequesterToClientProjectsParams{
+				UserID: id, ClientID: *clientID, OrganizationID: in.OrganizationID,
+			}); err != nil {
 				return err
 			}
 		}
