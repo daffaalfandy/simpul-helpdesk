@@ -2,6 +2,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/mail"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/secretbox"
 )
 
@@ -30,6 +32,7 @@ const (
 	VarSMTPAddr       = "SMTP_ADDR"
 	VarSMTPUser       = "SMTP_USER"
 	VarSMTPPass       = "SMTP_PASS"
+	VarSMTPTLS        = "SMTP_TLS"
 	VarMailFrom       = "MAIL_FROM"
 	VarMailFromName   = "MAIL_FROM_NAME"
 	VarDocsEnabled    = "DOCS_ENABLED"
@@ -65,6 +68,7 @@ type Config struct {
 	SMTPAddr       string
 	SMTPUser       string
 	SMTPPass       string
+	SMTPTLS        mail.TLSPolicy
 	MailFrom       string
 	MailFromName   string
 	DocsEnabled    bool
@@ -83,8 +87,12 @@ func Load() (Config, error) {
 		SMTPAddr:     getenv(VarSMTPAddr, DefaultSMTPAddr),
 		SMTPUser:     os.Getenv(VarSMTPUser),
 		SMTPPass:     os.Getenv(VarSMTPPass),
+		SMTPTLS:      mail.TLSPolicy(strings.ToLower(getenv(VarSMTPTLS, string(mail.TLSAuto)))),
 		MailFrom:     getenv(VarMailFrom, DefaultMailFrom),
 		MailFromName: getenv(VarMailFromName, DefaultMailFromName),
+	}
+	if !c.SMTPTLS.Valid() {
+		errs = append(errs, fmt.Errorf("%s must be one of %v, got %q", VarSMTPTLS, mail.TLSPolicies, c.SMTPTLS))
 	}
 	if c.Env != EnvDev && c.Env != EnvProd {
 		errs = append(errs, fmt.Errorf("%s must be %s or %s, got %q", VarAppEnv, EnvDev, EnvProd, c.Env))
@@ -128,15 +136,21 @@ func Load() (Config, error) {
 		rawKey = DefaultDevEncryptionKey
 	case strings.TrimSpace(rawKey) == "":
 		errs = append(errs, fmt.Errorf("%s is required: 32 random bytes, base64 (openssl rand -base64 32)", VarEncryptionKey))
-	case !c.IsDev() && strings.TrimSpace(rawKey) == DefaultDevEncryptionKey:
-		errs = append(errs, fmt.Errorf("%s is the public development key; generate your own", VarEncryptionKey))
 	}
 	if rawKey != "" {
 		if c.EncryptionKey, err = secretbox.ParseKey(rawKey); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", VarEncryptionKey, err))
+		} else if !c.IsDev() && isDevKey(c.EncryptionKey) {
+			// Compared decoded: the key parser also takes unpadded and URL-safe spellings.
+			errs = append(errs, fmt.Errorf("%s is the public development key; generate your own", VarEncryptionKey))
 		}
 	}
 	return c, errors.Join(errs...)
+}
+
+func isDevKey(key []byte) bool {
+	dev, err := secretbox.ParseKey(DefaultDevEncryptionKey)
+	return err == nil && bytes.Equal(key, dev)
 }
 
 func getenv(key, fallback string) string {
@@ -167,6 +181,11 @@ func parsePrefixes(s string) ([]netip.Prefix, error) {
 			continue
 		}
 		if p, err := netip.ParsePrefix(part); err == nil {
+			if p.Bits() == 0 {
+				// Trusting every address would let anyone set their own X-Forwarded-For and dodge
+				// the per-address sign-in limits.
+				return nil, fmt.Errorf("%s: %q trusts every address; list your proxies' addresses", VarTrustedProxies, part)
+			}
 			out = append(out, p.Masked())
 			continue
 		}

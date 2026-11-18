@@ -124,6 +124,22 @@ func (q *Queries) DeletePersonalToken(ctx context.Context, arg DeletePersonalTok
 	return i, err
 }
 
+const deleteTokensOutsideOrganization = `-- name: DeleteTokensOutsideOrganization :exec
+DELETE FROM personal_access_tokens WHERE user_id = $1 AND organization_id <> $2
+`
+
+type DeleteTokensOutsideOrganizationParams struct {
+	UserID         uuid.UUID
+	OrganizationID uuid.UUID
+}
+
+// A former administrator keeps tokens only for the organization they now belong to; tokens made
+// elsewhere would come back to life if they joined that organization later.
+func (q *Queries) DeleteTokensOutsideOrganization(ctx context.Context, arg DeleteTokensOutsideOrganizationParams) error {
+	_, err := q.db.Exec(ctx, deleteTokensOutsideOrganization, arg.UserID, arg.OrganizationID)
+	return err
+}
+
 const deleteUserTokens = `-- name: DeleteUserTokens :exec
 DELETE FROM personal_access_tokens WHERE user_id = $1
 `

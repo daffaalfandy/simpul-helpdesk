@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"io"
 	"net/http"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
@@ -96,14 +95,7 @@ func apiRepository(r connector.Repository) gen.Repository {
 // ReceiveWebhook takes a delivery from GitHub or GitLab. It is public: the repository's secret
 // authenticates it, so the body is read exactly as sent (the spec's x-raw-body).
 func (s *server) ReceiveWebhook(ctx context.Context, req gen.ReceiveWebhookRequestObject) (gen.ReceiveWebhookResponseObject, error) {
-	body, err := io.ReadAll(req.Body)
-	if tooLargeError(err) {
-		return nil, s.connector.RefuseTooLarge(ctx, req.RepositoryId)
-	}
-	if err != nil {
-		return nil, err
-	}
-	receipt, err := s.connector.Receive(ctx, req.RepositoryId, webhookHeader(req.Params), body)
+	receipt, err := s.connector.Receive(ctx, req.RepositoryId, webhookHeader(req.Params), req.Body)
 	if err != nil {
 		return nil, err
 	}

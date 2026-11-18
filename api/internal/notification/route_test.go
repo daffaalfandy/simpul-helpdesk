@@ -324,8 +324,8 @@ func TestRouteChannelsFollowPreferences(t *testing.T) {
 	}
 }
 
-// UAT items go right away whatever the user's summary setting; staff reasons never reach the
-// client side.
+// UAT items go right away whatever the user's summary setting; staff reasons and causes never
+// reach the client side.
 func TestRouteUrgencyAndReasons(t *testing.T) {
 	in := base()
 	in.Actor, in.ActorStaff = &agent2, true
@@ -338,6 +338,25 @@ func TestRouteUrgencyAndReasons(t *testing.T) {
 		if (d.Change.Reason != "") != staff {
 			t.Errorf("%s (staff %v) reason = %q", d.UserID, staff, d.Change.Reason)
 		}
+		if (d.Change.Cause != "") != staff {
+			t.Errorf("%s (staff %v) cause = %q", d.UserID, staff, d.Change.Cause)
+		}
+	}
+	in.Changes = []Change{{AuditID: auditA, Kind: ChangeStatus, StatusFrom: ticket.StatusResolved,
+		StatusTo: ticket.StatusInProgress, Cause: ticket.CauseReopened}}
+	in.Actor, in.ActorStaff = nil, false
+	ds, _ = Route(in)
+	told := false
+	for _, d := range ds {
+		if d.UserID == requester {
+			told = true
+			if d.Change.Cause != ticket.CauseReopened {
+				t.Errorf("the client's own cause = %q, want %q", d.Change.Cause, ticket.CauseReopened)
+			}
+		}
+	}
+	if !told {
+		t.Error("the requester isn't told about the reopened ticket")
 	}
 	in.Changes = []Change{{AuditID: auditA, Kind: ChangeStatus, StatusFrom: ticket.StatusInProgress, StatusTo: ticket.StatusInUAT}}
 	ds, _ = Route(in)

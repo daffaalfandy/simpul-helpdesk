@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
@@ -28,13 +29,51 @@ const (
 	detailOther = "This ticket belongs to another organization. A token works only in the organization it was made in."
 )
 
+// Fences around text people wrote (see quoted).
+const (
+	fenceChar   = '`'
+	minFenceLen = 3
+	// Unicode's line and paragraph separators, which some readers also break lines on.
+	lineSeparator      = '\u2028'
+	paragraphSeparator = '\u2029'
+	space              = ' '
+)
+
 func at(t time.Time) string { return t.UTC().Format(timeLayout) }
 
 func refName(r *tickets.Ref) string {
 	if r == nil {
 		return nobody
 	}
-	return r.Name
+	return oneLine(r.Name)
+}
+
+// quoted fences text someone wrote (a description, a message, a file) with a fence longer than
+// any backtick run inside it, so nothing in it can close the fence and pass for this output's
+// own structure, such as a made-up "Internal note" heading.
+func quoted(text string) string {
+	longest, run := 0, 0
+	for _, r := range text {
+		if r == fenceChar {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	fence := strings.Repeat(string(fenceChar), max(minFenceLen, longest+1))
+	return fence + "\n" + strings.TrimRight(text, "\n") + "\n" + fence
+}
+
+// oneLine keeps a short field (a subject, a name, a file name) on one line: line breaks and
+// other control characters become spaces, so the field can't start a heading of its own.
+func oneLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || r == lineSeparator || r == paragraphSeparator {
+			return space
+		}
+		return r
+	}, s)
 }
 
 func renderList(list []tickets.Summary, link func(string) string) string {
@@ -45,22 +84,22 @@ func renderList(list []tickets.Summary, link func(string) string) string {
 	fmt.Fprintf(&b, "%d tickets, most recently updated first:\n\n", len(list))
 	for _, t := range list {
 		fmt.Fprintf(&b, "- **%s** %s\n  %s · %s · %s · client %s · assignee %s · updated %s · %s\n",
-			t.Key, t.Subject, t.Status, t.Priority, t.Type, t.Client.Name, refName(t.Assignee), at(t.UpdatedAt), link(t.Key))
+			t.Key, oneLine(t.Subject), t.Status, t.Priority, t.Type, oneLine(t.Client.Name), refName(t.Assignee), at(t.UpdatedAt), link(t.Key))
 	}
 	return b.String()
 }
 
 func renderTicket(t tickets.Ticket, msgs []tickets.Message, link string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# %s: %s\n\n", t.Key, t.Subject)
+	fmt.Fprintf(&b, "# %s: %s\n\n", t.Key, oneLine(t.Subject))
 	fmt.Fprintf(&b, "- Link: %s\n", link)
 	fmt.Fprintf(&b, "- Status: %s%s\n", t.Status, allowedMoves(t.AllowedStatuses))
 	fmt.Fprintf(&b, "- Priority: %s\n- Type: %s\n", t.Priority, t.Type)
-	fmt.Fprintf(&b, "- Client: %s\n- Project: %s\n", t.Client.Name, t.Project.Name)
+	fmt.Fprintf(&b, "- Client: %s\n- Project: %s\n", oneLine(t.Client.Name), oneLine(t.Project.Name))
 	if t.CatalogItem != nil {
-		fmt.Fprintf(&b, "- Request: %s\n", t.CatalogItem.Name)
+		fmt.Fprintf(&b, "- Request: %s\n", oneLine(t.CatalogItem.Name))
 	}
-	fmt.Fprintf(&b, "- Requester: %s%s\n", t.Requester.Name, jobTitle(t.RequesterJobTitle))
+	fmt.Fprintf(&b, "- Requester: %s%s\n", oneLine(t.Requester.Name), jobTitle(t.RequesterJobTitle))
 	fmt.Fprintf(&b, "- Assignee: %s\n", refName(t.Assignee))
 	fmt.Fprintf(&b, "- Created: %s via %s\n- Updated: %s\n", at(t.CreatedAt), t.Channel, at(t.UpdatedAt))
 	if t.SLAClocks != nil {
@@ -70,11 +109,11 @@ func renderTicket(t tickets.Ticket, msgs []tickets.Message, link string) string 
 	if t.DoD != nil {
 		fmt.Fprintf(&b, "- Definition of Done: %s\n", doneness(t.DoD))
 	}
-	fmt.Fprintf(&b, "\n## Description\n\n%s\n", t.Description)
+	fmt.Fprintf(&b, "\n## Description\n\n%s\n", quoted(t.Description))
 	writeAttachments(&b, t.Attachments)
 	fmt.Fprintf(&b, "\n## Conversation (%d messages, oldest first)\n", len(msgs))
 	for _, m := range msgs {
-		fmt.Fprintf(&b, "\n### %s, %s\n\n%s\n", messageHeading(m), at(m.CreatedAt), m.Body)
+		fmt.Fprintf(&b, "\n### %s, %s\n\n%s\n", messageHeading(m), at(m.CreatedAt), quoted(m.Body))
 		writeAttachments(&b, m.Attachments)
 	}
 	return b.String()
@@ -95,7 +134,7 @@ func jobTitle(t *string) string {
 	if t == nil || *t == "" {
 		return ""
 	}
-	return " (" + *t + ")"
+	return " (" + oneLine(*t) + ")"
 }
 
 func clock(v slaengine.View) string {
@@ -125,11 +164,11 @@ func doneness(d *tickets.TicketDoD) string {
 func messageHeading(m tickets.Message) string {
 	switch {
 	case m.Visibility == ticket.VisibilityInternal:
-		return "Internal note by " + m.Author.Name + " (staff only, never shown to the client)"
+		return "Internal note by " + oneLine(m.Author.Name) + " (staff only, never shown to the client)"
 	case m.FromSupport:
-		return "Reply by " + m.Author.Name + " (support team)"
+		return "Reply by " + oneLine(m.Author.Name) + " (support team)"
 	}
-	return "Message from " + m.Author.Name + jobTitle(m.AuthorJobTitle) + " (client)"
+	return "Message from " + oneLine(m.Author.Name) + jobTitle(m.AuthorJobTitle) + " (client)"
 }
 
 func writeAttachments(b *strings.Builder, files []tickets.Attachment) {
@@ -138,7 +177,7 @@ func writeAttachments(b *strings.Builder, files []tickets.Attachment) {
 	}
 	b.WriteString("\nAttachments (read them with read_attachment):\n")
 	for _, f := range files {
-		fmt.Fprintf(b, "- %s (%s, %s), id %s\n", f.Filename, f.ContentType, humanBytes(f.SizeBytes), f.ID)
+		fmt.Fprintf(b, "- %s (%s, %s), id %s\n", oneLine(f.Filename), f.ContentType, humanBytes(f.SizeBytes), f.ID)
 	}
 }
 
@@ -151,7 +190,7 @@ func renderActivity(key string, entries []tickets.ActivityEntry) string {
 	for _, e := range entries {
 		actor := "SimDesk"
 		if e.ActorName != nil {
-			actor = *e.ActorName
+			actor = oneLine(*e.ActorName)
 		}
 		fmt.Fprintf(&b, "- %s · %s · %s", at(e.At), actor, e.Action)
 		if e.From != nil || e.To != nil {
@@ -164,7 +203,7 @@ func renderActivity(key string, entries []tickets.ActivityEntry) string {
 			fmt.Fprintf(&b, " · %s %s %s", e.Code.Provider, e.Code.Kind, e.Code.Ref)
 		}
 		if e.Reason != nil && *e.Reason != "" {
-			fmt.Fprintf(&b, " · reason: %s", *e.Reason)
+			fmt.Fprintf(&b, " · reason: %s", oneLine(*e.Reason))
 		}
 		b.WriteString("\n")
 	}
@@ -185,14 +224,14 @@ func renderAssignees(key string, current *tickets.Ref, people []clients.Assignee
 		b.WriteString("- nobody: no staff member works this client yet\n")
 	}
 	for _, p := range people {
-		fmt.Fprintf(&b, "- %s%s, %s, %d open tickets, id %s\n", p.Name, jobTitle(p.JobTitle), p.Role, p.OpenTickets, p.ID)
+		fmt.Fprintf(&b, "- %s%s, %s, %d open tickets, id %s\n", oneLine(p.Name), jobTitle(p.JobTitle), p.Role, p.OpenTickets, p.ID)
 	}
 	return b.String()
 }
 
 func renderTextFile(name, content string, cut bool, link string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s:\n\n```\n%s\n```\n", name, strings.TrimRight(content, "\n"))
+	fmt.Fprintf(&b, "%s:\n\n%s\n", oneLine(name), quoted(content))
 	if cut {
 		fmt.Fprintf(&b, "\nOnly the first %s are shown. The whole file: %s\n", humanBytes(maxInlineTextBytes), link)
 	}

@@ -59,6 +59,13 @@ var Kinds = []Kind{
 }
 
 // uatKinds name the client's answer behind a status change.
+// clientCauses are the status causes client staff may see: their own actions and the
+// client-facing lifecycle.
+var clientCauses = map[ticket.Cause]bool{
+	ticket.CauseRequesterReply: true, ticket.CauseUATApproved: true, ticket.CauseUATRejected: true,
+	ticket.CauseUATAutoApproved: true, ticket.CauseReopened: true, ticket.CauseAutoClosed: true,
+}
+
 var uatKinds = map[ticket.Cause]Kind{
 	ticket.CauseUATApproved:     KindApproved,
 	ticket.CauseUATRejected:     KindRejected,
@@ -187,6 +194,9 @@ func Route(in Input) (deliveries []Delivery, dropped int) {
 		}
 		if !r.Staff {
 			c.change.Reason = "" // staff reasons (a priority change, resolving without the DoD) stay with the team
+			if !clientCauses[c.change.Cause] {
+				c.change.Cause = "" // so do the team's causes: the DoD skipped, code activity
+			}
 		}
 		if _, seen := byUser[c.user]; !seen {
 			order = append(order, c.user)

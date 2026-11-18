@@ -217,3 +217,23 @@ func TestHumanDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestSMTPTLSPolicy(t *testing.T) {
+	for _, tt := range []struct {
+		host string
+		want bool
+	}{
+		{"localhost", true}, {"127.0.0.1", true}, {"::1", true},
+		{"smtp.example.test", false}, {"10.0.0.5", false}, {"mailpit", false},
+	} {
+		if got := isLoopback(tt.host); got != tt.want {
+			t.Errorf("isLoopback(%q) = %v, want %v", tt.host, got, tt.want)
+		}
+	}
+	if s, err := NewSMTP(SMTPConfig{Addr: "smtp.example.test:587"}); err != nil || s.cfg.TLS != TLSAuto {
+		t.Fatalf("an unset policy = %v, %v; want auto", s, err)
+	}
+	if _, err := NewSMTP(SMTPConfig{Addr: "smtp.example.test:587", TLS: "sometimes"}); err == nil {
+		t.Fatal("an unknown policy is accepted")
+	}
+}

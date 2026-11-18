@@ -23,13 +23,20 @@ func (q *Queries) ClearLoginAttempts(ctx context.Context, key string) error {
 }
 
 const consumePasswordResetToken = `-- name: ConsumePasswordResetToken :one
-UPDATE password_reset_tokens SET used_at = now()
-WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
-RETURNING user_id
+UPDATE password_reset_tokens t SET used_at = now()
+FROM users u
+WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > now()
+  AND u.id = t.user_id AND u.status = $2
+RETURNING t.user_id
 `
 
-func (q *Queries) ConsumePasswordResetToken(ctx context.Context, tokenHash []byte) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, consumePasswordResetToken, tokenHash)
+type ConsumePasswordResetTokenParams struct {
+	TokenHash []byte
+	Active    string
+}
+
+func (q *Queries) ConsumePasswordResetToken(ctx context.Context, arg ConsumePasswordResetTokenParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, consumePasswordResetToken, arg.TokenHash, arg.Active)
 	var user_id uuid.UUID
 	err := row.Scan(&user_id)
 	return user_id, err
@@ -121,6 +128,15 @@ func (q *Queries) CreateUserInvite(ctx context.Context, arg CreateUserInvitePara
 	return err
 }
 
+const deleteLoginAttempt = `-- name: DeleteLoginAttempt :exec
+DELETE FROM login_attempts WHERE id = $1
+`
+
+func (q *Queries) DeleteLoginAttempt(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteLoginAttempt, id)
+	return err
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = $1
 `
@@ -137,6 +153,26 @@ DELETE FROM sessions WHERE user_id = $1
 func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteUserSessions, userID)
 	return err
+}
+
+const getPasswordResetTokenUser = `-- name: GetPasswordResetTokenUser :one
+SELECT t.user_id
+FROM password_reset_tokens t
+JOIN users u ON u.id = t.user_id
+WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > now() AND u.status = $2
+`
+
+type GetPasswordResetTokenUserParams struct {
+	TokenHash []byte
+	Active    string
+}
+
+// A live reset link of an active account, read before any password is hashed.
+func (q *Queries) GetPasswordResetTokenUser(ctx context.Context, arg GetPasswordResetTokenUserParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getPasswordResetTokenUser, arg.TokenHash, arg.Active)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
 }
 
 const getSessionPrincipal = `-- name: GetSessionPrincipal :one
@@ -191,6 +227,27 @@ func (q *Queries) GetSessionPrincipal(ctx context.Context, tokenHash []byte) (Ge
 	return i, err
 }
 
+const getUserInviteUser = `-- name: GetUserInviteUser :one
+SELECT i.user_id
+FROM user_invites i
+JOIN users u ON u.id = i.user_id
+WHERE i.token_hash = $1 AND i.used_at IS NULL AND i.expires_at > now() AND u.status = $2
+`
+
+type GetUserInviteUserParams struct {
+	TokenHash []byte
+	Invited   string
+}
+
+// A live invite of an account still waiting for its first password, read before any password
+// is hashed.
+func (q *Queries) GetUserInviteUser(ctx context.Context, arg GetUserInviteUserParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getUserInviteUser, arg.TokenHash, arg.Invited)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const invalidateUserInvites = `-- name: InvalidateUserInvites :exec
 UPDATE user_invites SET used_at = now() WHERE user_id = $1 AND used_at IS NULL
 `
@@ -243,6 +300,24 @@ func (q *Queries) PruneLoginAttempts(ctx context.Context, before time.Time) erro
 	return err
 }
 
+const purgeExpiredSessions = `-- name: PurgeExpiredSessions :exec
+DELETE FROM sessions WHERE expires_at < $1
+`
+
+func (q *Queries) PurgeExpiredSessions(ctx context.Context, before time.Time) error {
+	_, err := q.db.Exec(ctx, purgeExpiredSessions, before)
+	return err
+}
+
+const purgeSpentResetTokens = `-- name: PurgeSpentResetTokens :exec
+DELETE FROM password_reset_tokens WHERE expires_at < $1 OR used_at < $1
+`
+
+func (q *Queries) PurgeSpentResetTokens(ctx context.Context, before time.Time) error {
+	_, err := q.db.Exec(ctx, purgeSpentResetTokens, before)
+	return err
+}
+
 const recordLoginAttempt = `-- name: RecordLoginAttempt :exec
 INSERT INTO login_attempts (key) VALUES ($1)
 `
@@ -250,6 +325,17 @@ INSERT INTO login_attempts (key) VALUES ($1)
 func (q *Queries) RecordLoginAttempt(ctx context.Context, key string) error {
 	_, err := q.db.Exec(ctx, recordLoginAttempt, key)
 	return err
+}
+
+const reserveLoginAttempt = `-- name: ReserveLoginAttempt :one
+INSERT INTO login_attempts (key) VALUES ($1) RETURNING id
+`
+
+func (q *Queries) ReserveLoginAttempt(ctx context.Context, key string) (int64, error) {
+	row := q.db.QueryRow(ctx, reserveLoginAttempt, key)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const touchSession = `-- name: TouchSession :exec

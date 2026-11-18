@@ -991,6 +991,7 @@
     "invalid_subject": "Enter a short subject.",
     "invalid_description": "Describe the issue.",
     "invalid_message": "Write a message first.",
+    "text_too_complex": "This text has too many table cells or nested levels. Simplify the formatting and send it again.",
     "invalid_catalog_item": "Choose an item from the catalogue.",
     "invalid_requester": "Choose a requester of this client.",
     "invalid_channel": "Choose how the request arrived.",

@@ -152,12 +152,18 @@ func (s *Service) AcceptInvite(ctx context.Context, token, password string) (*Pr
 		return nil, NewSession{}, err
 	}
 	info := reqinfo.From(ctx)
-	limitKey := ""
-	if info.IP.IsValid() {
-		limitKey = keyPrefixInviteIP + info.IP.String()
+	limitKey := ipLimitKey(keyPrefixInviteIP, info.IP)
+	if limitKey != "" {
 		if err := s.checkLimit(ctx, limitKey, s.opts.MaxFailuresPerIP, s.opts.LoginWindow); err != nil {
 			return nil, NewSession{}, err
 		}
+	}
+	// The link is checked before the password is hashed, so made-up links cost no hashing.
+	invite := db.GetUserInviteUserParams{TokenHash: HashToken(token), Invited: string(UserStatusInvited)}
+	if _, err := s.store.Q().GetUserInviteUser(ctx, invite); errors.Is(err, pgx.ErrNoRows) {
+		return nil, NewSession{}, s.refuseToken(ctx, limitKey)
+	} else if err != nil {
+		return nil, NewSession{}, err
 	}
 	hash, err := s.hasher.Hash(ctx, password)
 	if err != nil {
@@ -166,7 +172,7 @@ func (s *Service) AcceptInvite(ctx context.Context, token, password string) (*Pr
 	var p *Principal
 	var sess NewSession
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
-		userID, err := tx.Q.ConsumeUserInvite(ctx, db.ConsumeUserInviteParams{TokenHash: HashToken(token), Invited: string(UserStatusInvited)})
+		userID, err := tx.Q.ConsumeUserInvite(ctx, db.ConsumeUserInviteParams(invite))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.InvalidToken()
 		}
@@ -196,12 +202,7 @@ func (s *Service) AcceptInvite(ctx context.Context, token, password string) (*Pr
 		return err
 	})
 	if apperr.IsCode(err, apperr.CodeInvalidToken) {
-		if limitKey != "" {
-			if rerr := s.store.Q().RecordLoginAttempt(ctx, limitKey); rerr != nil {
-				return nil, NewSession{}, rerr
-			}
-		}
-		return nil, NewSession{}, err
+		return nil, NewSession{}, s.refuseToken(ctx, limitKey)
 	}
 	if err != nil {
 		return nil, NewSession{}, err

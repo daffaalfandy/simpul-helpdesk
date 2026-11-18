@@ -51,6 +51,7 @@ const (
 	CodeInvalidSubject            = "invalid_subject"
 	CodeInvalidDescription        = "invalid_description"
 	CodeInvalidMessage            = "invalid_message"
+	CodeTextTooComplex            = "text_too_complex"
 	CodeInvalidProject            = "invalid_project"
 	CodeClientHasNoProject        = "client_has_no_project"
 	CodeInvalidCatalogItem        = "invalid_catalog_item"

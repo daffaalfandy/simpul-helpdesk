@@ -33,8 +33,11 @@ export function dayPart(date: Date): DayPart {
   return 'evening'
 }
 
-/** Only allow same-site paths as post-login redirects (no open redirects). */
+/**
+ * Only allow same-site paths as post-login redirects (no open redirects). Browsers read a
+ * backslash as a slash, so "/\evil.example" would be another site.
+ */
 export function safeRedirect(target: unknown): string | undefined {
-  if (typeof target !== 'string' || !target.startsWith('/') || target.startsWith('//')) return undefined
+  if (typeof target !== 'string' || !target.startsWith('/') || target.startsWith('//') || target.includes('\\')) return undefined
   return target
 }

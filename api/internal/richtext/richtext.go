@@ -45,6 +45,7 @@ const (
 	cellSeparator = " | "
 	lineBreak     = "\n"
 	blockBreak    = "\n\n"
+	htmlLineBreak = "<br>"
 )
 
 var (
@@ -63,18 +64,25 @@ var (
 )
 
 // HTML renders md for an HTML email, with inline styles only (mail clients drop stylesheets).
-// It never passes raw HTML through: see emailRenderer.
+// It never passes raw HTML through: see emailRenderer. A body past the limits (TooComplex)
+// shows as the text it is.
 func HTML(md string) template.HTML {
+	if TooComplex(md) {
+		return plainHTML(md)
+	}
 	var b bytes.Buffer
 	if err := emailMD.Convert([]byte(md), &b); err != nil {
-		return template.HTML(template.HTMLEscapeString(md)) //nolint:gosec // escaped
+		return plainHTML(md)
 	}
 	return template.HTML(strings.TrimSpace(b.String())) //nolint:gosec // safe renderer, see emailRenderer
 }
 
 // Text is md as plain text: formatting marks gone, a blank line between blocks, list items
-// and code lines kept.
+// and code lines kept. A body past the limits (TooComplex) stays as written.
 func Text(md string) string {
+	if TooComplex(md) {
+		return strings.TrimSpace(md)
+	}
 	src := []byte(md)
 	doc := parseMD.Parser().Parse(text.NewReader(src))
 	var b strings.Builder
@@ -86,6 +94,12 @@ func Text(md string) string {
 		return writeEntering(&b, n, src), nil
 	})
 	return strings.TrimSpace(blankLines.ReplaceAllString(b.String(), blockBreak))
+}
+
+// plainHTML is md escaped, its line breaks kept.
+func plainHTML(md string) template.HTML {
+	escaped := template.HTMLEscapeString(strings.TrimSpace(md))
+	return template.HTML(strings.ReplaceAll(escaped, lineBreak, htmlLineBreak)) //nolint:gosec // escaped
 }
 
 // Line is Text on one line, for a short quote such as a notification excerpt.

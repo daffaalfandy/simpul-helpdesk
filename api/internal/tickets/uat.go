@@ -14,6 +14,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/dod"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/richtext"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
@@ -56,6 +57,8 @@ func (s *Service) AnswerUAT(ctx context.Context, p *auth.Principal, key string, 
 		return Ticket{}, apperr.InvalidRequest("answer")
 	case answer == ticket.UATReject && (message == "" || len([]rune(message)) > MaxMessageLen):
 		return Ticket{}, apperr.Invalid(apperr.CodeInvalidMessage, "Tell the team what went wrong", "")
+	case richtext.TooComplex(message):
+		return Ticket{}, errTooComplex()
 	}
 	err := s.clientAction(ctx, p, key, func(tx store.Tx, row db.GetTicketForUpdateRow, cs *changeSet) error {
 		from := ticket.Status(row.Status)

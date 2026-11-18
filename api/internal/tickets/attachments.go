@@ -41,15 +41,9 @@ func (s *Service) Upload(ctx context.Context, p *auth.Principal, filename string
 	if err != nil {
 		return Attachment{}, apperr.Invalid(apperr.CodeInvalidAttachment, "The file needs a name", "")
 	}
-	pending, err := s.store.Q().CountPendingAttachments(ctx, db.CountPendingAttachmentsParams{
-		UploadedBy: p.UserID, NotBefore: s.now().Add(-PendingAttachmentTTL),
-	})
-	if err != nil {
+	// Checked here so a full queue costs no transfer, and again under a lock before the insert.
+	if err := s.pendingRoom(ctx, s.store.Q(), p.UserID); err != nil {
 		return Attachment{}, err
-	}
-	if pending >= MaxPendingAttachmentsPerUser {
-		return Attachment{}, apperr.Conflict(apperr.CodeTooManyPendingAttachments,
-			"Too many files waiting to be sent", "Send or remove some first.")
 	}
 
 	br := bufio.NewReaderSize(r, SniffBytes)
@@ -81,6 +75,12 @@ func (s *Service) Upload(ctx context.Context, p *auth.Principal, filename string
 
 	out := Attachment{Filename: name, ContentType: contentType, SizeBytes: size}
 	err = s.store.Tx(ctx, func(tx store.Tx) error {
+		if err := store.LockKey(ctx, tx, store.LockClassPendingUploads, p.UserID.String()); err != nil {
+			return err
+		}
+		if err := s.pendingRoom(ctx, tx.Q, p.UserID); err != nil {
+			return err
+		}
 		created, err := tx.Q.CreateAttachment(ctx, db.CreateAttachmentParams{
 			StorageKey: key, Filename: name, ContentType: contentType, SizeBytes: size,
 			Sha256: sum.Sum(nil), UploadedBy: p.UserID,
@@ -97,6 +97,21 @@ func (s *Service) Upload(ctx context.Context, p *auth.Principal, filename string
 		return Attachment{}, err
 	}
 	return out, nil
+}
+
+// pendingRoom refuses another upload while the user already has MaxPendingAttachmentsPerUser
+// files waiting to be sent.
+func (s *Service) pendingRoom(ctx context.Context, q *db.Queries, userID uuid.UUID) error {
+	pending, err := q.CountPendingAttachments(ctx, db.CountPendingAttachmentsParams{
+		UploadedBy: userID, NotBefore: s.now().Add(-PendingAttachmentTTL),
+	})
+	if err != nil {
+		return err
+	}
+	if pending >= MaxPendingAttachmentsPerUser {
+		return apperr.Conflict(apperr.CodeTooManyPendingAttachments, "Too many files waiting to be sent", "Send or remove some first.")
+	}
+	return nil
 }
 
 // uploadError maps a body over the request limit to the attachment error.

@@ -1166,7 +1166,7 @@ export interface paths {
          *     non-portal `channel`. Incidents name one of the client's active projects (`projectId`);
          *     service requests go to the client's default project. The ticket keeps a copy of that
          *     project's SLA. Error codes are `invalid_subject`, `invalid_description`,
-         *     `invalid_project`, `invalid_catalog_item`, `client_has_no_project`, `client_required`,
+         *     `text_too_complex` (more table cells or deeper nesting than rich text allows), `invalid_project`, `invalid_catalog_item`, `client_has_no_project`, `client_required`,
          *     `client_not_found`, `invalid_requester`, `invalid_channel`, `invalid_assignee`,
          *     `invalid_attachment` and `too_many_attachments`.
          */
@@ -1221,7 +1221,7 @@ export interface paths {
         /**
          * Reply, or add an internal note (staff)
          * @description A requester asking for `internal` gets 403. Error codes are `invalid_message`,
-         *     `invalid_attachment`, `too_many_attachments` and `ticket_closed` (409).
+         *     `text_too_complex` (more table cells or deeper nesting than rich text allows), `invalid_attachment`, `too_many_attachments` and `ticket_closed` (409).
          */
         post: operations["createTicketMessage"];
         delete?: never;
@@ -1384,7 +1384,7 @@ export interface paths {
         /**
          * Approve or reject the fix while the ticket waits In UAT (client staff)
          * @description Any requester of the ticket's client may answer. Approval resolves the ticket; a rejection
-         *     needs a `message` (`invalid_message`), posted as a public reply, and hands the ticket back to
+         *     needs a `message` (`invalid_message`, or `text_too_complex` past the rich-text limits), posted as a public reply, and hands the ticket back to
          *     the team. A ticket no longer In UAT fails with `uat_not_waiting` (409).
          */
         post: operations["answerTicketUat"];

@@ -53,7 +53,7 @@ const (
 	valuePermissions      = "camera=(), microphone=(), geolocation=()"
 	valueHSTS             = "max-age=31536000"
 	problemTypeBlank      = "about:blank"
-	appCSP                = "default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	appCSP                = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 	docsCSP               = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 	forwardedForSeparator = ","
 )

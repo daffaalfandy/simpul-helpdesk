@@ -124,22 +124,17 @@ func (s *Service) Login(ctx context.Context, email, password string) (*Principal
 	email = NormalizeEmail(email)
 	info := reqinfo.From(ctx)
 
-	type limit struct {
-		key string
-		max int
+	emailKey := hashedKey(keyPrefixLoginEmail, email)
+	limits := []rateLimit{{emailKey, s.opts.MaxFailuresPerEmail, s.opts.LoginWindow}}
+	if ipKey := ipLimitKey(keyPrefixLoginIP, info.IP); ipKey != "" {
+		limits = append(limits, rateLimit{ipKey, s.opts.MaxFailuresPerIP, s.opts.LoginWindow})
 	}
-	limits := []limit{{hashedKey(keyPrefixLoginEmail, email), s.opts.MaxFailuresPerEmail}}
-	if info.IP.IsValid() {
-		limits = append(limits, limit{keyPrefixLoginIP + info.IP.String(), s.opts.MaxFailuresPerIP})
+	// The attempt is recorded before the password is checked and dropped again only on success,
+	// so parallel guesses are counted one by one instead of all passing an empty count.
+	reserved, err := s.reserveAttempts(ctx, limits)
+	if err != nil {
+		return nil, NewSession{}, err
 	}
-	keys := make([]string, len(limits))
-	for i, l := range limits {
-		keys[i] = l.key
-		if err := s.checkLimit(ctx, l.key, l.max, s.opts.LoginWindow); err != nil {
-			return nil, NewSession{}, err
-		}
-	}
-	emailLimitKey := keys[0]
 
 	user, err := s.store.Q().GetUserByEmail(ctx, email)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -148,14 +143,14 @@ func (s *Service) Login(ctx context.Context, email, password string) (*Principal
 	found := err == nil
 	if !found || user.PasswordHash == nil || !IsActive(user.Status) {
 		s.hasher.VerifyDummy(ctx, password)
-		return nil, NewSession{}, s.loginFailed(ctx, keys, found, user.ID, user.Name)
+		return nil, NewSession{}, s.loginFailed(ctx, found, user.ID, user.Name)
 	}
 	ok, rehash, err := s.hasher.Verify(ctx, password, *user.PasswordHash)
 	if err != nil && !errors.Is(err, ErrMalformedHash) {
 		return nil, NewSession{}, err
 	}
 	if !ok {
-		return nil, NewSession{}, s.loginFailed(ctx, keys, true, user.ID, user.Name)
+		return nil, NewSession{}, s.loginFailed(ctx, true, user.ID, user.Name)
 	}
 
 	var newHash string
@@ -180,8 +175,13 @@ func (s *Service) Login(ctx context.Context, email, password string) (*Principal
 				return err
 			}
 		}
-		if err := tx.Q.ClearLoginAttempts(ctx, emailLimitKey); err != nil {
+		if err := tx.Q.ClearLoginAttempts(ctx, emailKey); err != nil {
 			return err
+		}
+		for _, id := range reserved {
+			if err := tx.Q.DeleteLoginAttempt(ctx, id); err != nil {
+				return err
+			}
 		}
 		sess, err = s.startSession(ctx, tx, p, info)
 		return err
@@ -222,38 +222,82 @@ func (s *Service) startSession(ctx context.Context, tx store.Tx, p *Principal, i
 	return NewSession{Token: raw, CookieExpires: now.Add(s.opts.SessionAbsolute)}, nil
 }
 
-func (s *Service) loginFailed(ctx context.Context, keys []string, userKnown bool, userID uuid.UUID, name string) error {
-	err := s.store.Tx(ctx, func(tx store.Tx) error {
-		for _, key := range keys {
-			if err := tx.Q.RecordLoginAttempt(ctx, key); err != nil {
-				return err
-			}
-		}
-		if err := tx.Q.PruneLoginAttempts(ctx, s.now().Add(-loginAttemptRetention)); err != nil {
-			return err
-		}
-		e := audit.Entry{Action: ActionLoginFailed, ActorKind: audit.ActorSystem}
-		if userKnown {
-			e.TargetType, e.TargetID, e.ActorName = TargetUser, &userID, name
-		}
-		return audit.Write(ctx, tx.Q, e)
-	})
-	if err != nil {
+// loginFailed audits a refused sign-in. The attempt itself was recorded by reserveAttempts.
+func (s *Service) loginFailed(ctx context.Context, userKnown bool, userID uuid.UUID, name string) error {
+	e := audit.Entry{Action: ActionLoginFailed, ActorKind: audit.ActorSystem}
+	if userKnown {
+		e.TargetType, e.TargetID, e.ActorName = TargetUser, &userID, name
+	}
+	if err := audit.Write(ctx, s.store.Q(), e); err != nil {
 		return err
 	}
 	return apperr.InvalidCredentials()
 }
 
+// rateLimit allows max attempts per key within window.
+type rateLimit struct {
+	key    string
+	max    int
+	window time.Duration
+}
+
+// reserveAttempts records one attempt against every key, unless a key is already at its limit:
+// then nothing is recorded and the answer is rate_limited. Each key is counted and recorded
+// under its own lock, so parallel requests can't all pass the count before any is recorded.
+// It returns the recorded attempts, for the caller to drop if the attempt succeeds.
+func (s *Service) reserveAttempts(ctx context.Context, limits []rateLimit) ([]int64, error) {
+	sorted := slices.SortedFunc(slices.Values(limits), func(a, b rateLimit) int { return strings.Compare(a.key, b.key) })
+	var ids []int64
+	err := s.store.Tx(ctx, func(tx store.Tx) error {
+		ids = ids[:0]
+		for _, l := range sorted {
+			if err := store.LockKey(ctx, tx, store.LockClassRateLimit, l.key); err != nil {
+				return err
+			}
+		}
+		for _, l := range sorted {
+			if err := s.limitReached(ctx, tx.Q, l); err != nil {
+				return err
+			}
+		}
+		for _, l := range sorted {
+			id, err := tx.Q.ReserveLoginAttempt(ctx, l.key)
+			if err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		return nil
+	})
+	return ids, err
+}
+
 func (s *Service) checkLimit(ctx context.Context, key string, limit int, window time.Duration) error {
+	return s.limitReached(ctx, s.store.Q(), rateLimit{key, limit, window})
+}
+
+// limitReached answers rate_limited when l's key already has l.max attempts in its window.
+func (s *Service) limitReached(ctx context.Context, q *db.Queries, l rateLimit) error {
 	now := s.now()
-	stats, err := s.store.Q().LoginAttemptStats(ctx, db.LoginAttemptStatsParams{Key: key, Since: now.Add(-window)})
+	stats, err := q.LoginAttemptStats(ctx, db.LoginAttemptStatsParams{Key: l.key, Since: now.Add(-l.window)})
 	if err != nil {
 		return err
 	}
-	if int(stats.Attempts) < limit {
+	if int(stats.Attempts) < l.max {
 		return nil
 	}
-	return apperr.RateLimited(max(stats.Oldest.Add(window).Sub(now), minRetryAfter))
+	return apperr.RateLimited(max(stats.Oldest.Add(l.window).Sub(now), minRetryAfter))
+}
+
+// refuseToken counts a wrong or spent link against the caller's address (limitKey; "" when the
+// address is unknown) and answers invalid_token.
+func (s *Service) refuseToken(ctx context.Context, limitKey string) error {
+	if limitKey != "" {
+		if err := s.store.Q().RecordLoginAttempt(ctx, limitKey); err != nil {
+			return err
+		}
+	}
+	return apperr.InvalidToken()
 }
 
 // Authenticate resolves a session token to the signed-in user, working in the organization
@@ -313,15 +357,13 @@ func (s *Service) Logout(ctx context.Context, p *Principal) error {
 // user. It reports success either way so callers can't probe for accounts.
 func (s *Service) RequestPasswordReset(ctx context.Context, email string) error {
 	email = NormalizeEmail(email)
-	key := hashedKey(keyPrefixReset, email)
-	stats, err := s.store.Q().LoginAttemptStats(ctx, db.LoginAttemptStatsParams{Key: key, Since: s.now().Add(-s.opts.ResetWindow)})
-	if err != nil {
-		return err
+	limits := []rateLimit{{hashedKey(keyPrefixReset, email), s.opts.MaxResetsPerEmail, s.opts.ResetWindow}}
+	if ipKey := ipLimitKey(keyPrefixResetRequestIP, reqinfo.From(ctx).IP); ipKey != "" {
+		limits = append(limits, rateLimit{ipKey, s.opts.MaxFailuresPerIP, s.opts.ResetWindow})
 	}
-	if int(stats.Attempts) >= s.opts.MaxResetsPerEmail {
+	if _, err := s.reserveAttempts(ctx, limits); apperr.IsCode(err, apperr.CodeRateLimited) {
 		return nil // silently drop; the response is the same
-	}
-	if err := s.store.Q().RecordLoginAttempt(ctx, key); err != nil {
+	} else if err != nil {
 		return err
 	}
 	user, err := s.store.Q().GetUserByEmail(ctx, email)
@@ -350,15 +392,34 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 	if token == "" {
 		return apperr.InvalidToken()
 	}
+	limitKey := ipLimitKey(keyPrefixResetIP, reqinfo.From(ctx).IP)
+	if limitKey != "" {
+		if err := s.checkLimit(ctx, limitKey, s.opts.MaxFailuresPerIP, s.opts.LoginWindow); err != nil {
+			return err
+		}
+	}
+	// The link is checked before the password is hashed, so made-up links cost no hashing.
+	tokenHash, active := HashToken(token), string(UserStatusActive)
+	_, err := s.store.Q().GetPasswordResetTokenUser(ctx, db.GetPasswordResetTokenUserParams{TokenHash: tokenHash, Active: active})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return s.refuseToken(ctx, limitKey)
+	}
+	if err != nil {
+		return err
+	}
 	hash, err := s.hasher.Hash(ctx, newPassword)
 	if err != nil {
 		return err
 	}
-	return s.store.Tx(ctx, func(tx store.Tx) error {
-		userID, err := tx.Q.ConsumePasswordResetToken(ctx, HashToken(token))
+	err = s.store.Tx(ctx, func(tx store.Tx) error {
+		userID, err := tx.Q.ConsumePasswordResetToken(ctx, db.ConsumePasswordResetTokenParams{TokenHash: tokenHash, Active: active})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.InvalidToken()
 		}
+		if err != nil {
+			return err
+		}
+		user, err := tx.Q.GetUserByID(ctx, userID)
 		if err != nil {
 			return err
 		}
@@ -371,10 +432,18 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 		if err := tx.Q.DeleteUserSessions(ctx, userID); err != nil {
 			return err
 		}
+		// Someone locked out by wrong guesses can sign in with the new password at once.
+		if err := tx.Q.ClearLoginAttempts(ctx, hashedKey(keyPrefixLoginEmail, user.Email)); err != nil {
+			return err
+		}
 		return audit.Write(ctx, tx.Q, audit.Entry{
 			ActorUserID: &userID, Action: ActionPasswordReset, TargetType: TargetUser, TargetID: &userID,
 		})
 	})
+	if apperr.IsCode(err, apperr.CodeInvalidToken) {
+		return s.refuseToken(ctx, limitKey)
+	}
+	return err
 }
 
 type NewUser struct {

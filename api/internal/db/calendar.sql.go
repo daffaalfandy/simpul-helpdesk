@@ -195,6 +195,22 @@ func (q *Queries) LockInstall(ctx context.Context) error {
 	return err
 }
 
+const lockKey = `-- name: LockKey :exec
+SELECT pg_advisory_xact_lock($1::int, hashtext($2::text))
+`
+
+type LockKeyParams struct {
+	LockClass int32
+	Key       string
+}
+
+// Serialises work on one key until the transaction ends (store.LockKey): a class per kind of key,
+// and the key's hash.
+func (q *Queries) LockKey(ctx context.Context, arg LockKeyParams) error {
+	_, err := q.db.Exec(ctx, lockKey, arg.LockClass, arg.Key)
+	return err
+}
+
 const lockOrganization = `-- name: LockOrganization :exec
 SELECT 1 FROM organizations WHERE id = $1 FOR UPDATE
 `

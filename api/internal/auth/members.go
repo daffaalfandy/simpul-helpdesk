@@ -206,6 +206,9 @@ func (s *Service) ChangeRole(ctx context.Context, actor *Principal, orgID, id uu
 			if err := tx.Q.UpsertMembership(ctx, db.UpsertMembershipParams{UserID: id, OrganizationID: orgID, Role: string(role)}); err != nil {
 				return "", nil, err
 			}
+			if err := tx.Q.DeleteTokensOutsideOrganization(ctx, db.DeleteTokensOutsideOrganizationParams{UserID: id, OrganizationID: orgID}); err != nil {
+				return "", nil, err
+			}
 		case role == RoleAdmin:
 			// Administrators work in every organization, so their memberships (and client
 			// links) go.
@@ -298,6 +301,9 @@ func (s *Service) Suspend(ctx context.Context, actor *Principal, orgID, id uuid.
 			return "", nil, err
 		}
 		if err := tx.Q.InvalidateUserInvites(ctx, id); err != nil {
+			return "", nil, err
+		}
+		if err := tx.Q.InvalidateUserResetTokens(ctx, id); err != nil {
 			return "", nil, err
 		}
 		if err := tx.Q.DeleteClientAgentsForUser(ctx, id); err != nil {

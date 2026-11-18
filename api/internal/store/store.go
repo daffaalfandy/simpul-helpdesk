@@ -15,6 +15,21 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
+// Advisory lock classes for LockKey, one per kind of key, so keys of different kinds never share
+// a lock (pg_advisory_xact_lock's two-key form also never meets its one-key form).
+const (
+	// LockClassRateLimit serialises counting and recording one rate-limit key.
+	LockClassRateLimit int32 = 1
+	// LockClassPendingUploads serialises one user's count-then-insert of pending uploads.
+	LockClassPendingUploads int32 = 2
+)
+
+// LockKey holds an advisory lock on key until tx ends, so a count and the insert it allows
+// can't interleave with another request's.
+func LockKey(ctx context.Context, tx Tx, class int32, key string) error {
+	return tx.Q.LockKey(ctx, db.LockKeyParams{LockClass: class, Key: key})
+}
+
 // Tx is a running transaction with typed queries.
 type Tx struct {
 	Q  *db.Queries

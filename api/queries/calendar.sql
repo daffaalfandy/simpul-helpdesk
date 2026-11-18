@@ -5,6 +5,11 @@ SELECT timezone FROM organizations WHERE id = @organization_id;
 -- Serialises changes to one organization's settings.
 SELECT 1 FROM organizations WHERE id = @organization_id FOR UPDATE;
 
+-- name: LockKey :exec
+-- Serialises work on one key until the transaction ends (store.LockKey): a class per kind of key,
+-- and the key's hash.
+SELECT pg_advisory_xact_lock(@lock_class::int, hashtext(@key::text));
+
 -- name: LockInstall :exec
 -- Serialises install-wide rules: the last administrator, first-run setup, new organizations.
 SELECT 1 FROM install WHERE id FOR UPDATE;

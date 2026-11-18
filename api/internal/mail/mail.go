@@ -8,6 +8,8 @@ import (
 	"fmt"
 	htmltemplate "html/template"
 	"net"
+	"net/netip"
+	"slices"
 	"strconv"
 	"sync"
 	texttemplate "text/template"
@@ -17,9 +19,11 @@ import (
 )
 
 const (
-	// smtpsPort uses implicit TLS; other ports use STARTTLS when offered.
+	// smtpsPort uses implicit TLS; other ports use STARTTLS (see TLSPolicy).
 	smtpsPort   = 465
 	sendTimeout = 15 * time.Second
+	// localhostName is the loopback host name; loopback addresses are recognised by value.
+	localhostName = "localhost"
 
 	textTemplateGlob = "templates/*.txt.tmpl"
 	htmlTemplateGlob = "templates/*.html.tmpl"
@@ -111,7 +115,29 @@ type SMTPConfig struct {
 	Pass     string
 	From     string
 	FromName string
+	TLS      TLSPolicy
 }
+
+// TLSPolicy says whether STARTTLS is required on ports other than smtpsPort. Reset and invite
+// links travel by email, so a relay reached over the network must not fall back to plain text
+// when an attacker strips STARTTLS from its greeting.
+type TLSPolicy string
+
+const (
+	// TLSAuto requires STARTTLS, except for a relay on this machine (a local Postfix, Mailpit).
+	TLSAuto TLSPolicy = "auto"
+	// TLSMandatory refuses to send without STARTTLS.
+	TLSMandatory TLSPolicy = "mandatory"
+	// TLSOpportunistic uses STARTTLS when the relay offers it.
+	TLSOpportunistic TLSPolicy = "opportunistic"
+	// TLSOff never uses STARTTLS (a relay on a private network without TLS).
+	TLSOff TLSPolicy = "off"
+)
+
+// TLSPolicies lists the accepted values.
+var TLSPolicies = []TLSPolicy{TLSAuto, TLSMandatory, TLSOpportunistic, TLSOff}
+
+func (p TLSPolicy) Valid() bool { return slices.Contains(TLSPolicies, p) }
 
 type SMTP struct {
 	cfg  SMTPConfig
@@ -128,6 +154,12 @@ func NewSMTP(cfg SMTPConfig) (*SMTP, error) {
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		return nil, fmt.Errorf("SMTP port: %w", err)
+	}
+	if cfg.TLS == "" {
+		cfg.TLS = TLSAuto
+	}
+	if !cfg.TLS.Valid() {
+		return nil, fmt.Errorf("SMTP TLS policy %q: use one of %v", cfg.TLS, TLSPolicies)
 	}
 	return &SMTP{cfg: cfg, host: host, port: port}, nil
 }
@@ -152,10 +184,15 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 	}
 
 	opts := []gomail.Option{gomail.WithPort(s.port), gomail.WithTimeout(sendTimeout)}
-	if s.port == smtpsPort {
+	switch {
+	case s.port == smtpsPort:
 		opts = append(opts, gomail.WithSSL())
-	} else {
+	case s.cfg.TLS == TLSOff:
+		opts = append(opts, gomail.WithTLSPolicy(gomail.NoTLS))
+	case s.cfg.TLS == TLSOpportunistic || (s.cfg.TLS == TLSAuto && isLoopback(s.host)):
 		opts = append(opts, gomail.WithTLSPolicy(gomail.TLSOpportunistic))
+	default:
+		opts = append(opts, gomail.WithTLSPolicy(gomail.TLSMandatory))
 	}
 	if s.cfg.User != "" {
 		opts = append(opts,
@@ -171,6 +208,15 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 		return fmt.Errorf("send mail: %w", err)
 	}
 	return nil
+}
+
+// isLoopback reports whether host names this machine.
+func isLoopback(host string) bool {
+	if host == localhostName {
+		return true
+	}
+	addr, err := netip.ParseAddr(host)
+	return err == nil && addr.IsLoopback()
 }
 
 // Recorder is an in-memory Sender for tests. With Fail set, every send fails with it.

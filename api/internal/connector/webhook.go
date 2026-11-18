@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -70,14 +71,23 @@ func PurgeJob() *river.PeriodicJob {
 		&river.PeriodicJobOpts{ID: JobKindPurge, RunOnStart: true})
 }
 
-// Receive checks and stores one webhook delivery; a job reads it. The secret is checked before
-// anything in the body is trusted. Refusals are recorded on the repository so the
-// Integrations page can say what is wrong.
-func (s *Service) Receive(ctx context.Context, repoID uuid.UUID, h http.Header, body []byte) (Receipt, error) {
+// Receive checks and stores one webhook delivery; a job reads it. The body is read only once
+// the repository is known (an unknown address costs no transfer), and the secret is checked
+// before anything in it is trusted. Refusals are recorded on the repository so the
+// Integrations page can say what is wrong. r is capped at MaxDeliveryBytes by the caller.
+func (s *Service) Receive(ctx context.Context, repoID uuid.UUID, h http.Header, r io.Reader) (Receipt, error) {
 	q := s.store.Q()
 	repo, err := q.GetRepository(ctx, repoID)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && repo.Hidden) {
 		return "", apperr.NotFound()
+	}
+	if err != nil {
+		return "", err
+	}
+	body, err := io.ReadAll(r)
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		return "", s.refuse(ctx, repo.ID, ErrorTooLarge, apperr.TooLarge(apperr.CodeRequestTooLarge, "The delivery is too large", ""))
 	}
 	if err != nil {
 		return "", err
@@ -129,11 +139,6 @@ func (s *Service) Receive(ctx context.Context, repoID uuid.UUID, h http.Header, 
 		return err
 	})
 	return receipt, err
-}
-
-// RefuseTooLarge records a body over MaxDeliveryBytes for a repository that exists.
-func (s *Service) RefuseTooLarge(ctx context.Context, repoID uuid.UUID) error {
-	return s.refuse(ctx, repoID, ErrorTooLarge, apperr.TooLarge(apperr.CodeRequestTooLarge, "The delivery is too large", ""))
 }
 
 // refuse records why a delivery was refused and returns the error for the sender.

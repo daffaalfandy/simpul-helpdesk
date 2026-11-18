@@ -200,9 +200,8 @@ func (s *Service) RevokeToken(ctx context.Context, p *Principal, id uuid.UUID) e
 // user active staff, and the user still able to work in the token's organization (a removed
 // membership ends it). Unknown tokens count against the caller's address.
 func (s *Service) AuthenticateToken(ctx context.Context, raw string) (TokenSession, error) {
-	limitKey := ""
-	if ip := reqinfo.From(ctx).IP; ip.IsValid() {
-		limitKey = keyPrefixTokenIP + ip.String()
+	limitKey := ipLimitKey(keyPrefixTokenIP, reqinfo.From(ctx).IP)
+	if limitKey != "" {
 		if err := s.checkLimit(ctx, limitKey, s.opts.MaxFailuresPerIP, s.opts.LoginWindow); err != nil {
 			return TokenSession{}, err
 		}

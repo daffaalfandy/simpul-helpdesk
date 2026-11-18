@@ -28,6 +28,11 @@ RETURNING id, access, expires_at;
 -- Every token of a suspended user.
 DELETE FROM personal_access_tokens WHERE user_id = @user_id;
 
+-- name: DeleteTokensOutsideOrganization :exec
+-- A former administrator keeps tokens only for the organization they now belong to; tokens made
+-- elsewhere would come back to life if they joined that organization later.
+DELETE FROM personal_access_tokens WHERE user_id = @user_id AND organization_id <> @organization_id;
+
 -- name: DeleteMemberTokens :exec
 -- A removed member's tokens for that organization.
 DELETE FROM personal_access_tokens WHERE user_id = @user_id AND organization_id = @organization_id;

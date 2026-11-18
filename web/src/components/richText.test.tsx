@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { MAX_NESTING_DEPTH } from '../lib/richTextLimits'
 import { writeRichText } from '../test/richText'
 import { RichText } from './RichText'
 import { RichTextField } from './RichTextField'
@@ -41,6 +42,14 @@ describe('RichText', () => {
   it('puts tables in their own scrolling box', () => {
     const { container } = render(<RichText markdown={'| Office | Status |\n| --- | --- |\n| Jambi | Down |'} />)
     expect(container.querySelector('table')?.parentElement).toHaveClass('overflow-x-auto')
+  })
+
+  it('shows a body past the structure limits as plain text instead of formatting it', () => {
+    const deep = '>'.repeat(MAX_NESTING_DEPTH + 1) + ' **deep**'
+    const { container } = render(<RichText markdown={deep} />)
+    expect(container.querySelector('blockquote')).toBeNull()
+    expect(container.querySelector('strong')).toBeNull()
+    expect(screen.getByText(deep)).toHaveClass('whitespace-pre-wrap')
   })
 })
 

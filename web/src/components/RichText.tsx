@@ -1,9 +1,11 @@
+import { Component, type ReactNode } from 'react'
 import Markdown, { type Components } from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 
 import { cx } from '../lib/text'
 import { isSafeHref } from '../lib/links'
+import { isTooComplex } from '../lib/richTextLimits'
 import { ExternalLink } from './ExternalLink'
 
 /** The parts of an mdast node this file reads. */
@@ -94,13 +96,45 @@ type RichTextProps = {
   className?: string
 }
 
-/** A Markdown body, formatted like the editor shows it (`.rich-text` in app.css). Raw HTML shows as text. */
+/** The body as typed, line breaks kept: for bodies the formatter can't safely handle. */
+function PlainText({ markdown }: { markdown: string }) {
+  return <p className="whitespace-pre-wrap wrap-break-word">{markdown}</p>
+}
+
+type BoundaryProps = { markdown: string; children: ReactNode }
+
+/**
+ * Whatever a body holds, one message must never take the whole ticket page down: if formatting
+ * it throws (a pattern the limits don't catch), it shows as plain text instead.
+ */
+class FormattingBoundary extends Component<BoundaryProps, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    return this.state.failed ? <PlainText markdown={this.props.markdown} /> : this.props.children
+  }
+}
+
+/**
+ * A Markdown body, formatted like the editor shows it (`.rich-text` in app.css). Raw HTML shows
+ * as text. A body past the structure limits (lib/richTextLimits) shows as plain text.
+ */
 export function RichText({ markdown, tone = 'default', className }: RichTextProps) {
   return (
     <div className={cx('rich-text', tone === 'onDark' && 'rich-text-on-dark', className)}>
-      <Markdown remarkPlugins={remarkPlugins} components={componentsByTone[tone]}>
-        {markdown}
-      </Markdown>
+      {isTooComplex(markdown) ? (
+        <PlainText markdown={markdown} />
+      ) : (
+        <FormattingBoundary key={markdown} markdown={markdown}>
+          <Markdown remarkPlugins={remarkPlugins} components={componentsByTone[tone]}>
+            {markdown}
+          </Markdown>
+        </FormattingBoundary>
+      )}
     </div>
   )
 }

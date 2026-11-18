@@ -13,6 +13,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/clients"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/richtext"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
@@ -209,6 +210,8 @@ func normalizeCreate(in CreateInput) (CreateInput, error) {
 		return in, apperr.Invalid(apperr.CodeInvalidSubject, "Enter a short subject", "")
 	case in.Description == "" || len([]rune(in.Description)) > MaxDescriptionLen:
 		return in, apperr.Invalid(apperr.CodeInvalidDescription, "Describe the issue", "")
+	case richtext.TooComplex(in.Description):
+		return in, errTooComplex()
 	case in.Type == ticket.TypeIncident && in.ProjectID == nil:
 		return in, apperr.Invalid(apperr.CodeInvalidProject, "Choose which system has the problem", "")
 	case in.ProjectID != nil && in.Type != ticket.TypeIncident:

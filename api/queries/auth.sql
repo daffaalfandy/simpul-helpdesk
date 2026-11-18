@@ -30,10 +30,19 @@ VALUES (@token_hash, @user_id, @expires_at);
 UPDATE password_reset_tokens SET used_at = now()
 WHERE user_id = @user_id AND used_at IS NULL;
 
+-- name: GetPasswordResetTokenUser :one
+-- A live reset link of an active account, read before any password is hashed.
+SELECT t.user_id
+FROM password_reset_tokens t
+JOIN users u ON u.id = t.user_id
+WHERE t.token_hash = @token_hash AND t.used_at IS NULL AND t.expires_at > now() AND u.status = @active;
+
 -- name: ConsumePasswordResetToken :one
-UPDATE password_reset_tokens SET used_at = now()
-WHERE token_hash = @token_hash AND used_at IS NULL AND expires_at > now()
-RETURNING user_id;
+UPDATE password_reset_tokens t SET used_at = now()
+FROM users u
+WHERE t.token_hash = @token_hash AND t.used_at IS NULL AND t.expires_at > now()
+  AND u.id = t.user_id AND u.status = @active
+RETURNING t.user_id;
 
 -- name: LoginAttemptStats :one
 SELECT count(*)::int AS attempts,
@@ -44,11 +53,23 @@ WHERE key = @key AND at > @since;
 -- name: RecordLoginAttempt :exec
 INSERT INTO login_attempts (key) VALUES (@key);
 
+-- name: ReserveLoginAttempt :one
+INSERT INTO login_attempts (key) VALUES (@key) RETURNING id;
+
+-- name: DeleteLoginAttempt :exec
+DELETE FROM login_attempts WHERE id = @id;
+
 -- name: ClearLoginAttempts :exec
 DELETE FROM login_attempts WHERE key = @key;
 
 -- name: PruneLoginAttempts :exec
 DELETE FROM login_attempts WHERE at < @before;
+
+-- name: PurgeExpiredSessions :exec
+DELETE FROM sessions WHERE expires_at < @before;
+
+-- name: PurgeSpentResetTokens :exec
+DELETE FROM password_reset_tokens WHERE expires_at < @before OR used_at < @before;
 
 -- name: CreateUserInvite :exec
 INSERT INTO user_invites (token_hash, user_id, invited_by, expires_at)
@@ -56,6 +77,14 @@ VALUES (@token_hash, @user_id, sqlc.narg(invited_by), @expires_at);
 
 -- name: InvalidateUserInvites :exec
 UPDATE user_invites SET used_at = now() WHERE user_id = @user_id AND used_at IS NULL;
+
+-- name: GetUserInviteUser :one
+-- A live invite of an account still waiting for its first password, read before any password
+-- is hashed.
+SELECT i.user_id
+FROM user_invites i
+JOIN users u ON u.id = i.user_id
+WHERE i.token_hash = @token_hash AND i.used_at IS NULL AND i.expires_at > now() AND u.status = @invited;
 
 -- name: ConsumeUserInvite :one
 -- Single use, unexpired, and only while the account still waits for its first password.

@@ -10,6 +10,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/audit"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/richtext"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/store"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
@@ -35,6 +36,8 @@ func (s *Service) AddMessage(ctx context.Context, p *auth.Principal, key string,
 		return Message{}, apperr.Forbidden()
 	case in.Body == "" || len([]rune(in.Body)) > MaxMessageLen:
 		return Message{}, apperr.Invalid(apperr.CodeInvalidMessage, "Write a message", "")
+	case richtext.TooComplex(in.Body):
+		return Message{}, errTooComplex()
 	}
 	ids, err := dedupeAttachments(in.AttachmentIDs)
 	if err != nil {
@@ -103,4 +106,11 @@ func (s *Service) recordMessage(ctx context.Context, tx store.Tx, cs *changeSet,
 		return s.writeStatus(ctx, tx, cs, actor, statusMove{from: from, to: to, cause: ticket.CauseRequesterReply})
 	}
 	return nil
+}
+
+// errTooComplex refuses a description or message with more table cells or deeper nesting than
+// rich text renders safely (richtext.TooComplex).
+func errTooComplex() error {
+	return apperr.Invalid(apperr.CodeTextTooComplex, "This text has too many table cells or nested levels",
+		"Simplify the formatting and send it again.")
 }

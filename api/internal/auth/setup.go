@@ -42,12 +42,17 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 		return nil, NewSession{}, err
 	}
 	info := reqinfo.From(ctx)
-	limitKey := ""
-	if info.IP.IsValid() {
-		limitKey = keyPrefixSetupIP + info.IP.String()
+	limitKey := ipLimitKey(keyPrefixSetupIP, info.IP)
+	if limitKey != "" {
 		if err := s.checkLimit(ctx, limitKey, s.opts.MaxFailuresPerIP, s.opts.LoginWindow); err != nil {
 			return nil, NewSession{}, err
 		}
+	}
+	// A closed setup answers before the password is hashed (checked again under the lock below).
+	if done, err := s.store.Q().GetInstall(ctx); err != nil {
+		return nil, NewSession{}, err
+	} else if done != nil {
+		return nil, NewSession{}, s.setupRefused(ctx, limitKey)
 	}
 	hash, err := s.hasher.Hash(ctx, in.Password)
 	if err != nil {
@@ -64,7 +69,7 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 			return err
 		}
 		if done != nil {
-			return apperr.Conflict(apperr.CodeSetupClosed, "This install is already set up", "Sign in instead.")
+			return errSetupClosed()
 		}
 		id, err := tx.Q.CreateUser(ctx, db.CreateUserParams{Email: in.Email, Name: in.Name, PasswordHash: &hash, Role: string(RoleAdmin)})
 		if store.IsViolation(err, store.SQLStateUniqueViolation, ConstraintUserEmail) {
@@ -96,13 +101,25 @@ func (s *Service) Setup(ctx context.Context, in SetupInput) (*Principal, NewSess
 		sess, err = s.startSession(ctx, tx, p, info)
 		return err
 	})
-	if apperr.IsCode(err, apperr.CodeSetupClosed) && limitKey != "" {
-		if rerr := s.store.Q().RecordLoginAttempt(ctx, limitKey); rerr != nil {
-			return nil, NewSession{}, rerr
-		}
+	if apperr.IsCode(err, apperr.CodeSetupClosed) {
+		return nil, NewSession{}, s.setupRefused(ctx, limitKey)
 	}
 	if err != nil {
 		return nil, NewSession{}, err
 	}
 	return p, sess, nil
+}
+
+func errSetupClosed() error {
+	return apperr.Conflict(apperr.CodeSetupClosed, "This install is already set up", "Sign in instead.")
+}
+
+// setupRefused counts a refused setup against the caller's address and answers setup_closed.
+func (s *Service) setupRefused(ctx context.Context, limitKey string) error {
+	if limitKey != "" {
+		if err := s.store.Q().RecordLoginAttempt(ctx, limitKey); err != nil {
+			return err
+		}
+	}
+	return errSetupClosed()
 }
