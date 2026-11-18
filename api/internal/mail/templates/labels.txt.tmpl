@@ -29,7 +29,7 @@
 {{- if or (eq .Event "reply") (eq .Event "comment")}}{{template "notice.actor" .}} replied
 {{- else if eq .Event "internal_note"}}{{template "notice.actor" .}} added an internal note
 {{- else if eq .Event "question"}}{{template "notice.actor" .}} needs your reply or confirmation to continue
-{{- else if eq .Event "new_ticket"}}{{template "notice.actor" .}} reported this ticket; nobody is assigned yet
+{{- else if eq .Event "new_ticket"}}{{template "notice.actor" .}} opened this ticket; nobody is assigned yet
 {{- else if or (eq .Event "status") (eq .Event "resolved")}}Status changed: {{status .StatusFrom .Portal}} → {{status .StatusTo .Portal}}
 {{- else if eq .Event "assignment"}}{{if eq .Kind "unassigned"}}{{template "notice.actor" .}} unassigned you from this ticket{{else}}{{template "notice.actor" .}} assigned this ticket to you{{end}}
 {{- else if eq .Event "priority"}}{{template "notice.actor" .}} changed priority: {{.PriorityFrom}} → {{.PriorityTo}}{{if .Reason}} ({{.Reason}}){{end}}

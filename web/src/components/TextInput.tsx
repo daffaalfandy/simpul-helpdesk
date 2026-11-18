@@ -45,6 +45,7 @@ export function TextInput({
         className={cx(
           'w-full rounded-lg border border-border-strong bg-surface px-3.5 font-sans text-ink',
           'placeholder:text-muted data-invalid:border-danger',
+          'data-disabled:cursor-not-allowed data-disabled:bg-surface-subtle data-disabled:text-muted',
           size === 'lg' ? 'min-h-(--control-h-lg) text-md' : 'min-h-(--control-h-md) text-base',
         )}
       />

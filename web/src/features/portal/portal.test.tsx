@@ -73,6 +73,8 @@ describe('portal home', () => {
     expect(lastRequest('GET', '/tickets')?.search).toBe(
       '?status=new&status=assigned&status=in_progress&status=waiting_on_client&status=in_uat&from=2026-09-01&to=2026-09-30&limit=50',
     )
+    // A range that ended before today points to later dates.
+    expect(await within(card).findByText('Pick later dates to see newer ones.')).toBeInTheDocument()
     expect(within(card).getByText(/^No open tickets reported 1.30 Sept? 2026\.$/)).toBeInTheDocument()
 
     await user.click(within(card).getByRole('button', { name: /^Reported 1.30 Sept? 2026$/ }))

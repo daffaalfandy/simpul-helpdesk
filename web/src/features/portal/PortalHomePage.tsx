@@ -1,5 +1,6 @@
 import { useSuspenseInfiniteQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { today } from '@internationalized/date'
 import { Check, ChevronRight, Inbox, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -86,7 +87,8 @@ export function PortalHomePage({ filter, range, onFilterChange, onRangeChange }:
           <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted">
             <Inbox aria-hidden="true" className="size-(--icon-lg)" />
             <p>{t(`portal.home.empty.${filter}`, { range: formatDateRange(range.from, range.to) })}</p>
-            <p>{t('portal.home.emptyEarlier')}</p>
+            {/* A range that ended before today hides newer tickets; one that reaches today, older ones. */}
+            <p>{t(range.to < today(timeZone).toString() ? 'portal.home.emptyLater' : 'portal.home.emptyEarlier')}</p>
           </div>
         ) : (
           <ul className="flex flex-col">

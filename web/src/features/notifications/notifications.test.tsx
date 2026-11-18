@@ -145,7 +145,7 @@ describe('notifications page', () => {
     expect(writes('/events/new_ticket')[0]?.body).toEqual({ web: true, email: false })
 
     const inbox = screen.getByRole('list')
-    expect(within(inbox).getByText('Hendra Gunawan reported this ticket; nobody is assigned yet')).toBeInTheDocument()
+    expect(within(inbox).getByText('Hendra Gunawan opened this ticket; nobody is assigned yet')).toBeInTheDocument()
     const filters = screen.getByRole('group', { name: 'Filter notifications' })
     await user.click(within(filters).getByRole('button', { name: 'Assigned' }))
     await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2))

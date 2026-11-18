@@ -156,7 +156,7 @@ func TestNewTicketRenders(t *testing.T) {
 		t.Errorf("subject = %q, want %q", msg.Subject, want)
 	}
 	for _, want := range []string{
-		"Hendra Gunawan reported this ticket; nobody is assigned yet",
+		"Hendra Gunawan opened this ticket; nobody is assigned yet",
 		"You're getting this because supervisors hear about tickets nobody is assigned to.",
 		"View the ticket: https://helpdesk.example/tickets/HD-7",
 	} {

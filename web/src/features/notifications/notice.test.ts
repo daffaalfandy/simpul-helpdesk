@@ -38,7 +38,7 @@ function notice(over: Partial<Notification>): Notification {
 
 describe('notices about who should act', () => {
   it('tells supervisors about a ticket nobody is on and the client that the team waits for them', () => {
-    expect(noticeText(t, notice({ event: 'new_ticket' }), 'team', times)).toBe('Hendra Gunawan reported this ticket; nobody is assigned yet')
+    expect(noticeText(t, notice({ event: 'new_ticket' }), 'team', times)).toBe('Hendra Gunawan opened this ticket; nobody is assigned yet')
     expect(noticeText(t, notice({ event: 'question', actorName: 'Rina Pratiwi' }), 'portal', times)).toBe(
       'Rina Pratiwi is waiting for your reply',
     )

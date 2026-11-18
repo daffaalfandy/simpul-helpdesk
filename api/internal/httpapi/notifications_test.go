@@ -217,7 +217,7 @@ func TestUnassignedTicketsGoToSupervisors(t *testing.T) {
 	if want := "[" + tk.Key + "] New ticket: Scanner jams"; m.Subject != want {
 		t.Errorf("subject = %q, want %q", m.Subject, want)
 	}
-	for _, want := range []string{"User requester reported this ticket; nobody is assigned yet",
+	for _, want := range []string{"User requester opened this ticket; nobody is assigned yet",
 		"supervisors hear about tickets nobody is assigned to", appURL + "/tickets/" + tk.Key} {
 		if !strings.Contains(m.Text, want) {
 			t.Errorf("supervisor email lacks %q:\n%s", want, m.Text)

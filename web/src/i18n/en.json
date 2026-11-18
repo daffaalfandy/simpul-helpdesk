@@ -281,6 +281,7 @@
         "all": "No tickets reported {{range}}."
       },
       "emptyEarlier": "Pick earlier dates to see older ones.",
+      "emptyLater": "Pick later dates to see newer ones.",
       "reportedBy": "Reported by {{name}}",
       "updated": "Updated {{when}}",
       "resolvedOn": "Resolved {{when}}",
@@ -1660,7 +1661,7 @@
       "internal_note": "{{actor}} added an internal note",
       "reply": "{{actor}} replied",
       "question": "{{actor}} is waiting for your reply",
-      "new_ticket": "{{actor}} reported this ticket; nobody is assigned yet",
+      "new_ticket": "{{actor}} opened this ticket; nobody is assigned yet",
       "status": "Status changed: {{from}} → {{to}}",
       "uatRequested": "Status changed: {{from}} → {{to}}. If we don't hear back, it's approved on {{date}}.",
       "resolvedReopen": "Status changed: {{from}} → {{to}}. You can reopen it until {{date}}.",
