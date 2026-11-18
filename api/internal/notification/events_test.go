@@ -6,7 +6,7 @@ import (
 )
 
 func TestSettingsListOrderAndDefaults(t *testing.T) {
-	team := Settings(AudienceTeam, nil)
+	team := Settings(AudienceTeam, false, nil)
 	want := []Setting{
 		{EventComment, webAndEmail, false},
 		{EventInternalNote, webOnly, false},
@@ -18,21 +18,31 @@ func TestSettingsListOrderAndDefaults(t *testing.T) {
 		{EventCode, webOnly, false},
 	}
 	if !slices.Equal(team, want) {
-		t.Errorf("team settings\n got %v\nwant %v", team, want)
+		t.Errorf("agent settings\n got %v\nwant %v", team, want)
 	}
-	portal := Settings(AudiencePortal, nil)
+	// Supervisors also switch new tickets, right after assignments.
+	supervisor := Settings(AudienceTeam, true, map[Event]Pref{EventNewTicket: webOnly})
+	wantSupervisor := slices.Insert(slices.Clone(want), 4, Setting{EventNewTicket, webOnly, false})
+	if !slices.Equal(supervisor, wantSupervisor) {
+		t.Errorf("supervisor settings\n got %v\nwant %v", supervisor, wantSupervisor)
+	}
+	portal := Settings(AudiencePortal, false, nil)
 	var events []Event
 	for _, s := range portal {
 		events = append(events, s.Event)
+		// Tests and questions for the client are always on: the ticket waits for their answer.
+		if locked := s.Event == EventUATRequested || s.Event == EventQuestion; s.Locked != locked {
+			t.Errorf("portal %s locked = %v", s.Event, s.Locked)
+		}
 	}
-	// ticket_logged is always on and not listed; UAT requests are always on and listed.
+	// ticket_logged is always on and not listed.
 	if !slices.Equal(events, []Event{EventReply, EventStatus, EventUATRequested, EventQuestion, EventResolved, EventColleague}) {
 		t.Errorf("portal events = %v", events)
 	}
 }
 
 func TestChannels(t *testing.T) {
-	off := map[Event]Pref{EventComment: {}, EventAssignment: {}, EventReply: {Web: true}}
+	off := map[Event]Pref{EventComment: {}, EventAssignment: {}, EventReply: {Web: true}, EventQuestion: {}, EventNewTicket: webOnly}
 	tests := []struct {
 		audience Audience
 		event    Event
@@ -42,6 +52,9 @@ func TestChannels(t *testing.T) {
 		{AudienceTeam, EventAssignment, webAndEmail},     // locked wins over a stored choice
 		{AudienceTeam, EventStatus, webAndEmail},         // default
 		{AudienceTeam, EventReply, Pref{}},               // not a team event
+		{AudienceTeam, EventNewTicket, webOnly},          // stored choice
+		{AudiencePortal, EventQuestion, webAndEmail},     // locked wins over a stored choice
+		{AudiencePortal, EventNewTicket, Pref{}},         // never for client staff
 		{AudiencePortal, EventReply, webOnly},            // stored choice
 		{AudiencePortal, EventTicketLogged, webAndEmail}, // hidden and locked
 		{AudiencePortal, EventInternalNote, Pref{}},      // never for client staff
@@ -57,21 +70,27 @@ func TestChannels(t *testing.T) {
 func TestSwitchable(t *testing.T) {
 	tests := []struct {
 		audience       Audience
+		supervisor     bool
 		event          Event
 		pref           Pref
 		known, allowed bool
 	}{
-		{AudienceTeam, EventComment, Pref{}, true, true},
-		{AudienceTeam, EventSLA, Pref{Web: true}, true, false},
-		{AudienceTeam, EventSLA, webAndEmail, true, true},
-		{AudienceTeam, EventReply, webOnly, false, false},
-		{AudiencePortal, EventTicketLogged, webAndEmail, false, false},
+		{AudienceTeam, false, EventComment, Pref{}, true, true},
+		{AudienceTeam, false, EventSLA, Pref{Web: true}, true, false},
+		{AudienceTeam, false, EventSLA, webAndEmail, true, true},
+		{AudienceTeam, false, EventReply, webOnly, false, false},
+		{AudienceTeam, false, EventNewTicket, Pref{}, false, false}, // supervisors only
+		{AudienceTeam, true, EventNewTicket, Pref{}, true, true},
+		{AudienceTeam, true, EventDoD, Pref{}, false, false}, // hidden, even for supervisors
+		{AudiencePortal, false, EventTicketLogged, webAndEmail, false, false},
+		{AudiencePortal, false, EventQuestion, webOnly, true, false},
+		{AudiencePortal, false, EventQuestion, webAndEmail, true, true},
 	}
 	for _, tt := range tests {
-		known, allowed := Switchable(tt.audience, tt.event, tt.pref)
+		known, allowed := Switchable(tt.audience, tt.supervisor, tt.event, tt.pref)
 		if known != tt.known || allowed != tt.allowed {
-			t.Errorf("Switchable(%s, %s, %v) = %v, %v; want %v, %v",
-				tt.audience, tt.event, tt.pref, known, allowed, tt.known, tt.allowed)
+			t.Errorf("Switchable(%s, supervisor %v, %s, %v) = %v, %v; want %v, %v",
+				tt.audience, tt.supervisor, tt.event, tt.pref, known, allowed, tt.known, tt.allowed)
 		}
 	}
 }
@@ -95,9 +114,13 @@ func TestEventTablesAreConsistent(t *testing.T) {
 			}
 		}
 	}
+	// A missing event would rank -1 and outrank SLA alerts.
 	for _, e := range Events {
-		if !slices.Contains(precedence, e) {
+		if Rank(e) < 0 {
 			t.Errorf("event %s has no precedence", e)
 		}
+	}
+	if len(precedence) != len(Events) {
+		t.Errorf("precedence lists %d events, Events %d", len(precedence), len(Events))
 	}
 }

@@ -156,7 +156,7 @@ func loadRecipients(ctx context.Context, q *db.Queries, orgID uuid.UUID, in *not
 }
 
 // quotedEvents quote the team's latest public reply: the question the requester is asked, or
-// what the team asks them to test.
+// what the team asks them to test. The inbox quotes it as of the fan-out, the email as of sending.
 var quotedEvents = []notification.Event{notification.EventQuestion, notification.EventUATRequested}
 
 // quoteLatestStaffReply points question and test notifications at the team's latest public reply.
@@ -182,16 +182,10 @@ func quoteLatestStaffReply(ctx context.Context, q *db.Queries, ticketID uuid.UUI
 	return nil
 }
 
-// supervisorsFor loads the organization's active supervisors when a change concerns them: a breach the ticket's
-// project alerts them about, a ticket resolved without its Definition of Done, or a ticket given
-// its own. The router decides which of them hears what.
+// supervisorsFor loads the organization's active supervisors when a change concerns them
+// (notification.Input.NeedsSupervisors). The router decides which of them hears what.
 func supervisorsFor(ctx context.Context, q *db.Queries, orgID uuid.UUID, in notification.Input) ([]uuid.UUID, error) {
-	needed := false
-	for _, c := range in.Changes {
-		needed = needed || (c.Kind == notification.ChangeSLABreached && in.NotifySupervisorOnBreach) ||
-			c.Kind == notification.ChangeDoD || c.Cause == ticket.CauseDoDSkipped
-	}
-	if !needed {
+	if !in.NeedsSupervisors() {
 		return nil, nil
 	}
 	return q.ListActiveSupervisorIDs(ctx, db.ListActiveSupervisorIDsParams{

@@ -114,8 +114,9 @@ func TestFanoutFollowsTheTicket(t *testing.T) {
 	supervisorID := userID(t, te.env, auth.RoleSupervisor)
 	tk := te.requester.report(t, incident(te.projectA, "VPN down"))
 	te.fanout(t)
-	if got := te.notices(t, tk.Id); len(got) != 0 {
-		t.Fatalf("a portal report notifies nobody (HANDOFF §13 Q7), got %v", got)
+	reported := []notice{{supervisorID, notification.EventNewTicket}}
+	if got := te.notices(t, tk.Id); !slices.Equal(got, reported) {
+		t.Fatalf("a portal report nobody is on tells the supervisors (owner, 18 Nov), got %v", got)
 	}
 
 	steps := []struct {
@@ -143,7 +144,7 @@ func TestFanoutFollowsTheTicket(t *testing.T) {
 				gen.TicketPriorityInput{Priority: gen.PriorityP2, Reason: "Whole office"}), http.StatusOK)
 		}, []notice{{te.agentID, notification.EventPriority}}},
 	}
-	var want []notice
+	want := reported
 	for _, s := range steps {
 		s.act()
 		te.fanout(t)
@@ -152,7 +153,7 @@ func TestFanoutFollowsTheTicket(t *testing.T) {
 			t.Fatalf("after %q\n got %v\nwant %v", s.name, got, want)
 		}
 	}
-	for _, n := range te.notices(t, tk.Id) {
+	for _, n := range te.notices(t, tk.Id)[len(reported):] {
 		if n.user == supervisorID {
 			t.Errorf("the actor was notified: %v", n)
 		}
@@ -169,9 +170,65 @@ func TestFanoutFollowsTheTicket(t *testing.T) {
 
 func TestLoggedTicketNotifiesTheRequester(t *testing.T) {
 	te := newTicketEnv(t)
+	supervisorID := userID(t, te.env, auth.RoleSupervisor)
 	tk := te.agent.logFor(t, te.clientA, te.requesterID, incident(te.projectA, "Called about email"))
 	te.fanout(t)
-	want := []notice{{te.requesterID, notification.EventTicketLogged}}
+	want := []notice{{supervisorID, notification.EventNewTicket}, {te.requesterID, notification.EventTicketLogged}}
+	if got := te.notices(t, tk.Id); !slices.Equal(got, want) {
+		t.Fatalf("logged with nobody on it: got %v, want %v", got, want)
+	}
+
+	// Taken at once: the agent is on it, so no supervisor hears about it.
+	in := incident(te.projectA, "Called about the printer")
+	mine := true
+	in.AssignToMe = &mine
+	tk = te.agent.logFor(t, te.clientA, te.requesterID, in)
+	te.fanout(t)
+	want = []notice{{te.requesterID, notification.EventTicketLogged}}
+	if got := te.notices(t, tk.Id); !slices.Equal(got, want) {
+		t.Fatalf("logged and assigned to me: got %v, want %v", got, want)
+	}
+}
+
+// A ticket reported on the portal with nobody on it reaches the supervisors' inbox and email,
+// and its conversation keeps going to them until someone takes it (owner, 18 Nov).
+func TestUnassignedTicketsGoToSupervisors(t *testing.T) {
+	te := newTicketEnv(t)
+	supervisorID := userID(t, te.env, auth.RoleSupervisor)
+	supervisorEmail := te.users[auth.RoleSupervisor]
+	tk := te.requester.report(t, incident(te.projectA, "Scanner jams"))
+	te.fanout(t)
+
+	page := te.supervisor.inbox(t, "?filter=assigned")
+	if len(page.Items) != 1 || page.Items[0].Event != gen.NotificationEventNewTicket || page.Items[0].Ticket.Key != tk.Key ||
+		page.Items[0].ActorName == nil || *page.Items[0].ActorName != "User requester" {
+		t.Fatalf("supervisor inbox = %+v", page.Items)
+	}
+	if got := te.agent.inbox(t, ""); len(got.Items) != 0 {
+		t.Fatalf("an agent hears about a ticket nobody gave them: %+v", got.Items)
+	}
+	te.age(t, notification.GroupWindow)
+	te.sendEmails(t)
+	got := mailsTo(te.mailer.Messages(), supervisorEmail)
+	if len(got) != 1 {
+		t.Fatalf("supervisor emails = %v", subjects(got))
+	}
+	m := got[0]
+	if want := "[" + tk.Key + "] New ticket: Scanner jams"; m.Subject != want {
+		t.Errorf("subject = %q, want %q", m.Subject, want)
+	}
+	for _, want := range []string{"User requester reported this ticket; nobody is assigned yet",
+		"supervisors hear about tickets nobody is assigned to", appURL + "/tickets/" + tk.Key} {
+		if !strings.Contains(m.Text, want) {
+			t.Errorf("supervisor email lacks %q:\n%s", want, m.Text)
+		}
+	}
+
+	// The client's reply goes to the supervisors while nobody is on it; an internal note does not.
+	decode[gen.TicketMessage](t, te.requester.message(tk.Key, gen.MessageVisibilityPublic, "It jams on every page"), http.StatusCreated)
+	decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityInternal, "Probably the roller"), http.StatusCreated)
+	te.fanout(t)
+	want := []notice{{supervisorID, notification.EventNewTicket}, {supervisorID, notification.EventComment}}
 	if got := te.notices(t, tk.Id); !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -222,8 +279,11 @@ func TestWatchers(t *testing.T) {
 	// Adding twice changes nothing and audits once.
 	decode[[]gen.Colleague](t, te.requester.do(http.MethodPost, path+"/watchers", gen.WatcherInput{UserId: colleagueID}), http.StatusOK)
 	te.fanout(t)
-	if got, want := te.notices(t, tk.Id), []notice{{colleagueID, notification.EventColleague}}; !slices.Equal(got, want) {
-		t.Fatalf("adding notifies the colleague: got %v, want %v", got, want)
+	// Nobody is on the ticket yet, so the supervisor hears about it and its replies.
+	supervisorID := userID(t, te.env, auth.RoleSupervisor)
+	added := []notice{{supervisorID, notification.EventNewTicket}, {colleagueID, notification.EventColleague}}
+	if got := te.notices(t, tk.Id); !slices.Equal(got, added) {
+		t.Fatalf("adding notifies the colleague: got %v, want %v", got, added)
 	}
 	if got := decode[[]gen.Colleague](t, te.agent.do(http.MethodGet, path+"/watchers", nil), http.StatusOK); len(got) != 1 {
 		t.Fatalf("staff see who is notified: %+v", got)
@@ -233,11 +293,10 @@ func TestWatchers(t *testing.T) {
 	decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityPublic, "On our way"), http.StatusCreated)
 	decode[gen.TicketMessage](t, colleague.message(tk.Key, gen.MessageVisibilityPublic, "Room 2"), http.StatusCreated)
 	te.fanout(t)
-	want := []notice{
-		{colleagueID, notification.EventColleague},
-		{te.requesterID, notification.EventReply}, {colleagueID, notification.EventReply},
-		{te.requesterID, notification.EventColleague},
-	}
+	want := append(added,
+		notice{supervisorID, notification.EventComment}, notice{te.requesterID, notification.EventReply}, notice{colleagueID, notification.EventReply},
+		notice{supervisorID, notification.EventComment}, notice{te.requesterID, notification.EventColleague},
+	)
 	if got := te.notices(t, tk.Id); !slices.Equal(got, want) {
 		t.Fatalf("got %v\nwant %v", got, want)
 	}
@@ -367,6 +426,18 @@ func TestNotificationSettings(t *testing.T) {
 		if e.Locked != locked {
 			t.Errorf("%s locked = %v", e.Event, e.Locked)
 		}
+		if e.Event == gen.NotificationEventNewTicket {
+			t.Error("an agent's settings list new tickets")
+		}
+	}
+	// Supervisors also choose how they hear about new tickets nobody is on; administrators don't.
+	supervising := decode[gen.NotificationSettings](t, te.supervisor.do(http.MethodGet, "/notification-settings", nil), http.StatusOK)
+	if len(supervising.Events) != 9 || supervising.Events[4].Event != gen.NotificationEventNewTicket || supervising.Events[4].Locked ||
+		!supervising.Events[4].Web || !supervising.Events[4].Email {
+		t.Fatalf("supervisor settings = %+v", supervising.Events)
+	}
+	if admin := decode[gen.NotificationSettings](t, te.admin.do(http.MethodGet, "/notification-settings", nil), http.StatusOK); len(admin.Events) != 8 {
+		t.Fatalf("admin settings = %+v", admin.Events)
 	}
 	set := func(s session, event string, web, email bool) *httptest.ResponseRecorder {
 		return s.do(http.MethodPut, "/notification-settings/events/"+event, gen.NotificationPreferenceInput{Web: web, Email: email})
@@ -374,6 +445,8 @@ func TestNotificationSettings(t *testing.T) {
 	expectProblem(t, set(te.agent, "sla", true, false), http.StatusBadRequest, apperr.CodeNotificationLocked)
 	expectProblem(t, set(te.agent, "reply", false, false), http.StatusBadRequest, apperr.CodeNotificationEventUnknown)
 	expectProblem(t, set(te.requester, "ticket_logged", false, false), http.StatusBadRequest, apperr.CodeNotificationEventUnknown)
+	expectProblem(t, set(te.agent, "new_ticket", false, false), http.StatusBadRequest, apperr.CodeNotificationEventUnknown)
+	expectProblem(t, set(te.requester, "question", true, false), http.StatusBadRequest, apperr.CodeNotificationLocked)
 	updated := decode[gen.NotificationSettings](t, set(te.agent, "comment", false, false), http.StatusOK)
 	if updated.Events[0].Event != gen.NotificationEventComment || updated.Events[0].Web || updated.Events[0].Email {
 		t.Fatalf("comment switched off = %+v", updated.Events[0])
@@ -388,14 +461,18 @@ func TestNotificationSettings(t *testing.T) {
 		t.Fatalf("portal settings = %+v", portal)
 	}
 	for _, e := range portal.Events {
-		if e.Locked != (e.Event == gen.NotificationEventUatRequested) {
+		if e.Locked != (e.Event == gen.NotificationEventUatRequested || e.Event == gen.NotificationEventQuestion) {
 			t.Errorf("portal %s locked = %v", e.Event, e.Locked)
 		}
 	}
 	expectProblem(t, set(te.requester, "uat_requested", true, false), http.StatusBadRequest, apperr.CodeNotificationLocked)
 	expectProblem(t, set(te.supervisor, "dod", false, false), http.StatusBadRequest, apperr.CodeNotificationEventUnknown)
-	if got := countOf(te.auditActionsLike(t, "notification_settings.%"), "notification_settings.updated"); got != 2 {
-		t.Errorf("settings audit entries = %d, want 2", got)
+	newTickets := decode[gen.NotificationSettings](t, set(te.supervisor, "new_ticket", true, false), http.StatusOK)
+	if e := newTickets.Events[4]; e.Event != gen.NotificationEventNewTicket || !e.Web || e.Email {
+		t.Fatalf("new tickets on the web only = %+v", e)
+	}
+	if got := countOf(te.auditActionsLike(t, "notification_settings.%"), "notification_settings.updated"); got != 3 {
+		t.Errorf("settings audit entries = %d, want 3", got)
 	}
 
 	// A switched-off event notifies nobody.
@@ -468,7 +545,7 @@ func TestTicketEmailsAreGrouped(t *testing.T) {
 		t.Fatalf("requester got %d emails, want one grouped email", len(toRequester))
 	}
 	m := toRequester[0]
-	if want := "[" + tk.Key + "] A question for you: Login fails"; m.Subject != want {
+	if want := "[" + tk.Key + "] We're waiting for your reply: Login fails"; m.Subject != want {
 		t.Errorf("subject = %q, want %q", m.Subject, want)
 	}
 	for _, want := range []string{"Which accounts fail?", "Also changed:", "Status changed: New → Assigned", "you reported " + tk.Key,
@@ -640,5 +717,63 @@ func TestLateSummaryRowsCatchUp(t *testing.T) {
 	te.sendEmails(t)
 	if got := mailsTo(te.mailer.Messages(), te.users[auth.RoleAgent]); len(got) != 2 {
 		t.Fatalf("catch-up summary: %v", subjects(got))
+	}
+}
+
+// The "waiting for your reply" email quotes the team's latest public reply when it is sent,
+// whether the agent typed the question before moving the ticket or after.
+func TestQuestionEmailQuotesTheLatestReply(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		replyFirst bool
+		wantQuote  string
+		staleQuote string
+	}{
+		{name: "reply, then move", replyFirst: true, wantQuote: "Which office are you in?", staleQuote: "Looking into it."},
+		{name: "move, then reply", replyFirst: false, wantQuote: "Which floor are you on?", staleQuote: "Looking into it."},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			te := newTicketEnv(t)
+			requesterEmail := te.users[auth.RoleRequester]
+			tk := te.requester.report(t, incident(te.projectA, "Wi-Fi drops"))
+			decode[gen.Ticket](t, te.supervisor.do(http.MethodPut, "/tickets/"+tk.Key+"/assignee",
+				gen.TicketAssigneeInput{AssigneeId: &te.agentID}), http.StatusOK)
+			decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityPublic, tt.staleQuote), http.StatusCreated)
+			te.fanout(t)
+			te.age(t, notification.GroupWindow)
+			te.sendEmails(t)
+			sent := len(mailsTo(te.mailer.Messages(), requesterEmail))
+
+			reply := func() {
+				decode[gen.TicketMessage](t, te.agent.message(tk.Key, gen.MessageVisibilityPublic, tt.wantQuote), http.StatusCreated)
+				te.fanout(t)
+			}
+			move := func() {
+				decode[gen.Ticket](t, te.agent.do(http.MethodPut, "/tickets/"+tk.Key+"/status",
+					gen.TicketStatusInput{Status: gen.TicketStatusWaitingOnClient}), http.StatusOK)
+				te.fanout(t)
+			}
+			if tt.replyFirst {
+				reply()
+				move()
+			} else {
+				move()
+				reply()
+			}
+			te.age(t, notification.GroupWindow)
+			te.sendEmails(t)
+			got := mailsTo(te.mailer.Messages(), requesterEmail)[sent:]
+			if len(got) != 1 {
+				t.Fatalf("requester emails = %v, want one", subjects(got))
+			}
+			m := got[0]
+			if want := "[" + tk.Key + "] We're waiting for your reply: Wi-Fi drops"; m.Subject != want {
+				t.Errorf("subject = %q, want %q", m.Subject, want)
+			}
+			if !strings.Contains(m.Text, tt.wantQuote+"\n"+"Reply now: "+appURL+"/portal/tickets/"+tk.Key) ||
+				strings.Contains(m.Text, tt.staleQuote) || strings.Contains(m.Text, "Open the ticket to see") {
+				t.Errorf("question email quotes the wrong reply:\n%s", m.Text)
+			}
+		})
 	}
 }

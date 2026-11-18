@@ -19,6 +19,8 @@ const (
 	RelationSupervisor Relation = "supervisor" // SLA breach alerts
 	// RelationSupervisorDoD: supervisors hear when a Definition of Done is skipped or changed.
 	RelationSupervisorDoD Relation = "supervisor_dod"
+	// RelationSupervisorUnassigned: supervisors hear about tickets nobody is assigned to.
+	RelationSupervisorUnassigned Relation = "supervisor_unassigned"
 )
 
 // NoticeData is one notification as a line of an email.

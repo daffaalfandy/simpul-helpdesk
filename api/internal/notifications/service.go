@@ -188,7 +188,7 @@ func (s *Service) settings(ctx context.Context, q *db.Queries, p *auth.Principal
 	}
 	aud := audienceOf(p)
 	return Settings{
-		Audience: aud, Frequency: notification.Frequency(freq), Events: notification.Settings(aud, overrides),
+		Audience: aud, Frequency: notification.Frequency(freq), Events: notification.Settings(aud, supervises(p), overrides),
 	}, nil
 }
 
@@ -198,7 +198,7 @@ func (s *Service) SetEventPreference(ctx context.Context, p *auth.Principal, e n
 	if p == nil {
 		return Settings{}, apperr.Unauthenticated()
 	}
-	known, allowed := notification.Switchable(audienceOf(p), e, pref)
+	known, allowed := notification.Switchable(audienceOf(p), supervises(p), e, pref)
 	switch {
 	case !known:
 		return Settings{}, apperr.Invalid(apperr.CodeNotificationEventUnknown, "This notification isn't in your settings", "")
@@ -260,6 +260,10 @@ func (s *Service) SetEmailFrequency(ctx context.Context, p *auth.Principal, f no
 func audienceOf(p *auth.Principal) notification.Audience {
 	return notification.AudienceFor(!auth.Can(p.Role, auth.CapPortal))
 }
+
+// supervises reports whether p is a supervisor of the organization they work in: only they hear
+// about tickets nobody is assigned to. Administrators have no membership, so they don't.
+func supervises(p *auth.Principal) bool { return p.Role == auth.RoleSupervisor }
 
 // cutQuote trims a plain-text quote to notification.QuoteMaxRunes, marking the cut.
 func cutQuote(s string) string {

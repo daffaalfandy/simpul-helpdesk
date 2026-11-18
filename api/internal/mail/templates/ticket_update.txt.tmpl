@@ -9,7 +9,9 @@ Status: {{status .Main.StatusFrom .Portal}} → {{status .Main.StatusTo .Portal}
 {{with .Quote}}
 {{.Author}}{{if .FromSupport}} · Support team{{end}} · {{.Time}}
 {{.Body}}
-{{end}}
+{{else}}{{if and .Portal (eq .Main.Event "question")}}
+{{template "question.fallback"}}
+{{end}}{{end}}
 {{- with .UAT}}
 {{template "uat.question"}}
 {{template "uat.approve"}}: {{.ApproveURL}}
@@ -23,7 +25,7 @@ Status: {{status .Main.StatusFrom .Portal}} → {{status .Main.StatusTo .Portal}
 {{template "reopen.line" .Main.ReopenUntil}}
 
 {{end -}}
-View the ticket: {{.TicketURL}}
+{{if and .Portal (eq .Main.Event "question")}}{{template "question.reply"}}{{else}}{{template "ticket.view"}}{{end}}: {{.TicketURL}}
 {{- if or .Changes .Others}}
 
 Also changed:

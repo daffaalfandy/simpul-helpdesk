@@ -140,6 +140,77 @@ func TestTeamWordingAndRelations(t *testing.T) {
 	}
 }
 
+// Supervisors hear about a ticket nobody is assigned to, and why they get the email.
+func TestNewTicketRenders(t *testing.T) {
+	data := TicketUpdateData{
+		OrgName: "Demo Vendor", Relation: RelationSupervisorUnassigned, TicketKey: "HD-7", Title: "VPN down",
+		Priority: "P2", PriorityName: "High", ProjectName: "Network",
+		Main:      NoticeData{Event: "new_ticket", ActorName: "Hendra Gunawan", Time: "09:12"},
+		TicketURL: "https://helpdesk.example/tickets/HD-7", SettingsURL: "s",
+	}
+	msg, err := Render(TemplateTicketUpdate, "dewi@example.test", "Dewi", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "[HD-7] New ticket: VPN down"; msg.Subject != want {
+		t.Errorf("subject = %q, want %q", msg.Subject, want)
+	}
+	for _, want := range []string{
+		"Hendra Gunawan reported this ticket; nobody is assigned yet",
+		"You're getting this because supervisors hear about tickets nobody is assigned to.",
+		"View the ticket: https://helpdesk.example/tickets/HD-7",
+	} {
+		if !strings.Contains(msg.Text, want) {
+			t.Errorf("text lacks %q:\n%s", want, msg.Text)
+		}
+	}
+	if !strings.Contains(msg.HTML, "supervisors hear about tickets nobody is assigned to") || strings.Contains(msg.Text+msg.HTML, noValue) {
+		t.Errorf("html:\n%s", msg.HTML)
+	}
+}
+
+// A question for the client says the ticket waits for them, quotes the team's reply or says
+// where to look, and offers to reply.
+func TestQuestionRenders(t *testing.T) {
+	url := "https://helpdesk.example/portal/tickets/HD-7"
+	data := TicketUpdateData{
+		OrgName: "Demo Vendor", Portal: true, Relation: RelationReported, TicketKey: "HD-7", Title: "VPN down",
+		Main: NoticeData{Event: "question", Portal: true, ActorName: "Rina Pratiwi", StatusFrom: "in_progress",
+			StatusTo: "waiting_on_client", Time: "09:12"},
+		TicketURL: url, SettingsURL: "s",
+	}
+	msg, err := Render(TemplateTicketUpdate, "hendra@example.test", "Hendra", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "[HD-7] We're waiting for your reply: VPN down"; msg.Subject != want {
+		t.Errorf("subject = %q, want %q", msg.Subject, want)
+	}
+	fallback := "Open the ticket to see what the team needs from you."
+	for _, want := range []string{"Rina Pratiwi needs your reply or confirmation to continue", fallback, "Reply now: " + url} {
+		if !strings.Contains(msg.Text, want) {
+			t.Errorf("text lacks %q:\n%s", want, msg.Text)
+		}
+	}
+	for _, want := range []string{fallback, `href="` + url + `"`, "Reply now"} {
+		if !strings.Contains(msg.HTML, want) {
+			t.Errorf("html lacks %q", want)
+		}
+	}
+	if strings.Contains(msg.Text+msg.HTML, "View the ticket") || strings.Contains(msg.Text+msg.HTML, noValue) {
+		t.Errorf("question email:\n%s", msg.Text)
+	}
+
+	data.Quote = &QuoteData{Author: "Rina Pratiwi", FromSupport: true, Time: "09:14", Body: "Which office?", BodyHTML: "<p>Which office?</p>"}
+	msg, err = Render(TemplateTicketUpdate, "hendra@example.test", "Hendra", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(msg.Text, "Which office?") || strings.Contains(msg.Text+msg.HTML, fallback) {
+		t.Errorf("quoted question:\n%s", msg.Text)
+	}
+}
+
 func TestCodeActivityRenders(t *testing.T) {
 	tests := []struct {
 		code CodeData

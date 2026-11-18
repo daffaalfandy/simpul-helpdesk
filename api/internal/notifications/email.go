@@ -391,9 +391,18 @@ func mainRow(rows []claimedRow) claimedRow {
 }
 
 // quote is the message the email quotes: the headline's, else the latest the rows name.
-// Client staff only ever see public messages.
+// A question or test request to client staff quotes the team's latest public reply as of now,
+// since an agent may move the ticket first and type the question after; with no reply there
+// is no quote. Client staff only ever see public messages.
 func (m *Mailer) quote(ctx context.Context, q *db.Queries, portal bool, main claimedRow, rows []claimedRow, f formatter) (*mail.QuoteData, error) {
 	id := main.MessageID
+	if portal && slices.Contains(quotedEvents, notification.Event(main.EventType)) {
+		reply, err := tickets.LatestStaffReply(ctx, q, main.TicketID)
+		if err != nil || reply == nil {
+			return nil, err
+		}
+		id = &reply.ID
+	}
 	for i := len(rows) - 1; id == nil && i >= 0; i-- {
 		id = rows[i].MessageID
 	}
@@ -457,10 +466,13 @@ func (m *Mailer) settingsURL(portal bool) string {
 	return u.String()
 }
 
-// relation is why the user gets the email, for its footer.
+// relation is why the user gets the email, for its footer. Whether they supervise comes from
+// their membership in the ticket's organization: users.role only says "staff".
 func relation(user *recipient, t db.ListEmailTicketsRow, main claimedRow) mail.Relation {
+	event := notification.Event(main.EventType)
+	supervisor := t.MemberRole != nil && auth.Role(*t.MemberRole) == auth.RoleSupervisor
 	switch {
-	case notification.Event(main.EventType) == notification.EventTicketLogged:
+	case event == notification.EventTicketLogged:
 		return mail.RelationLogged
 	case user.ID == t.RequesterID:
 		return mail.RelationReported
@@ -468,10 +480,13 @@ func relation(user *recipient, t db.ListEmailTicketsRow, main claimedRow) mail.R
 		return mail.RelationWatching
 	case t.AssigneeID != nil && *t.AssigneeID == user.ID:
 		return mail.RelationAssigned
-	case notification.Event(main.EventType) == notification.EventSLA && auth.Role(user.Role) == auth.RoleSupervisor:
+	case event == notification.EventSLA && supervisor:
 		return mail.RelationSupervisor
-	case notification.Event(main.EventType) == notification.EventDoD:
+	case event == notification.EventDoD:
 		return mail.RelationSupervisorDoD
+	case supervisor && (event == notification.EventNewTicket ||
+		(t.AssigneeID == nil && slices.Contains(notification.UnassignedEvents, event))):
+		return mail.RelationSupervisorUnassigned
 	}
 	return mail.RelationTeam
 }

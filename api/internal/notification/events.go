@@ -19,12 +19,13 @@ const (
 	EventUATResult    Event = "uat_result" // the client approved or rejected a test, or it was approved automatically
 	EventDoD          Event = "dod"        // supervisors: resolved without the DoD, or a ticket's own DoD
 	EventCode         Event = "code"       // commits, pull/merge requests, CI and deploys naming the ticket
+	EventNewTicket    Event = "new_ticket" // supervisors: a ticket nobody is assigned to was reported
 )
 
 // Portal events (client staff).
 const (
 	EventReply        Event = "reply"         // public replies from the support team
-	EventQuestion     Event = "question"      // the team moved the ticket to Waiting on client
+	EventQuestion     Event = "question"      // the team moved the ticket to Waiting on client; always on
 	EventResolved     Event = "resolved"      // resolved or closed
 	EventColleague    Event = "colleague"     // a colleague's change on a ticket you follow
 	EventTicketLogged Event = "ticket_logged" // an agent logged a ticket for you
@@ -34,7 +35,7 @@ const (
 // Events lists every event; the database CHECK constraints hold the same set.
 var Events = []Event{
 	EventComment, EventInternalNote, EventStatus, EventAssignment, EventPriority, EventSLA, EventUATResult, EventDoD,
-	EventCode, EventReply, EventQuestion, EventResolved, EventColleague, EventTicketLogged, EventUATRequested,
+	EventCode, EventNewTicket, EventReply, EventQuestion, EventResolved, EventColleague, EventTicketLogged, EventUATRequested,
 }
 
 func (e Event) Valid() bool { return slices.Contains(Events, e) }
@@ -71,21 +72,24 @@ var (
 
 // eventSpec is one event as an audience sees it in Settings.
 type eventSpec struct {
-	event    Event
-	defaults Pref
-	locked   bool // always on, both channels; the API refuses to switch it off
-	hidden   bool // always on and not listed in Settings
+	event           Event
+	defaults        Pref
+	locked          bool // always on, both channels; the API refuses to switch it off
+	hidden          bool // always on and not listed in Settings
+	supervisorsOnly bool // listed, and switchable, only for the organization's supervisors
 }
 
 // audienceEvents holds each audience's events in Settings order, with the defaults from the
 // Notifications artboard. Settings lists only events the build sends. Supervisors' Definition
-// of Done alerts are always on, like SLA breaches, and have no row of their own.
+// of Done alerts are always on, like SLA breaches, and have no row of their own. A question
+// for the client (Waiting on client) is always on: the ticket waits for their answer.
 var audienceEvents = map[Audience][]eventSpec{
 	AudienceTeam: {
 		{event: EventComment, defaults: webAndEmail},
 		{event: EventInternalNote, defaults: webOnly},
 		{event: EventStatus, defaults: webAndEmail},
 		{event: EventAssignment, defaults: webAndEmail, locked: true},
+		{event: EventNewTicket, defaults: webAndEmail, supervisorsOnly: true},
 		{event: EventPriority, defaults: webOnly},
 		{event: EventSLA, defaults: webAndEmail, locked: true},
 		{event: EventUATResult, defaults: webAndEmail},
@@ -96,7 +100,7 @@ var audienceEvents = map[Audience][]eventSpec{
 		{event: EventReply, defaults: webAndEmail},
 		{event: EventStatus, defaults: webAndEmail},
 		{event: EventUATRequested, defaults: webAndEmail, locked: true},
-		{event: EventQuestion, defaults: webAndEmail},
+		{event: EventQuestion, defaults: webAndEmail, locked: true},
 		{event: EventResolved, defaults: webAndEmail},
 		{event: EventColleague, defaults: webOnly},
 		{event: EventTicketLogged, defaults: webAndEmail, locked: true, hidden: true},
@@ -119,11 +123,18 @@ type Setting struct {
 	Locked bool
 }
 
+// listed reports whether a user sees the event in Settings: hidden events never, supervisor-only
+// events only for supervisors.
+func (s eventSpec) listed(supervisor bool) bool {
+	return !s.hidden && (supervisor || !s.supervisorsOnly)
+}
+
 // Settings lists the events an audience can switch, in order, with the user's choices applied.
-func Settings(a Audience, overrides map[Event]Pref) []Setting {
+// supervisor is whether the user supervises the organization they work in.
+func Settings(a Audience, supervisor bool, overrides map[Event]Pref) []Setting {
 	out := []Setting{}
 	for _, s := range audienceEvents[a] {
-		if s.hidden {
+		if !s.listed(supervisor) {
 			continue
 		}
 		out = append(out, Setting{Event: s.event, Pref: Channels(a, s.event, overrides), Locked: s.locked})
@@ -147,11 +158,12 @@ func Channels(a Audience, e Event, overrides map[Event]Pref) Pref {
 	return s.defaults
 }
 
-// Switchable reports whether a user of the audience may change the event, and whether the
-// requested channels are allowed (locked events can't be switched off).
-func Switchable(a Audience, e Event, p Pref) (known, allowed bool) {
+// Switchable reports whether a user of the audience may change the event (only events their
+// Settings list), and whether the requested channels are allowed (locked events can't be
+// switched off).
+func Switchable(a Audience, supervisor bool, e Event, p Pref) (known, allowed bool) {
 	s, ok := spec(a, e)
-	if !ok || s.hidden {
+	if !ok || !s.listed(supervisor) {
 		return false, false
 	}
 	return true, !s.locked || p == webAndEmail
@@ -165,7 +177,7 @@ const (
 	FilterUnread   Filter = "unread"
 	FilterComments Filter = "comments" // team: replies and internal notes
 	FilterStatus   Filter = "status"
-	FilterAssigned Filter = "assigned"
+	FilterAssigned Filter = "assigned" // team: assignments and new tickets nobody is assigned to
 	FilterSLA      Filter = "sla"
 	FilterReplies  Filter = "replies" // portal: replies and questions
 	FilterCode     Filter = "code"    // team: code activity
@@ -180,7 +192,7 @@ func (f Filter) Valid() bool { return slices.Contains(Filters, f) }
 var filterEvents = map[Filter][]Event{
 	FilterComments: {EventComment, EventInternalNote},
 	FilterStatus:   {EventStatus, EventResolved, EventUATRequested, EventUATResult, EventDoD},
-	FilterAssigned: {EventAssignment},
+	FilterAssigned: {EventAssignment, EventNewTicket},
 	FilterSLA:      {EventSLA},
 	FilterReplies:  {EventReply, EventQuestion},
 	FilterCode:     {EventCode},

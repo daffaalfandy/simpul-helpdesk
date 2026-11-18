@@ -73,8 +73,8 @@ var uatKinds = map[ticket.Cause]Kind{
 }
 
 // urgentEvents always email right away, whatever the user's summary setting (HANDOFF §9: P1,
-// SLA and UAT items).
-var urgentEvents = []Event{EventSLA, EventUATRequested, EventUATResult}
+// SLA and UAT items), and so does a question for the client: the ticket waits for their answer.
+var urgentEvents = []Event{EventSLA, EventUATRequested, EventUATResult, EventQuestion}
 
 // Person is a user named in a change.
 type Person struct {
@@ -93,7 +93,7 @@ type Change struct {
 	StatusTo    ticket.Status
 	Priority    *PriorityChange
 	Reason      string
-	AssigneeTo  *Person
+	AssigneeTo  *Person // assignee: the new one; created: the first one, nil when nobody is on it
 	AssigneeOut *Person // the previous assignee
 	WatcherID   *uuid.UUID
 	SLAClock    string // which SLA clock: first response or resolution
@@ -139,7 +139,7 @@ type Input struct {
 	Assignee    *uuid.UUID // after the transaction
 	Requester   uuid.UUID
 	Watchers    []uuid.UUID
-	Supervisors []uuid.UUID // the active supervisors, filled only when a change concerns them
+	Supervisors []uuid.UUID // the active supervisors, filled only when NeedsSupervisors
 	// NotifySupervisorOnBreach is the ticket's project switch for SLA breach alerts.
 	NotifySupervisorOnBreach bool
 	Priority                 sla.Priority
@@ -161,8 +161,9 @@ type Delivery struct {
 }
 
 // precedence orders events when one transaction gives a user several: the first wins.
+// Every event has a place: a missing one would rank -1 and outrank SLA alerts.
 var precedence = []Event{
-	EventSLA, EventTicketLogged, EventUATRequested, EventUATResult, EventQuestion, EventResolved, EventDoD,
+	EventSLA, EventTicketLogged, EventNewTicket, EventUATRequested, EventUATResult, EventQuestion, EventResolved, EventDoD,
 	EventAssignment, EventReply, EventComment, EventInternalNote, EventStatus, EventPriority, EventCode, EventColleague,
 }
 
@@ -245,13 +246,18 @@ func (in Input) candidates(c Change) []candidate {
 			out = append(out, candidate{user: *user, event: e, kind: k, change: c})
 		}
 	}
-	clientSide := func(e Event, k Kind) {
-		for _, u := range in.clientSide() {
+	each := func(users []uuid.UUID, e Event, k Kind) {
+		for _, u := range users {
 			add(&u, e, k)
 		}
 	}
 	switch c.Kind {
 	case ChangeCreated:
+		if c.AssigneeTo != nil {
+			add(&c.AssigneeTo.ID, EventAssignment, KindAssigned)
+		} else {
+			each(in.Supervisors, EventNewTicket, KindNone)
+		}
 		if c.StaffLogged {
 			add(&in.Requester, EventTicketLogged, KindNone)
 		}
@@ -260,27 +266,25 @@ func (in Input) candidates(c Change) []candidate {
 		case c.Internal:
 			add(in.Assignee, EventInternalNote, KindNone)
 		case in.ActorStaff:
-			add(in.Assignee, EventComment, KindNone)
-			clientSide(EventReply, KindNone)
+			each(in.team(), EventComment, KindNone)
+			each(in.clientSide(), EventReply, KindNone)
 		default:
-			add(in.Assignee, EventComment, KindNone)
-			clientSide(EventColleague, KindReply)
+			each(in.team(), EventComment, KindNone)
+			each(in.clientSide(), EventColleague, KindReply)
 		}
 	case ChangeStatus:
 		if k, ok := uatKinds[c.Cause]; ok {
-			add(in.Assignee, EventUATResult, k)
+			each(in.team(), EventUATResult, k)
 		} else {
-			add(in.Assignee, EventStatus, KindNone)
+			each(in.team(), EventStatus, KindNone)
 		}
 		if c.Cause == ticket.CauseDoDSkipped {
-			for _, s := range in.Supervisors {
-				add(&s, EventDoD, KindSkipped)
-			}
+			each(in.Supervisors, EventDoD, KindSkipped)
 		}
 		if in.Actor != nil && !in.ActorStaff {
-			clientSide(EventColleague, KindStatus)
+			each(in.clientSide(), EventColleague, KindStatus)
 		} else {
-			clientSide(portalStatusEvent(c.StatusTo), KindNone)
+			each(in.clientSide(), portalStatusEvent(c.StatusTo), KindNone)
 		}
 	case ChangeAssignee:
 		if c.AssigneeTo != nil {
@@ -298,18 +302,47 @@ func (in Input) candidates(c Change) []candidate {
 	case ChangeSLABreached:
 		add(in.Assignee, EventSLA, KindBreached)
 		if in.NotifySupervisorOnBreach {
-			for _, s := range in.Supervisors {
-				add(&s, EventSLA, KindBreached)
-			}
+			each(in.Supervisors, EventSLA, KindBreached)
 		}
 	case ChangeDoD:
-		for _, s := range in.Supervisors {
-			add(&s, EventDoD, KindOverride)
-		}
+		each(in.Supervisors, EventDoD, KindOverride)
 	case ChangeCode:
 		add(in.Assignee, EventCode, KindNone) // the team's event; never client staff
 	}
 	return out
+}
+
+// UnassignedEvents are what supervisors hear about a ticket nobody is assigned to: its report,
+// and then its public messages, moves and test results (team).
+var UnassignedEvents = []Event{EventNewTicket, EventComment, EventStatus, EventUATResult}
+
+// team is who on the vendor side hears about the ticket's conversation and moves (owner, 18 Nov):
+// its assignee, or the supervisors while nobody is assigned. Internal notes, priority changes,
+// code activity and SLA warnings stay with the assignee only.
+func (in Input) team() []uuid.UUID {
+	if in.Assignee != nil {
+		return []uuid.UUID{*in.Assignee}
+	}
+	return in.Supervisors
+}
+
+// NeedsSupervisors reports whether a change may concern the organization's supervisors, so the
+// caller loads them: a breach the ticket's project alerts them about, a Definition of Done
+// skipped or given to the ticket, a ticket reported with nobody on it, or a public message or
+// move on a ticket nobody is assigned to. The router decides which of them hears what.
+func (in Input) NeedsSupervisors() bool {
+	for _, c := range in.Changes {
+		switch {
+		case c.Kind == ChangeSLABreached && in.NotifySupervisorOnBreach,
+			c.Kind == ChangeDoD,
+			c.Kind == ChangeStatus && c.Cause == ticket.CauseDoDSkipped,
+			c.Kind == ChangeCreated && c.AssigneeTo == nil:
+			return true
+		case in.Assignee == nil && (c.Kind == ChangeStatus || (c.Kind == ChangeMessage && !c.Internal)):
+			return true
+		}
+	}
+	return false
 }
 
 // clientSide is the requester and the colleagues following the ticket.

@@ -99,6 +99,7 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"code links":                   count(`SELECT count(*) FROM code_event_links`),
 		"unknown keys":                 count(`SELECT count(*) FROM code_event_links WHERE outcome = 'unknown_ticket'`),
 		"code notifications":           count(`SELECT count(*) FROM notifications WHERE event_type = 'code'`),
+		"new tickets to supervisors":   count(`SELECT count(*) FROM notifications WHERE event_type = 'new_ticket'`),
 	}
 	want := map[string]int{
 		"users": 13, "clients": 9, "agent links": 8, "setup open": 0,
@@ -106,11 +107,11 @@ func TestSeedIsIdempotent(t *testing.T) {
 		"projects": 9, "tickets on projects": 15, "requests on default": 4, "project targets": 36, "default projects": 6, "e-Office P1 fix": 2,
 		"tickets": 15, "messages": 14, "internal notes": 1, "ticket history": 15, "next number": 24898,
 		"resolved today": 2, "assigned, not started": 1,
-		"watchers": 1, "notifications": 51, "emails pending": 0, "internal notes to client staff": 0,
+		"watchers": 1, "notifications": 63, "emails pending": 0, "internal notes to client staff": 0,
 		"projects asking for UAT": 2, "projects asking to confirm": 3, "in UAT": 2, "items met by the requester": 1,
 		"UAT requests to client staff": 3,
 		"repositories":                 3, "projects reading code": 4, "code events": 8, "code links": 8, "unknown keys": 1,
-		"code notifications": 2,
+		"code notifications": 2, "new tickets to supervisors": 12,
 	}
 	for k, w := range want {
 		if got[k] != w {

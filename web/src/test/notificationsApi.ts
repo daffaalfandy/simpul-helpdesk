@@ -15,7 +15,7 @@ const API = '*/api/v1'
 const FILTER_EVENTS: Partial<Record<NotificationFilter, NotificationEvent[]>> = {
   comments: ['comment', 'internal_note'],
   status: ['status', 'resolved', 'uat_requested', 'uat_result', 'dod'],
-  assigned: ['assignment'],
+  assigned: ['assignment', 'new_ticket'],
   sla: ['sla'],
   replies: ['reply', 'question'],
   code: ['code'],
@@ -51,7 +51,7 @@ function item(id: string, over: Partial<Notification>): Notification {
 }
 
 /** The agent's inbox: the mock's items M5 can produce, newest first. */
-export const NOTICE_IDS = { reply: 'n-1', assign: 'n-2', priority: 'n-3', question: 'n-4', status: 'n-5' } as const
+export const NOTICE_IDS = { reply: 'n-1', assign: 'n-2', priority: 'n-3', question: 'n-4', status: 'n-5', newTicket: 'n-6' } as const
 
 function teamItems(): Notification[] {
   return [
@@ -80,6 +80,19 @@ function teamItems(): Notification[] {
   ]
 }
 
+/** A supervisor's inbox also tells them about tickets nobody is assigned to. */
+function supervisorItems(): Notification[] {
+  return [
+    item(NOTICE_IDS.newTicket, {
+      event: 'new_ticket',
+      actorName: 'Hendra Gunawan',
+      ticket: { key: 'HD-24898', subject: 'Scanner jams on every page' },
+      createdAt: '2026-11-16T07:30:00Z',
+    }),
+    ...teamItems(),
+  ]
+}
+
 function portalItems(): Notification[] {
   return [
     item(NOTICE_IDS.question, {
@@ -97,7 +110,8 @@ function portalItems(): Notification[] {
   ]
 }
 
-function settingsFor(audience: 'team' | 'portal'): NotificationSettings {
+/** Settings as the API lists them: supervisors also get the New tickets row, after assignments. */
+function settingsFor(audience: 'team' | 'portal', supervisor = false): NotificationSettings {
   const ev = (event: NotificationEvent, web: boolean, email: boolean, locked = false): NotificationEventSetting => ({
     event,
     web,
@@ -113,6 +127,7 @@ function settingsFor(audience: 'team' | 'portal'): NotificationSettings {
           ev('internal_note', true, false),
           ev('status', true, true),
           ev('assignment', true, true, true),
+          ...(supervisor ? [ev('new_ticket', true, true)] : []),
           ev('priority', true, false),
           ev('sla', true, true, true),
           ev('uat_result', true, true),
@@ -125,7 +140,7 @@ function settingsFor(audience: 'team' | 'portal'): NotificationSettings {
           ev('reply', true, true),
           ev('status', true, true),
           ev('uat_requested', true, true, true),
-          ev('question', true, true),
+          ev('question', true, true, true),
           ev('resolved', true, true),
           ev('colleague', true, false),
         ],
@@ -137,8 +152,10 @@ type Recorded = { method: string; path: string; body?: unknown }
 /** Fake notification state per audience, plus every write; reset after each test. */
 export const notifications = {
   team: teamItems(),
+  supervisor: supervisorItems(),
   portal: portalItems(),
   teamSettings: settingsFor('team'),
+  supervisorSettings: settingsFor('team', true),
   portalSettings: settingsFor('portal'),
   failNextSave: false,
   requests: [] as Recorded[],
@@ -147,8 +164,10 @@ export const notifications = {
 export function resetNotifications() {
   Object.assign(notifications, {
     team: teamItems(),
+    supervisor: supervisorItems(),
     portal: portalItems(),
     teamSettings: settingsFor('team'),
+    supervisorSettings: settingsFor('team', true),
     portalSettings: settingsFor('portal'),
     failNextSave: false,
     requests: [],
@@ -156,11 +175,12 @@ export function resetNotifications() {
 }
 
 const portal = () => state.me?.role === 'requester'
-const items = () => (portal() ? notifications.portal : notifications.team)
+const supervising = () => state.me?.role === 'supervisor'
+const items = () => (portal() ? notifications.portal : supervising() ? notifications.supervisor : notifications.team)
 const unread = () => items().filter((n) => n.readAt == null).length
 
-function settingsKey(): 'teamSettings' | 'portalSettings' {
-  return portal() ? 'portalSettings' : 'teamSettings'
+function settingsKey(): 'teamSettings' | 'supervisorSettings' | 'portalSettings' {
+  return portal() ? 'portalSettings' : supervising() ? 'supervisorSettings' : 'teamSettings'
 }
 
 function problem(status: number, code: string) {

@@ -86,6 +86,9 @@ func NotificationChanges(rows []AuditRow) []notification.Change {
 			if ch := decode[ticket.Channel](data, dataChannel); ch != nil {
 				c.StaffLogged = ch.AgentLoggable()
 			}
+			if a := decode[refJSON](data, dataAssignee); a != nil && a.ID != uuid.Nil {
+				c.AssigneeTo = person(a) // logged and assigned at once
+			}
 		case ActionMessageAdded:
 			c.Kind = notification.ChangeMessage
 			c.MessageID = decode[uuid.UUID](data, dataMessageID)

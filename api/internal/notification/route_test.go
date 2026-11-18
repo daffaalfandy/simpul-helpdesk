@@ -15,6 +15,7 @@ var (
 	agent      = uuid.MustParse("00000000-0000-0000-0000-00000000000a")
 	agent2     = uuid.MustParse("00000000-0000-0000-0000-00000000000b")
 	supervisor = uuid.MustParse("00000000-0000-0000-0000-00000000000c")
+	boss2      = uuid.MustParse("00000000-0000-0000-0000-00000000000d") // a second supervisor
 	requester  = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	colleague  = uuid.MustParse("00000000-0000-0000-0000-000000000002")
 	suspended  = uuid.MustParse("00000000-0000-0000-0000-000000000003")
@@ -27,6 +28,7 @@ var users = map[uuid.UUID]Recipient{
 	agent:      {Staff: true},
 	agent2:     {Staff: true},
 	supervisor: {Staff: true},
+	boss2:      {Staff: true},
 	requester:  {},
 	colleague:  {},
 	suspended:  {Suspended: true},
@@ -51,6 +53,15 @@ func by(id uuid.UUID, staff bool) func(*Input) {
 	return func(in *Input) { in.Actor, in.ActorStaff = &id, staff }
 }
 
+func unassigned(in *Input) { in.Assignee = nil }
+
+// withSupervisors fills in the supervisors when the changes concern them, as the fan-out does.
+func withSupervisors(in *Input) {
+	if in.NeedsSupervisors() {
+		in.Supervisors = []uuid.UUID{supervisor, boss2}
+	}
+}
+
 func TestRoute(t *testing.T) {
 	publicReply := Change{AuditID: auditA, Kind: ChangeMessage, MessageID: &messageID}
 	note := Change{AuditID: auditA, Kind: ChangeMessage, MessageID: &messageID, Internal: true}
@@ -62,8 +73,14 @@ func TestRoute(t *testing.T) {
 		c.Cause = cause
 		return c
 	}
-	supervisors := func(in *Input) { in.Supervisors = []uuid.UUID{supervisor} }
 	rejection := Change{AuditID: auditA, Kind: ChangeMessage, MessageID: &messageID}
+	created := func(staffLogged bool, assignee *uuid.UUID) Change {
+		c := Change{AuditID: auditA, Kind: ChangeCreated, StaffLogged: staffLogged}
+		if assignee != nil {
+			c.AssigneeTo = &Person{ID: *assignee}
+		}
+		return c
+	}
 	tests := []struct {
 		name    string
 		setup   []func(*Input)
@@ -71,15 +88,28 @@ func TestRoute(t *testing.T) {
 		want    []got
 	}{
 		{
-			name:    "staff-logged ticket: requester gets the copy",
+			name:    "logged and assigned to me: only the requester gets the copy",
 			setup:   []func(*Input){by(agent, true)},
-			changes: []Change{{AuditID: auditA, Kind: ChangeCreated, StaffLogged: true}},
+			changes: []Change{created(true, &agent)},
 			want:    []got{{requester, EventTicketLogged, KindNone, 0}},
 		},
 		{
-			name:    "portal ticket: nobody",
-			setup:   []func(*Input){by(requester, false), func(in *Input) { in.Assignee = nil; in.Watchers = nil }},
-			changes: []Change{{AuditID: auditA, Kind: ChangeCreated}},
+			name:    "portal ticket nobody is on: the supervisors are told",
+			setup:   []func(*Input){by(requester, false), unassigned, func(in *Input) { in.Watchers = nil }},
+			changes: []Change{created(false, nil)},
+			want:    []got{{supervisor, EventNewTicket, KindNone, 0}, {boss2, EventNewTicket, KindNone, 0}},
+		},
+		{
+			name:    "a supervisor logs an unassigned ticket: the other supervisors and the requester",
+			setup:   []func(*Input){by(supervisor, true), unassigned},
+			changes: []Change{created(true, nil)},
+			want:    []got{{boss2, EventNewTicket, KindNone, 0}, {requester, EventTicketLogged, KindNone, 0}},
+		},
+		{
+			name:    "logged with another assignee: that assignee, not the supervisors",
+			setup:   []func(*Input){by(supervisor, true), func(in *Input) { in.Assignee = &agent2 }},
+			changes: []Change{created(true, &agent2)},
+			want:    []got{{agent2, EventAssignment, KindAssigned, 0}, {requester, EventTicketLogged, KindNone, 0}},
 		},
 		{
 			name:    "staff reply: assignee comment, client side reply",
@@ -159,13 +189,14 @@ func TestRoute(t *testing.T) {
 		},
 		{
 			name:    "SLA breach: assignee and supervisors",
-			setup:   []func(*Input){supervisors, func(in *Input) { in.NotifySupervisorOnBreach = true }},
+			setup:   []func(*Input){func(in *Input) { in.NotifySupervisorOnBreach = true }},
 			changes: []Change{{AuditID: auditA, Kind: ChangeSLABreached}},
-			want:    []got{{agent, EventSLA, KindBreached, 0}, {supervisor, EventSLA, KindBreached, 0}},
+			want: []got{
+				{agent, EventSLA, KindBreached, 0}, {supervisor, EventSLA, KindBreached, 0}, {boss2, EventSLA, KindBreached, 0},
+			},
 		},
 		{
 			name:    "SLA breach on a project that doesn't alert supervisors",
-			setup:   []func(*Input){supervisors},
 			changes: []Change{{AuditID: auditA, Kind: ChangeSLABreached}},
 			want:    []got{{agent, EventSLA, KindBreached, 0}},
 		},
@@ -211,18 +242,83 @@ func TestRoute(t *testing.T) {
 		},
 		{
 			name:    "resolved without the DoD: supervisors are told",
-			setup:   []func(*Input){by(agent, true), supervisors},
+			setup:   []func(*Input){by(agent, true)},
 			changes: []Change{moveFor(ticket.StatusInProgress, ticket.StatusResolved, ticket.CauseDoDSkipped)},
 			want: []got{
-				{supervisor, EventDoD, KindSkipped, 0}, {requester, EventResolved, KindNone, 0},
+				{supervisor, EventDoD, KindSkipped, 0}, {boss2, EventDoD, KindSkipped, 0}, {requester, EventResolved, KindNone, 0},
 				{colleague, EventResolved, KindNone, 0},
 			},
 		},
 		{
+			name:    "resolved without the DoD while unassigned: one DoD alert per supervisor",
+			setup:   []func(*Input){by(supervisor, true), unassigned},
+			changes: []Change{moveFor(ticket.StatusInProgress, ticket.StatusResolved, ticket.CauseDoDSkipped)},
+			want: []got{
+				{boss2, EventDoD, KindSkipped, 0}, {requester, EventResolved, KindNone, 0}, {colleague, EventResolved, KindNone, 0},
+			},
+		},
+		{
 			name:    "a ticket's own DoD: supervisors only",
-			setup:   []func(*Input){by(agent, true), supervisors},
+			setup:   []func(*Input){by(agent, true)},
 			changes: []Change{{AuditID: auditA, Kind: ChangeDoD}},
-			want:    []got{{supervisor, EventDoD, KindOverride, 0}},
+			want:    []got{{supervisor, EventDoD, KindOverride, 0}, {boss2, EventDoD, KindOverride, 0}},
+		},
+		{
+			name:    "unassigned: a move goes to the supervisors",
+			setup:   []func(*Input){by(agent, true), unassigned},
+			changes: []Change{move(ticket.StatusNew, ticket.StatusWaitingOnClient)},
+			want: []got{
+				{supervisor, EventStatus, KindNone, 0}, {boss2, EventStatus, KindNone, 0},
+				{requester, EventQuestion, KindNone, 0}, {colleague, EventQuestion, KindNone, 0},
+			},
+		},
+		{
+			name:    "unassigned: the client's reply goes to the supervisors",
+			setup:   []func(*Input){by(requester, false), unassigned},
+			changes: []Change{publicReply, move(ticket.StatusWaitingOnClient, ticket.StatusNew)},
+			want: []got{
+				{supervisor, EventComment, KindNone, 1}, {boss2, EventComment, KindNone, 1}, {colleague, EventColleague, KindReply, 1},
+			},
+		},
+		{
+			name:    "unassigned: a teammate's public reply goes to the supervisors",
+			setup:   []func(*Input){by(agent, true), unassigned},
+			changes: []Change{publicReply},
+			want: []got{
+				{supervisor, EventComment, KindNone, 0}, {boss2, EventComment, KindNone, 0},
+				{requester, EventReply, KindNone, 0}, {colleague, EventReply, KindNone, 0},
+			},
+		},
+		{
+			name:    "unassigned: a rejected test goes to the supervisors",
+			setup:   []func(*Input){by(requester, false), unassigned},
+			changes: []Change{rejection, moveFor(ticket.StatusInUAT, ticket.StatusInProgress, ticket.CauseUATRejected)},
+			want: []got{
+				{supervisor, EventUATResult, KindRejected, 1}, {boss2, EventUATResult, KindRejected, 1},
+				{colleague, EventColleague, KindReply, 1},
+			},
+		},
+		{
+			name:  "an agent releases their ticket: the supervisors hear it is back in New",
+			setup: []func(*Input){by(agent, true), unassigned},
+			changes: []Change{
+				{AuditID: auditA, Kind: ChangeAssignee, AssigneeOut: &Person{ID: agent}},
+				move(ticket.StatusAssigned, ticket.StatusNew),
+			},
+			want: []got{
+				{supervisor, EventStatus, KindNone, 0}, {boss2, EventStatus, KindNone, 0},
+				{requester, EventStatus, KindNone, 0}, {colleague, EventStatus, KindNone, 0},
+			},
+		},
+		{
+			name:    "unassigned: an internal note tells nobody",
+			setup:   []func(*Input){by(agent2, true), unassigned},
+			changes: []Change{note},
+		},
+		{
+			name:    "unassigned: a priority change tells nobody",
+			setup:   []func(*Input){by(supervisor, true), unassigned},
+			changes: []Change{{AuditID: auditA, Kind: ChangePriority, Priority: &PriorityChange{From: sla.P3, To: sla.P2}}},
 		},
 		{
 			name:    "code activity: the assignee only, never client staff",
@@ -263,6 +359,7 @@ func TestRoute(t *testing.T) {
 				f(&in)
 			}
 			in.Changes = tt.changes
+			withSupervisors(&in)
 			ds, dropped := Route(in)
 			if dropped != 0 {
 				t.Errorf("dropped = %d", dropped)
@@ -275,6 +372,65 @@ func TestRoute(t *testing.T) {
 				t.Errorf("deliveries\n got %v\nwant %v", gotten, tt.want)
 			}
 		})
+	}
+}
+
+func TestNeedsSupervisors(t *testing.T) {
+	assignee := &Person{ID: agent}
+	tests := []struct {
+		name     string
+		assigned bool
+		breach   bool // the project alerts supervisors about breaches
+		change   Change
+		want     bool
+	}{
+		{"breach, project alerts them", true, true, Change{Kind: ChangeSLABreached}, true},
+		{"breach, project doesn't", true, false, Change{Kind: ChangeSLABreached}, false},
+		{"a ticket's own DoD", true, false, Change{Kind: ChangeDoD}, true},
+		{"resolved without the DoD", true, false, Change{Kind: ChangeStatus, Cause: ticket.CauseDoDSkipped}, true},
+		{"reported with nobody on it", false, false, Change{Kind: ChangeCreated}, true},
+		{"logged and assigned", true, false, Change{Kind: ChangeCreated, AssigneeTo: assignee}, false},
+		{"public message, unassigned", false, false, Change{Kind: ChangeMessage}, true},
+		{"public message, assigned", true, false, Change{Kind: ChangeMessage}, false},
+		{"internal note, unassigned", false, false, Change{Kind: ChangeMessage, Internal: true}, false},
+		{"move, unassigned", false, false, Change{Kind: ChangeStatus}, true},
+		{"move, assigned", true, false, Change{Kind: ChangeStatus}, false},
+		{"priority, unassigned", false, false, Change{Kind: ChangePriority}, false},
+		{"SLA at risk, unassigned", false, false, Change{Kind: ChangeSLAAtRisk}, false},
+		{"code, unassigned", false, false, Change{Kind: ChangeCode}, false},
+		{"colleague added, unassigned", false, false, Change{Kind: ChangeWatcherAdded}, false},
+	}
+	for _, tt := range tests {
+		in := Input{NotifySupervisorOnBreach: tt.breach, Changes: []Change{tt.change}}
+		if tt.assigned {
+			in.Assignee = &agent
+		}
+		if got := in.NeedsSupervisors(); got != tt.want {
+			t.Errorf("%s: NeedsSupervisors() = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// A question for the client is always on and always urgent: the ticket waits for their answer,
+// so neither a switched-off preference nor a summary setting holds it back.
+func TestQuestionIsAlwaysOnAndUrgent(t *testing.T) {
+	in := base()
+	in.Actor, in.ActorStaff = &agent, true
+	in.Prefs = map[uuid.UUID]map[Event]Pref{requester: {EventQuestion: {}}}
+	in.Changes = []Change{{AuditID: auditA, Kind: ChangeStatus, StatusFrom: ticket.StatusInProgress, StatusTo: ticket.StatusWaitingOnClient}}
+	ds, _ := Route(in)
+	var found bool
+	for _, d := range ds {
+		if d.UserID != requester {
+			continue
+		}
+		found = true
+		if d.Event != EventQuestion || d.Channels != webAndEmail || !d.Urgent {
+			t.Errorf("question = %+v, want web and email, urgent", d)
+		}
+	}
+	if !found {
+		t.Fatal("the requester wasn't asked")
 	}
 }
 

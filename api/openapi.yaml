@@ -2951,11 +2951,13 @@ components:
       type: string
       description: |
         Team events: comment, internal_note, status, assignment, priority, sla, uat_result, dod
-        (supervisors; always on, not listed), code (commits that name the ticket).
-        Portal events: reply, status, uat_requested (always on), question, resolved, colleague,
-        ticket_logged (always on, not listed).
-      enum: [comment, internal_note, status, assignment, priority, sla, uat_result, dod, code, reply, question,
-             resolved, colleague, ticket_logged, uat_requested]
+        (supervisors; always on, not listed), code (commits that name the ticket), new_ticket
+        (supervisors only: a ticket nobody is assigned to). While a ticket has no assignee, its
+        public messages, moves and test results go to the supervisors instead.
+        Portal events: reply, status, uat_requested (always on), question (Waiting on client;
+        always on, sent right away), resolved, colleague, ticket_logged (always on, not listed).
+      enum: [comment, internal_note, status, assignment, priority, sla, uat_result, dod, code, new_ticket, reply,
+             question, resolved, colleague, ticket_logged, uat_requested]
 
     NotificationKind:
       type: string
@@ -2968,7 +2970,7 @@ components:
 
     NotificationFilter:
       type: string
-      description: "`comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed; `code` = code activity (team)."
+      description: "`comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed; `assigned` = assignments and new tickets nobody is assigned to (team); `code` = code activity (team)."
       enum: [all, unread, comments, status, assigned, sla, replies, code]
 
     NotificationChange:
@@ -2987,7 +2989,7 @@ components:
 
     EmailFrequency:
       type: string
-      description: "`instant` sends one email per change (grouped over about 2 minutes); summaries still send urgent items (P1, SLA) right away."
+      description: "`instant` sends one email per change (grouped over about 2 minutes); summaries still send urgent items (P1, SLA, tests and questions for the client) right away."
       enum: [instant, hourly, daily]
 
     NotificationTicket:

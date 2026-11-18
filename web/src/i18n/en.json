@@ -1517,7 +1517,7 @@
     "settings": {
       "title": "Settings",
       "who": {
-        "team": "You get notifications for tickets assigned to you. The requester is notified too. Changes you make yourself never notify you.",
+        "team": "You get notifications for tickets assigned to you; supervisors also get them for tickets nobody is assigned to yet. The requester is notified too. Changes you make yourself never notify you.",
         "portal": "You get notifications for tickets you reported and tickets a colleague added you to. Changes you make yourself never notify you."
       },
       "saved": "Saved.",
@@ -1529,7 +1529,7 @@
       "emailFor": "Email for {{event}}",
       "lockedNote": {
         "team": "Assignments and SLA alerts are always on, so nothing slips past its deadline.",
-        "portal": "UAT requests are always on, because tickets wait for your approval."
+        "portal": "UAT requests and “Waiting for your reply” are always on, because the ticket waits for your answer."
       },
       "sendEmails": "Send emails",
       "frequency": {
@@ -1556,12 +1556,16 @@
             "hint": "Notes from teammates on your tickets"
           },
           "status": {
-            "label": "Status changes",
-            "hint": "Including moves on the board"
+            "label": "Ticket updates",
+            "hint": "Status changes, including moves on the board"
           },
           "assignment": {
             "label": "Assigned to me or unassigned",
             "hint": "Always on"
+          },
+          "new_ticket": {
+            "label": "New tickets",
+            "hint": "Tickets nobody is assigned to yet"
           },
           "priority": {
             "label": "Priority changes",
@@ -1594,8 +1598,8 @@
             "hint": "A fix is ready and needs your approval"
           },
           "question": {
-            "label": "Questions for you",
-            "hint": "The team needs information before they can continue"
+            "label": "Waiting for your reply",
+            "hint": "The team needs your reply or confirmation to continue"
           },
           "resolved": {
             "label": "Resolved and closed",
@@ -1612,7 +1616,8 @@
       "comment": "{{actor}} replied",
       "internal_note": "{{actor}} added an internal note",
       "reply": "{{actor}} replied",
-      "question": "{{actor}} asked you a question",
+      "question": "{{actor}} is waiting for your reply",
+      "new_ticket": "{{actor}} reported this ticket; nobody is assigned yet",
       "status": "Status changed: {{from}} → {{to}}",
       "uatRequested": "Status changed: {{from}} → {{to}}. If we don't hear back, it's approved on {{date}}.",
       "resolvedReopen": "Status changed: {{from}} → {{to}}. You can reopen it until {{date}}.",

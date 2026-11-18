@@ -166,8 +166,9 @@ SELECT id, email, name, role, status, client_id, email_frequency FROM users WHER
 -- What an email shows about each ticket, and whether the recipient may still see it (the same
 -- rule as internal/tickets access: all for administrators and the organization's supervisors,
 -- linked clients and tickets assigned to them for its agents, their own client for requesters).
+-- member_role is the recipient's role in the ticket's organization (NULL: not a member).
 SELECT t.id, t.organization_id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id,
-       t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
+       t.sla_snapshot, pl.name AS priority_name, p.name AS project_name, m.role AS member_role,
        (u.role = @admin_role
         OR m.role = @supervisor_role
         OR (m.role = @agent_role AND (t.assignee_id = u.id

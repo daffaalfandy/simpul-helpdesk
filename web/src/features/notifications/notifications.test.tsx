@@ -8,6 +8,7 @@ import { state, USERS } from '../../test/server'
 
 const AGENT = USERS['rina@demo-vendor.test'] ?? null
 const REQUESTER = USERS['hendra@kominfo-jambi.test'] ?? null
+const SUPERVISOR = USERS['dewi@demo-vendor.test'] ?? null
 
 function writes(path: string) {
   return notifications.requests.filter((r) => r.path.endsWith(path))
@@ -124,6 +125,31 @@ describe('notifications page', () => {
     expect(writes('/events/internal_note')[0]?.body).toEqual({ web: true, email: true })
     expect(screen.getByText('Assignments and SLA alerts are always on, so nothing slips past its deadline.')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: /Never notify me about my own changes/ })).toBeDisabled()
+    expect(within(settings).getByRole('rowheader', { name: /Ticket updates/ })).toHaveTextContent(
+      'Status changes, including moves on the board',
+    )
+    // New tickets nobody is on are a supervisor's row.
+    expect(within(settings).queryByText('New tickets')).not.toBeInTheDocument()
+  })
+
+  it('tells supervisors about tickets nobody is assigned to', async () => {
+    state.me = SUPERVISOR
+    const { user } = await open()
+    const settings = screen.getByRole('table', { name: 'Where each notification goes' })
+    const rows = within(settings).getAllByRole('rowheader').map((r) => r.textContent)
+    expect(rows.slice(3, 5)).toEqual(['Assigned to me or unassignedAlways on', 'New ticketsTickets nobody is assigned to yet'])
+    const newTicketsEmail = within(settings).getByRole('switch', { name: 'Email for New tickets' })
+    expect(newTicketsEmail).toBeEnabled()
+    await user.click(newTicketsEmail)
+    expect(await screen.findByText('Saved.')).toBeInTheDocument()
+    expect(writes('/events/new_ticket')[0]?.body).toEqual({ web: true, email: false })
+
+    const inbox = screen.getByRole('list')
+    expect(within(inbox).getByText('Hendra Gunawan reported this ticket; nobody is assigned yet')).toBeInTheDocument()
+    const filters = screen.getByRole('group', { name: 'Filter notifications' })
+    await user.click(within(filters).getByRole('button', { name: 'Assigned' }))
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2))
+    expect(screen.getByRole('link', { name: /HD-24898 · Scanner jams on every page/ })).toHaveAttribute('href', '/tickets/HD-24898')
   })
 
   it('puts a switch back when the save fails', async () => {
@@ -155,14 +181,18 @@ describe('notifications page', () => {
     const filters = screen.getByRole('group', { name: 'Filter notifications' })
     await within(filters).findByRole('button', { name: 'Unread (2)' })
     expect(within(filters).getAllByRole('button').map((b) => b.textContent)).toEqual(['All', 'Unread (2)', 'Replies', 'Status'])
-    expect(screen.getByText('Yoga Hidayat asked you a question')).toBeInTheDocument()
+    expect(screen.getByText('Yoga Hidayat is waiting for your reply')).toBeInTheDocument()
     expect(screen.getByText('Status changed: In progress → Ready for your test')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /HD-24812/ })).toHaveAttribute('href', '/portal/tickets/HD-24812')
     expect(screen.queryByText(/always on, so nothing slips/)).not.toBeInTheDocument()
-    expect(screen.getByText('UAT requests are always on, because tickets wait for your approval.')).toBeInTheDocument()
+    expect(
+      screen.getByText('UAT requests and “Waiting for your reply” are always on, because the ticket waits for your answer.'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Includes the 3-working-day reopen window')).toBeInTheDocument()
     expect(screen.queryByText(/notifications\.settings/)).not.toBeInTheDocument()
     expect(screen.getAllByRole('switch')).toHaveLength(12)
     expect(screen.getByRole('switch', { name: 'Web notifications for Ready for your test (UAT)' })).toBeDisabled()
+    expect(screen.getByRole('switch', { name: 'Email for Waiting for your reply' })).toBeDisabled()
+    expect(screen.getByText('The team needs your reply or confirmation to continue')).toBeInTheDocument()
   })
 })

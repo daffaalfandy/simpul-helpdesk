@@ -7,7 +7,8 @@
 {{define "notice.headline"}}
 {{- if or (eq .Event "reply") (eq .Event "comment")}}New reply
 {{- else if eq .Event "internal_note"}}Internal note
-{{- else if eq .Event "question"}}A question for you
+{{- else if eq .Event "question"}}We're waiting for your reply
+{{- else if eq .Event "new_ticket"}}New ticket
 {{- else if eq .Event "resolved"}}{{if eq .StatusTo "closed"}}Closed{{else}}Resolved{{end}}
 {{- else if eq .Event "status"}}{{if and .Portal (eq .StatusTo "in_uat")}}Ready for your test{{else}}Status changed{{end}}
 {{- else if eq .Event "assignment"}}{{if eq .Kind "unassigned"}}Unassigned{{else}}Assigned to you{{end}}
@@ -27,7 +28,8 @@
 {{define "notice.summary"}}
 {{- if or (eq .Event "reply") (eq .Event "comment")}}{{template "notice.actor" .}} replied
 {{- else if eq .Event "internal_note"}}{{template "notice.actor" .}} added an internal note
-{{- else if eq .Event "question"}}{{template "notice.actor" .}} asked you a question
+{{- else if eq .Event "question"}}{{template "notice.actor" .}} needs your reply or confirmation to continue
+{{- else if eq .Event "new_ticket"}}{{template "notice.actor" .}} reported this ticket; nobody is assigned yet
 {{- else if or (eq .Event "status") (eq .Event "resolved")}}Status changed: {{status .StatusFrom .Portal}} → {{status .StatusTo .Portal}}
 {{- else if eq .Event "assignment"}}{{if eq .Kind "unassigned"}}{{template "notice.actor" .}} unassigned you from this ticket{{else}}{{template "notice.actor" .}} assigned this ticket to you{{end}}
 {{- else if eq .Event "priority"}}{{template "notice.actor" .}} changed priority: {{.PriorityFrom}} → {{.PriorityTo}}{{if .Reason}} ({{.Reason}}){{end}}
@@ -72,8 +74,15 @@
 {{- else if eq .Relation "assigned"}}You're getting this because you're assigned to {{.TicketKey}}.
 {{- else if eq .Relation "supervisor"}}You're getting this because you supervise SLA alerts.
 {{- else if eq .Relation "supervisor_dod"}}You're getting this because supervisors hear when a Definition of Done is skipped or changed.
+{{- else if eq .Relation "supervisor_unassigned"}}You're getting this because supervisors hear about tickets nobody is assigned to.
 {{- else}}You're getting this because you worked on {{.TicketKey}}.{{end}}
 {{- end}}
+
+{{define "question.fallback"}}Open the ticket to see what the team needs from you.{{end}}
+
+{{define "question.reply"}}Reply now{{end}}
+
+{{define "ticket.view"}}View the ticket{{end}}
 
 {{define "uat.question"}}Does it work now?{{end}}
 

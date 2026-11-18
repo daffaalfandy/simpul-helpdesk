@@ -41,6 +41,7 @@ export function noticeIcon(n: Notification): { Icon: LucideIcon; tone: string } 
     case 'sla':
       return { Icon: Clock, tone: tones.sla }
     case 'ticket_logged':
+    case 'new_ticket':
       return { Icon: TicketIcon, tone: tones.message }
     case 'code':
       return { Icon: GitBranch, tone: tones.code }
@@ -68,6 +69,7 @@ export function noticeText(t: TFunction, n: Notification, audience: Audience, ti
     case 'internal_note':
     case 'reply':
     case 'question':
+    case 'new_ticket':
       return t(`notifications.text.${n.event}`, { actor })
     case 'status': {
       const code = n.also.find((a) => a.code)?.code

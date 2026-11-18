@@ -2197,12 +2197,14 @@ export interface components {
         };
         /**
          * @description Team events: comment, internal_note, status, assignment, priority, sla, uat_result, dod
-         *     (supervisors; always on, not listed), code (commits that name the ticket).
-         *     Portal events: reply, status, uat_requested (always on), question, resolved, colleague,
-         *     ticket_logged (always on, not listed).
+         *     (supervisors; always on, not listed), code (commits that name the ticket), new_ticket
+         *     (supervisors only: a ticket nobody is assigned to). While a ticket has no assignee, its
+         *     public messages, moves and test results go to the supervisors instead.
+         *     Portal events: reply, status, uat_requested (always on), question (Waiting on client;
+         *     always on, sent right away), resolved, colleague, ticket_logged (always on, not listed).
          * @enum {string}
          */
-        NotificationEvent: "comment" | "internal_note" | "status" | "assignment" | "priority" | "sla" | "uat_result" | "dod" | "code" | "reply" | "question" | "resolved" | "colleague" | "ticket_logged" | "uat_requested";
+        NotificationEvent: "comment" | "internal_note" | "status" | "assignment" | "priority" | "sla" | "uat_result" | "dod" | "code" | "new_ticket" | "reply" | "question" | "resolved" | "colleague" | "ticket_logged" | "uat_requested";
         /**
          * @description Tells apart notifications of one event: assigned or unassigned; what a colleague did; SLA
          *     at risk or breached; the test approved, rejected or approved automatically; resolved
@@ -2211,7 +2213,7 @@ export interface components {
          */
         NotificationKind: "assigned" | "unassigned" | "reply" | "status" | "added" | "at_risk" | "breached" | "approved" | "rejected" | "auto_approved" | "skipped" | "override";
         /**
-         * @description `comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed; `code` = code activity (team).
+         * @description `comments` = replies and internal notes (team); `replies` = replies and questions (portal); `status` includes resolved and closed; `assigned` = assignments and new tickets nobody is assigned to (team); `code` = code activity (team).
          * @enum {string}
          */
         NotificationFilter: "all" | "unread" | "comments" | "status" | "assigned" | "sla" | "replies" | "code";
@@ -2225,7 +2227,7 @@ export interface components {
          */
         SlaClockName: "first_response" | "resolution";
         /**
-         * @description `instant` sends one email per change (grouped over about 2 minutes); summaries still send urgent items (P1, SLA) right away.
+         * @description `instant` sends one email per change (grouped over about 2 minutes); summaries still send urgent items (P1, SLA, tests and questions for the client) right away.
          * @enum {string}
          */
         EmailFrequency: "instant" | "hourly" | "daily";

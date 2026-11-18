@@ -468,7 +468,7 @@ func (q *Queries) ListDueEmails(ctx context.Context, arg ListDueEmailsParams) ([
 
 const listEmailTickets = `-- name: ListEmailTickets :many
 SELECT t.id, t.organization_id, t.key, t.subject, t.type, t.status, t.priority, t.requester_id, t.assignee_id,
-       t.sla_snapshot, pl.name AS priority_name, p.name AS project_name,
+       t.sla_snapshot, pl.name AS priority_name, p.name AS project_name, m.role AS member_role,
        (u.role = $1
         OR m.role = $2
         OR (m.role = $3 AND (t.assignee_id = u.id
@@ -506,6 +506,7 @@ type ListEmailTicketsRow struct {
 	SlaSnapshot    []byte
 	PriorityName   string
 	ProjectName    string
+	MemberRole     *string
 	Visible        bool
 	Watching       bool
 }
@@ -513,6 +514,7 @@ type ListEmailTicketsRow struct {
 // What an email shows about each ticket, and whether the recipient may still see it (the same
 // rule as internal/tickets access: all for administrators and the organization's supervisors,
 // linked clients and tickets assigned to them for its agents, their own client for requesters).
+// member_role is the recipient's role in the ticket's organization (NULL: not a member).
 func (q *Queries) ListEmailTickets(ctx context.Context, arg ListEmailTicketsParams) ([]ListEmailTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listEmailTickets,
 		arg.AdminRole,
@@ -542,6 +544,7 @@ func (q *Queries) ListEmailTickets(ctx context.Context, arg ListEmailTicketsPara
 			&i.SlaSnapshot,
 			&i.PriorityName,
 			&i.ProjectName,
+			&i.MemberRole,
 			&i.Visible,
 			&i.Watching,
 		); err != nil {
