@@ -496,6 +496,15 @@ func (e *env) age(t *testing.T, d time.Duration) {
 	}
 }
 
+// ageTicket backdates one ticket's notifications only.
+func (e *env) ageTicket(t *testing.T, ticketID uuid.UUID, d time.Duration) {
+	t.Helper()
+	if _, err := e.st.Pool().Exec(context.Background(),
+		`UPDATE notifications SET created_at = created_at - make_interval(secs => $1) WHERE ticket_id = $2`, d.Seconds(), ticketID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // sendEmails runs the dispatcher (a periodic job, so never queued here) and the emails it queued.
 func (e *env) sendEmails(t *testing.T) {
 	t.Helper()
@@ -584,7 +593,10 @@ func TestSummaryUsersWaitButUrgentGoesNow(t *testing.T) {
 		decode[gen.TicketMessage](t, te.requester.message(tk.Key, gen.MessageVisibilityPublic, "Any news?"), http.StatusCreated)
 	}
 	te.fanout(t)
-	te.age(t, notification.GroupWindow)
+	// Only the urgent ticket's items age past the group window: aging the routine ones too would
+	// push them into the previous hour when the test runs in an hour's first minutes, and their
+	// summary would rightly go out at once.
+	te.ageTicket(t, urgent.Id, notification.GroupWindow)
 	te.sendEmails(t)
 	got := mailsTo(te.mailer.Messages(), agentEmail)
 	if len(got) != 1 || !strings.Contains(got[0].Subject, urgent.Key) {
