@@ -1718,11 +1718,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The monthly SLA report for every client (supervisors and admins)
+         * The monthly SLA report for every project (supervisors and admins)
          * @description A month holds the tickets created in it, in the organisation's time zone, open or done.
          *     A ticket is within SLA while neither of its clocks has breached; breaches count tickets,
-         *     not clocks. Every client is listed, busiest first, clients without tickets last.
-         *     Error code `month_in_future` (400).
+         *     not clocks. Every active project is listed, busiest first, then by client and project
+         *     name; a hidden project only when it has tickets in the month. The report reaches back
+         *     12 months before the current one. Error codes `month_in_future` and
+         *     `month_out_of_range` (400).
          */
         get: operations["getSlaReport"];
         put?: never;
@@ -1741,10 +1743,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The monthly SLA report for every client as an Excel file (supervisors and admins)
-         * @description A Summary sheet with the report's figures and a Tickets sheet with one row per ticket.
-         *     Times are written in the organisation's time zone, named in the headers. Error code
-         *     `month_in_future` (400).
+         * The monthly SLA report for every project as an Excel file (supervisors and admins)
+         * @description A Summary sheet with the report's figures and a row per project (with its client and the
+         *     client's contract number), and a Tickets sheet with one row per ticket. Times are written
+         *     in the organisation's time zone, named in the headers. Error codes `month_in_future` and
+         *     `month_out_of_range` (400).
          */
         get: operations["exportSlaReportExcel"];
         put?: never;
@@ -1755,22 +1758,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/reports/sla/clients/{clientId}/pdf": {
+    "/reports/sla/projects/{projectId}/pdf": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                clientId: components["parameters"]["ClientId"];
+                projectId: components["parameters"]["ProjectId"];
             };
             cookie?: never;
         };
         /**
-         * One client's monthly SLA report as a PDF (supervisors and admins)
-         * @description The client's figures, a row per project and every ticket of the month, to send to that
-         *     client; it never shows another client's numbers. A plain export, not signed. Error code
-         *     `month_in_future` (400).
+         * One project's monthly SLA report as a PDF (supervisors and admins)
+         * @description The project's figures, a row per priority and every ticket of the month, to send to its
+         *     client; it never shows another project's numbers. Hidden projects have one too. A plain
+         *     export, not signed. Error codes `month_in_future` and `month_out_of_range` (400).
          */
-        get: operations["exportSlaReportPdf"];
+        get: operations["exportSlaProjectPdf"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3006,6 +3009,8 @@ export interface components {
             month: string;
             /** @description This month in the organisation's time zone. */
             currentMonth: string;
+            /** @description The earliest month the report shows, 12 months before the current one. */
+            oldestMonth: string;
             /** @description The month of the first ticket ever; null without tickets. */
             firstMonth: string | null;
             /** @description The month hasn't ended yet. */
@@ -3018,10 +3023,14 @@ export interface components {
             /** @description Null without tickets. */
             waitingPause: components["schemas"]["SlaWaitingPause"] | null;
             totals: components["schemas"]["SlaFigures"];
-            clientsWithTickets: number;
-            /** @description Clients with tickets and a share within SLA under the target. */
-            clientsBelowTarget: number;
-            clients: components["schemas"]["SlaReportClient"][];
+            projectsWithTickets: number;
+            /** @description Projects with tickets and a share within SLA under the target. */
+            projectsBelowTarget: number;
+            /**
+             * @description Every active project and the hidden ones with tickets in the month, busiest first,
+             *     then by client and project name.
+             */
+            projects: components["schemas"]["SlaReportProject"][];
         };
         /**
          * @description How many of the month's tickets stop their resolution clock while waiting on the
@@ -3029,10 +3038,13 @@ export interface components {
          * @enum {string}
          */
         SlaWaitingPause: "all" | "some" | "none";
-        SlaReportClient: {
+        SlaReportProject: {
             /** Format: uuid */
             id: string;
             name: string;
+            client: components["schemas"]["Ref"];
+            /** @description False for a hidden project */
+            active: boolean;
             belowTarget: boolean;
             figures: components["schemas"]["SlaFigures"];
         };
@@ -5884,7 +5896,7 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
-    exportSlaReportPdf: {
+    exportSlaProjectPdf: {
         parameters: {
             query?: {
                 /** @description A month such as `2026-11`; the current month when left out. */
@@ -5892,7 +5904,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                clientId: components["parameters"]["ClientId"];
+                projectId: components["parameters"]["ProjectId"];
             };
             cookie?: never;
         };

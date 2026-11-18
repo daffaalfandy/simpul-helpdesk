@@ -1042,6 +1042,7 @@
     "uat_not_waiting": "This ticket isn't waiting for your test any more. Someone may have answered already.",
     "reopen_not_allowed": "This ticket can no longer be reopened. Report a new issue instead.",
     "month_in_future": "That month hasn't started yet.",
+    "month_out_of_range": "That month is too far back for the report.",
     "invalid_organization": "Some settings aren't valid. Check the fields and try again.",
     "logo_type_not_allowed": "Choose a PNG, JPEG or WebP image.",
     "logo_too_large": "The logo is too large. Choose an image up to 512 KB.",
@@ -1778,45 +1779,45 @@
   },
   "reports": {
     "title": "SLA report",
-    "subtitle": "Monthly evidence for each client contract. Attach it to your service report and invoice.",
+    "subtitle": "Monthly evidence for each client project. Send each client their project's PDF with your service report and invoice.",
     "month": {
       "label": "Month",
-      "earlier": "Earlier month",
       "toDate": "{{month}} (to date)"
     },
     "downloadExcel": "Download Excel",
     "downloadPdf": "PDF",
-    "downloadPdfFor": "Download PDF for {{client}}",
+    "downloadPdfFor": "Download PDF for {{project}}, {{client}}",
     "kpi": {
       "tickets": "Tickets",
-      "ticketsSub_one": "from {{count}} client",
-      "ticketsSub_other": "from {{count}} clients",
+      "ticketsSub_one": "from {{count}} project",
+      "ticketsSub_other": "from {{count}} projects",
       "within": "Within SLA",
       "withinSub": "target {{target}}%",
       "breaches": "SLA breaches",
       "breachesSub": "tickets that missed a target",
-      "belowTarget": "Clients below target",
+      "belowTarget": "Projects below target",
       "belowTargetSub": "review with the account manager",
       "allOnTarget": "all on target",
       "noTicketsSub": "no tickets this month"
     },
     "percent": "{{value}}%",
     "noTickets": "No tickets",
-    "byClient": "By client · {{month}}",
+    "byProject": "By project · {{month}}",
     "target": "Contract target: {{target}}% of tickets within SLA",
     "table": {
-      "caption": "SLA by client",
-      "client": "Client",
+      "caption": "SLA by project",
+      "project": "Project",
       "tickets": "Tickets",
       "split": "Incidents / Requests",
       "splitValue": "{{incidents}} / {{requests}}",
       "avgFirstResponse": "Avg first response",
       "within": "Within SLA",
       "breaches": "Breaches",
-      "report": "Client report"
+      "report": "Project report"
     },
     "withinValue": "{{value}}% within SLA, target {{target}}%",
     "belowTarget": "Below target",
+    "hidden": "Hidden",
     "footnote": {
       "tick": "The dark mark on each bar is the {{target}}% target.",
       "waiting": {
@@ -1827,9 +1828,9 @@
       "firstResponse": "Average first response covers tickets reported in the portal; tickets the team logs are answered when logged."
     },
     "empty": {
-      "title": "No clients yet",
-      "body": "Clients appear here once they are added in Settings › Clients.",
-      "link": "Add clients in Settings"
+      "title": "No projects yet",
+      "body": "Each active client project gets a row here, with its own PDF to send that client.",
+      "link": "Add a project"
     }
   },
   "account": {

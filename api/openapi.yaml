@@ -2220,12 +2220,14 @@ paths:
   /reports/sla:
     get:
       operationId: getSlaReport
-      summary: The monthly SLA report for every client (supervisors and admins)
+      summary: The monthly SLA report for every project (supervisors and admins)
       description: |
         A month holds the tickets created in it, in the organisation's time zone, open or done.
         A ticket is within SLA while neither of its clocks has breached; breaches count tickets,
-        not clocks. Every client is listed, busiest first, clients without tickets last.
-        Error code `month_in_future` (400).
+        not clocks. Every active project is listed, busiest first, then by client and project
+        name; a hidden project only when it has tickets in the month. The report reaches back
+        12 months before the current one. Error codes `month_in_future` and
+        `month_out_of_range` (400).
       tags: [reports]
       parameters:
         - $ref: "#/components/parameters/ReportMonth"
@@ -2243,11 +2245,12 @@ paths:
   /reports/sla/excel:
     get:
       operationId: exportSlaReportExcel
-      summary: The monthly SLA report for every client as an Excel file (supervisors and admins)
+      summary: The monthly SLA report for every project as an Excel file (supervisors and admins)
       description: |
-        A Summary sheet with the report's figures and a Tickets sheet with one row per ticket.
-        Times are written in the organisation's time zone, named in the headers. Error code
-        `month_in_future` (400).
+        A Summary sheet with the report's figures and a row per project (with its client and the
+        client's contract number), and a Tickets sheet with one row per ticket. Times are written
+        in the organisation's time zone, named in the headers. Error codes `month_in_future` and
+        `month_out_of_range` (400).
       tags: [reports]
       parameters:
         - $ref: "#/components/parameters/ReportMonth"
@@ -2269,16 +2272,16 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
-  /reports/sla/clients/{clientId}/pdf:
+  /reports/sla/projects/{projectId}/pdf:
     parameters:
-      - $ref: "#/components/parameters/ClientId"
+      - $ref: "#/components/parameters/ProjectId"
     get:
-      operationId: exportSlaReportPdf
-      summary: One client's monthly SLA report as a PDF (supervisors and admins)
+      operationId: exportSlaProjectPdf
+      summary: One project's monthly SLA report as a PDF (supervisors and admins)
       description: |
-        The client's figures, a row per project and every ticket of the month, to send to that
-        client; it never shows another client's numbers. A plain export, not signed. Error code
-        `month_in_future` (400).
+        The project's figures, a row per priority and every ticket of the month, to send to its
+        client; it never shows another project's numbers. Hidden projects have one too. A plain
+        export, not signed. Error codes `month_in_future` and `month_out_of_range` (400).
       tags: [reports]
       parameters:
         - $ref: "#/components/parameters/ReportMonth"
@@ -4008,11 +4011,14 @@ components:
 
     SlaReport:
       type: object
-      required: [month, currentMonth, firstMonth, toDate, targetPercent, waitingPause, totals,
-        clientsWithTickets, clientsBelowTarget, clients]
+      required: [month, currentMonth, oldestMonth, firstMonth, toDate, targetPercent, waitingPause, totals,
+        projectsWithTickets, projectsBelowTarget, projects]
       properties:
         month: { type: string, description: "The report's month, e.g. `2026-11`." }
         currentMonth: { type: string, description: "This month in the organisation's time zone." }
+        oldestMonth:
+          type: string
+          description: The earliest month the report shows, 12 months before the current one.
         firstMonth:
           type: string
           nullable: true
@@ -4027,13 +4033,16 @@ components:
           nullable: true
           description: Null without tickets.
         totals: { $ref: "#/components/schemas/SlaFigures" }
-        clientsWithTickets: { type: integer }
-        clientsBelowTarget:
+        projectsWithTickets: { type: integer }
+        projectsBelowTarget:
           type: integer
-          description: Clients with tickets and a share within SLA under the target.
-        clients:
+          description: Projects with tickets and a share within SLA under the target.
+        projects:
           type: array
-          items: { $ref: "#/components/schemas/SlaReportClient" }
+          description: |
+            Every active project and the hidden ones with tickets in the month, busiest first,
+            then by client and project name.
+          items: { $ref: "#/components/schemas/SlaReportProject" }
 
     SlaWaitingPause:
       type: string
@@ -4042,12 +4051,14 @@ components:
         How many of the month's tickets stop their resolution clock while waiting on the
         client (each ticket follows its project's SLA as it was when the ticket was created).
 
-    SlaReportClient:
+    SlaReportProject:
       type: object
-      required: [id, name, belowTarget, figures]
+      required: [id, name, client, active, belowTarget, figures]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        client: { $ref: "#/components/schemas/Ref" }
+        active: { type: boolean, description: False for a hidden project, listed because it has tickets. }
         belowTarget: { type: boolean }
         figures: { $ref: "#/components/schemas/SlaFigures" }
 

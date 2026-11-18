@@ -11,6 +11,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/palette"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/report"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 )
 
 // Plus Jakarta Sans (SIL Open Font License, fonts/OFL.txt), the app's typeface (HANDOFF §14.1).
@@ -33,6 +34,8 @@ const (
 	// glyphMissing stands in for characters the font lacks (e.g. emoji in a subject).
 	glyphMissing = '?'
 	ellipsis     = "…"
+	// infoSeparator joins the parts of the file's title in its document properties.
+	infoSeparator = " · "
 )
 
 // Page geometry in points: A4 portrait, as gopdf.PageSizeA4.
@@ -67,6 +70,7 @@ const (
 	sizeMeta      = 7.5
 	sizeTitle     = 22.0
 	sizeClient    = 15.0
+	sizeProject   = 12.0
 	sizeMonth     = 11.0
 	sizeContract  = 8.5
 	sizeKPILabel  = 8.0
@@ -84,7 +88,8 @@ const (
 const (
 	stepTitle    = 18.0
 	stepClient   = 30.0
-	stepMonth    = 20.0
+	stepProject  = 20.0
+	stepMonth    = 18.0
 	stepContract = 15.0
 	stepRule     = 14.0
 	stepKPILabel = 14.0
@@ -98,8 +103,8 @@ type pdfColumn struct {
 	width float64
 }
 
-var projectColumns = []pdfColumn{
-	{label: labelColProject},
+var priorityColumns = []pdfColumn{
+	{label: labelColPriority},
 	{label: labelColTickets, width: 46},
 	{label: labelColSplit, width: 86},
 	{label: labelColAvgFirst, width: 86},
@@ -124,22 +129,34 @@ type pdfCell struct {
 	color  string
 }
 
-// buildPDF writes one client's month: the summary, a row per project and every ticket.
-func buildPDF(d exportData, client db.ListReportClientsRow) (Export, error) {
-	body, _, err := renderPDF(d, client)
+// buildPDF writes one project's month: the summary, a row per priority and every ticket.
+// priorities names the organization's priority levels; a level without a name shows its code.
+func buildPDF(d exportData, project db.ListReportProjectsRow, priorities map[sla.Priority]string) (Export, error) {
+	body, _, err := renderPDF(d, project, priorities)
 	if err != nil {
 		return Export{}, err
 	}
 	c := &copywriter{}
-	name := slug(client.Name)
-	if name == "" {
-		name = client.ID.String()
+	return Export{Filename: c.fileName(d.Month, pdfStem(project), pdfExt), Body: body}, c.err
+}
+
+// pdfStem names the file after the client and the project, or the project's id when neither
+// name has an ASCII letter or digit.
+func pdfStem(p db.ListReportProjectsRow) string {
+	var parts []string
+	for _, name := range []string{p.ClientName, p.Name} {
+		if s := slug(name); s != "" {
+			parts = append(parts, s)
+		}
 	}
-	return Export{Filename: c.fileName(d.Month, name, pdfExt), Body: body}, c.err
+	if len(parts) == 0 {
+		return p.ID.String()
+	}
+	return strings.Join(parts, fileStemJoin)
 }
 
 // renderPDF returns the file and its page count.
-func renderPDF(d exportData, client db.ListReportClientsRow) ([]byte, int, error) {
+func renderPDF(d exportData, project db.ListReportProjectsRow, priorities map[sla.Priority]string) ([]byte, int, error) {
 	w, err := newPDFWriter()
 	if err != nil {
 		return nil, 0, err
@@ -149,7 +166,7 @@ func renderPDF(d exportData, client db.ListReportClientsRow) ([]byte, int, error
 	figures := report.Summarize(tickets)
 	month := c.month(d.Period)
 	w.pdf.SetInfo(gopdf.PdfInfo{
-		Title:   c.text(labelHeading, month) + " · " + client.Name,
+		Title:   c.text(labelHeading, month) + infoSeparator + project.ClientName + infoSeparator + project.Name,
 		Author:  d.Org.Name,
 		Creator: c.text(labelCreator, nil), Producer: c.text(labelCreator, nil),
 		CreationDate: d.Generated,
@@ -164,10 +181,13 @@ func renderPDF(d exportData, client db.ListReportClientsRow) ([]byte, int, error
 	w.write(familyExtraBold, sizeTitle, "ink", pageMargin, contentWidth, c.text(labelTitle, nil), gopdf.Left)
 	w.y += stepClient
 	w.font(familyExtraBold, sizeClient)
-	w.write(familyExtraBold, sizeClient, "ink", pageMargin, contentWidth, w.fit(client.Name, contentWidth), gopdf.Left)
+	w.write(familyExtraBold, sizeClient, "ink", pageMargin, contentWidth, w.fit(project.ClientName, contentWidth), gopdf.Left)
+	w.y += stepProject
+	w.font(familyBold, sizeProject)
+	w.write(familyBold, sizeProject, "ink-2", pageMargin, contentWidth, w.fit(project.Name, contentWidth), gopdf.Left)
 	w.y += stepMonth
 	w.write(familyRegular, sizeMonth, "ink-2", pageMargin, contentWidth, month, gopdf.Left)
-	if contract := c.text(labelContract, contractFor(client)); contract != "" {
+	if contract := c.text(labelContract, contractFor(project)); contract != "" {
 		w.y += stepContract
 		w.write(familyRegular, sizeContract, "muted", pageMargin, contentWidth, contract, gopdf.Left)
 	}
@@ -181,11 +201,11 @@ func renderPDF(d exportData, client db.ListReportClientsRow) ([]byte, int, error
 	if figures.Tickets == 0 {
 		w.write(familyRegular, sizeMonth, "ink-2", pageMargin, contentWidth, c.text(labelNoTickets, month), gopdf.Left)
 	} else {
-		w.section(c.text(labelByProject, nil))
-		widths := columnWidths(projectColumns)
-		w.tableHeader(projectColumns, widths)
-		for _, g := range report.Projects(tickets) {
-			w.tableRow(widths, sizeTable, w.projectCells(g))
+		w.section(c.text(labelByPriority, nil))
+		widths := columnWidths(priorityColumns)
+		w.tableHeader(priorityColumns, widths)
+		for _, g := range report.ByPriority(tickets) {
+			w.tableRow(widths, sizeTable, w.priorityCells(g, priorities[g.Priority]))
 		}
 		w.y += sectionGap
 		w.section(c.text(labelTickets, nil))
@@ -219,13 +239,14 @@ const (
 	firstResponseColumn = 4
 )
 
-func contractFor(cl db.ListReportClientsRow) contractArgs {
+// contractFor is the project's client's contract.
+func contractFor(p db.ListReportProjectsRow) contractArgs {
 	var a contractArgs
-	if cl.ContractNo != nil {
-		a.No = *cl.ContractNo
+	if p.ContractNo != nil {
+		a.No = *p.ContractNo
 	}
-	if cl.ContractStart != nil && cl.ContractEnd != nil {
-		a.Start, a.End = cl.ContractStart.String(), cl.ContractEnd.String()
+	if p.ContractStart != nil && p.ContractEnd != nil {
+		a.Start, a.End = p.ContractStart.String(), p.ContractEnd.String()
 	}
 	return a
 }
@@ -435,17 +456,17 @@ func (w *pdfWriter) tableRow(widths []float64, size float64, cells []pdfCell) {
 	w.rule(w.y, "border-subtle")
 }
 
-func (w *pdfWriter) projectCells(g report.Group) []pdfCell {
+func (w *pdfWriter) priorityCells(g report.PriorityGroup, name string) []pdfCell {
 	c := w.c
-	widths := columnWidths(projectColumns)
+	widths := columnWidths(priorityColumns)
 	w.font(familyBold, sizeTable)
-	name := w.fit(g.Name, widths[0]-2*cellPaddingX)
+	label := w.fit(c.text(labelPriorityLevel, priorityArgs{Code: string(g.Priority), Name: name}), widths[0]-2*cellPaddingX)
 	within := plain(c.percent(g.WithinPercent))
 	if g.BelowTarget() {
 		within = pdfCell{lines: []string{c.percent(g.WithinPercent)}, family: familyBold, color: "danger-fg"}
 	}
 	return []pdfCell{
-		{lines: []string{name}, family: familyBold, color: "ink"},
+		{lines: []string{label}, family: familyBold, color: "ink"},
 		plain(itoa(g.Tickets)),
 		plain(itoa(g.Incidents) + " / " + itoa(g.Requests)),
 		plain(c.span(g.AvgFirstResponse)),

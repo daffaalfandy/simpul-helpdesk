@@ -8,21 +8,21 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
-// TargetPercent is the contract target: the share of a client's tickets within SLA (HANDOFF §10).
+// TargetPercent is the contract target: the share of a project's tickets within SLA (HANDOFF §10).
 const TargetPercent = 90.0
 
 const percentScale = 100
 
 // Ticket is one ticket reported in the month, with its SLA outcome so far.
 type Ticket struct {
-	ClientID    uuid.UUID
-	ProjectID   uuid.UUID
-	ProjectName string
-	Type        ticket.Type
-	Channel     ticket.Channel
+	ProjectID uuid.UUID
+	Priority  sla.Priority
+	Type      ticket.Type
+	Channel   ticket.Channel
 	// FirstResponse is the time on the clock until the first public staff reply; nil while
 	// unanswered or before the SLA scan has replayed the ticket.
 	FirstResponse         *time.Duration
@@ -87,15 +87,30 @@ func Summarize(rows []Ticket) Figures {
 	return f
 }
 
-// Ref names a client or project.
+// Ref names a client.
 type Ref struct {
 	ID   uuid.UUID
 	Name string
 }
 
-// Group is one row of the report: a client or a project with its figures.
-type Group struct {
-	Ref
+// Project is one project of the organization, with its client.
+type Project struct {
+	ID     uuid.UUID
+	Name   string
+	Client Ref
+	// Active is false for a hidden project: off the report form, its tickets kept.
+	Active bool
+}
+
+// ProjectGroup is one row of the report: a project with its figures.
+type ProjectGroup struct {
+	Project
+	Figures
+}
+
+// PriorityGroup is one priority's figures.
+type PriorityGroup struct {
+	Priority sla.Priority
 	Figures
 }
 
@@ -130,67 +145,65 @@ func WaitingPauseOf(rows []Ticket) (WaitingPause, bool) {
 	}
 }
 
-// Report is the month for every client.
+// Report is the month for every project.
 type Report struct {
 	Totals Figures
-	// Clients lists every client, busiest first; clients without tickets come last by name.
-	Clients            []Group
-	ClientsWithTickets int
-	ClientsBelowTarget int
+	// Projects lists the projects busiest first, then by client and project name.
+	Projects            []ProjectGroup
+	ProjectsWithTickets int
+	ProjectsBelowTarget int
 }
 
-// Build groups rows by client. Every client in clients gets a row, with or without tickets;
-// rows of clients not listed are left out.
-func Build(clients []Ref, rows []Ticket) Report {
-	byClient := make(map[uuid.UUID][]Ticket, len(clients))
+// Build groups rows by project. Every active project gets a row, with or without tickets; a
+// hidden one only when it has tickets in the month. Rows of projects not listed are left out.
+func Build(projects []Project, rows []Ticket) Report {
+	byProject := make(map[uuid.UUID][]Ticket, len(projects))
 	for _, r := range rows {
-		byClient[r.ClientID] = append(byClient[r.ClientID], r)
-	}
-	rep := Report{Clients: make([]Group, 0, len(clients))}
-	var counted []Ticket
-	for _, c := range clients {
-		own := byClient[c.ID]
-		counted = append(counted, own...)
-		g := Group{Ref: c, Figures: Summarize(own)}
-		if g.Tickets > 0 {
-			rep.ClientsWithTickets++
-		}
-		if g.BelowTarget() {
-			rep.ClientsBelowTarget++
-		}
-		rep.Clients = append(rep.Clients, g)
-	}
-	rep.Totals = Summarize(counted)
-	sortGroups(rep.Clients)
-	return rep
-}
-
-// Projects groups rows by project, busiest first. Only projects with tickets appear.
-func Projects(rows []Ticket) []Group {
-	var groups []Group
-	index := map[uuid.UUID]int{}
-	byProject := map[uuid.UUID][]Ticket{}
-	for _, r := range rows {
-		if _, ok := index[r.ProjectID]; !ok {
-			index[r.ProjectID] = len(groups)
-			groups = append(groups, Group{Ref: Ref{ID: r.ProjectID, Name: r.ProjectName}})
-		}
 		byProject[r.ProjectID] = append(byProject[r.ProjectID], r)
 	}
-	for i := range groups {
-		groups[i].Figures = Summarize(byProject[groups[i].ID])
+	rep := Report{Projects: make([]ProjectGroup, 0, len(projects))}
+	var counted []Ticket
+	for _, p := range projects {
+		own := byProject[p.ID]
+		if !p.Active && len(own) == 0 {
+			continue
+		}
+		counted = append(counted, own...)
+		g := ProjectGroup{Project: p, Figures: Summarize(own)}
+		if g.Tickets > 0 {
+			rep.ProjectsWithTickets++
+		}
+		if g.BelowTarget() {
+			rep.ProjectsBelowTarget++
+		}
+		rep.Projects = append(rep.Projects, g)
 	}
-	sortGroups(groups)
-	return groups
-}
-
-func sortGroups(gs []Group) {
-	slices.SortStableFunc(gs, func(a, b Group) int {
+	rep.Totals = Summarize(counted)
+	slices.SortStableFunc(rep.Projects, func(a, b ProjectGroup) int {
 		if c := cmp.Compare(b.Tickets, a.Tickets); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(strings.ToLower(a.Client.Name), strings.ToLower(b.Client.Name)); c != 0 {
 			return c
 		}
 		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	})
+	return rep
+}
+
+// ByPriority groups rows by priority, P1 first. Only priorities with tickets appear.
+func ByPriority(rows []Ticket) []PriorityGroup {
+	byPriority := make(map[sla.Priority][]Ticket, len(sla.Priorities))
+	for _, r := range rows {
+		byPriority[r.Priority] = append(byPriority[r.Priority], r)
+	}
+	var out []PriorityGroup
+	for _, p := range sla.Priorities {
+		if own := byPriority[p]; len(own) > 0 {
+			out = append(out, PriorityGroup{Priority: p, Figures: Summarize(own)})
+		}
+	}
+	return out
 }
 
 // HoursMinutes splits d into whole hours and the minutes left, rounded down. Report times are

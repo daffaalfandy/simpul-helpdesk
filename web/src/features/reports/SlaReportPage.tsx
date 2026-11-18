@@ -2,7 +2,7 @@ import { useMutation, useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import type { SlaReportClient } from '../../api/client'
+import type { SlaReportProject } from '../../api/client'
 import { downloadSlaExcel, downloadSlaPdf, slaReportQueryOptions } from '../../api/reports'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
@@ -11,13 +11,13 @@ import { ErrorAlert } from '../../components/ErrorAlert'
 import { paths } from '../../lib/constants'
 import { can } from '../../lib/roles'
 import { useSignedInUser } from '../shell/useSignedInUser'
-import { ClientTable } from './ClientTable'
 import { formatPercent, reportMonthLabel } from './format'
 import { KpiTiles } from './KpiTiles'
-import { MonthSwitcher } from './MonthSwitcher'
+import { MonthPicker } from './MonthPicker'
 import type { MonthKey } from './months'
+import { ProjectTable } from './ProjectTable'
 
-type Download = { kind: 'excel' } | { kind: 'pdf'; client: SlaReportClient }
+type Download = { kind: 'excel' } | { kind: 'pdf'; project: SlaReportProject }
 
 type SlaReportPageProps = {
   /** The month in the URL; the current month when left out. */
@@ -25,18 +25,18 @@ type SlaReportPageProps = {
   onMonthChange: (month: MonthKey, current: MonthKey) => void
 }
 
-/** SLA report (Reports mock): every client's month against the contract target, with exports. */
+/** SLA report (Reports mock): every project's month against the contract target, with exports. */
 export function SlaReportPage({ month, onMonthChange }: SlaReportPageProps) {
   const { t } = useTranslation()
   const { data: report } = useSuspenseQuery(slaReportQueryOptions(month))
   const download = useMutation({
     mutationFn: (d: Download) =>
-      d.kind === 'excel' ? downloadSlaExcel(report.month) : downloadSlaPdf(d.client.id, report.month),
+      d.kind === 'excel' ? downloadSlaExcel(report.month) : downloadSlaPdf(d.project.id, report.month),
   })
   const pending = download.isPending ? download.variables : undefined
   const target = formatPercent(report.targetPercent)
   const me = useSignedInUser()
-  const canAddClients = can.manageSettings(me.role)
+  const canAddProjects = can.manageProjects(me.role)
 
   return (
     <>
@@ -46,9 +46,10 @@ export function SlaReportPage({ month, onMonthChange }: SlaReportPageProps) {
           <p className="text-base text-muted">{t('reports.subtitle')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <MonthSwitcher
+          <MonthPicker
             value={report.month}
             current={report.currentMonth}
+            oldest={report.oldestMonth}
             first={report.firstMonth}
             onChange={(m) => onMonthChange(m, report.currentMonth)}
           />
@@ -59,13 +60,13 @@ export function SlaReportPage({ month, onMonthChange }: SlaReportPageProps) {
       </div>
       <ErrorAlert error={download.error} />
       <KpiTiles report={report} />
-      {report.clients.length === 0 ? (
+      {report.projects.length === 0 ? (
         <EmptyState title={t('reports.empty.title')}>
           {t('reports.empty.body')}
-          {canAddClients && (
+          {canAddProjects && (
             <>
               {' '}
-              <Link to={paths.settingsClients} className="font-bold">
+              <Link to={paths.projects} className="font-bold">
                 {t('reports.empty.link')}
               </Link>
             </>
@@ -73,14 +74,14 @@ export function SlaReportPage({ month, onMonthChange }: SlaReportPageProps) {
         </EmptyState>
       ) : (
         <Card
-          title={t('reports.byClient', { month: reportMonthLabel(t, report.month, report.toDate) })}
+          title={t('reports.byProject', { month: reportMonthLabel(t, report.month, report.toDate) })}
           actions={<span className="text-sm text-muted">{t('reports.target', { target })}</span>}
         >
-          <ClientTable
-            clients={report.clients}
+          <ProjectTable
+            projects={report.projects}
             target={report.targetPercent}
-            downloading={pending?.kind === 'pdf' ? pending.client.id : null}
-            onDownload={(client) => download.mutate({ kind: 'pdf', client })}
+            downloading={pending?.kind === 'pdf' ? pending.project.id : null}
+            onDownload={(project) => download.mutate({ kind: 'pdf', project })}
           />
           <div className="flex flex-col gap-1 text-sm text-muted">
             <p>{t('reports.footnote.tick', { target })}</p>

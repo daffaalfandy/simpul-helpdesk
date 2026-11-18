@@ -196,6 +196,8 @@ var projectOps = map[string]struct{ requester, otherAgent, linkedAgent int }{
 	"deleteProject":    {http.StatusForbidden, http.StatusForbidden, http.StatusForbidden},
 	"updateProjectSla": {http.StatusForbidden, http.StatusForbidden, http.StatusForbidden},
 	"updateProjectDod": {http.StatusForbidden, http.StatusForbidden, http.StatusForbidden},
+	// The SLA report is for supervisors and admins only.
+	"exportSlaProjectPdf": {http.StatusForbidden, http.StatusForbidden, http.StatusForbidden},
 }
 
 func TestProjectScope(t *testing.T) {
@@ -222,6 +224,9 @@ func TestProjectScope(t *testing.T) {
 		},
 		"updateProjectDod": func(s session, p gen.Project) *httptest.ResponseRecorder {
 			return s.do(http.MethodPut, projectPath(p)+"/dod", gen.ProjectDodInput{Dod: p.Dod, AllowTicketOverride: true})
+		},
+		"exportSlaProjectPdf": func(s session, p gen.Project) *httptest.ResponseRecorder {
+			return s.do(http.MethodGet, "/reports/sla/projects/"+p.Id.String()+"/pdf", nil)
 		},
 	}
 

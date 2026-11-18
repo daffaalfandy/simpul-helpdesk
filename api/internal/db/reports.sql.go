@@ -25,31 +25,38 @@ func (q *Queries) GetFirstTicketCreatedAt(ctx context.Context, organizationID uu
 	return created_at, err
 }
 
-const getReportClient = `-- name: GetReportClient :one
-SELECT id, name, contract_no, contract_start, contract_end
-FROM clients
-WHERE id = $1 AND organization_id = $2
+const getReportProject = `-- name: GetReportProject :one
+SELECT p.id, p.name, p.active, p.client_id, c.name AS client_name, c.contract_no, c.contract_start, c.contract_end
+FROM projects p
+JOIN clients c ON c.id = p.client_id
+WHERE p.id = $1 AND p.organization_id = $2
 `
 
-type GetReportClientParams struct {
+type GetReportProjectParams struct {
 	ID             uuid.UUID
 	OrganizationID uuid.UUID
 }
 
-type GetReportClientRow struct {
+type GetReportProjectRow struct {
 	ID            uuid.UUID
 	Name          string
+	Active        bool
+	ClientID      uuid.UUID
+	ClientName    string
 	ContractNo    *string
 	ContractStart *calendar.Date
 	ContractEnd   *calendar.Date
 }
 
-func (q *Queries) GetReportClient(ctx context.Context, arg GetReportClientParams) (GetReportClientRow, error) {
-	row := q.db.QueryRow(ctx, getReportClient, arg.ID, arg.OrganizationID)
-	var i GetReportClientRow
+func (q *Queries) GetReportProject(ctx context.Context, arg GetReportProjectParams) (GetReportProjectRow, error) {
+	row := q.db.QueryRow(ctx, getReportProject, arg.ID, arg.OrganizationID)
+	var i GetReportProjectRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.Active,
+		&i.ClientID,
+		&i.ClientName,
 		&i.ContractNo,
 		&i.ContractStart,
 		&i.ContractEnd,
@@ -57,33 +64,41 @@ func (q *Queries) GetReportClient(ctx context.Context, arg GetReportClientParams
 	return i, err
 }
 
-const listReportClients = `-- name: ListReportClients :many
-SELECT id, name, contract_no, contract_start, contract_end
-FROM clients
-WHERE organization_id = $1
-ORDER BY lower(name)
+const listReportProjects = `-- name: ListReportProjects :many
+SELECT p.id, p.name, p.active, p.client_id, c.name AS client_name, c.contract_no, c.contract_start, c.contract_end
+FROM projects p
+JOIN clients c ON c.id = p.client_id
+WHERE p.organization_id = $1
+ORDER BY lower(c.name), lower(p.name)
 `
 
-type ListReportClientsRow struct {
+type ListReportProjectsRow struct {
 	ID            uuid.UUID
 	Name          string
+	Active        bool
+	ClientID      uuid.UUID
+	ClientName    string
 	ContractNo    *string
 	ContractStart *calendar.Date
 	ContractEnd   *calendar.Date
 }
 
-func (q *Queries) ListReportClients(ctx context.Context, organizationID uuid.UUID) ([]ListReportClientsRow, error) {
-	rows, err := q.db.Query(ctx, listReportClients, organizationID)
+// Every project with its client and the client's contract, hidden ones included.
+func (q *Queries) ListReportProjects(ctx context.Context, organizationID uuid.UUID) ([]ListReportProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listReportProjects, organizationID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListReportClientsRow{}
+	items := []ListReportProjectsRow{}
 	for rows.Next() {
-		var i ListReportClientsRow
+		var i ListReportProjectsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.Active,
+			&i.ClientID,
+			&i.ClientName,
 			&i.ContractNo,
 			&i.ContractStart,
 			&i.ContractEnd,
@@ -99,7 +114,7 @@ func (q *Queries) ListReportClients(ctx context.Context, organizationID uuid.UUI
 }
 
 const listReportTickets = `-- name: ListReportTickets :many
-SELECT t.id, t.key, t.client_id, t.project_id, p.name AS project_name, t.type, t.channel, t.priority,
+SELECT t.id, t.key, t.client_id, c.name AS client_name, t.project_id, p.name AS project_name, t.type, t.channel, t.priority,
        t.status, t.subject, t.created_at, t.first_response_at, t.resolved_at,
        s.first_response_elapsed_ms, s.first_response_met_at,
        s.first_response_breached_at, s.resolution_breached_at,
@@ -107,11 +122,12 @@ SELECT t.id, t.key, t.client_id, t.project_id, p.name AS project_name, t.type, t
        coalesce((t.sla_snapshot->>'pauseOnWaitingClient')::boolean, false)::boolean AS pauses_while_waiting
 FROM tickets t
 JOIN projects p ON p.id = t.project_id
+JOIN clients c ON c.id = t.client_id
 LEFT JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE t.organization_id = $1
   AND t.created_at >= $2::timestamptz
   AND t.created_at < $3::timestamptz
-  AND ($4::uuid IS NULL OR t.client_id = $4::uuid)
+  AND ($4::uuid IS NULL OR t.project_id = $4::uuid)
 ORDER BY t.created_at, t.number
 `
 
@@ -119,13 +135,14 @@ type ListReportTicketsParams struct {
 	OrganizationID uuid.UUID
 	MonthStart     time.Time
 	MonthEnd       time.Time
-	ClientID       *uuid.UUID
+	ProjectID      *uuid.UUID
 }
 
 type ListReportTicketsRow struct {
 	ID                      uuid.UUID
 	Key                     string
 	ClientID                uuid.UUID
+	ClientName              string
 	ProjectID               uuid.UUID
 	ProjectName             string
 	Type                    string
@@ -145,13 +162,13 @@ type ListReportTicketsRow struct {
 
 // Tickets created in [month_start, month_end), with their SLA outcome so far. A ticket the SLA
 // scan hasn't replayed yet has no ticket_sla row: no breach and no first-response time.
-// client_id narrows the list to one client; NULL lists all.
+// project_id narrows the list to one project; NULL lists all.
 func (q *Queries) ListReportTickets(ctx context.Context, arg ListReportTicketsParams) ([]ListReportTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listReportTickets,
 		arg.OrganizationID,
 		arg.MonthStart,
 		arg.MonthEnd,
-		arg.ClientID,
+		arg.ProjectID,
 	)
 	if err != nil {
 		return nil, err
@@ -164,6 +181,7 @@ func (q *Queries) ListReportTickets(ctx context.Context, arg ListReportTicketsPa
 			&i.ID,
 			&i.Key,
 			&i.ClientID,
+			&i.ClientName,
 			&i.ProjectID,
 			&i.ProjectName,
 			&i.Type,

@@ -22,7 +22,7 @@
 {{define "report.generated"}}Generated {{.At}} ({{.Zone}}){{end}}
 {{define "report.target"}}Contract target: {{.}}% of tickets within SLA{{end}}
 {{define "report.contract"}}{{if .No}}Contract {{.No}}{{end}}{{if and .No .Start}} · {{end}}{{if .Start}}{{.Start}} to {{.End}}{{end}}{{end}}
-{{define "report.byProject"}}By project{{end}}
+{{define "report.byPriority"}}By priority{{end}}
 {{define "report.tickets"}}Tickets{{end}}
 {{define "report.noTickets"}}No tickets reported in {{.}}.{{end}}
 {{define "report.page"}}Page {{.Page}} of {{.Pages}}{{end}}
@@ -37,11 +37,12 @@
 {{define "kpi.withinSub"}}target {{.}}%{{end}}
 {{define "kpi.breaches"}}SLA breaches{{end}}
 {{define "kpi.breachesSub"}}tickets that missed a target{{end}}
-{{define "kpi.belowTarget"}}Clients below target{{end}}
+{{define "kpi.belowTarget"}}Projects below target{{end}}
 {{define "kpi.avgFirstResponse"}}Avg first response{{end}}
 {{define "kpi.avgFirstResponseSub"}}portal reports{{end}}
 
 {{define "value.percent"}}{{.}}%{{end}}
+{{define "value.priority"}}{{.Code}}{{if .Name}} · {{.Name}}{{end}}{{end}}
 {{define "value.hours"}}{{.}}h{{end}}
 {{define "value.minutes"}}{{.}}m{{end}}
 {{define "value.noTickets"}}No tickets{{end}}

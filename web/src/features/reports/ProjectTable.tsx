@@ -1,28 +1,29 @@
 import { Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import type { SlaReportClient } from '../../api/client'
+import type { SlaReportProject } from '../../api/client'
+import { Pill } from '../../components/Badges'
 import { Button } from '../../components/Button'
 import { RowHeader, Table, Td, Th } from '../../components/Table'
 import { reportSpan } from './format'
 import { TargetBar } from './TargetBar'
 
-type ClientTableProps = {
-  clients: ReadonlyArray<SlaReportClient>
+type ProjectTableProps = {
+  projects: ReadonlyArray<SlaReportProject>
   target: number
-  /** The client whose PDF is being made, if any. */
+  /** The project whose PDF is being made, if any. */
   downloading: string | null
-  onDownload: (client: SlaReportClient) => void
+  onDownload: (project: SlaReportProject) => void
 }
 
-/** One row per client (Reports mock), with each client's own PDF to send them. */
-export function ClientTable({ clients, target, downloading, onDownload }: ClientTableProps) {
+/** One row per project with its client, and each project's own PDF to send to that client. */
+export function ProjectTable({ projects, target, downloading, onDownload }: ProjectTableProps) {
   const { t } = useTranslation()
   return (
     <Table caption={t('reports.table.caption')} minWidth="min-w-(--report-table-min-w)">
       <thead>
         <tr>
-          <Th>{t('reports.table.client')}</Th>
+          <Th>{t('reports.table.project')}</Th>
           <Th>{t('reports.table.tickets')}</Th>
           <Th>{t('reports.table.split')}</Th>
           <Th>{t('reports.table.avgFirstResponse')}</Th>
@@ -34,11 +35,17 @@ export function ClientTable({ clients, target, downloading, onDownload }: Client
         </tr>
       </thead>
       <tbody>
-        {clients.map((c) => {
-          const f = c.figures
+        {projects.map((p) => {
+          const f = p.figures
           return (
-            <tr key={c.id}>
-              <RowHeader>{c.name}</RowHeader>
+            <tr key={p.id}>
+              <RowHeader>
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {p.name}
+                  {!p.active && <Pill tone="neutral">{t('reports.hidden')}</Pill>}
+                </span>
+                <span className="block text-sm font-regular text-muted">{p.client.name}</span>
+              </RowHeader>
               <Td className="tabular-nums">{f.tickets}</Td>
               <Td className="text-ink-2 tabular-nums">
                 {t('reports.table.splitValue', { incidents: f.incidents, requests: f.requests })}
@@ -61,9 +68,9 @@ export function ClientTable({ clients, target, downloading, onDownload }: Client
                   size="sm"
                   className="-my-2"
                   icon={<Download aria-hidden="true" className="size-(--icon-md)" />}
-                  aria-label={t('reports.downloadPdfFor', { client: c.name })}
-                  isPending={downloading === c.id}
-                  onPress={() => onDownload(c)}
+                  aria-label={t('reports.downloadPdfFor', { project: p.name, client: p.client.name })}
+                  isPending={downloading === p.id}
+                  onPress={() => onDownload(p)}
                 >
                   {t('reports.downloadPdf')}
                 </Button>

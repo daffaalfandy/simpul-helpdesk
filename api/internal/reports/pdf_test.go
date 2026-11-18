@@ -12,6 +12,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/calendar"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/report"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
@@ -29,17 +30,19 @@ func testPeriod(t *testing.T) Period {
 	return p
 }
 
-func testClient() db.ListReportClientsRow {
+func testProject() db.ListReportProjectsRow {
 	no := "027/KOMINFO-JMB/2026"
 	start, end := calendar.NewDate(2026, time.January, 1), calendar.NewDate(2026, time.December, 31)
-	return db.ListReportClientsRow{ID: uuid.New(), Name: "Dinas Kominfo Jambi", ContractNo: &no, ContractStart: &start, ContractEnd: &end}
+	return db.ListReportProjectsRow{
+		ID: uuid.New(), Name: "e-Office", Active: true, ClientID: uuid.New(), ClientName: "Dinas Kominfo Jambi",
+		ContractNo: &no, ContractStart: &start, ContractEnd: &end,
+	}
 }
 
-func testRows(client uuid.UUID, start time.Time, n int) []db.ListReportTicketsRow {
-	projects := []struct {
-		id   uuid.UUID
-		name string
-	}{{uuid.New(), "e-Office"}, {uuid.New(), "Public website"}}
+// testPriorities are the default priority names, with P4 left unnamed.
+var testPriorities = map[sla.Priority]string{sla.P1: "Critical", sla.P2: "High", sla.P3: "Standard"}
+
+func testRows(project db.ListReportProjectsRow, start time.Time, n int) []db.ListReportTicketsRow {
 	subjects := []string{
 		"Cannot sign in to e-Office after the password reset",
 		"Disposisi surat tidak muncul di kotak masuk kepala bidang sejak pembaruan sistem kemarin sore 🙏",
@@ -51,11 +54,11 @@ func testRows(client uuid.UUID, start time.Time, n int) []db.ListReportTicketsRo
 		created := start.Add(time.Duration(i) * 7 * time.Hour)
 		answered := created.Add(20 * time.Minute)
 		elapsed := int64((time.Duration(i%5+1) * 10 * time.Minute) / time.Millisecond)
-		p := projects[i%len(projects)]
 		row := db.ListReportTicketsRow{
-			ID: uuid.New(), Key: fmt.Sprintf("HD-%d", 24000+i), ClientID: client, ProjectID: p.id, ProjectName: p.name,
-			Type: string(ticket.TypeIncident), Channel: string(ticket.ChannelPortal), Priority: "P3",
-			Status: string(ticket.StatusClosed), Subject: subjects[i%len(subjects)], CreatedAt: created,
+			ID: uuid.New(), Key: fmt.Sprintf("HD-%d", 24000+i), ClientID: project.ClientID, ClientName: project.ClientName,
+			ProjectID: project.ID, ProjectName: project.Name,
+			Type: string(ticket.TypeIncident), Channel: string(ticket.ChannelPortal), Status: string(ticket.StatusClosed),
+			Priority: string(sla.Priorities[i%len(sla.Priorities)]), Subject: subjects[i%len(subjects)], CreatedAt: created,
 			FirstResponseAt: &answered, FirstResponseMetAt: &answered, FirstResponseElapsedMs: &elapsed,
 			PausesWhileWaiting: true,
 		}
@@ -78,7 +81,7 @@ func testRows(client uuid.UUID, start time.Time, n int) []db.ListReportTicketsRo
 
 func TestRenderPDF(t *testing.T) {
 	period := testPeriod(t)
-	client := testClient()
+	project := testProject()
 	note := "Data is stored in Indonesia."
 	tests := []struct {
 		name      string
@@ -94,9 +97,9 @@ func TestRenderPDF(t *testing.T) {
 			d := exportData{
 				Period: period, Generated: time.Date(2026, time.November, 16, 7, 5, 0, 0, time.UTC),
 				Org:  db.GetOrganizationRow{Name: "PT Vendor Teknologi", FooterNote: &note},
-				Rows: testRows(client.ID, period.Start, tt.rows),
+				Rows: testRows(project, period.Start, tt.rows),
 			}
-			body, pages, err := renderPDF(d, client)
+			body, pages, err := renderPDF(d, project, testPriorities)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -118,29 +121,58 @@ func TestRenderPDF(t *testing.T) {
 func TestPDFFileName(t *testing.T) {
 	period := testPeriod(t)
 	tests := []struct {
-		client, want string
+		client, project, want string
 	}{
-		{"Dinas Kominfo Jambi", "sla-report-2026-10-dinas-kominfo-jambi.pdf"},
-		{"Bappeda Prov. Riau", "sla-report-2026-10-bappeda-prov-riau.pdf"},
+		{"Dinas Kominfo Jambi", "e-Office", "sla-report-2026-10-dinas-kominfo-jambi-e-office.pdf"},
+		{"Bappeda Prov. Riau", "SIPD (lama)", "sla-report-2026-10-bappeda-prov-riau-sipd-lama.pdf"},
+		{"日本", "e-Office", "sla-report-2026-10-e-office.pdf"},
+		{"Dinas Kominfo Jambi", "日本", "sla-report-2026-10-dinas-kominfo-jambi.pdf"},
 	}
 	for _, tt := range tests {
-		cl := testClient()
-		cl.Name = tt.client
-		f, err := buildPDF(exportData{Period: period}, cl)
+		p := testProject()
+		p.ClientName, p.Name = tt.client, tt.project
+		f, err := buildPDF(exportData{Period: period}, p, testPriorities)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if f.Filename != tt.want {
-			t.Errorf("file name for %q = %q, want %q", tt.client, f.Filename, tt.want)
+			t.Errorf("file name for %q / %q = %q, want %q", tt.client, tt.project, f.Filename, tt.want)
 		}
 	}
-	cl := testClient()
-	cl.Name = "日本"
-	f, err := buildPDF(exportData{Period: period}, cl)
+	p := testProject()
+	p.ClientName, p.Name = "日本", "東京"
+	f, err := buildPDF(exportData{Period: period}, p, testPriorities)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "sla-report-2026-10-" + cl.ID.String() + ".pdf"; f.Filename != want {
+	if want := "sla-report-2026-10-" + p.ID.String() + ".pdf"; f.Filename != want {
 		t.Errorf("file name without ASCII letters = %q, want %q", f.Filename, want)
+	}
+}
+
+func TestPriorityCells(t *testing.T) {
+	w, err := newPDFWriter()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		priority sla.Priority
+		name     string
+		want     string
+	}{
+		{sla.P1, "Critical", "P1 · Critical"},
+		{sla.P4, "", "P4"},
+	}
+	for _, tt := range tests {
+		cells := w.priorityCells(report.PriorityGroup{Priority: tt.priority}, tt.name)
+		if got := cells[0].lines; len(got) != 1 || got[0] != tt.want {
+			t.Errorf("priority cell = %q, want %q", got, tt.want)
+		}
+		if len(cells) != len(priorityColumns) {
+			t.Errorf("%d cells for %d columns", len(cells), len(priorityColumns))
+		}
+	}
+	if w.err != nil || w.c.err != nil {
+		t.Fatal(w.err, w.c.err)
 	}
 }

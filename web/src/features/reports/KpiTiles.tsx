@@ -7,7 +7,7 @@ import { formatPercent } from './format'
 /** The report's four figures (Reports mock): a label, the number, and what it is measured against. */
 export function KpiTiles({ report }: { report: SlaReport }) {
   const { t } = useTranslation()
-  const { totals, targetPercent, clientsBelowTarget } = report
+  const { totals, targetPercent, projectsBelowTarget } = report
   const target = formatPercent(targetPercent)
   const empty = totals.tickets === 0
   const tiles = [
@@ -15,7 +15,7 @@ export function KpiTiles({ report }: { report: SlaReport }) {
       id: 'tickets',
       label: t('reports.kpi.tickets'),
       value: String(totals.tickets),
-      sub: empty ? t('reports.kpi.noTicketsSub') : t('reports.kpi.ticketsSub', { count: report.clientsWithTickets }),
+      sub: empty ? t('reports.kpi.noTicketsSub') : t('reports.kpi.ticketsSub', { count: report.projectsWithTickets }),
     },
     {
       id: 'within',
@@ -31,10 +31,10 @@ export function KpiTiles({ report }: { report: SlaReport }) {
     {
       id: 'below',
       label: t('reports.kpi.belowTarget'),
-      value: String(clientsBelowTarget),
+      value: String(projectsBelowTarget),
       sub: empty
         ? t('reports.kpi.noTicketsSub')
-        : clientsBelowTarget > 0
+        : projectsBelowTarget > 0
           ? t('reports.kpi.belowTargetSub')
           : t('reports.kpi.allOnTarget'),
     },

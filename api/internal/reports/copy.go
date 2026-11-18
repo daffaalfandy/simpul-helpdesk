@@ -28,7 +28,7 @@ const (
 	labelGenerated           = "report.generated"
 	labelTarget              = "report.target"
 	labelContract            = "report.contract"
-	labelByProject           = "report.byProject"
+	labelByPriority          = "report.byPriority"
 	labelTickets             = "report.tickets"
 	labelNoTickets           = "report.noTickets"
 	labelPage                = "report.page"
@@ -44,6 +44,7 @@ const (
 	labelKPIAvgFirstResponse = "kpi.avgFirstResponse"
 	labelKPIAvgFirstSub      = "kpi.avgFirstResponseSub"
 	labelPercent             = "value.percent"
+	labelPriorityLevel       = "value.priority"
 	labelHours               = "value.hours"
 	labelMinutes             = "value.minutes"
 	labelNoTicketsValue      = "value.noTickets"
@@ -98,6 +99,7 @@ type (
 	contractArgs  struct{ No, Start, End string }
 	splitArgs     struct{ Incidents, Requests int }
 	pageArgs      struct{ Page, Pages int }
+	priorityArgs  struct{ Code, Name string }
 )
 
 const (
@@ -165,11 +167,11 @@ func (c *copywriter) generated(at time.Time, loc *time.Location) string {
 	return c.text(labelGenerated, generatedArgs{At: at.In(loc).Format(dateTimeLayout), Zone: loc.String()})
 }
 
-// fileName is "sla-report-2026-11.xlsx", or with a client "sla-report-2026-11-dinas-kominfo-jambi.pdf".
-func (c *copywriter) fileName(m report.Month, client, ext string) string {
+// fileName is "sla-report-2026-11.xlsx", or with a stem "sla-report-2026-11-dinas-kominfo-jambi-e-office.pdf".
+func (c *copywriter) fileName(m report.Month, stem, ext string) string {
 	name := c.text(labelFileStem, m.String())
-	if client != "" {
-		name += fileStemJoin + client
+	if stem != "" {
+		name += fileStemJoin + stem
 	}
 	return name + ext
 }

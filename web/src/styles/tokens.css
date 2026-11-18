@@ -165,8 +165,8 @@
   --log-time-w: 46px;          /* time column of the recent events log */
   --log-provider-w: 64px;      /* provider column of the recent events log */
   --kpi-tile-min-w: 150px;     /* SLA report figures: four in a row, two on a phone */
-  --report-table-min-w: 880px; /* SLA report client table scrolls sideways below this */
-  --month-picker-w: 190px;     /* "Earlier month" dropdown beside the month buttons */
+  --report-table-min-w: 880px; /* SLA report project table scrolls sideways below this */
+  --month-picker-w: 240px;     /* SLA report month dropdown: fits "September 2026 (to date)" */
   --target-bar-h: 10px;        /* within-SLA bar (Reports mock) */
   --target-tick-w: 2px;        /* the target's mark on that bar */
   --target-tick-h: 16px;

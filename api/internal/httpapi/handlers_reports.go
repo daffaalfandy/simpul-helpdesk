@@ -24,10 +24,10 @@ func (s *server) GetSlaReport(ctx context.Context, req gen.GetSlaReportRequestOb
 		return nil, err
 	}
 	out := gen.GetSlaReport200JSONResponse{
-		Month: r.Month.String(), CurrentMonth: r.Current.String(), ToDate: r.ToDate,
+		Month: r.Month.String(), CurrentMonth: r.Current.String(), OldestMonth: r.Oldest.String(), ToDate: r.ToDate,
 		TargetPercent: report.TargetPercent, Totals: apiSlaFigures(r.Totals),
-		ClientsWithTickets: r.ClientsWithTickets, ClientsBelowTarget: r.ClientsBelowTarget,
-		Clients: make([]gen.SlaReportClient, len(r.Clients)),
+		ProjectsWithTickets: r.ProjectsWithTickets, ProjectsBelowTarget: r.ProjectsBelowTarget,
+		Projects: make([]gen.SlaReportProject, len(r.Projects)),
 	}
 	if r.First != nil {
 		first := r.First.String()
@@ -37,8 +37,11 @@ func (s *server) GetSlaReport(ctx context.Context, req gen.GetSlaReportRequestOb
 		wp := gen.SlaWaitingPause(*r.WaitingPause)
 		out.WaitingPause = &wp
 	}
-	for i, c := range r.Clients {
-		out.Clients[i] = gen.SlaReportClient{Id: c.ID, Name: c.Name, BelowTarget: c.BelowTarget(), Figures: apiSlaFigures(c.Figures)}
+	for i, g := range r.Projects {
+		out.Projects[i] = gen.SlaReportProject{
+			Id: g.ID, Name: g.Name, Client: gen.Ref{Id: g.Client.ID, Name: g.Client.Name}, Active: g.Active,
+			BelowTarget: g.BelowTarget(), Figures: apiSlaFigures(g.Figures),
+		}
 	}
 	return out, nil
 }
@@ -65,7 +68,7 @@ func (s *server) ExportSlaReportExcel(ctx context.Context, req gen.ExportSlaRepo
 	}, nil
 }
 
-func (s *server) ExportSlaReportPdf(ctx context.Context, req gen.ExportSlaReportPdfRequestObject) (gen.ExportSlaReportPdfResponseObject, error) {
+func (s *server) ExportSlaProjectPdf(ctx context.Context, req gen.ExportSlaProjectPdfRequestObject) (gen.ExportSlaProjectPdfResponseObject, error) {
 	p, err := requireOrg(ctx, auth.CapReportsView)
 	if err != nil {
 		return nil, err
@@ -74,14 +77,14 @@ func (s *server) ExportSlaReportPdf(ctx context.Context, req gen.ExportSlaReport
 	if err != nil {
 		return nil, err
 	}
-	f, err := s.reports.ClientPDF(ctx, p.OrganizationID, req.ClientId, month)
+	f, err := s.reports.ProjectPDF(ctx, p.OrganizationID, req.ProjectId, month)
 	if err != nil {
 		return nil, err
 	}
 	disposition, cache, csp := downloadHeaders(f.Filename)
-	return gen.ExportSlaReportPdf200ApplicationpdfResponse{
+	return gen.ExportSlaProjectPdf200ApplicationpdfResponse{
 		Body: bytes.NewReader(f.Body), ContentLength: int64(len(f.Body)),
-		Headers: gen.ExportSlaReportPdf200ResponseHeaders{
+		Headers: gen.ExportSlaProjectPdf200ResponseHeaders{
 			ContentDisposition: &disposition, CacheControl: &cache, ContentSecurityPolicy: &csp,
 		},
 	}, nil

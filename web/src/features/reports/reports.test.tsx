@@ -3,15 +3,20 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { renderApp } from '../../test/renderApp'
-import { REPORT_CLIENT_IDS, reportsApi } from '../../test/reportsApi'
+import { REPORT_PROJECT_IDS, reportsApi } from '../../test/reportsApi'
 import { state, USERS } from '../../test/server'
 
 const SUPERVISOR = USERS['dewi@demo-vendor.test'] ?? null
 
-function clientRow(name: string) {
-  const row = screen.getByRole('rowheader', { name }).closest('tr')
-  if (!row) throw new Error(`no row ${name}`)
+/** The table row whose header starts with the project's name. */
+function projectRow(project: string) {
+  const row = screen.getByRole('rowheader', { name: new RegExp(`^${project}`) }).closest('tr')
+  if (!row) throw new Error(`no row ${project}`)
   return within(row)
+}
+
+function rowHeaders() {
+  return screen.getAllByRole('rowheader').map((h) => h.textContent)
 }
 
 describe('SLA report', () => {
@@ -31,71 +36,91 @@ describe('SLA report', () => {
     vi.unstubAllGlobals()
   })
 
-  it('opens on the current month with its figures and every client', async () => {
+  it('opens on the current month with its figures and every project', async () => {
     const { router, container } = renderApp('/reports')
     expect(await screen.findByRole('heading', { name: 'SLA report', level: 1 })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/reports/sla')
-
-    const months = screen.getByRole('group', { name: 'Month' })
-    // en-GB writes September as "Sept".
-    expect(within(months).getAllByRole('button').map((b) => b.textContent)).toEqual(['Sept', 'Oct', 'Nov'])
-    expect(within(months).getByRole('button', { name: 'Nov' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /Month/ })).toHaveTextContent('November 2026 (to date)')
 
     const figures = container.querySelector('dl')
-    expect(figures).toHaveTextContent('Tickets38from 2 clients')
+    expect(figures).toHaveTextContent('Tickets38from 3 projects')
     expect(figures).toHaveTextContent('Within SLA89.5%target 90%')
     expect(figures).toHaveTextContent('SLA breaches4tickets that missed a target')
-    expect(figures).toHaveTextContent('Clients below target1review with the account manager')
+    expect(figures).toHaveTextContent('Projects below target1review with the account manager')
 
-    expect(screen.getByRole('heading', { name: 'By client · November 2026 (to date)' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'By project · November 2026 (to date)' })).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'SLA by project' })).toBeInTheDocument()
     expect(screen.getByText('Contract target: 90% of tickets within SLA')).toBeInTheDocument()
-    const jambi = clientRow('Dinas Kominfo Jambi')
-    expect(jambi.getByText('21 / 9')).toBeInTheDocument()
-    expect(jambi.getByText('14m')).toBeInTheDocument()
-    expect(jambi.getByRole('meter', { name: 'Within SLA' })).toHaveAttribute('aria-valuetext', '93.3% within SLA, target 90%')
-    const riau = clientRow('Bappeda Prov. Riau')
-    expect(riau.getByText('1h 23m')).toBeInTheDocument()
-    expect(riau.getByText('Below target')).toBeInTheDocument()
-    const setda = clientRow('Setda Kab. Muaro Jambi')
-    expect(setda.getByText('No tickets')).toBeInTheDocument()
-    expect(setda.getByText('Not set')).toBeInTheDocument()
-    expect(setda.getByRole('button', { name: 'Download PDF for Setda Kab. Muaro Jambi' })).toBeInTheDocument()
+    // Busiest first, each project with its client underneath.
+    expect(rowHeaders()).toEqual([
+      'e-OfficeDinas Kominfo Jambi',
+      'WebsiteBappeda Prov. Riau',
+      'Legacy portalHiddenBappeda Prov. Riau',
+      'Network & infra supportSetda Kab. Muaro Jambi',
+    ])
+    const eOffice = projectRow('e-Office')
+    expect(eOffice.getByText('21 / 9')).toBeInTheDocument()
+    expect(eOffice.getByText('14m')).toBeInTheDocument()
+    expect(eOffice.getByRole('meter', { name: 'Within SLA' })).toHaveAttribute('aria-valuetext', '93.3% within SLA, target 90%')
+    expect(eOffice.queryByText('Hidden')).not.toBeInTheDocument()
+    const website = projectRow('Website')
+    expect(website.getByText('1h 23m')).toBeInTheDocument()
+    expect(website.getByText('Below target')).toBeInTheDocument()
+    expect(projectRow('Legacy portal').getByText('Hidden')).toBeInTheDocument()
+    const network = projectRow('Network')
+    expect(network.getByText('No tickets')).toBeInTheDocument()
+    expect(network.getByText('Not set')).toBeInTheDocument()
+    expect(network.getByRole('button', { name: 'Download PDF for Network & infra support, Setda Kab. Muaro Jambi' })).toBeInTheDocument()
     expect(screen.getByText('Time spent waiting on the client is excluded from SLA.')).toBeInTheDocument()
   })
 
-  it('switches months in the URL, older ones from the list', async () => {
+  it('picks the month from a list, newest first, back to the first ticket', async () => {
     const user = userEvent.setup()
     const { router } = renderApp('/reports/sla')
-    await user.click(await screen.findByRole('button', { name: 'Oct' }))
-    expect(await screen.findByRole('heading', { name: 'By client · October 2026' })).toBeInTheDocument()
-    expect(router.state.location.search).toEqual({ month: '2026-10' })
-    expect(screen.getByRole('button', { name: 'Oct' })).toHaveAttribute('aria-pressed', 'true')
+    const picker = await screen.findByRole('button', { name: /Month/ })
+    await user.click(picker)
+    const months = within(await screen.findByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
+    expect(months).toEqual(['November 2026 (to date)', 'October 2026', 'September 2026', 'August 2026'])
 
-    await user.click(screen.getByRole('button', { name: /Earlier month/ }))
+    await user.click(screen.getByRole('option', { name: 'October 2026' }))
+    expect(await screen.findByRole('heading', { name: 'By project · October 2026' })).toBeInTheDocument()
+    expect(router.state.location.search).toEqual({ month: '2026-10' })
+    expect(screen.getByRole('button', { name: /Month/ })).toHaveTextContent('October 2026')
+    // A hidden project without tickets this month is left out.
+    expect(screen.queryByRole('rowheader', { name: /^Legacy portal/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Month/ }))
     await user.click(await screen.findByRole('option', { name: 'August 2026' }))
-    expect(await screen.findByRole('heading', { name: 'By client · August 2026' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'By project · August 2026' })).toBeInTheDocument()
     expect(router.state.location.search).toEqual({ month: '2026-08' })
     expect(screen.getAllByText('no tickets this month')).toHaveLength(2)
-    for (const name of ['Sept', 'Oct', 'Nov']) {
-      expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false')
-    }
 
     // The current month leaves the URL clean.
-    await user.click(screen.getByRole('button', { name: 'Nov' }))
+    await user.click(screen.getByRole('button', { name: /Month/ }))
+    await user.click(await screen.findByRole('option', { name: 'November 2026 (to date)' }))
     await waitFor(() => expect(router.state.location.search).toEqual({}))
   })
 
-  it('downloads the Excel file and a client PDF for the month shown', async () => {
+  it.each([
+    { name: 'more than 12 months back', month: '2025-10' },
+    { name: 'not started yet', month: '2026-12' },
+  ])('opens the current month for a month it does not serve ($name)', async ({ month }) => {
+    const { router } = renderApp(`/reports/sla?month=${month}`)
+    expect(await screen.findByRole('heading', { name: 'By project · November 2026 (to date)' })).toBeInTheDocument()
+    expect(router.state.location.search).toEqual({})
+  })
+
+  it('downloads the Excel file and a project PDF for the month shown', async () => {
     const user = userEvent.setup()
     renderApp('/reports/sla?month=2026-10')
     await user.click(await screen.findByRole('button', { name: 'Download Excel' }))
     await waitFor(() => expect(saved).toEqual(['sla-report-2026-10.xlsx']))
-    await user.click(clientRow('Dinas Kominfo Jambi').getByRole('button', { name: 'Download PDF for Dinas Kominfo Jambi' }))
+    await user.click(projectRow('e-Office').getByRole('button', { name: 'Download PDF for e-Office, Dinas Kominfo Jambi' }))
     await waitFor(() => expect(saved).toHaveLength(2))
-    expect(saved[1]).toBe(`sla-report-2026-10-${REPORT_CLIENT_IDS.jambi}.pdf`)
+    expect(saved[1]).toBe(`sla-report-2026-10-${REPORT_PROJECT_IDS.eOffice}.pdf`)
     expect(reportsApi.requests).toEqual([
       '/api/v1/reports/sla/excel?month=2026-10',
-      `/api/v1/reports/sla/clients/${REPORT_CLIENT_IDS.jambi}/pdf?month=2026-10`,
+      `/api/v1/reports/sla/projects/${REPORT_PROJECT_IDS.eOffice}/pdf?month=2026-10`,
     ])
   })
 
@@ -108,20 +133,12 @@ describe('SLA report', () => {
     expect(saved).toEqual([])
   })
 
-  it('explains an install without clients', async () => {
-    reportsApi.noClients = true
+  it('explains an organization without projects and points to Projects', async () => {
+    reportsApi.noProjects = true
     renderApp('/reports/sla')
-    expect(await screen.findByRole('heading', { name: 'No clients yet' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'No projects yet' })).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    // Supervisors can't add clients; admins get the way there.
-    expect(screen.queryByRole('link', { name: 'Add clients in Settings' })).not.toBeInTheDocument()
-  })
-
-  it('points admins without clients to Settings', async () => {
-    reportsApi.noClients = true
-    state.me = USERS['admin@demo-vendor.test'] ?? null
-    renderApp('/reports/sla')
-    expect(await screen.findByRole('link', { name: 'Add clients in Settings' })).toHaveAttribute('href', '/settings/clients')
+    expect(screen.getByRole('link', { name: 'Add a project' })).toHaveAttribute('href', '/projects')
   })
 
   it('keeps agents out', async () => {

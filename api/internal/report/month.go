@@ -13,6 +13,10 @@ import (
 // MonthLayout is how a month is written in URLs and the API: "2026-11".
 const MonthLayout = "2006-01"
 
+// MonthsBack is how far the report reaches: the current month and this many before it (owner,
+// 18 Nov). Older months are refused.
+const MonthsBack = 12
+
 // ErrInvalidMonth is returned when text isn't a month in MonthLayout.
 var ErrInvalidMonth = errors.New("report: invalid month")
 
@@ -45,6 +49,9 @@ func (m Month) String() string { return m.first().In(time.UTC).Format(MonthLayou
 func (m Month) Bounds(loc *time.Location) (start, end time.Time) {
 	return m.first().In(loc), m.Next().first().In(loc)
 }
+
+// Oldest returns the earliest month the report shows when current is this month.
+func Oldest(current Month) Month { return current.add(-MonthsBack) }
 
 // Next returns the month after m.
 func (m Month) Next() Month { return m.add(1) }

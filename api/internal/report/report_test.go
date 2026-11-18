@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/sla"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 )
 
@@ -110,16 +111,14 @@ func minutes(n int) *time.Duration {
 func pct(v float64) *float64 { return &v }
 
 var (
-	clientA  = uuid.MustParse("00000000-0000-0000-0000-00000000000a")
-	clientB  = uuid.MustParse("00000000-0000-0000-0000-00000000000b")
-	clientC  = uuid.MustParse("00000000-0000-0000-0000-00000000000c")
+	clientA  = Ref{uuid.MustParse("00000000-0000-0000-0000-00000000000a"), "Dinas Kominfo Jambi"}
+	clientB  = Ref{uuid.MustParse("00000000-0000-0000-0000-00000000000b"), "bappeda Prov. Riau"}
 	projectX = uuid.MustParse("00000000-0000-0000-0000-0000000000f1")
-	projectY = uuid.MustParse("00000000-0000-0000-0000-0000000000f2")
 )
 
 func portal(first *time.Duration) Ticket {
-	return Ticket{ClientID: clientA, ProjectID: projectX, ProjectName: "e-Office", Type: ticket.TypeIncident,
-		Channel: ticket.ChannelPortal, FirstResponse: first, PausesWhileWaiting: true}
+	return Ticket{ProjectID: projectX, Priority: sla.P3, Type: ticket.TypeIncident, Channel: ticket.ChannelPortal,
+		FirstResponse: first, PausesWhileWaiting: true}
 }
 
 func TestSummarize(t *testing.T) {
@@ -189,63 +188,145 @@ func TestBelowTarget(t *testing.T) {
 	}
 }
 
+func TestOldest(t *testing.T) {
+	tests := []struct {
+		current, want Month
+	}{
+		{Month{2026, time.November}, Month{2025, time.November}},
+		{Month{2026, time.January}, Month{2025, time.January}},
+		{Month{2026, time.December}, Month{2025, time.December}},
+	}
+	for _, tt := range tests {
+		got := Oldest(tt.current)
+		if got != tt.want {
+			t.Errorf("Oldest(%v) = %v, want %v", tt.current, got, tt.want)
+		}
+		// The report offers the current month and MonthsBack before it.
+		n := 0
+		for m := tt.current; !m.Before(got); m = m.Prev() {
+			n++
+		}
+		if n != MonthsBack+1 {
+			t.Errorf("Oldest(%v) offers %d months, want %d", tt.current, n, MonthsBack+1)
+		}
+	}
+}
+
+// on returns n copies of a ticket on project p; breached of them missed a target.
+func on(p uuid.UUID, n, breached int) []Ticket {
+	out := make([]Ticket, n)
+	for i := range out {
+		out[i] = portal(minutes(10))
+		out[i].ProjectID = p
+		out[i].ResolutionBreached = i < breached
+	}
+	return out
+}
+
 func TestBuild(t *testing.T) {
-	ok := portal(minutes(10))
-	late := portal(minutes(10))
-	late.ResolutionBreached = true
-	other := portal(minutes(20))
-	other.ClientID = clientB
-	stray := portal(minutes(20))
-	stray.ClientID = uuid.New() // a client not listed
+	eOffice := Project{ID: uuid.New(), Name: "e-Office", Client: clientA, Active: true}
+	email := Project{ID: uuid.New(), Name: "Email", Client: clientA, Active: true}
+	website := Project{ID: uuid.New(), Name: "website", Client: clientB, Active: true}
+	sipd := Project{ID: uuid.New(), Name: "SIPD", Client: clientB, Active: true}
+	legacy := Project{ID: uuid.New(), Name: "Legacy portal", Client: clientA, Active: false}
+	archive := Project{ID: uuid.New(), Name: "Archive", Client: clientB, Active: false}
+	all := []Project{eOffice, email, website, sipd, legacy, archive}
 
-	// A: 1 of 10 breached (90%, on target). B: 2 tickets, 1 breached (50%). C: none.
-	rowsA := slices.Repeat([]Ticket{ok}, 9)
-	rowsA = append(rowsA, late)
-	lateB := other
-	lateB.FirstResponseBreached = true
-	rows := append(rowsA, other, lateB, stray)
-	clients := []Ref{{clientC, "Bappeda"}, {clientB, "BPKAD"}, {clientA, "Kominfo"}}
-
-	rep := Build(clients, rows)
-	names := make([]string, len(rep.Clients))
-	for i, c := range rep.Clients {
-		names[i] = c.Name
+	tests := []struct {
+		name                    string
+		projects                []Project
+		rows                    []Ticket
+		order                   []string
+		tickets, breaches       int
+		withTickets, belowCount int
+	}{
+		{
+			name:     "no tickets: active projects by client, then name; hidden ones left out",
+			projects: all,
+			order:    []string{"bappeda Prov. Riau/SIPD", "bappeda Prov. Riau/website", "Dinas Kominfo Jambi/e-Office", "Dinas Kominfo Jambi/Email"},
+		},
+		{
+			// e-Office: 1 of 10 breached (90%, on target). website: 1 of 2 (50%). Legacy is hidden
+			// but has a ticket this month, so it is listed and counted.
+			name:     "busiest first; a hidden project with tickets is listed",
+			projects: all,
+			rows:     slices.Concat(on(eOffice.ID, 10, 1), on(website.ID, 2, 1), on(legacy.ID, 1, 0)),
+			order: []string{"Dinas Kominfo Jambi/e-Office", "bappeda Prov. Riau/website", "Dinas Kominfo Jambi/Legacy portal",
+				"bappeda Prov. Riau/SIPD", "Dinas Kominfo Jambi/Email"},
+			tickets: 13, breaches: 2, withTickets: 3, belowCount: 1,
+		},
+		{
+			name:     "tickets of projects not listed are left out",
+			projects: []Project{eOffice},
+			rows:     slices.Concat(on(eOffice.ID, 2, 0), on(uuid.New(), 3, 3)),
+			order:    []string{"Dinas Kominfo Jambi/e-Office"},
+			tickets:  2, withTickets: 1,
+		},
+		{
+			name:     "ties on tickets sort by client, then project, ignoring case",
+			projects: all,
+			rows:     slices.Concat(on(email.ID, 1, 0), on(sipd.ID, 1, 0), on(eOffice.ID, 1, 0), on(website.ID, 1, 0)),
+			order: []string{"bappeda Prov. Riau/SIPD", "bappeda Prov. Riau/website", "Dinas Kominfo Jambi/e-Office",
+				"Dinas Kominfo Jambi/Email"},
+			tickets: 4, withTickets: 4,
+		},
 	}
-	if want := []string{"Kominfo", "BPKAD", "Bappeda"}; !slices.Equal(names, want) {
-		t.Errorf("order = %v, want %v (busiest first, then name)", names, want)
-	}
-	if rep.Totals.Tickets != 12 || rep.Totals.Breaches != 2 {
-		t.Errorf("totals = %s, want 12 tickets and 2 breaches (unlisted clients left out)", show(rep.Totals))
-	}
-	if rep.ClientsWithTickets != 2 || rep.ClientsBelowTarget != 1 {
-		t.Errorf("with tickets = %d, below target = %d; want 2 and 1", rep.ClientsWithTickets, rep.ClientsBelowTarget)
-	}
-	if c := rep.Clients[2]; c.Tickets != 0 || c.WithinPercent != nil || c.BelowTarget() {
-		t.Errorf("client without tickets = %s, want empty and not below target", show(c.Figures))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rep := Build(tt.projects, tt.rows)
+			var order []string
+			for _, g := range rep.Projects {
+				order = append(order, g.Client.Name+"/"+g.Name)
+			}
+			if !slices.Equal(order, tt.order) {
+				t.Errorf("order = %v, want %v", order, tt.order)
+			}
+			if rep.Totals.Tickets != tt.tickets || rep.Totals.Breaches != tt.breaches {
+				t.Errorf("totals = %s, want %d tickets and %d breaches", show(rep.Totals), tt.tickets, tt.breaches)
+			}
+			if rep.ProjectsWithTickets != tt.withTickets || rep.ProjectsBelowTarget != tt.belowCount {
+				t.Errorf("with tickets = %d, below target = %d; want %d and %d",
+					rep.ProjectsWithTickets, rep.ProjectsBelowTarget, tt.withTickets, tt.belowCount)
+			}
+			for _, g := range rep.Projects {
+				if g.Tickets == 0 && (g.WithinPercent != nil || g.BelowTarget()) {
+					t.Errorf("%s without tickets = %s, want empty and not below target", g.Name, show(g.Figures))
+				}
+			}
+		})
 	}
 }
 
-func TestBuildSortsTiesByName(t *testing.T) {
-	rep := Build([]Ref{{clientB, "bpkad"}, {clientA, "Bappeda"}, {clientC, "Arsip"}}, nil)
-	var names []string
-	for _, c := range rep.Clients {
-		names = append(names, c.Name)
+func TestByPriority(t *testing.T) {
+	at := func(p sla.Priority, n, breached int) []Ticket {
+		out := on(projectX, n, breached)
+		for i := range out {
+			out[i].Priority = p
+		}
+		return out
 	}
-	if want := []string{"Arsip", "Bappeda", "bpkad"}; !slices.Equal(names, want) {
-		t.Errorf("order = %v, want %v (case-insensitive)", names, want)
+	tests := []struct {
+		name string
+		rows []Ticket
+		want []string
+	}{
+		{name: "no tickets", rows: nil, want: nil},
+		{
+			name: "P1 first whatever the row order; empty priorities left out",
+			rows: slices.Concat(at(sla.P4, 1, 0), at(sla.P1, 2, 1), at(sla.P3, 3, 0)),
+			want: []string{"P1: 2 tickets, 1 breaches", "P3: 3 tickets, 0 breaches", "P4: 1 tickets, 0 breaches"},
+		},
 	}
-}
-
-func TestProjects(t *testing.T) {
-	x := portal(minutes(10))
-	y := portal(minutes(30))
-	y.ProjectID, y.ProjectName = projectY, "SIPD"
-	got := Projects([]Ticket{x, y, y})
-	if len(got) != 2 || got[0].Name != "SIPD" || got[0].Tickets != 2 || got[1].Name != "e-Office" || got[1].Tickets != 1 {
-		t.Errorf("Projects = %+v, want SIPD (2) then e-Office (1)", got)
-	}
-	if Projects(nil) != nil {
-		t.Error("Projects(nil) should be empty")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for _, g := range ByPriority(tt.rows) {
+				got = append(got, fmt.Sprintf("%s: %d tickets, %d breaches", g.Priority, g.Tickets, g.Breaches))
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("ByPriority = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

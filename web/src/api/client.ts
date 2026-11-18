@@ -59,7 +59,7 @@ export type BoardColumn = components['schemas']['BoardColumn']
 export type BoardColumnId = components['schemas']['BoardColumnId']
 export type BoardStats = components['schemas']['BoardStats']
 export type SlaReport = components['schemas']['SlaReport']
-export type SlaReportClient = components['schemas']['SlaReportClient']
+export type SlaReportProject = components['schemas']['SlaReportProject']
 export type SlaFigures = components['schemas']['SlaFigures']
 export type SlaWaitingPause = components['schemas']['SlaWaitingPause']
 export type PriorityLevel = components['schemas']['PriorityLevel']
@@ -154,6 +154,8 @@ export const ErrorCode = {
   SetupClosed: 'setup_closed',
   OrganizationRequired: 'organization_required',
   OtherOrganization: 'other_organization',
+  MonthInFuture: 'month_in_future',
+  MonthOutOfRange: 'month_out_of_range',
 } as const
 
 export const HttpStatus = {

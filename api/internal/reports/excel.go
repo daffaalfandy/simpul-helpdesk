@@ -7,14 +7,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 
-	"github.com/daffaalfandy/simpul-helpdesk/api/internal/db"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/palette"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/report"
 )
 
 const excelExt = ".xlsx"
 
-// Summary sheet rows: title block, the KPI block, then the client table.
+// Summary sheet rows: title block, the KPI block, then the project table.
 const (
 	rowOrg = 1 + iota
 	rowHeading
@@ -24,7 +23,7 @@ const (
 	rowKPILabels
 	rowKPIValues
 	_
-	rowClientHeader
+	rowProjectHeader
 )
 
 const (
@@ -67,6 +66,7 @@ type column struct {
 
 var summaryColumns = []column{
 	{label: labelColClient, width: 34},
+	{label: labelColProject, width: 28},
 	{label: labelColContract, width: 22},
 	{label: labelColTickets, width: 10},
 	{label: labelColIncidents, width: 11},
@@ -108,7 +108,7 @@ func ticketColumns(zone string) []column {
 	}
 }
 
-// buildExcel writes the month for every client. Text goes in as plain strings, never formulas,
+// buildExcel writes the month for every project. Text goes in as plain strings, never formulas,
 // so a subject starting with "=" stays text.
 func buildExcel(d exportData) (Export, error) {
 	c := &copywriter{}
@@ -119,14 +119,12 @@ func buildExcel(d exportData) (Export, error) {
 		return Export{}, err
 	}
 
-	refs := make([]report.Ref, len(d.Clients))
-	clients := make(map[uuid.UUID]db.ListReportClientsRow, len(d.Clients))
-	for i, cl := range d.Clients {
-		refs[i] = report.Ref{ID: cl.ID, Name: cl.Name}
-		clients[cl.ID] = cl
+	contracts := make(map[uuid.UUID]*string, len(d.Projects))
+	for _, p := range d.Projects {
+		contracts[p.ID] = p.ContractNo
 	}
 	tickets := reportTickets(d.Rows)
-	rep := report.Build(refs, tickets)
+	rep := report.Build(reportProjects(d.Projects), tickets)
 
 	summary := &sheet{f: f, name: c.text(labelSheetSummary, nil), styles: styles}
 	summary.err = f.SetSheetName(f.GetSheetName(0), summary.name)
@@ -140,26 +138,26 @@ func buildExcel(d exportData) (Export, error) {
 	summary.header(c, rowKPILabels, kpiColumns)
 	t := rep.Totals
 	summary.row(rowKPIValues, t.Tickets, t.Incidents, t.Requests, excelPercent(c, t.WithinPercent), t.Breaches,
-		rep.ClientsBelowTarget, excelMinutes(t.AvgFirstResponse))
+		rep.ProjectsBelowTarget, excelMinutes(t.AvgFirstResponse))
 	summary.formats(kpiColumns, rowKPIValues, rowKPIValues)
 
-	summary.header(c, rowClientHeader, summaryColumns)
-	r := rowClientHeader
-	for _, g := range rep.Clients {
+	summary.header(c, rowProjectHeader, summaryColumns)
+	r := rowProjectHeader
+	for _, g := range rep.Projects {
 		r++
 		contract := ""
-		if no := clients[g.ID].ContractNo; no != nil {
+		if no := contracts[g.ID]; no != nil {
 			contract = *no
 		}
-		summary.row(r, g.Name, contract, g.Tickets, g.Incidents, g.Requests, excelMinutes(g.AvgFirstResponse),
+		summary.row(r, g.Client.Name, g.Name, contract, g.Tickets, g.Incidents, g.Requests, excelMinutes(g.AvgFirstResponse),
 			excelPercent(c, g.WithinPercent), g.Breaches, c.yesNo(g.BelowTarget()))
 		if g.BelowTarget() {
 			summary.style(r, len(summaryColumns), len(summaryColumns), styles.alert)
 		}
 	}
-	summary.formats(summaryColumns, rowClientHeader+1, r)
-	summary.filter(rowClientHeader, r, len(summaryColumns))
-	summary.freezeThrough(rowClientHeader)
+	summary.formats(summaryColumns, rowProjectHeader+1, r)
+	summary.filter(rowProjectHeader, r, len(summaryColumns))
+	summary.freezeThrough(rowProjectHeader)
 	r += footnoteGap
 	if note := c.waiting(tickets); note != "" {
 		summary.row(r, note)
@@ -178,7 +176,7 @@ func buildExcel(d exportData) (Export, error) {
 		tk := tickets[i]
 		done := row.ResolvedAt != nil
 		list.row(rowTicketHeader+1+i,
-			row.Key, clients[row.ClientID].Name, row.ProjectName, c.text(labelType, row.Type), row.Priority,
+			row.Key, row.ClientName, row.ProjectName, c.text(labelType, row.Type), row.Priority,
 			c.text(labelChannel, row.Channel), row.Subject, c.text(labelStatus, row.Status),
 			excelTime(&row.CreatedAt, d.Location), excelTime(row.FirstResponseAt, d.Location),
 			excelMinutes(tk.FirstResponse), excelTime(row.ResolvedAt, d.Location),

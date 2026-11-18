@@ -11,15 +11,15 @@ export const slaReportQueryOptions = (month: string | undefined) =>
     queryFn: () => unwrap(api.GET('/reports/sla', { params: { query: { month } } })),
   })
 
-/** The month for every client as an Excel workbook. */
+/** The month for every project as an Excel workbook. */
 export function downloadSlaExcel(month: string): Promise<void> {
   return save(api.GET('/reports/sla/excel', { params: { query: { month } }, parseAs: 'blob' }))
 }
 
-/** One client's month as a PDF, to send to that client. */
-export function downloadSlaPdf(clientId: string, month: string): Promise<void> {
+/** One project's month as a PDF, to send to its client. */
+export function downloadSlaPdf(projectId: string, month: string): Promise<void> {
   return save(
-    api.GET('/reports/sla/clients/{clientId}/pdf', { params: { path: { clientId }, query: { month } }, parseAs: 'blob' }),
+    api.GET('/reports/sla/projects/{projectId}/pdf', { params: { path: { projectId }, query: { month } }, parseAs: 'blob' }),
   )
 }
 
