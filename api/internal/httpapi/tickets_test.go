@@ -713,6 +713,57 @@ func TestListTickets(t *testing.T) {
 	}
 }
 
+// from and to keep the tickets reported on those days, read in the organisation's time zone
+// (Asia/Jakarta, UTC+7); the viewer's scope still applies.
+func TestListTicketsReportedRange(t *testing.T) {
+	te := newTicketEnv(t)
+	lateOctober := te.requester.report(t, incident(te.projectA, "Late October"))
+	firstNovember := te.requester.report(t, incident(te.projectA, "First of November"))
+	ownOnEmail := te.requester.report(t, incident(te.projectA2, "Own ticket on Email"))
+	otherClient := te.otherRequester.report(t, incident(te.projectB, "Other client"))
+	colleague, _ := te.addColleague(t)
+	colleagues := colleague.report(t, incident(te.projectA2, "Colleague's ticket on Email"))
+	for key, at := range map[string]string{
+		lateOctober.Key:   "2026-10-31T16:30:00Z", // 23:30 on 31 Oct in Jakarta
+		firstNovember.Key: "2026-10-31T17:30:00Z", // 00:30 on 1 Nov in Jakarta
+		ownOnEmail.Key:    "2026-11-18T03:00:00Z",
+		otherClient.Key:   "2026-11-18T03:00:00Z",
+		colleagues.Key:    "2026-11-30T16:59:00Z", // 23:59 on 30 Nov in Jakarta
+	} {
+		te.exec(t, `UPDATE tickets SET created_at = $2 WHERE key = $1`, key, at)
+	}
+	// Narrowed to e-Office, the requester keeps the tickets they reported and loses the colleague's.
+	te.link(t, te.requesterID, te.projectA)
+
+	november := "?from=2026-11-01&to=2026-11-30"
+	checks := map[string]struct {
+		s     session
+		query string
+		want  []string
+	}{
+		"no limit":          {te.admin, "", []string{colleagues.Key, otherClient.Key, ownOnEmail.Key, firstNovember.Key, lateOctober.Key}},
+		"november":          {te.admin, november, []string{colleagues.Key, otherClient.Key, ownOnEmail.Key, firstNovember.Key}},
+		"october":           {te.admin, "?from=2026-10-01&to=2026-10-31", []string{lateOctober.Key}},
+		"one day":           {te.admin, "?from=2026-11-01&to=2026-11-01", []string{firstNovember.Key}},
+		"from only":         {te.admin, "?from=2026-11-18", []string{colleagues.Key, otherClient.Key, ownOnEmail.Key}},
+		"to only":           {te.admin, "?to=2026-10-31", []string{lateOctober.Key}},
+		"with a search":     {te.admin, november + "&q=email", []string{colleagues.Key, ownOnEmail.Key}},
+		"agent scope":       {te.agent, november, []string{colleagues.Key, ownOnEmail.Key, firstNovember.Key}},
+		"requester scope":   {te.requester, november, []string{ownOnEmail.Key, firstNovember.Key}},
+		"colleague":         {colleague, november, []string{colleagues.Key, ownOnEmail.Key, firstNovember.Key}},
+		"other client":      {te.otherRequester, november, []string{otherClient.Key}},
+		"other client, oct": {te.otherRequester, "?from=2026-10-01&to=2026-10-31", []string{}},
+	}
+	for name, ch := range checks {
+		if got := ch.s.keys(t, ch.query); !slices.Equal(got, ch.want) {
+			t.Errorf("%s: %v, want %v", name, got, ch.want)
+		}
+	}
+	expectProblem(t, te.admin.do(http.MethodGet, "/tickets?from=2026-11-30&to=2026-11-01", nil), http.StatusBadRequest,
+		apperr.CodeInvalidDateRange)
+	expectProblem(t, te.admin.do(http.MethodGet, "/tickets?from=30-11-2026", nil), http.StatusBadRequest, apperr.CodeInvalidRequest)
+}
+
 func TestAttachments(t *testing.T) {
 	ctx := context.Background()
 	te := newTicketEnv(t)

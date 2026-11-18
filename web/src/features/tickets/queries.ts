@@ -19,6 +19,9 @@ export type TicketListFilters = {
   clientId?: string
   assignee?: TicketAssigneeFilter
   q?: string
+  /** The days the tickets were reported on, both included; no date limit when left out. */
+  from?: string
+  to?: string
 }
 
 /** Newest first, paged by the last id seen. */

@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import '../i18n'
 
 import { cleanup, configure } from '@testing-library/react'
-import { afterAll, afterEach, beforeAll } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest'
 
 import { resetApi, server } from './server'
 
@@ -17,6 +17,15 @@ const noRects = (): DOMRectList => Object.assign([], { item: () => null }) as un
 Range.prototype.getClientRects = noRects
 Range.prototype.getBoundingClientRect = () => new DOMRect()
 document.elementFromPoint = () => null
+
+// Fixtures are dated November 2026 and the date filters default to the current month, so every
+// test runs on 18 Nov 2026 (10:00 in Jakarta). Only Date is faked: timers stay real, and the
+// clock keeps moving from there.
+const TEST_NOW = new Date('2026-11-18T03:00:00Z')
+vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true })
+beforeEach(() => {
+  vi.setSystemTime(TEST_NOW)
+})
 
 // Any API call without a handler fails the test.
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))

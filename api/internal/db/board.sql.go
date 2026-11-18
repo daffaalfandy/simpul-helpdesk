@@ -177,13 +177,14 @@ WITH board AS (
                     WHERE ca.client_id = t.client_id AND ca.user_id = $7::uuid)
          OR t.assignee_id = $7::uuid)
     AND (coalesce(cardinality($8::uuid[]), 0) = 0 OR t.project_id = ANY($8::uuid[]))
-    AND (t.resolved_at IS NULL OR t.resolved_at >= $9::timestamptz)
-    AND ($10::uuid IS NULL OR t.assignee_id = $10::uuid)
-    AND (NOT $11::boolean OR t.assignee_id IS NULL)
-    AND ($12::text IS NULL
-         OR t.key = $13::text
-         OR t.subject ILIKE $12::text
-         OR c.name ILIKE $12::text)
+    AND (t.status = ANY($5::text[])
+         OR (t.created_at >= $9::timestamptz AND t.created_at < $10::timestamptz))
+    AND ($11::uuid IS NULL OR t.assignee_id = $11::uuid)
+    AND (NOT $12::boolean OR t.assignee_id IS NULL)
+    AND ($13::text IS NULL
+         OR t.key = $14::text
+         OR t.subject ILIKE $13::text
+         OR c.name ILIKE $13::text)
 ), ranked AS (
   SELECT board.id, board.key, board.type, board.status, board.priority, board.subject, board.status_changed_at, board.client_id, board.client_name, board.assignee_id, board.assignee_name, board.dod_config, board.dod_mandatory, board.has_repository, board.dod_override, board.dod_done, board.column_id, board.sla_ticket_id, board.first_response_budget_ms, board.first_response_calendar, board.first_response_elapsed_ms, board.first_response_running_since, board.first_response_due_at, board.first_response_at_risk_flagged_at, board.first_response_breached_at, board.first_response_met_at, board.resolution_budget_ms, board.resolution_calendar, board.resolution_elapsed_ms, board.resolution_running_since, board.resolution_due_at, board.resolution_at_risk_flagged_at, board.resolution_breached_at, board.resolution_met_at,
          row_number() OVER (PARTITION BY column_id ORDER BY priority, status_changed_at, id) AS position,
@@ -213,7 +214,8 @@ type ListBoardCardsParams struct {
 	OrganizationID uuid.UUID
 	ScopeAgentID   *uuid.UUID
 	ProjectIds     []uuid.UUID
-	ResolvedSince  time.Time
+	CreatedFrom    time.Time
+	CreatedBefore  time.Time
 	AssigneeID     *uuid.UUID
 	Unassigned     bool
 	SearchPattern  *string
@@ -261,7 +263,8 @@ type ListBoardCardsRow struct {
 // The agent board. Staff only, so only the agent scope applies (see tickets.sql). project_ids is
 // the viewer's saved project filter (project_filters.sql); empty means every project.
 // A ticket with a status in @statuses lands in the column at the same index of @columns.
-// Done tickets show only once resolved_at >= @resolved_since (open ones have no resolved_at).
+// Open tickets always show; done ones (resolved and closed) only when reported in
+// [@created_from, @created_before), the days the resolved column covers (owner, 18 Nov).
 // Each column keeps its first @column_limit cards, P1 first (priority codes sort as text),
 // then the longest in the column, and reports how many it holds in total.
 // With @sla_at_risk, only open tickets with an unmet clock the scan flagged at risk or breached.
@@ -275,7 +278,8 @@ func (q *Queries) ListBoardCards(ctx context.Context, arg ListBoardCardsParams) 
 		arg.OrganizationID,
 		arg.ScopeAgentID,
 		arg.ProjectIds,
-		arg.ResolvedSince,
+		arg.CreatedFrom,
+		arg.CreatedBefore,
 		arg.AssigneeID,
 		arg.Unassigned,
 		arg.SearchPattern,

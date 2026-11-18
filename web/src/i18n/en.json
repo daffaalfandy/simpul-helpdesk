@@ -152,7 +152,8 @@
       "createdAssigned": "{{key}} created and assigned to you. The requester gets an email copy.",
       "openTicket": "Open {{key}}",
       "columnNote": {
-        "in_uat": "Client is testing. Resolves when they approve."
+        "in_uat": "Client is testing. Resolves when they approve.",
+        "resolved": "Reported {{range}}"
       },
       "uatChip": "Client testing · day {{day}} of {{days}}",
       "uatChipNoLimit": "Client testing · day {{day}}",
@@ -206,7 +207,7 @@
       "in_progress": "In progress",
       "waiting_on_client": "Waiting on client",
       "in_uat": "In UAT",
-      "resolved": "Resolved today"
+      "resolved": "Resolved"
     },
     "columnCount_one": "{{count}} ticket",
     "columnCount_other": "{{count}} tickets",
@@ -243,7 +244,7 @@
     "movedUat": "{{key}} moved to In UAT · client asked to test",
     "movedSkipped": "{{key}} moved to Resolved · reason saved to the audit log",
     "earlier": {
-      "title": "Resolved before today, and closed",
+      "title": "Resolved and closed, reported on other days",
       "description": "Matches for your search that are off the board.",
       "loading": "Searching resolved and closed tickets…",
       "resolvedOn": "Resolved {{when}}",
@@ -255,7 +256,8 @@
       "title": "Projects you see",
       "hint": "Saved for you in {{org}}: the board, its numbers and ticket lists. Notifications and reports still cover every project.",
       "showAll": "Show all projects"
-    }
+    },
+    "dateRangeHint": "Open tickets always show. Resolved and closed tickets show when they were reported on these days."
   },
   "portal": {
     "support": "{{org}} Support",
@@ -265,6 +267,7 @@
       "intro": "Follow your tickets here, or report something new.",
       "myTickets": "My tickets",
       "filterLabel": "Filter tickets",
+      "dateRangeHint": "Shows the tickets reported on these days.",
       "filters": {
         "open": "Open",
         "resolved": "Resolved",
@@ -273,10 +276,11 @@
       "viewDetails": "View details",
       "viewDetailsLabel": "View details of {{key}}",
       "empty": {
-        "open": "No open tickets. Report an issue when something needs our help.",
-        "resolved": "No resolved tickets yet.",
-        "all": "No tickets yet."
+        "open": "No open tickets reported {{range}}.",
+        "resolved": "No resolved tickets reported {{range}}.",
+        "all": "No tickets reported {{range}}."
       },
+      "emptyEarlier": "Pick earlier dates to see older ones.",
       "reportedBy": "Reported by {{name}}",
       "updated": "Updated {{when}}",
       "resolvedOn": "Resolved {{when}}",
@@ -1043,6 +1047,7 @@
     "reopen_not_allowed": "This ticket can no longer be reopened. Report a new issue instead.",
     "month_in_future": "That month hasn't started yet.",
     "month_out_of_range": "That month is too far back for the report.",
+    "invalid_date_range": "The end date is before the start date. Pick the dates again.",
     "invalid_organization": "Some settings aren't valid. Check the fields and try again.",
     "logo_type_not_allowed": "Choose a PNG, JPEG or WebP image.",
     "logo_too_large": "The logo is too large. Choose an image up to 512 KB.",
@@ -1071,6 +1076,12 @@
     "nextMonth": "Next month",
     "month": "Month",
     "year": "Year"
+  },
+  "dateRange": {
+    "trigger": "Reported {{range}}",
+    "title": "Reported between",
+    "thisMonth": "This month",
+    "lastMonth": "Last month"
   },
   "attach": {
     "button": "Attach file",

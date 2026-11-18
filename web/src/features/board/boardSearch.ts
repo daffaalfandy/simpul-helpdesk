@@ -1,13 +1,22 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { api, type BoardSlaFilter, type TicketAssigneeFilter } from '../../api/client'
+import { api, type BoardColumnId, type BoardSlaFilter, type TicketAssigneeFilter } from '../../api/client'
 import { queryKeys } from '../../api/queries'
 import { unwrap } from '../../api/unwrap'
 import { MAX_SEARCH_LENGTH } from '../../lib/constants'
+import { validateDateRangeSearch, type DateRange, type DateRangeSearch } from '../../lib/dateRange'
 
-/** Board filters, kept in the URL. Defaults stay out of it. */
+/**
+ * Board filters, kept in the URL. Defaults stay out of it, the current month included: `from`
+ * and `to` are there only for other days.
+ */
 export type BoardView = 'all' | 'mine' | 'risk' | 'unassigned'
-export type BoardSearch = { view?: BoardView; q?: string }
+export type BoardSearch = { view?: BoardView; q?: string } & DateRangeSearch
+/** What the board asks the API for: the URL's filters with the range worked out. */
+export type BoardFilters = BoardSearch & DateRange
+
+/** The column the date range limits; open tickets show whenever they were reported (owner, 18 Nov). */
+export const DONE_COLUMN: BoardColumnId = 'resolved'
 
 export const BOARD_VIEWS: readonly BoardView[] = ['all', 'mine', 'risk', 'unassigned']
 export const DEFAULT_VIEW: BoardView = 'all'
@@ -32,7 +41,7 @@ export function validateBoardSearch(search: Record<string, unknown>): BoardSearc
   if (BOARD_VIEWS.includes(search.view as BoardView) && search.view !== DEFAULT_VIEW) out.view = search.view as BoardView
   const q = cleanQuery(search.q)
   if (q) out.q = q
-  return out
+  return { ...out, ...validateDateRangeSearch(search) }
 }
 
 /** The search box as the API takes it: trimmed, at most MAX_SEARCH_LENGTH characters. */
@@ -40,21 +49,24 @@ export function cleanQuery(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, MAX_SEARCH_LENGTH) : ''
 }
 
-export function isFiltered(search: BoardSearch): boolean {
-  return Boolean(search.view || search.q)
+/** Whether a filter narrows the column, so an empty one says so. Other days narrow only the done column. */
+export function isFiltered(search: BoardSearch, column: BoardColumnId): boolean {
+  return Boolean(search.view || search.q || (column === DONE_COLUMN && search.from))
 }
 
-export const boardQueryOptions = (search: BoardSearch) =>
+export const boardQueryOptions = (filters: BoardFilters) =>
   queryOptions({
-    queryKey: queryKeys.board(search),
+    queryKey: queryKeys.board(filters),
     queryFn: () =>
       unwrap(
         api.GET('/board', {
           params: {
             query: {
-              assignee: VIEW_ASSIGNEE[search.view ?? DEFAULT_VIEW],
-              sla: VIEW_SLA[search.view ?? DEFAULT_VIEW],
-              q: search.q,
+              assignee: VIEW_ASSIGNEE[filters.view ?? DEFAULT_VIEW],
+              sla: VIEW_SLA[filters.view ?? DEFAULT_VIEW],
+              q: filters.q,
+              from: filters.from,
+              to: filters.to,
             },
           },
         }),

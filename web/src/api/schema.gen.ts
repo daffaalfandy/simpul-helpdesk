@@ -1162,11 +1162,14 @@ export interface paths {
         /**
          * The agent board (staff)
          * @description Five columns, left to right: new (new and assigned), in progress, waiting on client,
-         *     in UAT, and resolved since local midnight in the organisation's time zone. Closed
-         *     tickets are off the board. Each column holds at most 100 cards, P1 first, then the
-         *     longest in the column, and reports its full size in `total`. Agents see the tickets
-         *     of their assigned clients; supervisors and admins every ticket. The stats ignore
-         *     `assignee`, `q` and `sla`.
+         *     in UAT, and resolved. Open tickets always show, whenever they were reported; the
+         *     resolved column holds the resolved and closed tickets reported between `from` and `to`,
+         *     both days included, in the organisation's time zone. With neither date it covers the
+         *     current month; give both or neither (`invalid_date_range`, 400, also when `to` comes
+         *     before `from`). `doneFrom` and `doneTo` name the days it covers. Each column holds at
+         *     most 100 cards, P1 first, then the longest in the column, and reports its full size in
+         *     `total`. Agents see the tickets of their assigned clients; supervisors and admins every
+         *     ticket. The stats ignore `assignee`, `q`, `sla`, `from` and `to`.
          */
         get: operations["getBoard"];
         put?: never;
@@ -1188,7 +1191,10 @@ export interface paths {
          * Tickets the user may see, newest first
          * @description Requesters see the tickets they reported and those of their client's projects they are
          *     linked to; agents the tickets of their assigned clients; supervisors and admins every
-         *     ticket. Page with `before` = the last id of the previous page.
+         *     ticket. `from` and `to` keep the tickets reported on those days, both included, in the
+         *     organisation's time zone; either may be left out, and with neither there is no date
+         *     limit. `to` before `from` is `invalid_date_range` (400). Page with `before` = the last
+         *     id of the previous page.
          */
         get: operations["listTickets"];
         put?: never;
@@ -2865,10 +2871,15 @@ export interface components {
         Board: {
             columns: components["schemas"]["BoardColumn"][];
             /**
-             * Format: date-time
-             * @description Local midnight; the resolved column starts here.
+             * Format: date
+             * @description The first day the resolved column covers; its tickets were reported on or after it.
              */
-            resolvedSince: string;
+            doneFrom: string;
+            /**
+             * Format: date
+             * @description The last day the resolved column covers, included.
+             */
+            doneTo: string;
             stats: components["schemas"]["BoardStats"];
         };
         Ticket: {
@@ -3154,6 +3165,10 @@ export interface components {
         NotificationId: string;
         /** @description A month such as `2026-11`; the current month when left out. */
         ReportMonth: string;
+        /** @description The first day a ticket may have been reported on, such as `2026-11-01`. */
+        ReportedFrom: string;
+        /** @description The last day a ticket may have been reported on, included, such as `2026-11-30`. */
+        ReportedTo: string;
     };
     requestBodies: never;
     headers: never;
@@ -5065,6 +5080,10 @@ export interface operations {
     getBoard: {
         parameters: {
             query?: {
+                /** @description The first day a ticket may have been reported on, such as `2026-11-01`. */
+                from?: components["parameters"]["ReportedFrom"];
+                /** @description The last day a ticket may have been reported on, included, such as `2026-11-30`. */
+                to?: components["parameters"]["ReportedTo"];
                 assignee?: components["schemas"]["TicketAssigneeFilter"];
                 /** @description `at_risk`: only open tickets with a clock at risk or breached. */
                 sla?: components["schemas"]["BoardSlaFilter"];
@@ -5095,6 +5114,10 @@ export interface operations {
     listTickets: {
         parameters: {
             query?: {
+                /** @description The first day a ticket may have been reported on, such as `2026-11-01`. */
+                from?: components["parameters"]["ReportedFrom"];
+                /** @description The last day a ticket may have been reported on, included, such as `2026-11-30`. */
+                to?: components["parameters"]["ReportedTo"];
                 /** @description Any of these statuses; all when left out. */
                 status?: components["schemas"]["TicketStatus"][];
                 clientId?: string;

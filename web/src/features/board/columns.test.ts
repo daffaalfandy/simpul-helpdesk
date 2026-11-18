@@ -28,7 +28,8 @@ function card(key: string, over: Partial<BoardCard> = {}): BoardCard {
 function board(cards: Partial<Record<BoardColumnId, BoardCard[]>>): Board {
   return {
     columns: BOARD_COLUMNS.map((id) => ({ id, total: cards[id]?.length ?? 0, cards: cards[id] ?? [] })),
-    resolvedSince: '2026-11-14T00:00:00+07:00',
+    doneFrom: '2026-11-01',
+    doneTo: '2026-11-30',
     stats: {
       openTickets: 0,
       resolvedThisWeek: 0,

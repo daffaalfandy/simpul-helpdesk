@@ -17,7 +17,7 @@ func TestColumnOf(t *testing.T) {
 		{StatusWaitingOnClient, ColumnWaitingOnClient, true},
 		{StatusInUAT, ColumnInUAT, true},
 		{StatusResolved, ColumnResolved, true},
-		{StatusClosed, "", false},
+		{StatusClosed, ColumnResolved, true},
 		{Status("archived"), "", false},
 	}
 	for _, c := range cases {
@@ -41,6 +41,7 @@ func TestDropStatus(t *testing.T) {
 		{ColumnWaitingOnClient, true, StatusWaitingOnClient},
 		{ColumnInUAT, true, StatusInUAT},
 		{ColumnResolved, false, StatusResolved},
+		{ColumnResolved, true, StatusResolved},
 	}
 	for _, c := range cases {
 		if got := DropStatus(c.column, c.hasAssignee); got != c.want {
@@ -61,7 +62,7 @@ func TestDropStaysInColumn(t *testing.T) {
 }
 
 func TestBoardStatuses(t *testing.T) {
-	want := []Status{StatusNew, StatusAssigned, StatusInProgress, StatusWaitingOnClient, StatusInUAT, StatusResolved}
+	want := []Status{StatusNew, StatusAssigned, StatusInProgress, StatusWaitingOnClient, StatusInUAT, StatusResolved, StatusClosed}
 	if got := BoardStatuses(); !slices.Equal(got, want) {
 		t.Fatalf("BoardStatuses() = %v, want %v", got, want)
 	}

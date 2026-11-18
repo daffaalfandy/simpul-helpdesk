@@ -18,14 +18,14 @@ export function allowedMoves(t: Pick<Ticket, 'status' | 'assignee'>): TicketStat
   return MOVES[t.status].filter((to) => !(to === 'new' && t.assignee) && !(to === 'assigned' && !t.assignee))
 }
 
-/** The board column a status shows in (api/internal/ticket/board.go), or null off the board. */
-export function columnOf(status: TicketStatus): BoardColumnId | null {
+/** The board column a status shows in (api/internal/ticket/board.go): closed ones sit with the resolved. */
+export function columnOf(status: TicketStatus): BoardColumnId {
   switch (status) {
     case 'new':
     case 'assigned':
       return 'new'
     case 'closed':
-      return null
+      return 'resolved'
     default:
       return status
   }

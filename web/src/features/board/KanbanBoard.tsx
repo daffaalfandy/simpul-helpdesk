@@ -1,12 +1,15 @@
+import type { TFunction } from 'i18next'
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Board, BoardCard, BoardColumnId } from '../../api/client'
+import { formatDateRange } from '../../lib/dates'
 import { KanbanColumn } from './KanbanColumn'
 
 type KanbanBoardProps = {
   board: Board
-  filtered: boolean
+  /** Whether filters or a search narrow the column, so an empty one says so. */
+  isFiltered: (column: BoardColumnId) => boolean
   dragging: BoardCard | null
   onDraggingChange: (card: BoardCard | null) => void
   onMove: (card: BoardCard, column: BoardColumnId) => void
@@ -16,7 +19,7 @@ type KanbanBoardProps = {
  * The five columns. From xl they sit side by side as in the mock; below that they scroll
  * sideways in their own box, one column at a time, so the page never does.
  */
-export function KanbanBoard({ board, filtered, dragging, onDraggingChange, onMove }: KanbanBoardProps) {
+export function KanbanBoard({ board, isFiltered, dragging, onDraggingChange, onMove }: KanbanBoardProps) {
   const { t } = useTranslation()
   const draggingRef = useRef<BoardCard | null>(null)
   return (
@@ -29,7 +32,8 @@ export function KanbanBoard({ board, filtered, dragging, onDraggingChange, onMov
         <KanbanColumn
           key={column.id}
           column={column}
-          filtered={filtered}
+          note={columnNote(t, board, column.id)}
+          filtered={isFiltered(column.id)}
           dragging={dragging}
           draggingRef={draggingRef}
           onDragStart={onDraggingChange}
@@ -42,4 +46,11 @@ export function KanbanBoard({ board, filtered, dragging, onDraggingChange, onMov
       ))}
     </div>
   )
+}
+
+/** The line under a column's title (Main mock), where there is something to say. */
+function columnNote(t: TFunction, board: Board, column: BoardColumnId): string | undefined {
+  if (column === 'in_uat') return t('agent.board.columnNote.in_uat')
+  if (column === 'resolved') return t('agent.board.columnNote.resolved', { range: formatDateRange(board.doneFrom, board.doneTo) })
+  return undefined
 }

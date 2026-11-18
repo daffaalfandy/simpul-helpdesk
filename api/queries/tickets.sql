@@ -18,6 +18,7 @@ RETURNING id, created_at;
 -- Newest first. before pages by id (uuidv7, so creation order). search_key matches a key
 -- exactly; search_pattern is an escaped ILIKE pattern over the subject and the client name.
 -- project_ids is staff's saved project filter (empty: every project; requesters always empty).
+-- created_from and created_before (excluded) keep the tickets reported in between; null is open.
 SELECT t.id, t.key, t.type, t.status, t.priority, t.subject, t.created_at, t.updated_at, t.resolved_at,
        t.client_id, c.name AS client_name, t.requester_id, r.name AS requester_name,
        t.assignee_id, a.name AS assignee_name
@@ -44,6 +45,8 @@ WHERE t.organization_id = @organization_id
        OR t.key = sqlc.narg(search_key)::text
        OR t.subject ILIKE sqlc.narg(search_pattern)::text
        OR c.name ILIKE sqlc.narg(search_pattern)::text)
+  AND (sqlc.narg(created_from)::timestamptz IS NULL OR t.created_at >= sqlc.narg(created_from)::timestamptz)
+  AND (sqlc.narg(created_before)::timestamptz IS NULL OR t.created_at < sqlc.narg(created_before)::timestamptz)
   AND (sqlc.narg(before)::uuid IS NULL OR t.id < sqlc.narg(before)::uuid)
 ORDER BY t.id DESC
 LIMIT @row_limit;

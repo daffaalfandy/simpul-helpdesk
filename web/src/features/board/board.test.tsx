@@ -68,8 +68,8 @@ describe('board', () => {
     expect(keysIn('In progress')).toEqual(['HD-24871'])
     expect(keysIn('Waiting on client')).toEqual(['HD-24859'])
     expect(keysIn('In UAT')).toEqual(['HD-24915'])
-    // Resolved today only; closed tickets are off the board.
-    expect(keysIn('Resolved today')).toEqual(['HD-24920'])
+    // Done tickets reported this month; the closed one reported in October is off the board.
+    expect(keysIn('Resolved')).toEqual(['HD-24920'])
     expect(screen.queryByText('Install a PDF reader')).not.toBeInTheDocument()
 
     const owned = within(column('New')).getAllByRole('row')[0] as HTMLElement
@@ -136,14 +136,14 @@ describe('board', () => {
     const user = userEvent.setup()
     renderApp('/board')
     await screen.findByRole('region', { name: 'Ticket board' })
-    await keyboardMove(user, 'HD-24871', 'Resolved today')
+    await keyboardMove(user, 'HD-24871', 'Resolved')
     const guard = await screen.findByRole('alertdialog', { name: 'Resolve HD-24871 without meeting its Definition of Done?' })
     await user.click(within(guard).getByRole('button', { name: 'Keep where it is' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
     expect(lastRequest('PUT', '/tickets/HD-24871/status')).toBeUndefined()
     expect(keysIn('In progress')).toEqual(['HD-24871'])
 
-    await keyboardMove(user, 'HD-24871', 'Resolved today')
+    await keyboardMove(user, 'HD-24871', 'Resolved')
     const again = await screen.findByRole('alertdialog')
     await user.type(within(again).getByRole('textbox', { name: /Reason/ }), 'Client confirmed by phone')
     await user.click(within(again).getByRole('button', { name: 'Resolve anyway' }))
@@ -153,7 +153,7 @@ describe('board', () => {
       from: 'in_progress',
       reason: 'Client confirmed by phone',
     })
-    expect(keysIn('Resolved today')).toContain('HD-24871')
+    expect(keysIn('Resolved')).toContain('HD-24871')
   })
 
   it('resolves a card straight away when its Definition of Done is only guidance', async () => {
@@ -163,7 +163,7 @@ describe('board', () => {
     const user = userEvent.setup()
     renderApp('/board')
     await screen.findByRole('region', { name: 'Ticket board' })
-    await keyboardMove(user, 'HD-24871', 'Resolved today')
+    await keyboardMove(user, 'HD-24871', 'Resolved')
     expect(await screen.findByText('HD-24871 moved to Resolved.')).toBeInTheDocument()
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(lastRequest('PUT', '/tickets/HD-24871/status')?.body).toEqual({ status: 'resolved', from: 'in_progress' })
@@ -183,11 +183,12 @@ describe('board', () => {
     renderApp('/board')
     await screen.findByRole('region', { name: 'Ticket board' })
     await user.type(screen.getByRole('searchbox', { name: 'Search tickets' }), 'pdf reader')
-    const earlier = await screen.findByRole('region', { name: 'Resolved before today, and closed' })
+    const earlier = await screen.findByRole('region', { name: 'Resolved and closed, reported on other days' })
     const link = within(earlier).getByRole('link', { name: 'HD-24790 · Install a PDF reader' })
     expect(link).toHaveAttribute('href', '/tickets/HD-24790')
     expect(earlier).toHaveTextContent('Closed')
-    expect(lastRequest('GET', '/tickets')?.search).toContain('status=resolved&status=closed')
+    // No date limit: the search reaches every day the board leaves out.
+    expect(lastRequest('GET', '/tickets')?.search).toBe('?q=pdf%20reader&status=resolved&status=closed&limit=50')
   })
 
   it('keeps an owned ticket assigned when it goes back to New', async () => {
@@ -281,6 +282,67 @@ describe('board', () => {
   })
 })
 
+describe('board › reported dates', () => {
+  beforeEach(() => {
+    state.me = AGENT
+  })
+
+  it('asks for this month and says so on the pill and the resolved column', async () => {
+    renderApp('/board')
+    await screen.findByRole('region', { name: 'Ticket board' })
+    expect(lastRequest('GET', '/board')?.search).toContain('from=2026-11-01&to=2026-11-30')
+    expect(screen.getByRole('button', { name: 'Reported 1–30 Nov 2026' })).toBeInTheDocument()
+    const resolved = column('Resolved').closest('section') as HTMLElement
+    expect(within(resolved).getByText('Reported 1–30 Nov 2026')).toBeInTheDocument()
+  })
+
+  it('shows the done tickets of other days, keeps open ones, and keeps the range in the URL', async () => {
+    const user = userEvent.setup()
+    const { router } = renderApp('/board')
+    await screen.findByRole('region', { name: 'Ticket board' })
+    const pill = screen.getByRole('button', { name: 'Reported 1–30 Nov 2026' })
+    await user.click(pill)
+    const dialog = await screen.findByRole('dialog', { name: 'Reported between' })
+    expect(dialog).toHaveAccessibleDescription(
+      'Open tickets always show. Resolved and closed tickets show when they were reported on these days.',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Last month' }))
+
+    await waitFor(() => expect(router.state.location.search).toEqual({ from: '2026-10-01', to: '2026-10-31' }))
+    await waitFor(() => expect(keysIn('Resolved')).toEqual(['HD-24790']))
+    expect(lastRequest('GET', '/board')?.search).toContain('from=2026-10-01&to=2026-10-31')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Reported 1.31 Oct 2026$/ })).toHaveFocus()
+    // Open tickets show whenever they were reported.
+    expect(keysIn('New')).toEqual(['HD-24910', 'HD-24900'])
+    // A closed card says so and has nothing to drag.
+    const closed = within(column('Resolved')).getByRole('row', { name: /HD-24790/ })
+    expect(within(closed).getByText('Closed')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Move HD-24790' })).not.toBeInTheDocument()
+    expect(within(column('Resolved').closest('section') as HTMLElement).getByText(/^Reported 1.31 Oct 2026$/)).toBeInTheDocument()
+  })
+
+  it('opens on the range in the URL and drops it again for this month', async () => {
+    tickets.tickets = tickets.tickets.filter((t) => t.status !== 'in_uat')
+    const user = userEvent.setup()
+    const { router } = renderApp('/board?q=e&from=2026-09-01&to=2026-09-30')
+    await screen.findByRole('region', { name: 'Ticket board' })
+    expect(lastRequest('GET', '/board')?.search).toBe('?q=e&from=2026-09-01&to=2026-09-30')
+    // Other days narrow the done column only.
+    expect(within(column('Resolved')).getByText('Nothing here for this filter.')).toBeInTheDocument()
+    await user.clear(screen.getByRole('searchbox', { name: 'Search tickets' }))
+    await waitFor(() => expect(router.state.location.search).toEqual({ from: '2026-09-01', to: '2026-09-30' }))
+    await waitFor(() => expect(within(column('In UAT')).getByText('No tickets')).toBeInTheDocument())
+    expect(within(column('Resolved')).getByText('Nothing here for this filter.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^Reported 1.30 Sept? 2026$/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reported between' })
+    await user.click(within(dialog).getByRole('button', { name: 'This month' }))
+    await waitFor(() => expect(router.state.location.search).toEqual({}))
+    await waitFor(() => expect(lastRequest('GET', '/board')?.search).toBe('?from=2026-11-01&to=2026-11-30'))
+  })
+})
+
 describe('board SLA', () => {
   beforeEach(() => {
     state.me = AGENT
@@ -292,7 +354,7 @@ describe('board SLA', () => {
     await screen.findByRole('grid', { name: /^New/ })
     expect(within(column('New')).getByText('Respond in 22m')).toBeInTheDocument()
     expect(within(column('In UAT')).getByText('Breached 12m')).toBeInTheDocument()
-    expect(within(column('Resolved today')).getByText('Met SLA')).toBeInTheDocument()
+    expect(within(column('Resolved')).getByText('Met SLA')).toBeInTheDocument()
 
     const stats = screen.getByText('Avg first response').closest('dl') as HTMLElement
     expect(within(stats).getByText('18m')).toBeInTheDocument()
@@ -307,7 +369,7 @@ describe('board SLA', () => {
     await waitFor(() => expect(router.state.location.search).toEqual({ view: 'risk' }))
     expect(lastRequest('GET', '/board')?.search).toContain('sla=at_risk')
     await waitFor(() => expect(keysIn('New')).toEqual(['HD-24910']))
-    expect(keysIn('Resolved today')).toEqual([])
+    expect(keysIn('Resolved')).toEqual([])
     expect(screen.getByRole('button', { name: 'SLA at risk' })).toHaveAttribute('aria-pressed', 'true')
     expect(within(screen.getByRole('region', { name: 'SLA alert' })).queryByRole('button')).not.toBeInTheDocument()
   })

@@ -31,6 +31,16 @@ export function formatLongDate(iso: string): string {
   return longDateFormat.format(parseISODate(iso))
 }
 
+const dayMonthYearUTC = new Intl.DateTimeFormat(DATE_LOCALE, { day: 'numeric', month: 'short', year: 'numeric', timeZone: UTC })
+
+/**
+ * Two calendar days and everything between, written once: "1–30 Nov 2026", "1 Oct – 30 Nov 2026",
+ * or "18 Nov 2026" when both are the same day.
+ */
+export function formatDateRange(from: string, to: string): string {
+  return dayMonthYearUTC.formatRange(parseISODate(from), parseISODate(to))
+}
+
 /** A contract period with both ends: "Jan–Dec 2026" or "Mar 2026–Feb 2027". */
 export function formatPeriod(start: string, end: string): string {
   const a = parseISODate(start)

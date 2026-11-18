@@ -3,7 +3,8 @@
 
 -- name: ListBoardCards :many
 -- A ticket with a status in @statuses lands in the column at the same index of @columns.
--- Done tickets show only once resolved_at >= @resolved_since (open ones have no resolved_at).
+-- Open tickets always show; done ones (resolved and closed) only when reported in
+-- [@created_from, @created_before), the days the resolved column covers (owner, 18 Nov).
 -- Each column keeps its first @column_limit cards, P1 first (priority codes sort as text),
 -- then the longest in the column, and reports how many it holds in total.
 -- With @sla_at_risk, only open tickets with an unmet clock the scan flagged at risk or breached.
@@ -41,7 +42,8 @@ WITH board AS (
                     WHERE ca.client_id = t.client_id AND ca.user_id = sqlc.narg(scope_agent_id)::uuid)
          OR t.assignee_id = sqlc.narg(scope_agent_id)::uuid)
     AND (coalesce(cardinality(@project_ids::uuid[]), 0) = 0 OR t.project_id = ANY(@project_ids::uuid[]))
-    AND (t.resolved_at IS NULL OR t.resolved_at >= @resolved_since::timestamptz)
+    AND (t.status = ANY(@open_statuses::text[])
+         OR (t.created_at >= @created_from::timestamptz AND t.created_at < @created_before::timestamptz))
     AND (sqlc.narg(assignee_id)::uuid IS NULL OR t.assignee_id = sqlc.narg(assignee_id)::uuid)
     AND (NOT @unassigned::boolean OR t.assignee_id IS NULL)
     AND (sqlc.narg(search_pattern)::text IS NULL

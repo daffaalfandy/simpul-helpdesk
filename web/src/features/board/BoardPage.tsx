@@ -9,10 +9,12 @@ import { ApiError, ErrorCode, type BoardCard, type BoardColumnId, type Ticket } 
 import { clientsQueryOptions, useOrgTimeZone } from '../../api/queries'
 import { Alert } from '../../components/Alert'
 import { Button } from '../../components/Button'
+import { DateRangeFilter } from '../../components/DateRangeFilter'
 import { ErrorAlert } from '../../components/ErrorAlert'
 import { FilterPills } from '../../components/FilterPills'
 import { SearchField } from '../../components/SearchField'
 import { BOARD_REFRESH_MS, paths, SEARCH_DEBOUNCE_MS } from '../../lib/constants'
+import { rangeFromSearch, withRange } from '../../lib/dateRange'
 import { formatToday } from '../../lib/dates'
 import { dayPart, firstName } from '../../lib/text'
 import { ResolveGuardDialog } from '../dod/ResolveGuardDialog'
@@ -48,14 +50,16 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
   const { t } = useTranslation()
   const me = useSignedInUser()
   const { data: clients } = useSuspenseQuery(clientsQueryOptions)
+  const timeZone = useOrgTimeZone()
+  const range = rangeFromSearch(search, timeZone)
+  const filters = { ...search, ...range }
   const [dragging, setDragging] = useState<BoardCard | null>(null)
-  const move = useMoveTicket(search)
+  const move = useMoveTicket(filters)
   // Others move tickets too: refresh now and then, but never under a card being moved.
   const { data: board } = useSuspenseQuery({
-    ...boardQueryOptions(search),
+    ...boardQueryOptions(filters),
     refetchInterval: dragging || move.isPending ? false : BOARD_REFRESH_MS,
   })
-  const timeZone = useOrgTimeZone()
   const [logging, setLogging] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   // A drop into Resolved whose mandatory Definition of Done isn't met waits for a reason (Main mock).
@@ -143,13 +147,19 @@ export function BoardPage({ search, onSearchChange }: BoardPageProps) {
             onChange={(view) => onSearchChange({ ...search, view: view === DEFAULT_VIEW ? undefined : view })}
           />
           <ProjectFilter />
+          <DateRangeFilter
+            value={range}
+            timeZone={timeZone}
+            description={t('board.dateRangeHint')}
+            onChange={(next) => onSearchChange(withRange(search, next, timeZone))}
+          />
         </div>
         <BoardSearchBox value={search.q ?? ''} onCommit={(q) => onSearchChange({ ...search, q: q || undefined })} />
       </div>
       <p className="-mt-2 text-sm text-muted">{t('board.hint')}</p>
       <KanbanBoard
         board={board}
-        filtered={isFiltered(search)}
+        isFiltered={(column) => isFiltered(search, column)}
         dragging={dragging}
         onDraggingChange={setDragging}
         onMove={moveTo}

@@ -43,7 +43,8 @@ type ListFilter struct {
 	Statuses []ticket.Status // empty means every status
 	ClientID *uuid.UUID
 	Assignee AssigneeFilter
-	Query    string     // a ticket key, or words in the subject or client name
+	Query    string // a ticket key, or words in the subject or client name
+	Reported ReportedRange
 	Before   *uuid.UUID // the last ID of the previous page
 	Limit    int
 }
@@ -52,6 +53,9 @@ type ListFilter struct {
 func (s *Service) List(ctx context.Context, p *auth.Principal, f ListFilter) ([]Summary, error) {
 	a, err := accessFor(p)
 	if err != nil {
+		return nil, err
+	}
+	if err := f.Reported.Validate(); err != nil {
 		return nil, err
 	}
 	statuses := f.Statuses
@@ -63,10 +67,19 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, f ListFilter) ([]
 	if err != nil {
 		return nil, err
 	}
+	var createdFrom, createdBefore *time.Time
+	if !f.Reported.IsZero() {
+		loc, err := s.location(ctx, a.org)
+		if err != nil {
+			return nil, err
+		}
+		createdFrom, createdBefore = f.Reported.Bounds(loc)
+	}
 	params := db.ListTicketsParams{
 		OrganizationID: a.org, ProjectIds: filter, ScopeClientID: a.scopeClientID, ScopeRequesterID: a.scopeRequesterID, ScopeAgentID: a.scopeAgentID,
 		Statuses: statusStrings(statuses),
 		ClientID: f.ClientID, Unassigned: f.Assignee == AssigneeUnassigned, Before: f.Before,
+		CreatedFrom: createdFrom, CreatedBefore: createdBefore,
 		RowLimit: int32(pageSize(f.Limit)),
 	}
 	if f.Assignee == AssigneeMe {

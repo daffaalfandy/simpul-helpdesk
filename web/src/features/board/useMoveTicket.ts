@@ -4,7 +4,7 @@ import { flushSync } from 'react-dom'
 import { api, type Board, type BoardCard, type BoardColumnId, type TicketStatus } from '../../api/client'
 import { queryKeys, useInvalidate } from '../../api/queries'
 import { unwrap } from '../../api/unwrap'
-import type { BoardSearch } from './boardSearch'
+import type { BoardFilters } from './boardSearch'
 import { moveCard } from './columns'
 
 /** A drop on the board; reason resolves a ticket whose Definition of Done isn't met. */
@@ -30,10 +30,10 @@ function withTransition(update: () => void) {
  * Moves a ticket from the board. The card moves at once; the API checks the move with the
  * status the card showed (`from`), and a refused move puts the card back.
  */
-export function useMoveTicket(search: BoardSearch) {
+export function useMoveTicket(filters: BoardFilters) {
   const queryClient = useQueryClient()
   const invalidate = useInvalidate()
-  const boardKey = queryKeys.board(search)
+  const boardKey = queryKeys.board(filters)
   return useMutation({
     mutationFn: ({ card, status, reason }: Move) =>
       unwrap(

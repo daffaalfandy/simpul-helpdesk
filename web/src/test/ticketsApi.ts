@@ -1,3 +1,4 @@
+import { parseDate } from '@internationalized/date'
 import { delay, http, HttpResponse } from 'msw'
 
 import type {
@@ -27,9 +28,11 @@ import type {
   TicketSummary,
 } from '../api/client'
 import { BOARD_COLUMNS } from '../features/board/columns'
+import { DONE_STATUSES } from '../features/tickets/status'
+import { currentMonthRange, parseDay, type DateRange, type DateRangeSearch } from '../lib/dateRange'
 import { can } from '../lib/roles'
 import { allowedMoves, columnOf } from './lifecycle'
-import { state } from './server'
+import { ORG, state } from './server'
 import { defaultTargets, PROJECT_IDS, projectsApi, uatDod } from './projectsApi'
 import { IDS, settings } from './settingsApi'
 
@@ -175,7 +178,8 @@ function fixtures() {
       ],
     }),
     ticket({ id: 't-24859', key: 'HD-24859', subject: 'VPN access for the new officer', type: 'request', status: 'waiting_on_client', assignee: rina }),
-    ticket({ id: 't-24790', key: 'HD-24790', subject: 'Install a PDF reader', type: 'request', status: 'closed', resolvedAt: '2026-11-09T03:00:00Z', closedAt: '2026-11-11T03:00:00Z', allowedStatuses: [] }),
+    // Reported in October, so this month's lists leave it out.
+    ticket({ id: 't-24790', key: 'HD-24790', subject: 'Install a PDF reader', type: 'request', status: 'closed', createdAt: '2026-10-20T03:00:00Z', resolvedAt: '2026-11-09T03:00:00Z', closedAt: '2026-11-11T03:00:00Z', allowedStatuses: [] }),
     ticket({ id: 't-24900', key: 'HD-24900', subject: 'SIPD export times out', client: batam, requester: ref(TICKET_IDS.sri, 'Sri Lestari'), createdBy: ref(TICKET_IDS.sri, 'Sri Lestari') }),
     // Board fixtures at another client, so the portal's lists stay as they are.
     ticket({ id: 't-24910', key: 'HD-24910', subject: 'Router config backup', priority: 'P2', status: 'assigned', assignee: adi, client: batam }),
@@ -390,15 +394,33 @@ function startOfToday() {
   return d
 }
 
-/** The board like GET /board: columns in order, P1 first, done tickets from midnight only. */
-function board(assignee: string | null, q: string, slaFilter: string | null): Board {
+/** The `from` and `to` of a request as the API reads them, or the problem code it answers. */
+function requestedRange(params: URLSearchParams): { range: DateRangeSearch } | { problem: string } {
+  const from = params.get('from') ?? undefined
+  const to = params.get('to') ?? undefined
+  if ((from !== undefined && !parseDay(from)) || (to !== undefined && !parseDay(to))) return { problem: 'invalid_request' }
+  if (from && to && to < from) return { problem: 'invalid_date_range' }
+  return { range: { from, to } }
+}
+
+/** Whether the ticket was reported on the days, read in the organization's time zone; a missing end is open. */
+function reportedIn(t: Ticket, { from, to }: DateRangeSearch): boolean {
+  const at = new Date(t.createdAt)
+  return (!from || at >= parseDate(from).toDate(ORG.timezone)) && (!to || at < parseDate(to).add({ days: 1 }).toDate(ORG.timezone))
+}
+
+/**
+ * The board like GET /board: columns in order, P1 first, open tickets always, done ones (resolved
+ * and closed) when reported in the range.
+ */
+function board(assignee: string | null, q: string, slaFilter: string | null, range: DateRange): Board {
   const midnight = startOfToday()
   const weekStart = new Date(midnight)
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + DAYS_PER_WEEK - 1) % DAYS_PER_WEEK))
   const since = (t: Ticket, from: Date) => t.resolvedAt !== null && new Date(t.resolvedAt) >= from
   const search = q.toLowerCase()
   const cards = tickets.tickets
-    .filter((t) => columnOf(t.status) !== null && (t.resolvedAt === null || since(t, midnight)))
+    .filter((t) => !DONE_STATUSES.includes(t.status) || reportedIn(t, range))
     .filter((t) => assignee !== 'me' || t.assignee?.id === state.me?.id)
     .filter((t) => assignee !== 'unassigned' || t.assignee === null)
     .filter((t) => !search || [t.key, t.subject, t.client.name].some((s) => s.toLowerCase().includes(search)))
@@ -411,7 +433,8 @@ function board(assignee: string | null, q: string, slaFilter: string | null): Bo
         .sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority))
       return { id, total: inColumn.length, cards: inColumn.slice(0, BOARD_COLUMN_LIMIT).map(boardCard) }
     }),
-    resolvedSince: midnight.toISOString(),
+    doneFrom: range.from,
+    doneTo: range.to,
     stats: {
       openTickets: tickets.tickets.filter((t) => t.resolvedAt === null && t.status !== 'closed').length,
       resolvedThisWeek: tickets.tickets.filter((t) => since(t, weekStart)).length,
@@ -525,7 +548,13 @@ export const ticketsHandlers = [
     await record(request)
     if (isRequester()) return problem(403, 'forbidden')
     const params = new URL(request.url).searchParams
-    return HttpResponse.json(board(params.get('assignee'), params.get('q') ?? '', params.get('sla')))
+    const asked = requestedRange(params)
+    if ('problem' in asked) return problem(400, asked.problem)
+    const { from, to } = asked.range
+    // The resolved column names both of its days: half a range is refused.
+    if (!from !== !to) return problem(400, 'invalid_date_range')
+    const range = from && to ? { from, to } : currentMonthRange(ORG.timezone)
+    return HttpResponse.json(board(params.get('assignee'), params.get('q') ?? '', params.get('sla'), range))
   }),
   http.get(`${API}/attachment-policy`, () => HttpResponse.json(policy)),
   http.get(`${API}/intake`, async ({ request }) => {
@@ -552,8 +581,11 @@ export const ticketsHandlers = [
     const assignee = params.get('assignee')
     const client = params.get('clientId')
     const q = (params.get('q') ?? '').toLowerCase()
+    const asked = requestedRange(params)
+    if ('problem' in asked) return problem(400, asked.problem)
     const list = tickets.tickets
       .filter(visible)
+      .filter((t) => reportedIn(t, asked.range))
       .filter((t) => statuses.length === 0 || statuses.includes(t.status))
       .filter((t) => assignee !== 'me' || t.assignee?.id === state.me?.id)
       .filter((t) => assignee !== 'unassigned' || t.assignee === null)

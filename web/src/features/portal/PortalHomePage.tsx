@@ -7,11 +7,15 @@ import { useTranslation } from 'react-i18next'
 import type { TicketSummary, UatAnswer, UatRequest } from '../../api/client'
 import { Alert } from '../../components/Alert'
 import { Pill } from '../../components/Badges'
+import { useOrgTimeZone } from '../../api/queries'
 import { Button, buttonClasses } from '../../components/Button'
 import { Card } from '../../components/Card'
+import { DateRangeFilter } from '../../components/DateRangeFilter'
 import { FilterPills } from '../../components/FilterPills'
 import { RichText } from '../../components/RichText'
 import { paths } from '../../lib/constants'
+import type { DateRange } from '../../lib/dateRange'
+import { formatDateRange } from '../../lib/dates'
 import { firstName } from '../../lib/text'
 import { useSignedInUser } from '../shell/useSignedInUser'
 import { requesterStatus } from '../tickets/labels'
@@ -21,19 +25,28 @@ import { useTimestamp } from '../tickets/time'
 import { uatRequestsQueryOptions } from './queries'
 import { UatAnswerDialog } from './UatAnswerDialog'
 
-/** The list behind a portal filter; shared by the route loader and the page. */
-export function portalListOptions(filter: PortalFilter) {
+/**
+ * The list behind a portal filter and the days the tickets were reported on (every ticket,
+ * open ones too: owner, 18 Nov); shared by the route loader and the page.
+ */
+export function portalListOptions(filter: PortalFilter, range: DateRange) {
   const status = statusesForPortalFilter(filter)
-  return ticketListQueryOptions(status.length > 0 ? { status: [...status] } : {})
+  return ticketListQueryOptions({ ...(status.length > 0 ? { status: [...status] } : {}), from: range.from, to: range.to })
 }
 
-type PortalHomePageProps = { filter: PortalFilter; onFilterChange: (filter: PortalFilter) => void }
+type PortalHomePageProps = {
+  filter: PortalFilter
+  range: DateRange
+  onFilterChange: (filter: PortalFilter) => void
+  onRangeChange: (range: DateRange) => void
+}
 
 /** Portal home (HANDOFF §4, PortalHome.dc.html): report an issue and follow the client's tickets. */
-export function PortalHomePage({ filter, onFilterChange }: PortalHomePageProps) {
+export function PortalHomePage({ filter, range, onFilterChange, onRangeChange }: PortalHomePageProps) {
   const { t } = useTranslation()
   const me = useSignedInUser()
-  const list = useSuspenseInfiniteQuery(portalListOptions(filter))
+  const timeZone = useOrgTimeZone()
+  const list = useSuspenseInfiniteQuery(portalListOptions(filter, range))
   const tickets = list.data.pages.flat()
   const { data: tests } = useSuspenseQuery(uatRequestsQueryOptions)
 
@@ -58,19 +71,23 @@ export function PortalHomePage({ filter, onFilterChange }: PortalHomePageProps) 
         as="h2"
         title={t('portal.home.myTickets')}
         actions={
-          <FilterPills
-            label={t('portal.home.filterLabel')}
-            options={PORTAL_FILTERS.map((id) => ({ id, label: t(`portal.home.filters.${id}`) }))}
-            value={filter}
-            onChange={onFilterChange}
-          />
+          <>
+            <FilterPills
+              label={t('portal.home.filterLabel')}
+              options={PORTAL_FILTERS.map((id) => ({ id, label: t(`portal.home.filters.${id}`) }))}
+              value={filter}
+              onChange={onFilterChange}
+            />
+            <DateRangeFilter value={range} timeZone={timeZone} description={t('portal.home.dateRangeHint')} onChange={onRangeChange} />
+          </>
         }
       >
         {tickets.length === 0 ? (
-          <p className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted">
+          <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted">
             <Inbox aria-hidden="true" className="size-(--icon-lg)" />
-            {t(`portal.home.empty.${filter}`)}
-          </p>
+            <p>{t(`portal.home.empty.${filter}`, { range: formatDateRange(range.from, range.to) })}</p>
+            <p>{t('portal.home.emptyEarlier')}</p>
+          </div>
         ) : (
           <ul className="flex flex-col">
             {tickets.map((ticket) => (

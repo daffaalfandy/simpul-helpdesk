@@ -13,12 +13,13 @@ import { ticketListQueryOptions } from '../tickets/queries'
 import { STATUS_TONE } from '../tickets/status'
 import { useTimestamp } from '../tickets/time'
 
-/** Off the board: resolved before today, and closed (resolved tickets close by themselves). */
+/** The statuses that can be off the board: open tickets always show on it. */
 const OFF_BOARD: TicketStatus[] = ['resolved', 'closed']
 
 /**
- * Search matches the board can't show (it holds today's resolved tickets only), so a ticket
- * resolved earlier or closed stays findable by key, subject or client.
+ * Search matches the board can't show: its resolved column holds the done tickets reported on
+ * the chosen days only, so one reported on other days stays findable by key, subject or client.
+ * The list has no date limit; the cards already on the board are left out.
  */
 export function EarlierTickets({ q, board }: { q: string; board: Board }) {
   const { t } = useTranslation()

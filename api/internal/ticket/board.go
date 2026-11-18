@@ -13,26 +13,27 @@ const (
 	ColumnInProgress      Column = "in_progress"
 	ColumnWaitingOnClient Column = "waiting_on_client"
 	ColumnInUAT           Column = "in_uat"
-	ColumnResolved        Column = "resolved" // resolved today only
+	ColumnResolved        Column = "resolved" // done tickets reported in the board's date range
 )
 
 // Columns lists the board's columns from left to right.
 var Columns = []Column{ColumnNew, ColumnInProgress, ColumnWaitingOnClient, ColumnInUAT, ColumnResolved}
 
-// columnStatuses: New holds the work nobody has started yet, owned or not. Closed tickets
-// are off the board.
+// columnStatuses: New holds the work nobody has started yet, owned or not. Resolved holds
+// closed tickets too: a resolved ticket closes by itself after the reopen window, and the column
+// covers a date range, not a day. The first status is the one a drop sets.
 var columnStatuses = map[Column][]Status{
 	ColumnNew:             {StatusNew, StatusAssigned},
 	ColumnInProgress:      {StatusInProgress},
 	ColumnWaitingOnClient: {StatusWaitingOnClient},
 	ColumnInUAT:           {StatusInUAT},
-	ColumnResolved:        {StatusResolved},
+	ColumnResolved:        {StatusResolved, StatusClosed},
 }
 
 // BoardWeekStart is the first day of the week for the board's "Resolved this week".
 const BoardWeekStart = time.Monday
 
-// ColumnOf reports the column a status shows in, and false for statuses off the board.
+// ColumnOf reports the column a status shows in, and false for a status the board doesn't know.
 func ColumnOf(s Status) (Column, bool) {
 	for _, c := range Columns {
 		if slices.Contains(columnStatuses[c], s) {

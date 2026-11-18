@@ -1548,13 +1548,18 @@ paths:
       summary: The agent board (staff)
       description: |
         Five columns, left to right: new (new and assigned), in progress, waiting on client,
-        in UAT, and resolved since local midnight in the organisation's time zone. Closed
-        tickets are off the board. Each column holds at most 100 cards, P1 first, then the
-        longest in the column, and reports its full size in `total`. Agents see the tickets
-        of their assigned clients; supervisors and admins every ticket. The stats ignore
-        `assignee`, `q` and `sla`.
+        in UAT, and resolved. Open tickets always show, whenever they were reported; the
+        resolved column holds the resolved and closed tickets reported between `from` and `to`,
+        both days included, in the organisation's time zone. With neither date it covers the
+        current month; give both or neither (`invalid_date_range`, 400, also when `to` comes
+        before `from`). `doneFrom` and `doneTo` name the days it covers. Each column holds at
+        most 100 cards, P1 first, then the longest in the column, and reports its full size in
+        `total`. Agents see the tickets of their assigned clients; supervisors and admins every
+        ticket. The stats ignore `assignee`, `q`, `sla`, `from` and `to`.
       tags: [tickets]
       parameters:
+        - $ref: "#/components/parameters/ReportedFrom"
+        - $ref: "#/components/parameters/ReportedTo"
         - name: assignee
           in: query
           required: false
@@ -1587,9 +1592,14 @@ paths:
       description: |
         Requesters see the tickets they reported and those of their client's projects they are
         linked to; agents the tickets of their assigned clients; supervisors and admins every
-        ticket. Page with `before` = the last id of the previous page.
+        ticket. `from` and `to` keep the tickets reported on those days, both included, in the
+        organisation's time zone; either may be left out, and with neither there is no date
+        limit. `to` before `from` is `invalid_date_range` (400). Page with `before` = the last
+        id of the previous page.
       tags: [tickets]
       parameters:
+        - $ref: "#/components/parameters/ReportedFrom"
+        - $ref: "#/components/parameters/ReportedTo"
         - name: status
           in: query
           required: false
@@ -2370,6 +2380,18 @@ components:
       required: false
       description: A month such as `2026-11`; the current month when left out.
       schema: { type: string, pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" }
+    ReportedFrom:
+      name: from
+      in: query
+      required: false
+      description: The first day a ticket may have been reported on, such as `2026-11-01`.
+      schema: { type: string, format: date }
+    ReportedTo:
+      name: to
+      in: query
+      required: false
+      description: The last day a ticket may have been reported on, included, such as `2026-11-30`.
+      schema: { type: string, format: date }
 
   responses:
     Problem:
@@ -3812,17 +3834,21 @@ components:
 
     Board:
       type: object
-      required: [columns, resolvedSince, stats]
+      required: [columns, doneFrom, doneTo, stats]
       properties:
         columns:
           type: array
           minItems: 5
           maxItems: 5
           items: { $ref: "#/components/schemas/BoardColumn" }
-        resolvedSince:
+        doneFrom:
           type: string
-          format: date-time
-          description: Local midnight; the resolved column starts here.
+          format: date
+          description: The first day the resolved column covers; its tickets were reported on or after it.
+        doneTo:
+          type: string
+          format: date
+          description: The last day the resolved column covers, included.
         stats: { $ref: "#/components/schemas/BoardStats" }
 
     Ticket:

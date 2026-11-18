@@ -21,14 +21,16 @@ func (s *server) GetBoard(ctx context.Context, req gen.GetBoardRequestObject) (g
 		f.Query = *req.Params.Q
 	}
 	f.SLAAtRisk = req.Params.Sla != nil && *req.Params.Sla == gen.BoardSlaFilterAtRisk
+	f.Reported = tickets.ReportedRange{From: domainDatePtr(req.Params.From), To: domainDatePtr(req.Params.To)}
 	b, err := s.tickets.Board(ctx, p, f)
 	if err != nil {
 		return nil, err
 	}
 	out := gen.GetBoard200JSONResponse{
-		Columns:       make([]gen.BoardColumn, len(b.Columns)),
-		ResolvedSince: b.ResolvedSince,
-		Stats:         apiBoardStats(b.Stats),
+		Columns:  make([]gen.BoardColumn, len(b.Columns)),
+		DoneFrom: apiDate(b.DoneFrom),
+		DoneTo:   apiDate(b.DoneTo),
+		Stats:    apiBoardStats(b.Stats),
 	}
 	for i, c := range b.Columns {
 		col := gen.BoardColumn{Id: gen.BoardColumnId(c.ID), Total: c.Total, Cards: make([]gen.BoardCard, len(c.Cards))}

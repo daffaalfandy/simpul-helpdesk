@@ -26,6 +26,9 @@ type BoardFilter struct {
 	Assignee  AssigneeFilter
 	Query     string // a ticket key, or words in the subject or client name
 	SLAAtRisk bool   // only open tickets with a clock at risk or breached
+	// Reported limits the done tickets (the resolved column) by the day they were reported;
+	// open tickets always show. Empty means the current month; half a range is refused.
+	Reported ReportedRange
 }
 
 // BoardCard is a ticket on the board, with the moves the viewer may make.
@@ -94,9 +97,11 @@ const percentScale = 100
 
 // Board is every column, left to right, even when empty.
 type Board struct {
-	Columns       []BoardColumn
-	ResolvedSince time.Time // local midnight: the resolved column starts here
-	Stats         BoardStats
+	Columns []BoardColumn
+	// DoneFrom and DoneTo are the days the resolved column covers, both included: its resolved
+	// and closed tickets were reported on them.
+	DoneFrom, DoneTo calendar.Date
+	Stats            BoardStats
 }
 
 // Board returns the agent board for staff in their scope.
@@ -110,7 +115,11 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 		return Board{}, err
 	}
 	today := calendar.DateOf(s.now().In(loc))
-	midnight := today.In(loc)
+	doneFrom, doneTo, err := f.Reported.orCurrentMonth(today)
+	if err != nil {
+		return Board{}, err
+	}
+	reportedFrom, reportedBefore := ReportedRange{From: &doneFrom, To: &doneTo}.Bounds(loc)
 	weekStart := today.AddDays(-daysSince(today.Weekday(), ticket.BoardWeekStart)).In(loc)
 	monthStart := calendar.NewDate(today.Year, today.Month, 1).In(loc)
 
@@ -127,7 +136,7 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 	}
 	params := db.ListBoardCardsParams{
 		OrganizationID: a.org, ProjectIds: filter, ColumnLimit: BoardColumnLimit, Statuses: statusStrings(statuses), Columns: columns,
-		ScopeAgentID: a.scopeAgentID, ResolvedSince: midnight, Unassigned: f.Assignee == AssigneeUnassigned,
+		ScopeAgentID: a.scopeAgentID, CreatedFrom: *reportedFrom, CreatedBefore: *reportedBefore, Unassigned: f.Assignee == AssigneeUnassigned,
 		SlaAtRisk: f.SLAAtRisk, OpenStatuses: statusStrings(ticket.OpenStatuses),
 	}
 	if f.Assignee == AssigneeMe {
@@ -150,9 +159,10 @@ func (s *Service) Board(ctx context.Context, p *auth.Principal, f BoardFilter) (
 	now := s.now()
 
 	board := Board{
-		Columns:       make([]BoardColumn, len(ticket.Columns)),
-		ResolvedSince: midnight,
-		Stats:         stats,
+		Columns:  make([]BoardColumn, len(ticket.Columns)),
+		DoneFrom: doneFrom,
+		DoneTo:   doneTo,
+		Stats:    stats,
 	}
 	index := map[ticket.Column]int{}
 	for i, c := range ticket.Columns {

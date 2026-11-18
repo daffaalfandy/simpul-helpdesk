@@ -51,7 +51,10 @@ func (s *server) ListTickets(ctx context.Context, req gen.ListTicketsRequestObje
 	if err != nil {
 		return nil, err
 	}
-	f := tickets.ListFilter{ClientID: req.Params.ClientId, Before: req.Params.Before}
+	f := tickets.ListFilter{
+		ClientID: req.Params.ClientId, Before: req.Params.Before,
+		Reported: tickets.ReportedRange{From: domainDatePtr(req.Params.From), To: domainDatePtr(req.Params.To)},
+	}
 	if req.Params.Status != nil {
 		for _, st := range *req.Params.Status {
 			f.Statuses = append(f.Statuses, ticket.Status(st))

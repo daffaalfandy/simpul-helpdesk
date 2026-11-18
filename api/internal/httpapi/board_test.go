@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/apperr"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/ticket"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/tickets"
@@ -82,21 +83,17 @@ func TestBoard(t *testing.T) {
 	}
 	other := te.otherRequester.report(t, incident(te.projectB, "Batam router"))
 
-	// The resolved column starts at local midnight in the organisation's time zone.
-	b := te.admin.board(t, "")
+	// "Resolved this week" counts from Monday's local midnight in the organisation's time zone.
 	jakarta, _ := time.LoadLocation("Asia/Jakarta")
 	now := time.Now().In(jakarta)
-	if want := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, jakarta); !b.ResolvedSince.Equal(want) {
-		t.Fatalf("resolvedSince = %s, want %s", b.ResolvedSince, want)
-	}
-	midnight := b.ResolvedSince
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, jakarta)
 	weekStart := midnight.AddDate(0, 0, -int((midnight.Weekday()-ticket.BoardWeekStart+7)%7))
 	te.exec(t, `UPDATE tickets SET resolved_at = $2 WHERE key = $1`, today.Key, midnight)
 	te.exec(t, `UPDATE tickets SET resolved_at = $2 WHERE key = $1`, yesterday.Key, midnight.Add(-time.Minute))
 	te.exec(t, `UPDATE tickets SET status = 'closed', resolved_at = $2, closed_at = $2 WHERE key = $1`,
 		lastWeek.Key, weekStart.Add(-time.Minute))
 
-	b = te.admin.board(t, "")
+	b := te.admin.board(t, "")
 	ids := make([]gen.BoardColumnId, len(b.Columns))
 	for i, c := range b.Columns {
 		ids[i] = c.Id
@@ -112,8 +109,8 @@ func TestBoard(t *testing.T) {
 		gen.BoardColumnIdInProgress:      {urgent.Key, slow.Key, later.Key},
 		gen.BoardColumnIdWaitingOnClient: {waiting.Key},
 		gen.BoardColumnIdInUat:           {inUAT.Key},
-		// Resolved since midnight only; closed tickets are off the board.
-		gen.BoardColumnIdResolved: {today.Key},
+		// Resolved and closed tickets reported this month, whenever they were resolved.
+		gen.BoardColumnIdResolved: {today.Key, yesterday.Key, lastWeek.Key},
 	}
 	for _, c := range b.Columns {
 		if got := column(b, c.Id); !slices.Equal(got, want[c.Id]) || c.Total != len(want[c.Id]) {
@@ -188,6 +185,77 @@ func TestBoard(t *testing.T) {
 		t.Errorf("unlinked agent stats = %+v", empty.Stats)
 	}
 	expectProblem(t, te.requester.do(http.MethodGet, "/board", nil), http.StatusForbidden, "forbidden")
+}
+
+// Open tickets show whenever they were reported; the resolved column holds the resolved and
+// closed tickets reported in the range, the current month by default (owner, 18 Nov).
+func TestBoardDateRange(t *testing.T) {
+	te := newTicketEnv(t)
+	jakarta, _ := time.LoadLocation("Asia/Jakarta")
+	open := func(subject string) gen.Ticket { return te.requester.report(t, incident(te.projectA, subject)) }
+	resolve := func(subject string) gen.Ticket {
+		tk := open(subject)
+		te.move(t, tk.Key, gen.TicketStatusResolved)
+		return tk
+	}
+
+	// The default range is a whole month; read it from the answer, so a run across midnight at
+	// the end of a month can't fail.
+	b := te.admin.board(t, "")
+	from, to := b.DoneFrom.Time, b.DoneTo.Time
+	if from.Day() != 1 || to.AddDate(0, 0, 1).Day() != 1 || from.Month() != to.Month() || from.Year() != to.Year() {
+		t.Fatalf("default range = %s..%s, want a whole month", b.DoneFrom, b.DoneTo)
+	}
+	lastFrom, lastTo := from.AddDate(0, -1, 0), from.AddDate(0, 0, -1)
+	// 23:30 on the last day of the month before, and 00:30 on the 1st, in Jakarta (UTC+7).
+	lateLastMonth := time.Date(lastTo.Year(), lastTo.Month(), lastTo.Day(), 23, 30, 0, 0, jakarta)
+	earlyFirst := time.Date(from.Year(), from.Month(), from.Day(), 0, 30, 0, 0, jakarta)
+
+	done := resolve("Fixed this month")
+	closed := resolve("Closed this month")
+	te.exec(t, `UPDATE tickets SET status = 'closed', closed_at = now() WHERE key = $1`, closed.Key)
+	first := resolve("Fixed on the 1st")
+	te.exec(t, `UPDATE tickets SET created_at = $2 WHERE key = $1`, first.Key, earlyFirst)
+	old := resolve("Fixed last month")
+	stillOpen := open("Still open from last month")
+	for _, k := range []string{old.Key, stillOpen.Key} {
+		te.exec(t, `UPDATE tickets SET created_at = $2 WHERE key = $1`, k, lateLastMonth)
+	}
+
+	b = te.admin.board(t, "")
+	if got := column(b, gen.BoardColumnIdNew); !slices.Equal(got, []string{stillOpen.Key}) {
+		t.Errorf("new = %v, want the open ticket from last month", got)
+	}
+	if got := column(b, gen.BoardColumnIdResolved); !slices.Equal(got, []string{done.Key, closed.Key, first.Key}) {
+		t.Errorf("resolved this month = %v", got)
+	}
+	if c := card(b, closed.Key); c.Status != gen.TicketStatusClosed || len(c.AllowedStatuses) != 0 {
+		t.Errorf("closed card = %s, allowed %v", c.Status, c.AllowedStatuses)
+	}
+
+	query := "?from=" + lastFrom.Format(time.DateOnly) + "&to=" + lastTo.Format(time.DateOnly)
+	lb := te.admin.board(t, query)
+	if !lb.DoneFrom.Time.Equal(lastFrom) || !lb.DoneTo.Time.Equal(lastTo) {
+		t.Errorf("asked range = %s..%s, want %s..%s", lb.DoneFrom, lb.DoneTo, lastFrom, lastTo)
+	}
+	if got := column(lb, gen.BoardColumnIdResolved); !slices.Equal(got, []string{old.Key}) {
+		t.Errorf("resolved last month = %v, want %v", got, []string{old.Key})
+	}
+	if got := column(lb, gen.BoardColumnIdNew); !slices.Equal(got, []string{stillOpen.Key}) {
+		t.Errorf("new with last month = %v", got)
+	}
+	if !reflect.DeepEqual(lb.Stats, b.Stats) {
+		t.Errorf("stats moved with the range: %+v, want %+v", lb.Stats, b.Stats)
+	}
+
+	day := from.Format(time.DateOnly)
+	// The end before the start, or half a range: the column could not name its days.
+	for _, q := range []string{"?from=" + day + "&to=" + lastTo.Format(time.DateOnly), "?from=" + day, "?to=" + day} {
+		expectProblem(t, te.admin.do(http.MethodGet, "/board"+q, nil), http.StatusBadRequest, apperr.CodeInvalidDateRange)
+	}
+	for _, q := range []string{"?from=2026-13-01&to=2026-12-31", "?from=yesterday&to=" + day} {
+		expectProblem(t, te.admin.do(http.MethodGet, "/board"+q, nil), http.StatusBadRequest, apperr.CodeInvalidRequest)
+	}
 }
 
 // A full column shows its first cards and still counts every ticket.

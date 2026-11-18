@@ -10,11 +10,10 @@ import { KanbanCard } from './KanbanCard'
 /** Drag data type for a board card; other drags (files, text) are refused. */
 export const TICKET_DRAG_TYPE = 'application/x-simdesk-ticket'
 
-/** Columns with a note under the title (Main mock), once what it says is true. */
-const COLUMN_NOTES: Partial<Record<BoardColumnId, true>> = { in_uat: true }
-
 type KanbanColumnProps = {
   column: BoardColumn
+  /** A line under the title, such as the days the resolved column covers. */
+  note?: string
   /** Filters or a search are on, so an empty column says so. */
   filtered: boolean
   /** The card being dragged anywhere on the board, if any (drives what the columns show). */
@@ -33,7 +32,7 @@ type KanbanColumnProps = {
  * Kanban column per HANDOFF §14.3: title with a count, then the cards. A card can be dropped
  * anywhere in a column the API allows; the others say so while the drag lasts.
  */
-export function KanbanColumn({ column, filtered, dragging, draggingRef, onDragStart, onDragEnd, onMove }: KanbanColumnProps) {
+export function KanbanColumn({ column, note, filtered, dragging, draggingRef, onDragStart, onDragEnd, onMove }: KanbanColumnProps) {
   const { t } = useTranslation()
   const headingId = useId()
   const shown = column.cards.length
@@ -81,7 +80,7 @@ export function KanbanColumn({ column, filtered, dragging, draggingRef, onDragSt
           <span className="sr-only">{t('board.columnCount', { count: column.total })}</span>
         </span>
       </h2>
-      {COLUMN_NOTES[column.id] && <p className="px-1.5 text-xs text-muted">{t(`agent.board.columnNote.${column.id as 'in_uat'}`)}</p>}
+      {note && <p className="px-1.5 text-xs text-muted">{note}</p>}
       {blocked && <p className="px-1.5 text-xs font-bold text-muted">{t('board.cannotDrop')}</p>}
       <GridList
         aria-label={t('board.columnLabel', { column: title, count: column.total })}

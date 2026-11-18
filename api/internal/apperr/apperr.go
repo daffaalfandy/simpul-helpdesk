@@ -82,6 +82,7 @@ const (
 	CodeInvalidSignature          = "invalid_signature"
 	CodeMonthInFuture             = "month_in_future"
 	CodeMonthOutOfRange           = "month_out_of_range"
+	CodeInvalidDateRange          = "invalid_date_range"
 	CodeInvalidOrganization       = "invalid_organization"
 	CodeLogoTypeNotAllowed        = "logo_type_not_allowed"
 	CodeLogoTooLarge              = "logo_too_large"

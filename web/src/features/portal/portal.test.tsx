@@ -44,11 +44,41 @@ describe('portal home', () => {
 
     await user.click(within(card).getByRole('button', { name: 'Resolved' }))
     await waitFor(() => expect(router.state.location.search).toEqual({ filter: 'resolved' }))
-    expect(await within(card).findByText('Install a PDF reader')).toBeInTheDocument()
-    expect(lastRequest('GET', '/tickets')?.search).toBe('?status=resolved&status=closed&limit=50')
+    // This month by default: the ticket reported in October isn't in it, and the empty list says so.
+    expect(await within(card).findByText('No resolved tickets reported 1–30 Nov 2026.')).toBeInTheDocument()
+    expect(within(card).getByText('Pick earlier dates to see older ones.')).toBeInTheDocument()
+    expect(lastRequest('GET', '/tickets')?.search).toBe('?status=resolved&status=closed&from=2026-11-01&to=2026-11-30&limit=50')
 
-    await user.click(within(card).getByRole('link', { name: 'View details of HD-24790' }))
+    await user.click(within(card).getByRole('button', { name: 'Reported 1–30 Nov 2026' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reported between' })
+    expect(dialog).toHaveAccessibleDescription('Shows the tickets reported on these days.')
+    await user.click(within(dialog).getByRole('button', { name: 'Last month' }))
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ filter: 'resolved', from: '2026-10-01', to: '2026-10-31' }),
+    )
+    expect(await within(card).findByText('Install a PDF reader')).toBeInTheDocument()
+    expect(lastRequest('GET', '/tickets')?.search).toBe('?status=resolved&status=closed&from=2026-10-01&to=2026-10-31&limit=50')
+
+    // Changing the status keeps the dates.
+    await user.click(within(card).getByRole('button', { name: 'All' }))
+    await waitFor(() => expect(router.state.location.search).toEqual({ filter: 'all', from: '2026-10-01', to: '2026-10-31' }))
+    await user.click(await within(card).findByRole('link', { name: 'View details of HD-24790' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/portal/tickets/HD-24790'))
+  })
+
+  it('opens on the dates in the URL and drops them again for this month', async () => {
+    const user = userEvent.setup()
+    const { router } = renderApp('/portal?from=2026-09-01&to=2026-09-30')
+    const card = (await screen.findByRole('heading', { name: 'My tickets' })).closest('section') as HTMLElement
+    expect(lastRequest('GET', '/tickets')?.search).toBe(
+      '?status=new&status=assigned&status=in_progress&status=waiting_on_client&status=in_uat&from=2026-09-01&to=2026-09-30&limit=50',
+    )
+    expect(within(card).getByText(/^No open tickets reported 1.30 Sept? 2026\.$/)).toBeInTheDocument()
+
+    await user.click(within(card).getByRole('button', { name: /^Reported 1.30 Sept? 2026$/ }))
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'This month' }))
+    await waitFor(() => expect(router.state.location.search).toEqual({}))
+    expect(await within(card).findByText('e-Office login fails for all staff')).toBeInTheDocument()
   })
 
   it('keeps agents out of the portal', async () => {

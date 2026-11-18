@@ -549,9 +549,11 @@ WHERE t.organization_id = $1
        OR t.key = $11::text
        OR t.subject ILIKE $10::text
        OR c.name ILIKE $10::text)
-  AND ($12::uuid IS NULL OR t.id < $12::uuid)
+  AND ($12::timestamptz IS NULL OR t.created_at >= $12::timestamptz)
+  AND ($13::timestamptz IS NULL OR t.created_at < $13::timestamptz)
+  AND ($14::uuid IS NULL OR t.id < $14::uuid)
 ORDER BY t.id DESC
-LIMIT $13
+LIMIT $15
 `
 
 type ListTicketsParams struct {
@@ -566,6 +568,8 @@ type ListTicketsParams struct {
 	Unassigned       bool
 	SearchPattern    *string
 	SearchKey        *string
+	CreatedFrom      *time.Time
+	CreatedBefore    *time.Time
 	Before           *uuid.UUID
 	RowLimit         int32
 }
@@ -591,6 +595,7 @@ type ListTicketsRow struct {
 // Newest first. before pages by id (uuidv7, so creation order). search_key matches a key
 // exactly; search_pattern is an escaped ILIKE pattern over the subject and the client name.
 // project_ids is staff's saved project filter (empty: every project; requesters always empty).
+// created_from and created_before (excluded) keep the tickets reported in between; null is open.
 func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]ListTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listTickets,
 		arg.OrganizationID,
@@ -604,6 +609,8 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 		arg.Unassigned,
 		arg.SearchPattern,
 		arg.SearchKey,
+		arg.CreatedFrom,
+		arg.CreatedBefore,
 		arg.Before,
 		arg.RowLimit,
 	)
