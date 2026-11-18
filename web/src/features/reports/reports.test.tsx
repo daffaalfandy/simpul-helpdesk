@@ -40,7 +40,9 @@ describe('SLA report', () => {
     const { router, container } = renderApp('/reports')
     expect(await screen.findByRole('heading', { name: 'SLA report', level: 1 })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/reports/sla')
-    expect(screen.getByRole('button', { name: /Month/ })).toHaveTextContent('November 2026 (to date)')
+    const months = screen.getByRole('group', { name: 'Report months' })
+    expect(within(months).getByRole('button', { name: /From/ })).toHaveTextContent('November 2026 (to date)')
+    expect(within(months).getByRole('button', { name: /To/ })).toHaveTextContent('November 2026 (to date)')
 
     const figures = container.querySelector('dl')
     expect(figures).toHaveTextContent('Tickets38from 3 projects')
@@ -74,53 +76,109 @@ describe('SLA report', () => {
     expect(screen.getByText('Time spent waiting on the client is excluded from SLA.')).toBeInTheDocument()
   })
 
-  it('picks the month from a list, newest first, back to the first ticket', async () => {
+  it('starts the range at an earlier month and adds the months up', async () => {
     const user = userEvent.setup()
     const { router } = renderApp('/reports/sla')
-    const picker = await screen.findByRole('button', { name: /Month/ })
-    await user.click(picker)
+    await user.click(await screen.findByRole('button', { name: /From/ }))
     const months = within(await screen.findByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
     expect(months).toEqual(['November 2026 (to date)', 'October 2026', 'September 2026', 'August 2026'])
 
     await user.click(screen.getByRole('option', { name: 'October 2026' }))
+    expect(await screen.findByRole('heading', { name: 'By project · October 2026 to November 2026 (to date)' })).toBeInTheDocument()
+    expect(router.state.location.search).toEqual({ from: '2026-10', to: '2026-11' })
+    expect(screen.getByRole('button', { name: /From/ })).toHaveTextContent('October 2026')
+    expect(screen.getByRole('button', { name: /To/ })).toHaveTextContent('November 2026 (to date)')
+    // e-Office's 71 October tickets and 30 November ones.
+    expect(document.querySelector('dl')).toHaveTextContent('Tickets109from 3 projects')
+    expect(projectRow('e-Office').getByText('66 / 35')).toBeInTheDocument()
+    expect(projectRow('Legacy portal').getByText('Hidden')).toBeInTheDocument()
+  })
+
+  it('offers only months that keep the range in order, and the current month leaves the URL clean', async () => {
+    const user = userEvent.setup()
+    const { router } = renderApp('/reports/sla?from=2026-10&to=2026-11')
+    const to = await screen.findByRole('button', { name: /To/ })
+    await user.click(to)
+    let options = within(await screen.findByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
+    expect(options).toEqual(['November 2026 (to date)', 'October 2026'])
+    await user.click(screen.getByRole('option', { name: 'October 2026' }))
     expect(await screen.findByRole('heading', { name: 'By project · October 2026' })).toBeInTheDocument()
-    expect(router.state.location.search).toEqual({ month: '2026-10' })
-    expect(screen.getByRole('button', { name: /Month/ })).toHaveTextContent('October 2026')
-    // A hidden project without tickets this month is left out.
+    expect(router.state.location.search).toEqual({ from: '2026-10', to: '2026-10' })
+    // A hidden project without tickets in the range is left out.
     expect(screen.queryByRole('rowheader', { name: /^Legacy portal/ })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /Month/ }))
-    await user.click(await screen.findByRole('option', { name: 'August 2026' }))
-    expect(await screen.findByRole('heading', { name: 'By project · August 2026' })).toBeInTheDocument()
-    expect(router.state.location.search).toEqual({ month: '2026-08' })
-    expect(screen.getAllByText('no tickets this month')).toHaveLength(2)
+    await user.click(screen.getByRole('button', { name: /From/ }))
+    options = within(await screen.findByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
+    expect(options).toEqual(['October 2026', 'September 2026', 'August 2026'])
+    await user.click(screen.getByRole('option', { name: 'August 2026' }))
+    expect(await screen.findByRole('heading', { name: 'By project · August 2026 to October 2026' })).toBeInTheDocument()
+    expect(router.state.location.search).toEqual({ from: '2026-08', to: '2026-10' })
 
-    // The current month leaves the URL clean.
-    await user.click(screen.getByRole('button', { name: /Month/ }))
-    await user.click(await screen.findByRole('option', { name: 'November 2026 (to date)' }))
+    // Back to the current month alone, with the keyboard: To first, then From.
+    screen.getByRole('button', { name: /To/ }).focus()
+    await user.keyboard('{Enter}')
+    await screen.findByRole('listbox')
+    await user.keyboard('{Home}{Enter}')
+    expect(await screen.findByRole('heading', { name: 'By project · August 2026 to November 2026 (to date)' })).toBeInTheDocument()
+    expect(router.state.location.search).toEqual({ from: '2026-08', to: '2026-11' })
+    screen.getByRole('button', { name: /From/ }).focus()
+    await user.keyboard('{Enter}')
+    await screen.findByRole('listbox')
+    await user.keyboard('{Home}{Enter}')
+    expect(await screen.findByRole('heading', { name: 'By project · November 2026 (to date)' })).toBeInTheDocument()
     await waitFor(() => expect(router.state.location.search).toEqual({}))
   })
 
+  it('says when a range of months has no tickets', async () => {
+    renderApp('/reports/sla?from=2026-08&to=2026-09')
+    expect(await screen.findByRole('heading', { name: 'By project · August 2026 to September 2026' })).toBeInTheDocument()
+    expect(screen.getAllByText('no tickets in these months')).toHaveLength(2)
+  })
+
   it.each([
-    { name: 'more than 12 months back', month: '2025-10' },
-    { name: 'not started yet', month: '2026-12' },
-  ])('opens the current month for a month it does not serve ($name)', async ({ month }) => {
-    const { router } = renderApp(`/reports/sla?month=${month}`)
+    { name: 'a start more than 12 months back', search: '?from=2025-10&to=2026-11' },
+    { name: 'an end not started yet', search: '?from=2026-11&to=2026-12' },
+    { name: 'an end before the start', search: '?from=2026-11&to=2026-10' },
+    { name: 'an earlier end alone', search: '?to=2026-10' },
+  ])('opens the current month for months it does not serve ($name)', async ({ search }) => {
+    const { router } = renderApp(`/reports/sla${search}`)
     expect(await screen.findByRole('heading', { name: 'By project · November 2026 (to date)' })).toBeInTheDocument()
     expect(router.state.location.search).toEqual({})
   })
 
-  it('downloads the Excel file and a project PDF for the month shown', async () => {
+  it.each([
+    {
+      name: 'one month',
+      search: '?from=2026-10&to=2026-10',
+      query: '?from=2026-10&to=2026-10',
+      excel: 'sla-report-2026-10.xlsx',
+      pdf: `sla-report-2026-10-${REPORT_PROJECT_IDS.eOffice}.pdf`,
+    },
+    {
+      name: 'several months',
+      search: '?from=2026-09&to=2026-11',
+      query: '?from=2026-09&to=2026-11',
+      excel: 'sla-report-2026-09-to-2026-11.xlsx',
+      pdf: `sla-report-2026-09-to-2026-11-${REPORT_PROJECT_IDS.eOffice}.pdf`,
+    },
+    {
+      name: 'the current month',
+      search: '',
+      query: '?from=2026-11&to=2026-11',
+      excel: 'sla-report-2026-11.xlsx',
+      pdf: `sla-report-2026-11-${REPORT_PROJECT_IDS.eOffice}.pdf`,
+    },
+  ])('downloads the Excel file and a project PDF for the months shown ($name)', async ({ search, query, excel, pdf }) => {
     const user = userEvent.setup()
-    renderApp('/reports/sla?month=2026-10')
+    renderApp(`/reports/sla${search}`)
     await user.click(await screen.findByRole('button', { name: 'Download Excel' }))
-    await waitFor(() => expect(saved).toEqual(['sla-report-2026-10.xlsx']))
+    await waitFor(() => expect(saved).toEqual([excel]))
     await user.click(projectRow('e-Office').getByRole('button', { name: 'Download PDF for e-Office, Dinas Kominfo Jambi' }))
     await waitFor(() => expect(saved).toHaveLength(2))
-    expect(saved[1]).toBe(`sla-report-2026-10-${REPORT_PROJECT_IDS.eOffice}.pdf`)
+    expect(saved[1]).toBe(pdf)
     expect(reportsApi.requests).toEqual([
-      '/api/v1/reports/sla/excel?month=2026-10',
-      `/api/v1/reports/sla/projects/${REPORT_PROJECT_IDS.eOffice}/pdf?month=2026-10`,
+      `/api/v1/reports/sla/excel${query}`,
+      `/api/v1/reports/sla/projects/${REPORT_PROJECT_IDS.eOffice}/pdf${query}`,
     ])
   })
 

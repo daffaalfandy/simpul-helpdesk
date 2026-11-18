@@ -10,12 +10,13 @@ export function KpiTiles({ report }: { report: SlaReport }) {
   const { totals, targetPercent, projectsBelowTarget } = report
   const target = formatPercent(targetPercent)
   const empty = totals.tickets === 0
+  const noTicketsSub = t(report.from === report.to ? 'reports.kpi.noTicketsSub' : 'reports.kpi.noTicketsSubRange')
   const tiles = [
     {
       id: 'tickets',
       label: t('reports.kpi.tickets'),
       value: String(totals.tickets),
-      sub: empty ? t('reports.kpi.noTicketsSub') : t('reports.kpi.ticketsSub', { count: report.projectsWithTickets }),
+      sub: empty ? noTicketsSub : t('reports.kpi.ticketsSub', { count: report.projectsWithTickets }),
     },
     {
       id: 'within',
@@ -33,7 +34,7 @@ export function KpiTiles({ report }: { report: SlaReport }) {
       label: t('reports.kpi.belowTarget'),
       value: String(projectsBelowTarget),
       sub: empty
-        ? t('reports.kpi.noTicketsSub')
+        ? noTicketsSub
         : projectsBelowTarget > 0
           ? t('reports.kpi.belowTargetSub')
           : t('reports.kpi.allOnTarget'),

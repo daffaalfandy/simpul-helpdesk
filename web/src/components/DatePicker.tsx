@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next'
 import { POPOVER_OFFSET_PX } from '../lib/constants'
 import { cx } from '../lib/text'
 import { CalendarHeader, CalendarMonthGrid } from './CalendarParts'
-import { dateSegment, fieldBox, fieldDescription, fieldError, fieldLabel, fieldStack } from './fieldStyles'
+import { calendarPopover, dateSegment, fieldBox, fieldDescription, fieldError, fieldLabel, fieldStack } from './fieldStyles'
 
 type DatePickerProps<T extends DateValue> = Omit<
   AriaDatePickerProps<T>,
@@ -71,14 +71,7 @@ export function DatePicker<T extends DateValue>({
         </Text>
       )}
       <FieldError className={fieldError}>{errorMessage}</FieldError>
-      <Popover
-        placement="bottom start"
-        offset={POPOVER_OFFSET_PX}
-        className={cx(
-          'w-(--calendar-w) max-w-[calc(100vw-2*var(--space-4))] rounded-2xl border border-border-strong bg-surface',
-          'shadow-popover outline-none data-entering:animate-enter',
-        )}
-      >
+      <Popover placement="bottom start" offset={POPOVER_OFFSET_PX} className={calendarPopover}>
         <Dialog className="p-4 outline-none max-sm:p-2">
           <Calendar aria-label={label} className="flex flex-col gap-3">
             <CalendarHeader />

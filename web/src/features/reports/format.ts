@@ -21,6 +21,14 @@ export function reportSpan(t: TFunction, ms: number): string {
 
 /** "November 2026", or "November 2026 (to date)" while the month runs. */
 export function reportMonthLabel(t: TFunction, month: MonthKey, toDate: boolean): string {
-  const name = monthLong(month)
-  return toDate ? t('reports.month.toDate', { month: name }) : name
+  return reportRangeLabel(t, month, month, toDate)
+}
+
+/**
+ * The report's months as the Excel file and the PDF name them: "October 2026",
+ * "September 2026 to November 2026 (to date)".
+ */
+export function reportRangeLabel(t: TFunction, from: MonthKey, to: MonthKey, toDate: boolean): string {
+  const period = from === to ? monthLong(from) : t('reports.range.span', { from: monthLong(from), to: monthLong(to) })
+  return toDate ? t('reports.range.toDate', { period }) : period
 }

@@ -11,27 +11,28 @@ import { ErrorAlert } from '../../components/ErrorAlert'
 import { paths } from '../../lib/constants'
 import { can } from '../../lib/roles'
 import { useSignedInUser } from '../shell/useSignedInUser'
-import { formatPercent, reportMonthLabel } from './format'
+import { formatPercent, reportRangeLabel } from './format'
 import { KpiTiles } from './KpiTiles'
-import { MonthPicker } from './MonthPicker'
-import type { MonthKey } from './months'
+import { MonthRangePicker } from './MonthRangePicker'
+import type { MonthKey, MonthRange, ReportSearch } from './months'
 import { ProjectTable } from './ProjectTable'
 
 type Download = { kind: 'excel' } | { kind: 'pdf'; project: SlaReportProject }
 
 type SlaReportPageProps = {
-  /** The month in the URL; the current month when left out. */
-  month: MonthKey | undefined
-  onMonthChange: (month: MonthKey, current: MonthKey) => void
+  /** The months in the URL; the current month when left out. */
+  search: ReportSearch
+  onRangeChange: (range: MonthRange, current: MonthKey) => void
 }
 
-/** SLA report (Reports mock): every project's month against the contract target, with exports. */
-export function SlaReportPage({ month, onMonthChange }: SlaReportPageProps) {
+/** SLA report (Reports mock): every project over a range of months against the contract target, with exports. */
+export function SlaReportPage({ search, onRangeChange }: SlaReportPageProps) {
   const { t } = useTranslation()
-  const { data: report } = useSuspenseQuery(slaReportQueryOptions(month))
+  const { data: report } = useSuspenseQuery(slaReportQueryOptions(search))
+  // The months the API answered for, so the files match what is on screen.
+  const range: MonthRange = { from: report.from, to: report.to }
   const download = useMutation({
-    mutationFn: (d: Download) =>
-      d.kind === 'excel' ? downloadSlaExcel(report.month) : downloadSlaPdf(d.project.id, report.month),
+    mutationFn: (d: Download) => (d.kind === 'excel' ? downloadSlaExcel(range) : downloadSlaPdf(d.project.id, range)),
   })
   const pending = download.isPending ? download.variables : undefined
   const target = formatPercent(report.targetPercent)
@@ -45,13 +46,13 @@ export function SlaReportPage({ month, onMonthChange }: SlaReportPageProps) {
           <h1 className="text-3xl leading-tight font-extrabold tracking-title">{t('reports.title')}</h1>
           <p className="text-base text-muted">{t('reports.subtitle')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <MonthPicker
-            value={report.month}
+        <div className="flex flex-wrap items-end gap-2">
+          <MonthRangePicker
+            value={range}
             current={report.currentMonth}
             oldest={report.oldestMonth}
             first={report.firstMonth}
-            onChange={(m) => onMonthChange(m, report.currentMonth)}
+            onChange={(r) => onRangeChange(r, report.currentMonth)}
           />
           <Button variant="outline" isPending={pending?.kind === 'excel'} onPress={() => download.mutate({ kind: 'excel' })}>
             {t('reports.downloadExcel')}
@@ -74,7 +75,7 @@ export function SlaReportPage({ month, onMonthChange }: SlaReportPageProps) {
         </EmptyState>
       ) : (
         <Card
-          title={t('reports.byProject', { month: reportMonthLabel(t, report.month, report.toDate) })}
+          title={t('reports.byProject', { period: reportRangeLabel(t, report.from, report.to, report.toDate) })}
           actions={<span className="text-sm text-muted">{t('reports.target', { target })}</span>}
         >
           <ProjectTable

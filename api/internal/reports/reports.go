@@ -1,4 +1,5 @@
-// Package reports serves the monthly SLA report (HANDOFF §10) and its Excel and PDF exports.
+// Package reports serves the SLA report over a range of months (HANDOFF §10) and its Excel and
+// PDF exports.
 // The rules live in the pure internal/report package; this package loads the rows.
 package reports
 
@@ -26,19 +27,24 @@ type Service struct {
 
 func NewService(st *store.Store) *Service { return &Service{store: st, now: time.Now} }
 
-// Period is a report month placed in the organisation's time zone.
+// Months are the months asked for; a nil end is the current month.
+type Months struct {
+	From, To *report.Month
+}
+
+// Period is the report's months placed in the organisation's time zone.
 type Period struct {
-	Month   report.Month
+	Range   report.MonthRange
 	Current report.Month // this month, organisation time
 	Oldest  report.Month // the earliest month the report shows
 	// First is the month of the first ticket ever; nil without tickets.
 	First      *report.Month
-	ToDate     bool // the month hasn't ended yet
+	ToDate     bool // the range reaches the current month, which hasn't ended yet
 	Start, End time.Time
 	Location   *time.Location
 }
 
-// SLA is the report page: every project for one month.
+// SLA is the report page: every project over the range.
 type SLA struct {
 	Period
 	report.Report
@@ -46,10 +52,10 @@ type SLA struct {
 	WaitingPause *report.WaitingPause
 }
 
-// SLA returns the organization's report for month, or for the current month when month is nil.
-func (s *Service) SLA(ctx context.Context, orgID uuid.UUID, month *report.Month) (SLA, error) {
+// SLA returns the organization's report over the months asked for.
+func (s *Service) SLA(ctx context.Context, orgID uuid.UUID, months Months) (SLA, error) {
 	q := s.store.Q()
-	p, err := s.period(ctx, q, orgID, month)
+	p, err := s.period(ctx, q, orgID, months)
 	if err != nil {
 		return SLA{}, err
 	}
@@ -69,28 +75,27 @@ func (s *Service) SLA(ctx context.Context, orgID uuid.UUID, month *report.Month)
 	return out, nil
 }
 
-// period places month in the organization's time zone. A month that hasn't started, or one
-// before report.Oldest, is refused.
-func (s *Service) period(ctx context.Context, q *db.Queries, orgID uuid.UUID, month *report.Month) (Period, error) {
+// period places the months asked for in the organization's time zone. A month that hasn't
+// started, one before report.Oldest, or an end before the start is refused.
+func (s *Service) period(ctx context.Context, q *db.Queries, orgID uuid.UUID, months Months) (Period, error) {
 	loc, err := sla.Location(ctx, q, orgID)
 	if err != nil {
 		return Period{}, err
 	}
 	current := report.MonthOf(s.now(), loc)
-	m := current
-	if month != nil {
-		m = *month
+	r := report.SingleMonth(current)
+	if months.From != nil {
+		r.From = *months.From
 	}
-	if m.After(current) {
-		return Period{}, apperr.Invalid(apperr.CodeMonthInFuture, "This month hasn't started yet", "")
+	if months.To != nil {
+		r.To = *months.To
 	}
 	oldest := report.Oldest(current)
-	if m.Before(oldest) {
-		return Period{}, apperr.Invalid(apperr.CodeMonthOutOfRange, "This month is too far back",
-			fmt.Sprintf("The report goes back to %s.", oldest))
+	if err := r.Validate(current); err != nil {
+		return Period{}, rangeError(err, oldest)
 	}
-	p := Period{Month: m, Current: current, Oldest: oldest, ToDate: m == current, Location: loc}
-	p.Start, p.End = m.Bounds(loc)
+	p := Period{Range: r, Current: current, Oldest: oldest, ToDate: r.To == current, Location: loc}
+	p.Start, p.End = r.Bounds(loc)
 	first, err := q.GetFirstTicketCreatedAt(ctx, orgID)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -103,9 +108,23 @@ func (s *Service) period(ctx context.Context, q *db.Queries, orgID uuid.UUID, mo
 	return p, nil
 }
 
-// tickets lists the month's tickets, of one project when projectID is set.
+// rangeError is the API error for a range report.MonthRange.Validate refused.
+func rangeError(err error, oldest report.Month) error {
+	switch {
+	case errors.Is(err, report.ErrMonthInFuture):
+		return apperr.Invalid(apperr.CodeMonthInFuture, "This month hasn't started yet", "")
+	case errors.Is(err, report.ErrMonthTooOld):
+		return apperr.Invalid(apperr.CodeMonthOutOfRange, "This month is too far back",
+			fmt.Sprintf("The report goes back to %s.", oldest))
+	case errors.Is(err, report.ErrMonthsReversed):
+		return apperr.Invalid(apperr.CodeInvalidMonthRange, "The end month is before the start month", "")
+	}
+	return err
+}
+
+// tickets lists the range's tickets, of one project when projectID is set.
 func (s *Service) tickets(ctx context.Context, q *db.Queries, orgID uuid.UUID, p Period, projectID *uuid.UUID) ([]db.ListReportTicketsRow, error) {
-	return q.ListReportTickets(ctx, db.ListReportTicketsParams{OrganizationID: orgID, MonthStart: p.Start, MonthEnd: p.End, ProjectID: projectID})
+	return q.ListReportTickets(ctx, db.ListReportTicketsParams{OrganizationID: orgID, PeriodStart: p.Start, PeriodEnd: p.End, ProjectID: projectID})
 }
 
 func reportProjects(rows []db.ListReportProjectsRow) []report.Project {
@@ -153,10 +172,10 @@ type exportData struct {
 	Rows      []db.ListReportTicketsRow
 }
 
-// Excel returns the month for every project: a Summary sheet and a Tickets sheet.
-func (s *Service) Excel(ctx context.Context, orgID uuid.UUID, month *report.Month) (Export, error) {
+// Excel returns the range for every project: a Summary sheet and a Tickets sheet.
+func (s *Service) Excel(ctx context.Context, orgID uuid.UUID, months Months) (Export, error) {
 	q := s.store.Q()
-	d, err := s.exportData(ctx, q, orgID, month)
+	d, err := s.exportData(ctx, q, orgID, months)
 	if err != nil {
 		return Export{}, err
 	}
@@ -169,8 +188,8 @@ func (s *Service) Excel(ctx context.Context, orgID uuid.UUID, month *report.Mont
 	return buildExcel(d)
 }
 
-func (s *Service) exportData(ctx context.Context, q *db.Queries, orgID uuid.UUID, month *report.Month) (exportData, error) {
-	p, err := s.period(ctx, q, orgID, month)
+func (s *Service) exportData(ctx context.Context, q *db.Queries, orgID uuid.UUID, months Months) (exportData, error) {
+	p, err := s.period(ctx, q, orgID, months)
 	if err != nil {
 		return exportData{}, err
 	}
@@ -181,11 +200,11 @@ func (s *Service) exportData(ctx context.Context, q *db.Queries, orgID uuid.UUID
 	return exportData{Period: p, Org: org, Generated: s.now()}, nil
 }
 
-// ProjectPDF returns one project's month, to send to its client: the figures, a row per
+// ProjectPDF returns one project's range, to send to its client: the figures, a row per
 // priority and every ticket. It never shows another project's numbers.
-func (s *Service) ProjectPDF(ctx context.Context, orgID, projectID uuid.UUID, month *report.Month) (Export, error) {
+func (s *Service) ProjectPDF(ctx context.Context, orgID, projectID uuid.UUID, months Months) (Export, error) {
 	q := s.store.Q()
-	d, err := s.exportData(ctx, q, orgID, month)
+	d, err := s.exportData(ctx, q, orgID, months)
 	if err != nil {
 		return Export{}, err
 	}

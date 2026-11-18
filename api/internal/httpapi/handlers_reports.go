@@ -8,6 +8,7 @@ import (
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/auth"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/httpapi/gen"
 	"github.com/daffaalfandy/simpul-helpdesk/api/internal/report"
+	"github.com/daffaalfandy/simpul-helpdesk/api/internal/reports"
 )
 
 func (s *server) GetSlaReport(ctx context.Context, req gen.GetSlaReportRequestObject) (gen.GetSlaReportResponseObject, error) {
@@ -15,16 +16,17 @@ func (s *server) GetSlaReport(ctx context.Context, req gen.GetSlaReportRequestOb
 	if err != nil {
 		return nil, err
 	}
-	month, err := reportMonth(req.Params.Month)
+	months, err := reportMonths(req.Params.From, req.Params.To)
 	if err != nil {
 		return nil, err
 	}
-	r, err := s.reports.SLA(ctx, p.OrganizationID, month)
+	r, err := s.reports.SLA(ctx, p.OrganizationID, months)
 	if err != nil {
 		return nil, err
 	}
 	out := gen.GetSlaReport200JSONResponse{
-		Month: r.Month.String(), CurrentMonth: r.Current.String(), OldestMonth: r.Oldest.String(), ToDate: r.ToDate,
+		From: r.Range.From.String(), To: r.Range.To.String(), ToDate: r.ToDate,
+		CurrentMonth: r.Current.String(), OldestMonth: r.Oldest.String(),
 		TargetPercent: report.TargetPercent, Totals: apiSlaFigures(r.Totals),
 		ProjectsWithTickets: r.ProjectsWithTickets, ProjectsBelowTarget: r.ProjectsBelowTarget,
 		Projects: make([]gen.SlaReportProject, len(r.Projects)),
@@ -51,11 +53,11 @@ func (s *server) ExportSlaReportExcel(ctx context.Context, req gen.ExportSlaRepo
 	if err != nil {
 		return nil, err
 	}
-	month, err := reportMonth(req.Params.Month)
+	months, err := reportMonths(req.Params.From, req.Params.To)
 	if err != nil {
 		return nil, err
 	}
-	f, err := s.reports.Excel(ctx, p.OrganizationID, month)
+	f, err := s.reports.Excel(ctx, p.OrganizationID, months)
 	if err != nil {
 		return nil, err
 	}
@@ -73,11 +75,11 @@ func (s *server) ExportSlaProjectPdf(ctx context.Context, req gen.ExportSlaProje
 	if err != nil {
 		return nil, err
 	}
-	month, err := reportMonth(req.Params.Month)
+	months, err := reportMonths(req.Params.From, req.Params.To)
 	if err != nil {
 		return nil, err
 	}
-	f, err := s.reports.ProjectPDF(ctx, p.OrganizationID, req.ProjectId, month)
+	f, err := s.reports.ProjectPDF(ctx, p.OrganizationID, req.ProjectId, months)
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +92,20 @@ func (s *server) ExportSlaProjectPdf(ctx context.Context, req gen.ExportSlaProje
 	}, nil
 }
 
-// reportMonth reads the optional month parameter; the spec's pattern has already checked it.
-func reportMonth(param *gen.ReportMonth) (*report.Month, error) {
+// reportMonths reads the optional from and to months; the spec's pattern has already checked them.
+func reportMonths(from *gen.ReportFrom, to *gen.ReportTo) (reports.Months, error) {
+	var out reports.Months
+	var err error
+	if out.From, err = optionalMonth(from); err != nil {
+		return reports.Months{}, err
+	}
+	if out.To, err = optionalMonth(to); err != nil {
+		return reports.Months{}, err
+	}
+	return out, nil
+}
+
+func optionalMonth(param *string) (*report.Month, error) {
 	if param == nil {
 		return nil, nil
 	}

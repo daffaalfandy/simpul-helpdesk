@@ -3,11 +3,14 @@ package httpapi_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
@@ -65,10 +68,38 @@ func reportRows(r gen.SlaReport) []string {
 	return out
 }
 
+// pastMonth is the month report tests put their tickets in: last month in the test
+// organization's zone (Asia/Jakarta), so it stays inside the report's 12-month window whenever
+// the tests run.
+type pastMonth struct {
+	report.Month
+	loc *time.Location
+}
+
+func lastMonth(t *testing.T) pastMonth {
+	t.Helper()
+	loc := mustJakarta(t)
+	return pastMonth{Month: report.MonthOf(time.Now(), loc).Prev(), loc: loc}
+}
+
+// at is a time on a day of the month (day 0 is the last day of the month before).
+func (p pastMonth) at(day, hour, minute int) time.Time {
+	return time.Date(p.Year, p.Month.Month, day, hour, minute, 0, 0, p.loc)
+}
+
+// lastDayAt is a time on the month's last day.
+func (p pastMonth) lastDayAt(hour, minute int) time.Time {
+	return time.Date(p.Year, p.Month.Month+1, 0, hour, minute, 0, 0, p.loc)
+}
+
+// query asks for this month alone.
+func (p pastMonth) query() string { return "?from=" + p.String() + "&to=" + p.String() }
+
 func TestSLAReport(t *testing.T) {
 	te := newTicketEnv(t)
-	jakarta, _ := time.LoadLocation("Asia/Jakarta")
-	mid := time.Date(2026, time.October, 15, 9, 0, 0, 0, jakarta)
+	month := lastMonth(t)
+	jakarta := month.loc
+	mid := month.at(15, 9, 0)
 
 	quick := te.requester.report(t, incident(te.projectA, "Printer offline"))
 	slow := te.requester.report(t, incident(te.projectA, "e-Office down"))
@@ -87,19 +118,19 @@ func TestSLAReport(t *testing.T) {
 	te.exec(t, `UPDATE ticket_sla SET first_response_breached_at = now() WHERE ticket_id = $1`, slow.Id)
 
 	// Month edges are local midnight in the organisation's time zone.
-	lastOctober := te.otherRequester.report(t, incident(te.projectB, "Router down"))
-	te.reportedAt(t, lastOctober.Key, time.Date(2026, time.October, 31, 23, 30, 0, 0, jakarta))
-	firstNovember := te.otherRequester.report(t, incident(te.projectB, "Switch down"))
-	te.reportedAt(t, firstNovember.Key, time.Date(2026, time.November, 1, 0, 0, 0, 0, jakarta))
+	monthEnd := te.otherRequester.report(t, incident(te.projectB, "Router down"))
+	te.reportedAt(t, monthEnd.Key, month.lastDayAt(23, 30))
+	nextMonthStart := te.otherRequester.report(t, incident(te.projectB, "Switch down"))
+	te.reportedAt(t, nextMonthStart.Key, time.Date(month.Year, month.Month.Month+1, 1, 0, 0, 0, 0, jakarta))
 	// This ticket's project ran its clock while waiting on the client.
 	te.exec(t, `UPDATE tickets SET sla_snapshot = jsonb_set(sla_snapshot, '{pauseOnWaitingClient}', 'false') WHERE key = $1`,
-		lastOctober.Key)
+		monthEnd.Key)
 
-	r := te.supervisor.slaReport(t, "?month=2026-10")
+	r := te.supervisor.slaReport(t, month.query())
 	now := report.MonthOf(time.Now(), jakarta)
 	current := now.String()
-	if r.Month != "2026-10" || r.ToDate || r.CurrentMonth != current || r.FirstMonth == nil || *r.FirstMonth != "2026-10" {
-		t.Fatalf("month = %s, toDate = %v, current = %s, first = %v", r.Month, r.ToDate, r.CurrentMonth, r.FirstMonth)
+	if m := month.String(); r.From != m || r.To != m || r.ToDate || r.CurrentMonth != current || r.FirstMonth == nil || *r.FirstMonth != m {
+		t.Fatalf("months = %s..%s, toDate = %v, current = %s, first = %v", r.From, r.To, r.ToDate, r.CurrentMonth, r.FirstMonth)
 	}
 	if r.OldestMonth != report.Oldest(now).String() {
 		t.Errorf("oldest = %s, want %s", r.OldestMonth, report.Oldest(now))
@@ -126,7 +157,7 @@ func TestSLAReport(t *testing.T) {
 	}
 	b := reportProject(t, r, "Network & infra support")
 	if b.Figures.Tickets != 1 || b.BelowTarget || b.Figures.AvgFirstResponseMs != nil {
-		t.Errorf("%s = %+v; want only the 31 Oct ticket, on target, no average", b.Name, b.Figures)
+		t.Errorf("%s = %+v; want only the month-end ticket, on target, no average", b.Name, b.Figures)
 	}
 	// Busiest first; a project without tickets is still listed.
 	want := []string{requesterClient + " / e-Office", otherClient + " / Network & infra support", requesterClient + " / Email"}
@@ -140,14 +171,15 @@ func TestSLAReport(t *testing.T) {
 		t.Errorf("waitingPause = %v, want some", r.WaitingPause)
 	}
 
-	// Without a month: the current one, to date. Admins may read it too.
+	// Without months: the current one, to date. Admins may read it too.
 	thisMonth := te.admin.slaReport(t, "")
-	if thisMonth.Month != current || !thisMonth.ToDate {
-		t.Errorf("default month = %s (to date %v), want %s", thisMonth.Month, thisMonth.ToDate, current)
+	if thisMonth.From != current || thisMonth.To != current || !thisMonth.ToDate {
+		t.Errorf("default months = %s..%s (to date %v), want %s", thisMonth.From, thisMonth.To, thisMonth.ToDate, current)
 	}
 
 	// Every project is listed, even without tickets in the month.
-	empty := te.supervisor.slaReport(t, "?month=2026-09")
+	before := month.Prev().String()
+	empty := te.supervisor.slaReport(t, "?from="+before+"&to="+before)
 	if empty.Totals.Tickets != 0 || empty.Totals.WithinSlaPercent != nil || empty.WaitingPause != nil ||
 		len(empty.Projects) != len(r.Projects) || empty.ProjectsWithTickets != 0 || empty.ProjectsBelowTarget != 0 {
 		t.Errorf("empty month = %+v", empty)
@@ -203,25 +235,139 @@ func TestSLAReportAccessAndMonths(t *testing.T) {
 			t.Errorf("%s: status %d, want 403", name, rec.Code)
 		}
 	}
-	expectProblem(t, te.supervisor.do(http.MethodGet, "/reports/sla?month=2026-13", nil), http.StatusBadRequest, apperr.CodeInvalidRequest)
+	for _, q := range []string{"?from=2026-13", "?to=2026-00", "?from=2026-1", "?to=26-10"} {
+		expectProblem(t, te.supervisor.do(http.MethodGet, "/reports/sla"+q, nil), http.StatusBadRequest, apperr.CodeInvalidRequest)
+	}
 	now := report.MonthOf(time.Now(), mustJakarta(t))
 	oldest := report.Oldest(now)
 	tooOld := oldest.Prev().String()
-	for _, path := range []string{"/reports/sla", "/reports/sla/excel", "/reports/sla/projects/" + te.projectA.String() + "/pdf"} {
-		expectProblem(t, te.supervisor.do(http.MethodGet, path+"?month="+now.Next().String(), nil), http.StatusBadRequest, apperr.CodeMonthInFuture)
-		expectProblem(t, te.supervisor.do(http.MethodGet, path+"?month="+tooOld, nil), http.StatusBadRequest, apperr.CodeMonthOutOfRange)
+	refused := []struct {
+		query, code string
+	}{
+		{"?to=" + now.Next().String(), apperr.CodeMonthInFuture},
+		{"?from=" + now.Next().String() + "&to=" + now.Next().String(), apperr.CodeMonthInFuture},
+		// The end defaults to the current month, so a future start alone is refused too.
+		{"?from=" + now.Next().String(), apperr.CodeMonthInFuture},
+		{"?from=" + tooOld, apperr.CodeMonthOutOfRange},
+		{"?from=" + tooOld + "&to=" + oldest.String(), apperr.CodeMonthOutOfRange},
+		{"?from=" + now.String() + "&to=" + now.Prev().String(), apperr.CodeInvalidMonthRange},
+		// The start defaults to the current month, so an earlier end alone is reversed.
+		{"?to=" + now.Prev().String(), apperr.CodeInvalidMonthRange},
 	}
-	// The oldest month is still served.
-	if r := te.supervisor.slaReport(t, "?month="+oldest.String()); r.Month != oldest.String() || r.OldestMonth != oldest.String() {
-		t.Errorf("oldest month = %s (oldest %s)", r.Month, r.OldestMonth)
+	for _, path := range []string{"/reports/sla", "/reports/sla/excel", "/reports/sla/projects/" + te.projectA.String() + "/pdf"} {
+		for _, r := range refused {
+			expectProblem(t, te.supervisor.do(http.MethodGet, path+r.query, nil), http.StatusBadRequest, r.code)
+		}
+	}
+	// The oldest month is still served, alone or as the start of the whole window.
+	if r := te.supervisor.slaReport(t, "?from="+oldest.String()+"&to="+oldest.String()); r.From != oldest.String() ||
+		r.To != oldest.String() || r.OldestMonth != oldest.String() || r.ToDate {
+		t.Errorf("oldest month = %s..%s (oldest %s, to date %v)", r.From, r.To, r.OldestMonth, r.ToDate)
+	}
+	if r := te.supervisor.slaReport(t, "?from="+oldest.String()); r.From != oldest.String() || r.To != now.String() || !r.ToDate {
+		t.Errorf("whole window = %s..%s (to date %v)", r.From, r.To, r.ToDate)
+	}
+}
+
+// pdfInfoText is text as gopdf writes it in the PDF's document properties: UTF-16BE in hex.
+func pdfInfoText(s string) []byte {
+	var b strings.Builder
+	b.WriteString("<FEFF")
+	for _, u := range utf16.Encode([]rune(s)) {
+		fmt.Fprintf(&b, "%04X", u)
+	}
+	b.WriteString(">")
+	return []byte(b.String())
+}
+
+// monthName is how the files name a month: "November 2026".
+func monthName(m report.Month) string { return m.Month.String() + " " + strconv.Itoa(m.Year) }
+
+// A range of months counts the tickets of each, and the files cover and name the range.
+func TestSLAReportMonthRange(t *testing.T) {
+	te := newTicketEnv(t)
+	jakarta := mustJakarta(t)
+	now := report.MonthOf(time.Now(), jakarta)
+	prev, before := now.Prev(), now.Prev().Prev()
+	mid := func(m report.Month) time.Time {
+		start, _ := m.Bounds(jakarta)
+		return start.AddDate(0, 0, 14)
+	}
+	current := te.requester.report(t, incident(te.projectA, "Printer offline"))
+	last := te.requester.report(t, incident(te.projectA, "e-Office down"))
+	te.reportedAt(t, last.Key, mid(prev))
+	te.resolutionBreached(t, last.Key)
+	older := te.otherRequester.report(t, incident(te.projectB, "Router down"))
+	te.reportedAt(t, older.Key, mid(before))
+
+	both := te.supervisor.slaReport(t, "?from="+prev.String()+"&to="+now.String())
+	if both.From != prev.String() || both.To != now.String() || !both.ToDate {
+		t.Errorf("months = %s..%s (to date %v), want %s..%s to date", both.From, both.To, both.ToDate, prev, now)
+	}
+	if tot := both.Totals; tot.Tickets != 2 || tot.Breaches != 1 || both.ProjectsWithTickets != 1 {
+		t.Errorf("two months = %+v with tickets on %d projects; want 2 tickets, 1 breach, 1 project", tot, both.ProjectsWithTickets)
+	}
+	if p := reportProject(t, both, "e-Office"); p.Figures.Tickets != 2 {
+		t.Errorf("e-Office over two months = %d tickets, want 2", p.Figures.Tickets)
+	}
+	if p := reportProject(t, both, "Network & infra support"); p.Figures.Tickets != 0 {
+		t.Errorf("the ticket before the range counted: %d", p.Figures.Tickets)
+	}
+
+	// One earlier month alone is not to date.
+	one := te.supervisor.slaReport(t, "?from="+prev.String()+"&to="+prev.String())
+	if one.From != prev.String() || one.To != prev.String() || one.ToDate || one.Totals.Tickets != 1 {
+		t.Errorf("last month = %s..%s (to date %v), %d tickets; want 1", one.From, one.To, one.ToDate, one.Totals.Tickets)
+	}
+	// Without months: the current month only, as before.
+	if def := te.supervisor.slaReport(t, ""); def.From != now.String() || def.To != now.String() || def.Totals.Tickets != 1 {
+		t.Errorf("default = %s..%s, %d tickets; want this month's 1", def.From, def.To, def.Totals.Tickets)
+	}
+	// A start alone runs to the current month.
+	if all := te.supervisor.slaReport(t, "?from="+before.String()); all.To != now.String() || all.Totals.Tickets != 3 {
+		t.Errorf("from %s = ..%s, %d tickets; want to %s, 3", before, all.To, all.Totals.Tickets, now)
+	}
+
+	span := monthName(prev) + " to " + monthName(now) + " (to date)"
+	rec := te.supervisor.do(http.MethodGet, "/reports/sla/excel?from="+prev.String()+"&to="+now.String(), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Excel: status %d: %s", rec.Code, rec.Body)
+	}
+	if got, want := rec.Header().Get("Content-Disposition"), "attachment; filename=sla-report-"+prev.String()+"-to-"+now.String()+".xlsx"; got != want {
+		t.Errorf("Excel Content-Disposition = %q, want %q", got, want)
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(rec.Body.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	cells := map[string]string{"Summary!A2": "SLA report · " + span, "Tickets!A2": last.Key, "Tickets!A3": current.Key, "Tickets!A4": ""}
+	for ref, want := range cells {
+		sheet, cell, _ := strings.Cut(ref, "!")
+		if got, err := f.GetCellValue(sheet, cell); err != nil || got != want {
+			t.Errorf("Excel %s = %q (%v), want %q", ref, got, err, want)
+		}
+	}
+
+	path := "/reports/sla/projects/" + te.projectA.String() + "/pdf?from=" + prev.String() + "&to=" + now.String()
+	rec = te.supervisor.do(http.MethodGet, path, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PDF: status %d: %s", rec.Code, rec.Body)
+	}
+	want := "attachment; filename=sla-report-" + prev.String() + "-to-" + now.String() + "-dinas-kominfo-jambi-e-office.pdf"
+	if got := rec.Header().Get("Content-Disposition"); got != want {
+		t.Errorf("PDF Content-Disposition = %q, want %q", got, want)
+	}
+	if title := pdfInfoText("SLA report · " + span + " · " + requesterClient + " · e-Office"); !bytes.Contains(rec.Body.Bytes(), title) {
+		t.Errorf("the PDF's title does not name %q", span)
 	}
 }
 
 func TestSLAReportExcel(t *testing.T) {
 	te := newTicketEnv(t)
-	jakarta, _ := time.LoadLocation("Asia/Jakarta")
+	month := lastMonth(t)
 	formula := te.requester.report(t, incident(te.projectA, `=HYPERLINK("http://evil.test","Click")`))
-	te.reportedAt(t, formula.Key, time.Date(2026, time.October, 15, 9, 0, 0, 0, jakarta))
+	te.reportedAt(t, formula.Key, month.at(15, 9, 0))
 	te.answeredAfter(t, formula.Key, 16*time.Minute)
 
 	for name, s := range map[string]session{"agent": te.agent, "requester": te.requester} {
@@ -229,7 +375,7 @@ func TestSLAReportExcel(t *testing.T) {
 			t.Errorf("%s: status %d, want 403", name, rec.Code)
 		}
 	}
-	rec := te.supervisor.do(http.MethodGet, "/reports/sla/excel?month=2026-10", nil)
+	rec := te.supervisor.do(http.MethodGet, "/reports/sla/excel"+month.query(), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
@@ -237,7 +383,7 @@ func TestSLAReportExcel(t *testing.T) {
 	if got := h.Get("Content-Type"); got != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
 		t.Errorf("Content-Type = %q", got)
 	}
-	if got := h.Get("Content-Disposition"); got != `attachment; filename=sla-report-2026-10.xlsx` {
+	if got := h.Get("Content-Disposition"); got != "attachment; filename=sla-report-"+month.String()+".xlsx" {
 		t.Errorf("Content-Disposition = %q", got)
 	}
 	if h.Get("Cache-Control") != "no-store" {
@@ -295,7 +441,7 @@ func TestSLAReportExcel(t *testing.T) {
 	if got := cell("Tickets", "A2"); got != formula.Key {
 		t.Errorf("first ticket = %q, want %s", got, formula.Key)
 	}
-	if got := cell("Tickets", "I2"); got != "2026-10-15 09:00" {
+	if got := cell("Tickets", "I2"); got != month.String()+"-15 09:00" {
 		t.Errorf("reported = %q, want local time", got)
 	}
 	if got := cell("Tickets", "K2"); got != "16" {
@@ -312,11 +458,11 @@ func TestSLAReportExcel(t *testing.T) {
 
 func TestSLAReportPDF(t *testing.T) {
 	te := newTicketEnv(t)
-	jakarta := mustJakarta(t)
+	month := lastMonth(t)
 	tk := te.requester.report(t, incident(te.projectA, "Printer offline"))
-	te.reportedAt(t, tk.Key, time.Date(2026, time.October, 15, 9, 0, 0, 0, jakarta))
+	te.reportedAt(t, tk.Key, month.at(15, 9, 0))
 
-	path := "/reports/sla/projects/" + te.projectA.String() + "/pdf?month=2026-10"
+	path := "/reports/sla/projects/" + te.projectA.String() + "/pdf" + month.query()
 	for name, s := range map[string]session{"agent": te.agent, "requester": te.requester} {
 		if rec := s.do(http.MethodGet, path, nil); rec.Code != http.StatusForbidden {
 			t.Errorf("%s: status %d, want 403", name, rec.Code)
@@ -329,14 +475,14 @@ func TestSLAReportPDF(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); got != "application/pdf" {
 		t.Errorf("Content-Type = %q", got)
 	}
-	if got := rec.Header().Get("Content-Disposition"); got != "attachment; filename=sla-report-2026-10-dinas-kominfo-jambi-e-office.pdf" {
+	if got := rec.Header().Get("Content-Disposition"); got != "attachment; filename=sla-report-"+month.String()+"-dinas-kominfo-jambi-e-office.pdf" {
 		t.Errorf("Content-Disposition = %q", got)
 	}
 	if !bytes.HasPrefix(rec.Body.Bytes(), []byte("%PDF-")) {
 		t.Errorf("body is not a PDF")
 	}
 	// A project without tickets still gets its report.
-	if rec := te.admin.do(http.MethodGet, "/reports/sla/projects/"+te.projectB.String()+"/pdf?month=2026-10", nil); rec.Code != http.StatusOK {
+	if rec := te.admin.do(http.MethodGet, "/reports/sla/projects/"+te.projectB.String()+"/pdf"+month.query(), nil); rec.Code != http.StatusOK {
 		t.Errorf("project without tickets: status %d", rec.Code)
 	}
 	expectProblem(t, te.supervisor.do(http.MethodGet, "/reports/sla/projects/"+uuid.NewString()+"/pdf", nil), http.StatusNotFound, apperr.CodeNotFound)
@@ -362,7 +508,7 @@ func TestSLAReportPDFTickets(t *testing.T) {
 	te.otherRequester.report(t, incident(te.projectB, "Router down"))
 
 	svc := reports.NewService(te.st)
-	f, err := svc.ProjectPDF(ctx, te.org, te.projectA, nil)
+	f, err := svc.ProjectPDF(ctx, te.org, te.projectA, reports.Months{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +516,7 @@ func TestSLAReportPDFTickets(t *testing.T) {
 		t.Fatal("not a PDF")
 	}
 	rows, err := te.st.Q().ListReportTickets(ctx, db.ListReportTicketsParams{
-		OrganizationID: te.org, MonthStart: time.Now().Add(-time.Hour), MonthEnd: time.Now().Add(time.Hour), ProjectID: &te.projectA,
+		OrganizationID: te.org, PeriodStart: time.Now().Add(-time.Hour), PeriodEnd: time.Now().Add(time.Hour), ProjectID: &te.projectA,
 	})
 	if err != nil {
 		t.Fatal(err)

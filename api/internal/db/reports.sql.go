@@ -133,8 +133,8 @@ ORDER BY t.created_at, t.number
 
 type ListReportTicketsParams struct {
 	OrganizationID uuid.UUID
-	MonthStart     time.Time
-	MonthEnd       time.Time
+	PeriodStart    time.Time
+	PeriodEnd      time.Time
 	ProjectID      *uuid.UUID
 }
 
@@ -160,14 +160,14 @@ type ListReportTicketsRow struct {
 	PausesWhileWaiting      bool
 }
 
-// Tickets created in [month_start, month_end), with their SLA outcome so far. A ticket the SLA
+// Tickets created in [period_start, period_end), with their SLA outcome so far. A ticket the SLA
 // scan hasn't replayed yet has no ticket_sla row: no breach and no first-response time.
 // project_id narrows the list to one project; NULL lists all.
 func (q *Queries) ListReportTickets(ctx context.Context, arg ListReportTicketsParams) ([]ListReportTicketsRow, error) {
 	rows, err := q.db.Query(ctx, listReportTickets,
 		arg.OrganizationID,
-		arg.MonthStart,
-		arg.MonthEnd,
+		arg.PeriodStart,
+		arg.PeriodEnd,
 		arg.ProjectID,
 	)
 	if err != nil {

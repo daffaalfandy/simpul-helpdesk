@@ -156,6 +156,7 @@ export const ErrorCode = {
   OtherOrganization: 'other_organization',
   MonthInFuture: 'month_in_future',
   MonthOutOfRange: 'month_out_of_range',
+  InvalidMonthRange: 'invalid_month_range',
 } as const
 
 export const HttpStatus = {

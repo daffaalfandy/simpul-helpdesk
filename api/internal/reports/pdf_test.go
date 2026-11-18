@@ -25,8 +25,8 @@ func testPeriod(t *testing.T) Period {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := Period{Month: report.Month{Year: 2026, Month: time.October}, Current: report.Month{Year: 2026, Month: time.November}, Location: loc}
-	p.Start, p.End = p.Month.Bounds(loc)
+	p := Period{Range: report.SingleMonth(report.Month{Year: 2026, Month: time.October}), Current: report.Month{Year: 2026, Month: time.November}, Location: loc}
+	p.Start, p.End = p.Range.Bounds(loc)
 	return p
 }
 
@@ -147,6 +147,65 @@ func TestPDFFileName(t *testing.T) {
 	}
 	if want := "sla-report-2026-10-" + p.ID.String() + ".pdf"; f.Filename != want {
 		t.Errorf("file name without ASCII letters = %q, want %q", f.Filename, want)
+	}
+}
+
+func TestFileNameNamesTheMonths(t *testing.T) {
+	sep, oct, nov := report.Month{Year: 2026, Month: time.September}, report.Month{Year: 2026, Month: time.October},
+		report.Month{Year: 2026, Month: time.November}
+	jan := report.Month{Year: 2027, Month: time.January}
+	tests := []struct {
+		name  string
+		r     report.MonthRange
+		stem  string
+		ext   string
+		wantF string
+	}{
+		{"one month", report.SingleMonth(oct), "", excelExt, "sla-report-2026-10.xlsx"},
+		{"several months", report.MonthRange{From: sep, To: nov}, "", excelExt, "sla-report-2026-09-to-2026-11.xlsx"},
+		{"across the year end", report.MonthRange{From: nov, To: jan}, "", excelExt, "sla-report-2026-11-to-2027-01.xlsx"},
+		{"one month, a project", report.SingleMonth(nov), "dinas-kominfo-jambi-e-office", pdfExt,
+			"sla-report-2026-11-dinas-kominfo-jambi-e-office.pdf"},
+		{"several months, a project", report.MonthRange{From: sep, To: nov}, "dinas-kominfo-jambi-e-office", pdfExt,
+			"sla-report-2026-09-to-2026-11-dinas-kominfo-jambi-e-office.pdf"},
+	}
+	for _, tt := range tests {
+		c := &copywriter{}
+		if got := c.fileName(tt.r, tt.stem, tt.ext); got != tt.wantF || c.err != nil {
+			t.Errorf("%s: fileName = %q (%v), want %q", tt.name, got, c.err, tt.wantF)
+		}
+	}
+}
+
+func TestPeriodLabels(t *testing.T) {
+	sep, oct, nov := report.Month{Year: 2026, Month: time.September}, report.Month{Year: 2026, Month: time.October},
+		report.Month{Year: 2026, Month: time.November}
+	tests := []struct {
+		name              string
+		r                 report.MonthRange
+		toDate            bool
+		period, noTickets string
+	}{
+		{"one month", report.SingleMonth(oct), false, "October 2026", "No tickets reported in October 2026."},
+		{"the current month", report.SingleMonth(nov), true, "November 2026 (to date)",
+			"No tickets reported in November 2026 (to date)."},
+		{"several months", report.MonthRange{From: sep, To: oct}, false, "September 2026 to October 2026",
+			"No tickets reported from September 2026 to October 2026."},
+		{"several months to date", report.MonthRange{From: sep, To: nov}, true, "September 2026 to November 2026 (to date)",
+			"No tickets reported from September 2026 to November 2026 (to date)."},
+	}
+	for _, tt := range tests {
+		c := &copywriter{}
+		p := Period{Range: tt.r, ToDate: tt.toDate}
+		if got := c.period(p); got != tt.period {
+			t.Errorf("%s: period = %q, want %q", tt.name, got, tt.period)
+		}
+		if got := c.text(labelNoTickets, c.periodArgs(p)); got != tt.noTickets {
+			t.Errorf("%s: no tickets = %q, want %q", tt.name, got, tt.noTickets)
+		}
+		if c.err != nil {
+			t.Fatal(c.err)
+		}
 	}
 }
 

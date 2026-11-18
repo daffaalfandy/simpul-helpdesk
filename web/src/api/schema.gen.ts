@@ -1724,13 +1724,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The monthly SLA report for every project (supervisors and admins)
-         * @description A month holds the tickets created in it, in the organisation's time zone, open or done.
+         * The SLA report over a range of months for every project (supervisors and admins)
+         * @description The report covers whole months, `from` to `to`, both included: the tickets created from
+         *     the 1st of `from` to the end of `to` (to date while `to` is the current month), in the
+         *     organisation's time zone, open or done. Both default to the current month.
          *     A ticket is within SLA while neither of its clocks has breached; breaches count tickets,
          *     not clocks. Every active project is listed, busiest first, then by client and project
-         *     name; a hidden project only when it has tickets in the month. The report reaches back
-         *     12 months before the current one. Error codes `month_in_future` and
-         *     `month_out_of_range` (400).
+         *     name; a hidden project only when it has tickets in the range. Both months lie within the
+         *     12 months before the current one. Error codes `month_in_future`, `month_out_of_range`
+         *     and `invalid_month_range` (`to` before `from`), all 400.
          */
         get: operations["getSlaReport"];
         put?: never;
@@ -1749,11 +1751,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The monthly SLA report for every project as an Excel file (supervisors and admins)
-         * @description A Summary sheet with the report's figures and a row per project (with its client and the
-         *     client's contract number), and a Tickets sheet with one row per ticket. Times are written
-         *     in the organisation's time zone, named in the headers. Error codes `month_in_future` and
-         *     `month_out_of_range` (400).
+         * The SLA report over a range of months for every project as an Excel file (supervisors and admins)
+         * @description The months `from` to `to`, as in `getSlaReport`: a Summary sheet with the report's
+         *     figures and a row per project (with its client and the client's contract number), and a
+         *     Tickets sheet with one row per ticket. Times are written in the organisation's time zone,
+         *     named in the headers. The file is `sla-report-2026-11.xlsx` for one month and
+         *     `sla-report-2026-09-to-2026-11.xlsx` for several. Error codes `month_in_future`,
+         *     `month_out_of_range` and `invalid_month_range` (400).
          */
         get: operations["exportSlaReportExcel"];
         put?: never;
@@ -1774,10 +1778,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * One project's monthly SLA report as a PDF (supervisors and admins)
-         * @description The project's figures, a row per priority and every ticket of the month, to send to its
-         *     client; it never shows another project's numbers. Hidden projects have one too. A plain
-         *     export, not signed. Error codes `month_in_future` and `month_out_of_range` (400).
+         * One project's SLA report over a range of months as a PDF (supervisors and admins)
+         * @description The project's figures, a row per priority and every ticket of the months `from` to `to`
+         *     (as in `getSlaReport`), to send to its client; it never shows another project's numbers.
+         *     Hidden projects have one too. A plain export, not signed. The file is
+         *     `sla-report-2026-11-<client>-<project>.pdf` for one month and
+         *     `sla-report-2026-09-to-2026-11-<client>-<project>.pdf` for several. Error codes
+         *     `month_in_future`, `month_out_of_range` and `invalid_month_range` (400).
          */
         get: operations["exportSlaProjectPdf"];
         put?: never;
@@ -3016,15 +3023,17 @@ export interface components {
             code: components["schemas"]["TicketActivityCode"] | null;
         };
         SlaReport: {
-            /** @description The report's month, e.g. `2026-11`. */
-            month: string;
+            /** @description The report's first month, e.g. `2026-09`. */
+            from: string;
+            /** @description The report's last month, included, e.g. `2026-11`; the same as `from` for one month. */
+            to: string;
             /** @description This month in the organisation's time zone. */
             currentMonth: string;
             /** @description The earliest month the report shows, 12 months before the current one. */
             oldestMonth: string;
             /** @description The month of the first ticket ever; null without tickets. */
             firstMonth: string | null;
-            /** @description The month hasn't ended yet. */
+            /** @description The range reaches the current month, which hasn't ended yet. */
             toDate: boolean;
             /**
              * Format: double
@@ -3038,13 +3047,13 @@ export interface components {
             /** @description Projects with tickets and a share within SLA under the target. */
             projectsBelowTarget: number;
             /**
-             * @description Every active project and the hidden ones with tickets in the month, busiest first,
+             * @description Every active project and the hidden ones with tickets in the range, busiest first,
              *     then by client and project name.
              */
             projects: components["schemas"]["SlaReportProject"][];
         };
         /**
-         * @description How many of the month's tickets stop their resolution clock while waiting on the
+         * @description How many of the report's tickets stop their resolution clock while waiting on the
          *     client (each ticket follows its project's SLA as it was when the ticket was created).
          * @enum {string}
          */
@@ -3163,8 +3172,10 @@ export interface components {
         UserId: string;
         TokenId: string;
         NotificationId: string;
-        /** @description A month such as `2026-11`; the current month when left out. */
-        ReportMonth: string;
+        /** @description The report's first month, such as `2026-09`; the current month when left out. */
+        ReportFrom: string;
+        /** @description The report's last month, included, such as `2026-11`; the current month when left out. */
+        ReportTo: string;
         /** @description The first day a ticket may have been reported on, such as `2026-11-01`. */
         ReportedFrom: string;
         /** @description The last day a ticket may have been reported on, included, such as `2026-11-30`. */
@@ -5865,8 +5876,10 @@ export interface operations {
     getSlaReport: {
         parameters: {
             query?: {
-                /** @description A month such as `2026-11`; the current month when left out. */
-                month?: components["parameters"]["ReportMonth"];
+                /** @description The report's first month, such as `2026-09`; the current month when left out. */
+                from?: components["parameters"]["ReportFrom"];
+                /** @description The report's last month, included, such as `2026-11`; the current month when left out. */
+                to?: components["parameters"]["ReportTo"];
             };
             header?: never;
             path?: never;
@@ -5892,8 +5905,10 @@ export interface operations {
     exportSlaReportExcel: {
         parameters: {
             query?: {
-                /** @description A month such as `2026-11`; the current month when left out. */
-                month?: components["parameters"]["ReportMonth"];
+                /** @description The report's first month, such as `2026-09`; the current month when left out. */
+                from?: components["parameters"]["ReportFrom"];
+                /** @description The report's last month, included, such as `2026-11`; the current month when left out. */
+                to?: components["parameters"]["ReportTo"];
             };
             header?: never;
             path?: never;
@@ -5922,8 +5937,10 @@ export interface operations {
     exportSlaProjectPdf: {
         parameters: {
             query?: {
-                /** @description A month such as `2026-11`; the current month when left out. */
-                month?: components["parameters"]["ReportMonth"];
+                /** @description The report's first month, such as `2026-09`; the current month when left out. */
+                from?: components["parameters"]["ReportFrom"];
+                /** @description The report's last month, included, such as `2026-11`; the current month when left out. */
+                to?: components["parameters"]["ReportTo"];
             };
             header?: never;
             path: {

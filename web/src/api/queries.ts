@@ -45,7 +45,7 @@ export const queryKeys = {
   codeEvents: ['integrations', 'events'],
   commitTest: (message: string) => ['integrations', 'commit-test', message] as const,
   ticketCode: (key: string) => ['tickets', 'code', key] as const,
-  slaReport: (month: string | undefined) => ['reports', 'sla', month ?? 'current'] as const,
+  slaReport: (from: string | undefined, to: string | undefined) => ['reports', 'sla', from ?? 'current', to ?? 'current'] as const,
   members: ['members'],
   tokens: ['tokens'],
   projectFilter: ['project-filter'],

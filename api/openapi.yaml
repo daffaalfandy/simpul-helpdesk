@@ -2230,17 +2230,20 @@ paths:
   /reports/sla:
     get:
       operationId: getSlaReport
-      summary: The monthly SLA report for every project (supervisors and admins)
+      summary: The SLA report over a range of months for every project (supervisors and admins)
       description: |
-        A month holds the tickets created in it, in the organisation's time zone, open or done.
+        The report covers whole months, `from` to `to`, both included: the tickets created from
+        the 1st of `from` to the end of `to` (to date while `to` is the current month), in the
+        organisation's time zone, open or done. Both default to the current month.
         A ticket is within SLA while neither of its clocks has breached; breaches count tickets,
         not clocks. Every active project is listed, busiest first, then by client and project
-        name; a hidden project only when it has tickets in the month. The report reaches back
-        12 months before the current one. Error codes `month_in_future` and
-        `month_out_of_range` (400).
+        name; a hidden project only when it has tickets in the range. Both months lie within the
+        12 months before the current one. Error codes `month_in_future`, `month_out_of_range`
+        and `invalid_month_range` (`to` before `from`), all 400.
       tags: [reports]
       parameters:
-        - $ref: "#/components/parameters/ReportMonth"
+        - $ref: "#/components/parameters/ReportFrom"
+        - $ref: "#/components/parameters/ReportTo"
       responses:
         "200":
           description: The report
@@ -2255,15 +2258,18 @@ paths:
   /reports/sla/excel:
     get:
       operationId: exportSlaReportExcel
-      summary: The monthly SLA report for every project as an Excel file (supervisors and admins)
+      summary: The SLA report over a range of months for every project as an Excel file (supervisors and admins)
       description: |
-        A Summary sheet with the report's figures and a row per project (with its client and the
-        client's contract number), and a Tickets sheet with one row per ticket. Times are written
-        in the organisation's time zone, named in the headers. Error codes `month_in_future` and
-        `month_out_of_range` (400).
+        The months `from` to `to`, as in `getSlaReport`: a Summary sheet with the report's
+        figures and a row per project (with its client and the client's contract number), and a
+        Tickets sheet with one row per ticket. Times are written in the organisation's time zone,
+        named in the headers. The file is `sla-report-2026-11.xlsx` for one month and
+        `sla-report-2026-09-to-2026-11.xlsx` for several. Error codes `month_in_future`,
+        `month_out_of_range` and `invalid_month_range` (400).
       tags: [reports]
       parameters:
-        - $ref: "#/components/parameters/ReportMonth"
+        - $ref: "#/components/parameters/ReportFrom"
+        - $ref: "#/components/parameters/ReportTo"
       responses:
         "200":
           description: The workbook
@@ -2287,14 +2293,18 @@ paths:
       - $ref: "#/components/parameters/ProjectId"
     get:
       operationId: exportSlaProjectPdf
-      summary: One project's monthly SLA report as a PDF (supervisors and admins)
+      summary: One project's SLA report over a range of months as a PDF (supervisors and admins)
       description: |
-        The project's figures, a row per priority and every ticket of the month, to send to its
-        client; it never shows another project's numbers. Hidden projects have one too. A plain
-        export, not signed. Error codes `month_in_future` and `month_out_of_range` (400).
+        The project's figures, a row per priority and every ticket of the months `from` to `to`
+        (as in `getSlaReport`), to send to its client; it never shows another project's numbers.
+        Hidden projects have one too. A plain export, not signed. The file is
+        `sla-report-2026-11-<client>-<project>.pdf` for one month and
+        `sla-report-2026-09-to-2026-11-<client>-<project>.pdf` for several. Error codes
+        `month_in_future`, `month_out_of_range` and `invalid_month_range` (400).
       tags: [reports]
       parameters:
-        - $ref: "#/components/parameters/ReportMonth"
+        - $ref: "#/components/parameters/ReportFrom"
+        - $ref: "#/components/parameters/ReportTo"
       responses:
         "200":
           description: The PDF
@@ -2374,11 +2384,17 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
-    ReportMonth:
-      name: month
+    ReportFrom:
+      name: from
       in: query
       required: false
-      description: A month such as `2026-11`; the current month when left out.
+      description: The report's first month, such as `2026-09`; the current month when left out.
+      schema: { type: string, pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" }
+    ReportTo:
+      name: to
+      in: query
+      required: false
+      description: The report's last month, included, such as `2026-11`; the current month when left out.
       schema: { type: string, pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$" }
     ReportedFrom:
       name: from
@@ -4037,10 +4053,11 @@ components:
 
     SlaReport:
       type: object
-      required: [month, currentMonth, oldestMonth, firstMonth, toDate, targetPercent, waitingPause, totals,
+      required: [from, to, currentMonth, oldestMonth, firstMonth, toDate, targetPercent, waitingPause, totals,
         projectsWithTickets, projectsBelowTarget, projects]
       properties:
-        month: { type: string, description: "The report's month, e.g. `2026-11`." }
+        from: { type: string, description: "The report's first month, e.g. `2026-09`." }
+        to: { type: string, description: "The report's last month, included, e.g. `2026-11`; the same as `from` for one month." }
         currentMonth: { type: string, description: "This month in the organisation's time zone." }
         oldestMonth:
           type: string
@@ -4049,7 +4066,7 @@ components:
           type: string
           nullable: true
           description: The month of the first ticket ever; null without tickets.
-        toDate: { type: boolean, description: The month hasn't ended yet. }
+        toDate: { type: boolean, description: "The range reaches the current month, which hasn't ended yet." }
         targetPercent:
           type: number
           format: double
@@ -4066,7 +4083,7 @@ components:
         projects:
           type: array
           description: |
-            Every active project and the hidden ones with tickets in the month, busiest first,
+            Every active project and the hidden ones with tickets in the range, busiest first,
             then by client and project name.
           items: { $ref: "#/components/schemas/SlaReportProject" }
 
@@ -4074,7 +4091,7 @@ components:
       type: string
       enum: [all, some, none]
       description: |
-        How many of the month's tickets stop their resolution clock while waiting on the
+        How many of the report's tickets stop their resolution clock while waiting on the
         client (each ticket follows its project's SLA as it was when the ticket was created).
 
     SlaReportProject:

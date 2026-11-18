@@ -22,7 +22,8 @@ var labels = template.Must(template.New("labels").Parse(labelsText))
 const (
 	labelFileStem            = "file.stem"
 	labelMonthPrefix         = "month."
-	labelMonth               = "report.month"
+	labelMonthName           = "report.monthName"
+	labelPeriod              = "report.period"
 	labelTitle               = "report.title"
 	labelHeading             = "report.heading"
 	labelGenerated           = "report.generated"
@@ -91,10 +92,16 @@ const (
 // Data shapes the label blocks read.
 type (
 	monthArgs struct {
-		Name   string
-		Year   int
-		ToDate bool
+		Name string
+		Year int
 	}
+	// periodArgs names the range's months; To is empty for one month.
+	periodArgs struct {
+		From, To string
+		ToDate   bool
+	}
+	// fileArgs are the months in a file name, written as in URLs; To is empty for one month.
+	fileArgs      struct{ From, To string }
 	generatedArgs struct{ At, Zone string }
 	contractArgs  struct{ No, Start, End string }
 	splitArgs     struct{ Incidents, Requests int }
@@ -126,11 +133,23 @@ func (c *copywriter) text(name string, data any) string {
 	return b.String()
 }
 
-// month names the period, e.g. "November 2026 (to date)".
-func (c *copywriter) month(p Period) string {
-	return c.text(labelMonth, monthArgs{
-		Name: c.text(labelMonthPrefix+strconv.Itoa(int(p.Month.Month)), nil), Year: p.Month.Year, ToDate: p.ToDate,
-	})
+// monthName is "November 2026".
+func (c *copywriter) monthName(m report.Month) string {
+	return c.text(labelMonthName, monthArgs{Name: c.text(labelMonthPrefix+strconv.Itoa(int(m.Month)), nil), Year: m.Year})
+}
+
+// periodArgs names p's months for the label blocks.
+func (c *copywriter) periodArgs(p Period) periodArgs {
+	a := periodArgs{From: c.monthName(p.Range.From), ToDate: p.ToDate}
+	if !p.Range.Single() {
+		a.To = c.monthName(p.Range.To)
+	}
+	return a
+}
+
+// period names the report's months: "November 2026 (to date)", "September 2026 to October 2026".
+func (c *copywriter) period(p Period) string {
+	return c.text(labelPeriod, c.periodArgs(p))
 }
 
 // percent writes a share like the web app: one decimal at most, "95.3%", "100%".
@@ -167,9 +186,14 @@ func (c *copywriter) generated(at time.Time, loc *time.Location) string {
 	return c.text(labelGenerated, generatedArgs{At: at.In(loc).Format(dateTimeLayout), Zone: loc.String()})
 }
 
-// fileName is "sla-report-2026-11.xlsx", or with a stem "sla-report-2026-11-dinas-kominfo-jambi-e-office.pdf".
-func (c *copywriter) fileName(m report.Month, stem, ext string) string {
-	name := c.text(labelFileStem, m.String())
+// fileName is "sla-report-2026-11.xlsx" for one month and "sla-report-2026-09-to-2026-11.xlsx" for
+// several, or with a stem "sla-report-2026-11-dinas-kominfo-jambi-e-office.pdf".
+func (c *copywriter) fileName(r report.MonthRange, stem, ext string) string {
+	a := fileArgs{From: r.From.String()}
+	if !r.Single() {
+		a.To = r.To.String()
+	}
+	name := c.text(labelFileStem, a)
 	if stem != "" {
 		name += fileStemJoin + stem
 	}

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { isMonthKey, monthLong, monthOptions, previousMonth } from './months'
+import {
+  isMonthKey,
+  monthLong,
+  monthOptions,
+  previousMonth,
+  rangeOptions,
+  searchFromRange,
+  validateReportSearch,
+} from './months'
 
 describe('report months', () => {
   it('reads only months the API writes', () => {
@@ -45,5 +53,48 @@ describe('report months', () => {
 
   it('names months without the browser time zone', () => {
     expect(monthLong('2027-01')).toBe('January 2027')
+  })
+
+  it.each([
+    {
+      name: 'the current month alone',
+      range: { from: '2026-11', to: '2026-11' },
+      from: ['2026-11', '2026-10', '2026-09', '2026-08'],
+      to: ['2026-11'],
+    },
+    {
+      name: 'an earlier month alone',
+      range: { from: '2026-09', to: '2026-09' },
+      from: ['2026-09', '2026-08'],
+      to: ['2026-11', '2026-10', '2026-09'],
+    },
+    {
+      name: 'several months',
+      range: { from: '2026-09', to: '2026-10' },
+      from: ['2026-10', '2026-09', '2026-08'],
+      to: ['2026-11', '2026-10', '2026-09'],
+    },
+    {
+      name: 'a link starting before the first ticket',
+      range: { from: '2026-06', to: '2026-11' },
+      from: ['2026-11', '2026-10', '2026-09', '2026-08', '2026-07', '2026-06'],
+      to: ['2026-11', '2026-10', '2026-09', '2026-08', '2026-07', '2026-06'],
+    },
+  ])('keeps the start no later than the end ($name)', ({ range, from, to }) => {
+    expect(rangeOptions('2026-11', '2025-11', '2026-08', range)).toEqual({ from, to })
+  })
+
+  it('offers only the current month without tickets', () => {
+    expect(rangeOptions('2026-11', '2025-11', null, { from: '2026-11', to: '2026-11' })).toEqual({ from: ['2026-11'], to: ['2026-11'] })
+  })
+
+  it('reads the months from the URL and leaves the current month alone out of it', () => {
+    expect(validateReportSearch({ from: '2026-09', to: '2026-11' })).toEqual({ from: '2026-09', to: '2026-11' })
+    expect(validateReportSearch({ from: '2026-09' })).toEqual({ from: '2026-09' })
+    expect(validateReportSearch({ from: '2026-13', to: 202611, month: '2026-10' })).toEqual({})
+
+    expect(searchFromRange({ from: '2026-11', to: '2026-11' }, '2026-11')).toEqual({})
+    expect(searchFromRange({ from: '2026-10', to: '2026-10' }, '2026-11')).toEqual({ from: '2026-10', to: '2026-10' })
+    expect(searchFromRange({ from: '2026-09', to: '2026-11' }, '2026-11')).toEqual({ from: '2026-09', to: '2026-11' })
   })
 })

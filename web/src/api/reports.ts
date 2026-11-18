@@ -4,22 +4,25 @@ import { api, ApiError, type Problem } from './client'
 import { queryKeys } from './queries'
 import { unwrap } from './unwrap'
 
-/** The SLA report for a month ("2026-11"), or for this month when left out. */
-export const slaReportQueryOptions = (month: string | undefined) =>
+/** The report's months ("2026-09" to "2026-11"); a missing end is the current month. */
+export type SlaReportMonths = { from?: string; to?: string }
+
+/** The SLA report over a range of months, or for this month when both are left out. */
+export const slaReportQueryOptions = ({ from, to }: SlaReportMonths) =>
   queryOptions({
-    queryKey: queryKeys.slaReport(month),
-    queryFn: () => unwrap(api.GET('/reports/sla', { params: { query: { month } } })),
+    queryKey: queryKeys.slaReport(from, to),
+    queryFn: () => unwrap(api.GET('/reports/sla', { params: { query: { from, to } } })),
   })
 
-/** The month for every project as an Excel workbook. */
-export function downloadSlaExcel(month: string): Promise<void> {
-  return save(api.GET('/reports/sla/excel', { params: { query: { month } }, parseAs: 'blob' }))
+/** The months for every project as an Excel workbook. */
+export function downloadSlaExcel({ from, to }: SlaReportMonths): Promise<void> {
+  return save(api.GET('/reports/sla/excel', { params: { query: { from, to } }, parseAs: 'blob' }))
 }
 
-/** One project's month as a PDF, to send to its client. */
-export function downloadSlaPdf(projectId: string, month: string): Promise<void> {
+/** One project's months as a PDF, to send to its client. */
+export function downloadSlaPdf(projectId: string, { from, to }: SlaReportMonths): Promise<void> {
   return save(
-    api.GET('/reports/sla/projects/{projectId}/pdf', { params: { path: { projectId }, query: { month } }, parseAs: 'blob' }),
+    api.GET('/reports/sla/projects/{projectId}/pdf', { params: { path: { projectId }, query: { from, to } }, parseAs: 'blob' }),
   )
 }
 

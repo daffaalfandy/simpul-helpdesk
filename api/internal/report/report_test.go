@@ -212,6 +212,68 @@ func TestOldest(t *testing.T) {
 	}
 }
 
+func TestMonthRangeValidate(t *testing.T) {
+	nov, jan := Month{2026, time.November}, Month{2027, time.January}
+	tests := []struct {
+		name    string
+		r       MonthRange
+		current Month
+		want    error
+	}{
+		{"current month only", SingleMonth(nov), nov, nil},
+		{"one earlier month", SingleMonth(Month{2026, time.September}), nov, nil},
+		{"several months to date", MonthRange{Month{2026, time.September}, nov}, nov, nil},
+		{"the whole window", MonthRange{Month{2025, time.November}, nov}, nov, nil},
+		{"across the year end", MonthRange{Month{2026, time.November}, jan}, jan, nil},
+		{"oldest month alone", SingleMonth(Month{2026, time.January}), jan, nil},
+		{"end before start", MonthRange{Month{2026, time.October}, Month{2026, time.September}}, nov, ErrMonthsReversed},
+		{"end before start across the year end", MonthRange{jan, Month{2026, time.December}}, jan, ErrMonthsReversed},
+		{"start too far back", MonthRange{Month{2025, time.October}, nov}, nov, ErrMonthTooOld},
+		{"both too far back", SingleMonth(Month{2025, time.December}), jan, ErrMonthTooOld},
+		{"end not started", MonthRange{Month{2026, time.October}, Month{2026, time.December}}, nov, ErrMonthInFuture},
+		{"next year", SingleMonth(jan), nov, ErrMonthInFuture},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.r.Validate(tt.current); !errors.Is(err, tt.want) {
+				t.Errorf("Validate(%v..%v, current %v) = %v, want %v", tt.r.From, tt.r.To, tt.current, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestMonthRangeBounds(t *testing.T) {
+	newYork := mustZone("America/New_York")
+	tests := []struct {
+		name       string
+		r          MonthRange
+		loc        *time.Location
+		start, end time.Time
+		single     bool
+	}{
+		{"one month", SingleMonth(Month{2026, time.November}), jakarta,
+			time.Date(2026, time.November, 1, 0, 0, 0, 0, jakarta), time.Date(2026, time.December, 1, 0, 0, 0, 0, jakarta), true},
+		{"three months", MonthRange{Month{2026, time.September}, Month{2026, time.November}}, jakarta,
+			time.Date(2026, time.September, 1, 0, 0, 0, 0, jakarta), time.Date(2026, time.December, 1, 0, 0, 0, 0, jakarta), false},
+		{"across the year end", MonthRange{Month{2026, time.November}, Month{2027, time.January}}, jakarta,
+			time.Date(2026, time.November, 1, 0, 0, 0, 0, jakarta), time.Date(2027, time.February, 1, 0, 0, 0, 0, jakarta), false},
+		// Starts on standard time and ends on summer time: still local midnight at both ends.
+		{"DST zone", MonthRange{Month{2026, time.February}, Month{2026, time.April}}, newYork,
+			time.Date(2026, time.February, 1, 0, 0, 0, 0, newYork), time.Date(2026, time.May, 1, 0, 0, 0, 0, newYork), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start, end := tt.r.Bounds(tt.loc)
+			if !start.Equal(tt.start) || !end.Equal(tt.end) {
+				t.Errorf("Bounds = %v .. %v, want %v .. %v", start, end, tt.start, tt.end)
+			}
+			if got := tt.r.Single(); got != tt.single {
+				t.Errorf("Single = %v, want %v", got, tt.single)
+			}
+		})
+	}
+}
+
 // on returns n copies of a ticket on project p; breached of them missed a target.
 func on(p uuid.UUID, n, breached int) []Ticket {
 	out := make([]Ticket, n)

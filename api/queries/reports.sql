@@ -1,5 +1,5 @@
 -- name: ListReportTickets :many
--- Tickets created in [month_start, month_end), with their SLA outcome so far. A ticket the SLA
+-- Tickets created in [period_start, period_end), with their SLA outcome so far. A ticket the SLA
 -- scan hasn't replayed yet has no ticket_sla row: no breach and no first-response time.
 -- project_id narrows the list to one project; NULL lists all.
 SELECT t.id, t.key, t.client_id, c.name AS client_name, t.project_id, p.name AS project_name, t.type, t.channel, t.priority,
@@ -13,8 +13,8 @@ JOIN projects p ON p.id = t.project_id
 JOIN clients c ON c.id = t.client_id
 LEFT JOIN ticket_sla s ON s.ticket_id = t.id
 WHERE t.organization_id = @organization_id
-  AND t.created_at >= @month_start::timestamptz
-  AND t.created_at < @month_end::timestamptz
+  AND t.created_at >= @period_start::timestamptz
+  AND t.created_at < @period_end::timestamptz
   AND (sqlc.narg(project_id)::uuid IS NULL OR t.project_id = sqlc.narg(project_id)::uuid)
 ORDER BY t.created_at, t.number;
 

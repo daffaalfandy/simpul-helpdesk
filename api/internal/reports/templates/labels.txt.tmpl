@@ -1,6 +1,6 @@
 {{- /* Copy for the SLA report's Excel file and PDF. Data shapes are in internal/reports/copy.go. */ -}}
 
-{{define "file.stem"}}sla-report-{{.}}{{end}}
+{{define "file.stem"}}sla-report-{{.From}}{{if .To}}-to-{{.To}}{{end}}{{end}}
 
 {{define "month.1"}}January{{end}}
 {{define "month.2"}}February{{end}}
@@ -14,7 +14,8 @@
 {{define "month.10"}}October{{end}}
 {{define "month.11"}}November{{end}}
 {{define "month.12"}}December{{end}}
-{{define "report.month"}}{{.Name}} {{.Year}}{{if .ToDate}} (to date){{end}}{{end}}
+{{define "report.monthName"}}{{.Name}} {{.Year}}{{end}}
+{{define "report.period"}}{{.From}}{{if .To}} to {{.To}}{{end}}{{if .ToDate}} (to date){{end}}{{end}}
 
 {{define "report.title"}}SLA report{{end}}
 {{define "report.creator"}}SimDesk{{end}}
@@ -24,7 +25,7 @@
 {{define "report.contract"}}{{if .No}}Contract {{.No}}{{end}}{{if and .No .Start}} · {{end}}{{if .Start}}{{.Start}} to {{.End}}{{end}}{{end}}
 {{define "report.byPriority"}}By priority{{end}}
 {{define "report.tickets"}}Tickets{{end}}
-{{define "report.noTickets"}}No tickets reported in {{.}}.{{end}}
+{{define "report.noTickets"}}No tickets reported {{if .To}}from {{.From}} to {{.To}}{{else}}in {{.From}}{{end}}{{if .ToDate}} (to date){{end}}.{{end}}
 {{define "report.page"}}Page {{.Page}} of {{.Pages}}{{end}}
 {{define "report.waiting.all"}}Time spent waiting on the client is excluded from SLA.{{end}}
 {{define "report.waiting.some"}}Time spent waiting on the client is excluded from SLA on the projects that pause the clock for it.{{end}}

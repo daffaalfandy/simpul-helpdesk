@@ -7,9 +7,9 @@ import { useTranslation } from 'react-i18next'
 import { POPOVER_OFFSET_PX } from '../lib/constants'
 import { currentMonthRange, isSameRange, lastMonthRange, type DateRange } from '../lib/dateRange'
 import { formatDateRange } from '../lib/dates'
-import { cx } from '../lib/text'
 import { Button } from './Button'
 import { CalendarHeader, CalendarMonthGrid } from './CalendarParts'
+import { calendarPopover } from './fieldStyles'
 import { pillClasses } from './FilterPills'
 
 const PRESETS = ['thisMonth', 'lastMonth'] as const
@@ -47,15 +47,7 @@ export function DateRangeFilter({ value, timeZone, description, onChange }: Date
         {t('dateRange.trigger', { range: formatDateRange(value.from, value.to) })}
         <ChevronDown aria-hidden="true" className="size-(--icon-md) shrink-0" />
       </AriaButton>
-      <Popover
-        placement="bottom start"
-        offset={POPOVER_OFFSET_PX}
-        // On a short screen React Aria caps the height; the panel then scrolls instead of spilling.
-        className={cx(
-          'w-(--calendar-w) max-w-[calc(100vw-2*var(--space-4))] overflow-y-auto rounded-2xl border border-border-strong bg-surface',
-          'shadow-popover outline-none data-entering:animate-enter',
-        )}
-      >
+      <Popover placement="bottom start" offset={POPOVER_OFFSET_PX} className={calendarPopover}>
         <Dialog aria-describedby={descriptionId} className="flex flex-col gap-3 p-4 outline-none max-sm:p-2">
           <div className="flex flex-col gap-1">
             <Heading slot="title" className="text-base font-extrabold">

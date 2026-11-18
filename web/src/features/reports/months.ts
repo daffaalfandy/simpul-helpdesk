@@ -56,9 +56,39 @@ export function monthLong(m: MonthKey): string {
   return longFormat.format(firstDay(m))
 }
 
-/** The report's URL search: the month, left out for the current one. */
-export type ReportSearch = { month?: MonthKey }
+/** The report's months, both included: "2026-09" to "2026-11". */
+export type MonthRange = { from: MonthKey; to: MonthKey }
+
+/**
+ * The months each end of the range offers, newest first (see monthOptions): the start no later
+ * than the end and the end no earlier than the start, so the range can't be turned around. A
+ * range opened from a link that starts before the first ticket keeps its start on the lists.
+ */
+export function rangeOptions(
+  current: MonthKey,
+  oldest: MonthKey,
+  first: MonthKey | null,
+  range: MonthRange,
+): { from: MonthKey[]; to: MonthKey[] } {
+  const reach = first === null || range.from < first ? range.from : first
+  const months = monthOptions(current, oldest, reach)
+  return { from: months.filter((m) => m <= range.to), to: months.filter((m) => m >= range.from) }
+}
+
+/**
+ * The report's URL search: its first and last month. The API takes a missing end as the current
+ * month, so the current month alone leaves both out.
+ */
+export type ReportSearch = { from?: MonthKey; to?: MonthKey }
 
 export function validateReportSearch(search: Record<string, unknown>): ReportSearch {
-  return isMonthKey(search.month) ? { month: search.month } : {}
+  const out: ReportSearch = {}
+  if (isMonthKey(search.from)) out.from = search.from
+  if (isMonthKey(search.to)) out.to = search.to
+  return out
+}
+
+/** The URL search for a range; nothing for the current month alone, the default. */
+export function searchFromRange(range: MonthRange, current: MonthKey): ReportSearch {
+  return range.from === current && range.to === current ? {} : { from: range.from, to: range.to }
 }

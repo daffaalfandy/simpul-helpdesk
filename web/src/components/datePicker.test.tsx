@@ -54,6 +54,8 @@ describe('DatePicker', () => {
     await user.click(opener)
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByRole('grid', { name: /November 2026/ })).toBeInTheDocument()
+    // On a short screen the capped panel scrolls instead of spilling off the screen.
+    expect(dialog.parentElement).toHaveClass('overflow-y-auto')
     await waitFor(() => expect(document.activeElement).toHaveAccessibleName(/18 November 2026/))
     expect(within(dialog).getByRole('button', { name: /Month/ })).toHaveTextContent('Nov')
     expect(within(dialog).getByRole('button', { name: /Year/ })).toHaveTextContent('2026')

@@ -108,7 +108,7 @@ func ticketColumns(zone string) []column {
 	}
 }
 
-// buildExcel writes the month for every project. Text goes in as plain strings, never formulas,
+// buildExcel writes the range for every project. Text goes in as plain strings, never formulas,
 // so a subject starting with "=" stays text.
 func buildExcel(d exportData) (Export, error) {
 	c := &copywriter{}
@@ -130,7 +130,7 @@ func buildExcel(d exportData) (Export, error) {
 	summary.err = f.SetSheetName(f.GetSheetName(0), summary.name)
 	summary.row(rowOrg, d.Org.Name)
 	summary.style(rowOrg, firstColumn, firstColumn, styles.title)
-	summary.row(rowHeading, c.text(labelHeading, c.month(d.Period)))
+	summary.row(rowHeading, c.text(labelHeading, c.period(d.Period)))
 	summary.style(rowHeading, firstColumn, firstColumn, styles.heading)
 	summary.row(rowGenerated, c.generated(d.Generated, d.Location))
 	summary.row(rowTarget, c.text(labelTarget, formatPercent(report.TargetPercent)))
@@ -199,7 +199,7 @@ func buildExcel(d exportData) (Export, error) {
 	if err != nil {
 		return Export{}, err
 	}
-	return Export{Filename: c.fileName(d.Month, "", excelExt), Body: buf.Bytes()}, nil
+	return Export{Filename: c.fileName(d.Range, "", excelExt), Body: buf.Bytes()}, nil
 }
 
 // excelPercent is a share as a fraction for the percent format, or the "No tickets" text.

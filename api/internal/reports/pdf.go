@@ -71,7 +71,7 @@ const (
 	sizeTitle     = 22.0
 	sizeClient    = 15.0
 	sizeProject   = 12.0
-	sizeMonth     = 11.0
+	sizePeriod    = 11.0
 	sizeContract  = 8.5
 	sizeKPILabel  = 8.0
 	sizeKPIValue  = 18.0
@@ -89,7 +89,7 @@ const (
 	stepTitle    = 18.0
 	stepClient   = 30.0
 	stepProject  = 20.0
-	stepMonth    = 18.0
+	stepPeriod   = 18.0
 	stepContract = 15.0
 	stepRule     = 14.0
 	stepKPILabel = 14.0
@@ -129,7 +129,7 @@ type pdfCell struct {
 	color  string
 }
 
-// buildPDF writes one project's month: the summary, a row per priority and every ticket.
+// buildPDF writes one project's range: the summary, a row per priority and every ticket.
 // priorities names the organization's priority levels; a level without a name shows its code.
 func buildPDF(d exportData, project db.ListReportProjectsRow, priorities map[sla.Priority]string) (Export, error) {
 	body, _, err := renderPDF(d, project, priorities)
@@ -137,7 +137,7 @@ func buildPDF(d exportData, project db.ListReportProjectsRow, priorities map[sla
 		return Export{}, err
 	}
 	c := &copywriter{}
-	return Export{Filename: c.fileName(d.Month, pdfStem(project), pdfExt), Body: body}, c.err
+	return Export{Filename: c.fileName(d.Range, pdfStem(project), pdfExt), Body: body}, c.err
 }
 
 // pdfStem names the file after the client and the project, or the project's id when neither
@@ -164,9 +164,9 @@ func renderPDF(d exportData, project db.ListReportProjectsRow, priorities map[sl
 	c := w.c
 	tickets := reportTickets(d.Rows)
 	figures := report.Summarize(tickets)
-	month := c.month(d.Period)
+	period := c.period(d.Period)
 	w.pdf.SetInfo(gopdf.PdfInfo{
-		Title:   c.text(labelHeading, month) + infoSeparator + project.ClientName + infoSeparator + project.Name,
+		Title:   c.text(labelHeading, period) + infoSeparator + project.ClientName + infoSeparator + project.Name,
 		Author:  d.Org.Name,
 		Creator: c.text(labelCreator, nil), Producer: c.text(labelCreator, nil),
 		CreationDate: d.Generated,
@@ -185,8 +185,8 @@ func renderPDF(d exportData, project db.ListReportProjectsRow, priorities map[sl
 	w.y += stepProject
 	w.font(familyBold, sizeProject)
 	w.write(familyBold, sizeProject, "ink-2", pageMargin, contentWidth, w.fit(project.Name, contentWidth), gopdf.Left)
-	w.y += stepMonth
-	w.write(familyRegular, sizeMonth, "ink-2", pageMargin, contentWidth, month, gopdf.Left)
+	w.y += stepPeriod
+	w.write(familyRegular, sizePeriod, "ink-2", pageMargin, contentWidth, period, gopdf.Left)
 	if contract := c.text(labelContract, contractFor(project)); contract != "" {
 		w.y += stepContract
 		w.write(familyRegular, sizeContract, "muted", pageMargin, contentWidth, contract, gopdf.Left)
@@ -199,7 +199,7 @@ func renderPDF(d exportData, project db.ListReportProjectsRow, priorities map[sl
 	w.y += kpiHeight + sectionGap
 
 	if figures.Tickets == 0 {
-		w.write(familyRegular, sizeMonth, "ink-2", pageMargin, contentWidth, c.text(labelNoTickets, month), gopdf.Left)
+		w.write(familyRegular, sizePeriod, "ink-2", pageMargin, contentWidth, c.text(labelNoTickets, c.periodArgs(d.Period)), gopdf.Left)
 	} else {
 		w.section(c.text(labelByPriority, nil))
 		widths := columnWidths(priorityColumns)

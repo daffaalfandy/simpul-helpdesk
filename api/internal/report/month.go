@@ -1,5 +1,5 @@
-// Package report computes the monthly SLA report (HANDOFF §10) from ticket rows. It has no
-// database access, so the report page, the Excel file and the PDF share one set of rules.
+// Package report computes the SLA report (HANDOFF §10) over a range of months from ticket rows.
+// It has no database access, so the report page, the Excel file and the PDF share one set of rules.
 package report
 
 import (
@@ -66,6 +66,46 @@ func (m Month) Before(o Month) bool {
 
 // After reports whether m comes after o.
 func (m Month) After(o Month) bool { return o.Before(m) }
+
+// Errors MonthRange.Validate returns.
+var (
+	ErrMonthInFuture  = errors.New("report: month hasn't started")
+	ErrMonthTooOld    = errors.New("report: month before the oldest one the report shows")
+	ErrMonthsReversed = errors.New("report: end month before start month")
+)
+
+// MonthRange is the whole months a report covers, From to To, both included (owner, 18 Nov).
+type MonthRange struct {
+	From, To Month
+}
+
+// SingleMonth is the range of one month.
+func SingleMonth(m Month) MonthRange { return MonthRange{From: m, To: m} }
+
+// Single reports whether r is one month.
+func (r MonthRange) Single() bool { return r.From == r.To }
+
+// Validate keeps r inside the report's window when current is this month: both ends from
+// Oldest(current) to current, and To not before From.
+func (r MonthRange) Validate(current Month) error {
+	oldest := Oldest(current)
+	switch {
+	case r.From.After(current) || r.To.After(current):
+		return ErrMonthInFuture
+	case r.From.Before(oldest) || r.To.Before(oldest):
+		return ErrMonthTooOld
+	case r.To.Before(r.From):
+		return ErrMonthsReversed
+	}
+	return nil
+}
+
+// Bounds returns local midnight on the 1st of From and on the 1st of the month after To, in loc.
+func (r MonthRange) Bounds(loc *time.Location) (start, end time.Time) {
+	start, _ = r.From.Bounds(loc)
+	_, end = r.To.Bounds(loc)
+	return start, end
+}
 
 func (m Month) add(n int) Month {
 	d := calendar.NewDate(m.Year, m.Month+time.Month(n), 1)

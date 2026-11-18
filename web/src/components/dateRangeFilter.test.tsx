@@ -47,6 +47,7 @@ describe('DateRangeFilter', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Reported between' })
     expect(dialog).toHaveAccessibleDescription('Shows the tickets reported on these days.')
     expect(within(dialog).getByRole('grid', { name: /November 2026/ })).toBeInTheDocument()
+    expect(dialog.parentElement).toHaveClass('overflow-y-auto')
 
     await user.click(day(dialog, 3))
     expect(onChange).not.toHaveBeenCalled()

@@ -1047,6 +1047,7 @@
     "reopen_not_allowed": "This ticket can no longer be reopened. Report a new issue instead.",
     "month_in_future": "That month hasn't started yet.",
     "month_out_of_range": "That month is too far back for the report.",
+    "invalid_month_range": "The end month is before the start month. Pick the months again.",
     "invalid_date_range": "The end date is before the start date. Pick the dates again.",
     "invalid_organization": "Some settings aren't valid. Check the fields and try again.",
     "logo_type_not_allowed": "Choose a PNG, JPEG or WebP image.",
@@ -1791,9 +1792,12 @@
   "reports": {
     "title": "SLA report",
     "subtitle": "Monthly evidence for each client project. Send each client their project's PDF with your service report and invoice.",
-    "month": {
-      "label": "Month",
-      "toDate": "{{month}} (to date)"
+    "range": {
+      "label": "Report months",
+      "from": "From",
+      "to": "To",
+      "span": "{{from}} to {{to}}",
+      "toDate": "{{period}} (to date)"
     },
     "downloadExcel": "Download Excel",
     "downloadPdf": "PDF",
@@ -1809,11 +1813,12 @@
       "belowTarget": "Projects below target",
       "belowTargetSub": "review with the account manager",
       "allOnTarget": "all on target",
-      "noTicketsSub": "no tickets this month"
+      "noTicketsSub": "no tickets this month",
+      "noTicketsSubRange": "no tickets in these months"
     },
     "percent": "{{value}}%",
     "noTickets": "No tickets",
-    "byProject": "By project · {{month}}",
+    "byProject": "By project · {{period}}",
     "target": "Contract target: {{target}}% of tickets within SLA",
     "table": {
       "caption": "SLA by project",

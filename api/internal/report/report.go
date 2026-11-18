@@ -17,7 +17,7 @@ const TargetPercent = 90.0
 
 const percentScale = 100
 
-// Ticket is one ticket reported in the month, with its SLA outcome so far.
+// Ticket is one ticket reported in the report's months, with its SLA outcome so far.
 type Ticket struct {
 	ProjectID uuid.UUID
 	Priority  sla.Priority
@@ -114,7 +114,7 @@ type PriorityGroup struct {
 	Figures
 }
 
-// WaitingPause says how many of the month's tickets stop their resolution clock while waiting
+// WaitingPause says how many of the report's tickets stop their resolution clock while waiting
 // on the client, so the report's footnote only claims what the clocks did.
 type WaitingPause string
 
@@ -145,7 +145,7 @@ func WaitingPauseOf(rows []Ticket) (WaitingPause, bool) {
 	}
 }
 
-// Report is the month for every project.
+// Report is the range of months for every project.
 type Report struct {
 	Totals Figures
 	// Projects lists the projects busiest first, then by client and project name.
@@ -155,7 +155,7 @@ type Report struct {
 }
 
 // Build groups rows by project. Every active project gets a row, with or without tickets; a
-// hidden one only when it has tickets in the month. Rows of projects not listed are left out.
+// hidden one only when it has tickets in the range. Rows of projects not listed are left out.
 func Build(projects []Project, rows []Ticket) Report {
 	byProject := make(map[uuid.UUID][]Ticket, len(projects))
 	for _, r := range rows {

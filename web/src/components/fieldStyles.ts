@@ -22,3 +22,11 @@ export const dateSegment =
 
 export const fieldDescription = 'text-xs text-muted'
 export const fieldError = 'text-xs font-semibold text-danger'
+
+/**
+ * The popover holding a calendar. On a short screen React Aria caps its height (it may also open
+ * above the field); the panel then scrolls instead of spilling off the screen.
+ */
+export const calendarPopover =
+  'w-(--calendar-w) max-w-[calc(100vw-2*var(--space-4))] overflow-y-auto rounded-2xl border border-border-strong ' +
+  'bg-surface shadow-popover outline-none data-entering:animate-enter'
