@@ -220,6 +220,7 @@ function ClientDialog({ client, onClose, onDone }: ClientDialogProps) {
           <TextInput
             className="sm:col-span-2"
             label={t('settings.clients.contractNo')}
+            description={t('settings.clients.contractNoHint')}
             value={contractNo}
             onChange={setContractNo}
           />

@@ -543,6 +543,7 @@
       "dialogEdit": "Edit {{name}}",
       "name": "Client name",
       "contractNo": "Contract number",
+      "contractNoHint": "Optional, e.g. 027/SPK/2026. Your contract or agreement number with this client, printed on their SLA report.",
       "start": "Contract start",
       "end": "Contract end",
       "picName": "PIC name",

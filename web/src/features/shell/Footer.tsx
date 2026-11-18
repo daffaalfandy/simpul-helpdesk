@@ -2,6 +2,7 @@ import { ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { Organization } from '../../api/client'
+import { ExternalLink } from '../../components/ExternalLink'
 import { BrandMark } from '../../components/Logo'
 import { BRAND_NAME, DOCS_URL, ISSUES_URL, SOURCE_URL } from '../../lib/constants'
 
@@ -36,9 +37,9 @@ export function Footer({ variant, org }: FooterProps) {
         {links.length > 0 && (
           <nav aria-label={t('footer.linksLabel')} className="flex flex-wrap gap-x-4.5 gap-y-1">
             {links.map((l) => (
-              <a key={l.href} href={l.href} className="inline-flex min-h-8 items-center font-semibold text-muted underline hover:text-ink">
+              <ExternalLink key={l.href} href={l.href} className="hit-area min-h-(--control-h-sm) font-semibold text-muted underline">
                 {l.label}
-              </a>
+              </ExternalLink>
             ))}
           </nav>
         )}

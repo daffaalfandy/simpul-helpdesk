@@ -12,7 +12,7 @@ export function ExternalLink({ href, children, className }: { href: string; chil
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={cx('inline-flex items-baseline gap-1 hover:text-primary-hover hover:underline', className)}
+      className={cx('inline-flex items-center gap-1 hover:text-primary-hover hover:underline', className)}
     >
       {children}
       <ExternalIcon aria-hidden="true" className="size-(--icon-sm) shrink-0 self-center" />
