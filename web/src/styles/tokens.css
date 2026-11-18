@@ -175,6 +175,7 @@
   --member-role-w: 180px;      /* role dropdown in each team row */
   --editor-max-h: 480px;       /* a long message scrolls inside the editor, keeping Send in view */
   --link-popover-w: 340px;     /* editor's link address popover */
+  --calendar-w: 340px;         /* date picker calendar popover: seven 44px day columns plus padding */
   --quote-bar-w: 3px;          /* rule beside a quote in a message (as in the email quote) */
   --rule-w: 1px;               /* table cell and code block borders inside a message */
 

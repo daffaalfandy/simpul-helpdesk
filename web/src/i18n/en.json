@@ -483,6 +483,7 @@
       "days": "Working days",
       "opens": "Opens",
       "closes": "Closes",
+      "endOfDay": "24:00 (end of day)",
       "workingDayNote": "SLA targets are stored as working time, so the length of a working day changes with these hours. Now: {{length}}.",
       "dayLength_one": "{{count}} hour",
       "dayLength_other": "{{count}} hours",
@@ -545,7 +546,9 @@
       "contractNo": "Contract number",
       "contractNoHint": "Optional, e.g. 027/SPK/2026. Your contract or agreement number with this client, printed on their SLA report.",
       "start": "Contract start",
+      "periodHint": "Optional. Shown in the clients list; the SLA report prints the period when both dates are set.",
       "end": "Contract end",
+      "optional": "Optional.",
       "picName": "PIC name",
       "picEmail": "PIC email",
       "agents": "Assigned agents",
@@ -1041,6 +1044,13 @@
     "hoursAgo": "{{count}} h ago",
     "yesterday": "Yesterday",
     "today": "Today, {{time}}"
+  },
+  "datePicker": {
+    "open": "Open calendar",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "month": "Month",
+    "year": "Year"
   },
   "attach": {
     "button": "Attach file",

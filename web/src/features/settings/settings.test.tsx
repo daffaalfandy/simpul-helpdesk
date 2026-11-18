@@ -87,6 +87,29 @@ describe('settings', () => {
       expect(await screen.findByRole('row', { name: /Bappeda Prov. Riau/ })).toHaveTextContent('No projects yet')
     })
 
+    it('sets the contract period by typing the start and picking the end from its calendar', async () => {
+      const user = userEvent.setup()
+      renderApp('/settings/clients')
+      await user.click(await screen.findByRole('button', { name: 'Add client' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Add client' })
+      const start = within(dialog).getByRole('group', { name: 'Contract start' })
+      expect(start).toHaveAccessibleDescription(/Shown in the clients list/)
+      expect(within(dialog).getByRole('group', { name: 'Contract end' })).toHaveAccessibleDescription(/Optional\./)
+
+      await user.type(within(dialog).getByRole('textbox', { name: /Client name/ }), 'Bappeda Prov. Riau')
+      await user.click(within(start).getByRole('spinbutton', { name: /day/ }))
+      await user.keyboard('01032026')
+      // The end's calendar opens on the start's month.
+      await user.click(within(dialog).getByRole('button', { name: 'Open calendar Contract end' }))
+      const calendar = await screen.findByRole('grid', { name: /March 2026/ })
+      await user.click(within(calendar).getByRole('button', { name: /31 March 2026/ }))
+      await waitFor(() => expect(screen.queryByRole('grid')).not.toBeInTheDocument())
+
+      await user.click(within(dialog).getByRole('button', { name: 'Add client' }))
+      expect(await screen.findByRole('status')).toHaveTextContent('Bappeda Prov. Riau added.')
+      expect(lastRequest('POST', '/clients')?.body).toMatchObject({ contractStart: '2026-03-01', contractEnd: '2026-03-31' })
+    })
+
     it('shows the API message when the name is taken', async () => {
       const user = userEvent.setup()
       renderApp('/settings/clients')
@@ -117,14 +140,67 @@ describe('settings', () => {
       await user.click(await screen.findByRole('button', { name: 'Edit hours' }))
       const dialog = await screen.findByRole('dialog', { name: 'Edit business hours' })
       await user.click(within(dialog).getByRole('checkbox', { name: 'Friday' }))
+      await user.click(within(dialog).getByRole('button', { name: /Opens/ }))
+      await user.click(await screen.findByRole('option', { name: '07:30' }))
+      await user.click(within(dialog).getByRole('button', { name: /Closes/ }))
+      await user.click(await screen.findByRole('option', { name: '24:00 (end of day)' }))
+      expect(within(dialog).getByText(/Now: 16 h 30 min\./)).toBeInTheDocument()
       await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
       expect(await screen.findByRole('status')).toHaveTextContent('Business hours saved.')
       expect(lastRequest('PUT', '/business-hours')?.body).toEqual({
         weekdays: ['mon', 'tue', 'wed', 'thu'],
-        opens: '08:00',
-        closes: '17:00',
+        opens: '07:30',
+        closes: '24:00',
       })
       expect(await screen.findByText('Mon – Thu')).toBeInTheDocument()
+      expect(screen.getByText('07:30 – 24:00')).toBeInTheDocument()
+    })
+
+    it('keeps a saved time that is off the half hour', async () => {
+      settings.hours = { ...settings.hours, opens: '08:15' }
+      const user = userEvent.setup()
+      renderApp('/settings/general')
+      await user.click(await screen.findByRole('button', { name: 'Edit hours' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Edit business hours' })
+      const opens = within(dialog).getByRole('button', { name: /Opens/ })
+      expect(opens).toHaveTextContent('08:15')
+      await user.click(opens)
+      const times = within(await screen.findByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
+      expect(times.slice(times.indexOf('08:00'), times.indexOf('08:00') + 3)).toEqual(['08:00', '08:15', '08:30'])
+      await user.keyboard('{Escape}')
+      await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+      expect(await screen.findByRole('status')).toHaveTextContent('Business hours saved.')
+      expect(lastRequest('PUT', '/business-hours')?.body).toMatchObject({ opens: '08:15', closes: '17:00' })
+    })
+
+    it("refuses a closing time that isn't after the opening time", async () => {
+      const user = userEvent.setup()
+      renderApp('/settings/general')
+      await user.click(await screen.findByRole('button', { name: 'Edit hours' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Edit business hours' })
+      await user.click(within(dialog).getByRole('button', { name: /Closes/ }))
+      await user.click(await screen.findByRole('option', { name: '08:00' }))
+      await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+      expect(within(dialog).getByText('Closing time must be after opening time.')).toBeInTheDocument()
+      expect(lastRequest('PUT', '/business-hours')).toBeUndefined()
+    })
+
+    it('adds a holiday picked from the calendar', async () => {
+      const user = userEvent.setup()
+      renderApp('/settings/general')
+      await user.click(await screen.findByRole('button', { name: 'Add holiday' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Add a holiday' })
+      await user.click(within(dialog).getByRole('button', { name: 'Open calendar Date' }))
+      const calendar = await screen.findByRole('dialog', { name: /Open calendar Date/ })
+      await user.click(within(calendar).getByRole('button', { name: /Month/ }))
+      await user.click(await screen.findByRole('option', { name: 'Aug' }))
+      await user.click(within(calendar).getByRole('button', { name: new RegExp(`17 August ${THIS_YEAR}`) }))
+      await waitFor(() => expect(screen.queryByRole('grid')).not.toBeInTheDocument())
+
+      await user.type(within(dialog).getByRole('textbox', { name: /Name/ }), 'Hari Kemerdekaan')
+      await user.click(within(dialog).getByRole('button', { name: 'Add holiday' }))
+      expect(await screen.findByRole('status')).toHaveTextContent('Hari Kemerdekaan added.')
+      expect(lastRequest('POST', '/holidays')?.body).toEqual({ date: `${THIS_YEAR}-08-17`, name: 'Hari Kemerdekaan' })
     })
 
     it('loads the official holiday list and removes a holiday', async () => {

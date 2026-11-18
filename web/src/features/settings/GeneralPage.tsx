@@ -1,4 +1,4 @@
-import { CalendarDate, parseDate, parseTime, Time } from '@internationalized/date'
+import { CalendarDate, getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
@@ -10,12 +10,14 @@ import { Alert } from '../../components/Alert'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { Checkbox, CheckboxGroup } from '../../components/Checkbox'
+import { DatePicker } from '../../components/DatePicker'
 import { ConfirmDialog, FormDialog } from '../../components/Dialog'
 import { Dropdown } from '../../components/Dropdown'
-import { DateInput, TimeInput } from '../../components/Fields'
 import { RowHeader, Table, Td, Th } from '../../components/Table'
 import { TextInput } from '../../components/TextInput'
-import { HOLIDAY_YEARS_AROUND, MINUTES_PER_DAY, MINUTES_PER_HOUR } from '../../lib/constants'
+import { TimeSelect } from '../../components/TimeSelect'
+import { parseClock } from '../../lib/clock'
+import { HOLIDAY_YEARS_AROUND, MINUTES_PER_HOUR } from '../../lib/constants'
 import { currentYear, formatLongDate } from '../../lib/dates'
 import { closedDays, WEEK, weekdayRuns } from '../../lib/weekdays'
 import {
@@ -29,22 +31,6 @@ import {
 } from './queries'
 import { OrganizationCard } from './OrganizationCard'
 import { ErrorAlert, SectionHeader } from './shared'
-
-/** The API writes the end of the day as "24:00"; a time field shows it as 00:00. */
-const END_OF_DAY = '24:00'
-const MIDNIGHT = new Time(0, 0)
-/** "HH:MM" */
-const CLOCK_LENGTH = END_OF_DAY.length
-
-function clockText(time: Time): string {
-  return time.toString().slice(0, CLOCK_LENGTH)
-}
-
-/** Minutes from midnight; a closing time of 00:00 means the end of the day. */
-function minutesOf(time: Time, isClose: boolean): number {
-  const m = time.hour * MINUTES_PER_HOUR + time.minute
-  return isClose && m === 0 ? MINUTES_PER_DAY : m
-}
 
 export function GeneralPage() {
   const [flash, setFlash] = useState<string | null>(null)
@@ -128,12 +114,13 @@ function HoursDialog({ hours, onClose, onSaved }: { hours: BusinessHours; onClos
   const { t } = useTranslation()
   const save = useUpdateBusinessHours()
   const [days, setDays] = useState<string[]>(hours.weekdays)
-  const [opens, setOpens] = useState<Time | null>(parseTime(hours.opens))
-  const [closes, setCloses] = useState<Time | null>(hours.closes === END_OF_DAY ? MIDNIGHT : parseTime(hours.closes))
+  // Times stay "HH:MM" as the API writes them; a day that runs to midnight closes at "24:00".
+  const [opens, setOpens] = useState(hours.opens)
+  const [closes, setCloses] = useState(hours.closes)
   const [submitted, setSubmitted] = useState(false)
 
-  const openMin = opens ? minutesOf(opens, false) : null
-  const closeMin = closes ? minutesOf(closes, true) : null
+  const openMin = parseClock(opens)
+  const closeMin = parseClock(closes)
   const rangeOk = openMin !== null && closeMin !== null && openMin < closeMin
   const length = rangeOk ? closeMin - openMin : null
   const lengthText =
@@ -148,15 +135,8 @@ function HoursDialog({ hours, onClose, onSaved }: { hours: BusinessHours; onClos
 
   const submit = () => {
     setSubmitted(true)
-    if (days.length === 0 || !rangeOk || !opens || !closes) return
-    save.mutate(
-      {
-        weekdays: WEEK.filter((d) => days.includes(d)),
-        opens: clockText(opens),
-        closes: closeMin === MINUTES_PER_DAY ? END_OF_DAY : clockText(closes),
-      },
-      { onSuccess: onSaved },
-    )
+    if (days.length === 0 || !rangeOk) return
+    save.mutate({ weekdays: WEEK.filter((d) => days.includes(d)), opens, closes }, { onSuccess: onSaved })
   }
 
   return (
@@ -185,8 +165,14 @@ function HoursDialog({ hours, onClose, onSaved }: { hours: BusinessHours; onClos
       </CheckboxGroup>
       {submitted && days.length === 0 && <p className="text-xs font-semibold text-danger">{t('settings.hours.noDays')}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
-        <TimeInput label={t('settings.hours.opens')} value={opens} onChange={setOpens} isRequired />
-        <TimeInput label={t('settings.hours.closes')} value={closes} onChange={setCloses} isRequired />
+        <TimeSelect label={t('settings.hours.opens')} edge="start" value={opens} onChange={setOpens} />
+        <TimeSelect
+          label={t('settings.hours.closes')}
+          edge="end"
+          endOfDayLabel={t('settings.hours.endOfDay')}
+          value={closes}
+          onChange={setCloses}
+        />
       </div>
       {submitted && !rangeOk && (
         <p className="text-xs font-semibold text-danger">{t('settings.hours.closesBeforeOpens')}</p>
@@ -344,6 +330,9 @@ function HolidayDialog({ year, onClose, onAdded }: { year: number; onClose: () =
   const [date, setDate] = useState<CalendarDate | null>(null)
   const [name, setName] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  // The calendar opens on today when adding to this year, else on the year's first day.
+  const now = today(getLocalTimeZone())
+  const opensOn = now.year === year ? now : new CalendarDate(year, 1, 1)
 
   const submit = () => {
     setSubmitted(true)
@@ -362,11 +351,11 @@ function HolidayDialog({ year, onClose, onAdded }: { year: number; onClose: () =
       error={<ErrorAlert error={create.error} />}
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <DateInput
+        <DatePicker
           label={t('settings.holidays.date')}
           value={date}
           onChange={setDate}
-          placeholderValue={new CalendarDate(year, 1, 1)}
+          placeholderValue={opensOn}
           isRequired
           isInvalid={submitted && !date}
           errorMessage={t('settings.holidays.dateRequired')}

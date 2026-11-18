@@ -9,9 +9,9 @@ import { Alert } from '../../components/Alert'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { Checkbox, CheckboxGroup } from '../../components/Checkbox'
+import { DatePicker } from '../../components/DatePicker'
 import { ConfirmDialog, FormDialog } from '../../components/Dialog'
 import { EmptyState } from '../../components/EmptyState'
-import { DateInput } from '../../components/Fields'
 import { RowHeader, Table, Td, Th } from '../../components/Table'
 import { TextInput } from '../../components/TextInput'
 import { formatMonthYear, formatPeriod } from '../../lib/dates'
@@ -224,11 +224,18 @@ function ClientDialog({ client, onClose, onDone }: ClientDialogProps) {
             value={contractNo}
             onChange={setContractNo}
           />
-          <DateInput label={t('settings.clients.start')} value={start} onChange={setStart} />
-          <DateInput
+          <DatePicker
+            label={t('settings.clients.start')}
+            description={t('settings.clients.periodHint')}
+            value={start}
+            onChange={setStart}
+          />
+          <DatePicker
             label={t('settings.clients.end')}
+            description={t('settings.clients.optional')}
             value={end}
             onChange={setEnd}
+            placeholderValue={start ?? undefined}
             isInvalid={submitted && periodInvalid}
             errorMessage={t('settings.clients.periodInvalid')}
           />
