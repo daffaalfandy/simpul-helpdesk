@@ -113,6 +113,10 @@ A token acts as you in the organization you made it in, until it expires or you 
 
 Go (chi, pgx, sqlc, River) · PostgreSQL 18 · React + TypeScript (Vite, TanStack, Tailwind) · OpenAPI 3
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately, as [SECURITY.md](SECURITY.md) describes. Changes per release are in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [AGPL-3.0](LICENSE). If you run a modified version as a service, you must share your changes.
