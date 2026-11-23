@@ -1,26 +1,88 @@
 # SimDesk
 
-**SimDesk** (Simpul Helpdesk) is an open-source, self-hosted helpdesk for IT vendors who support client organisations.
+**SimDesk** (Simpul Helpdesk) is an open-source, self-hosted helpdesk for IT vendors who support client organisations. One install holds one or more vendor organizations, each with its own clients, projects, tickets and settings.
 
-- Several vendor organizations on one install, each with its own clients, projects, tickets and settings
-- Client portal for reporting issues and approving fixes (UAT)
-- Agent board with SLA timers (business hours, pauses while waiting on the client)
-- Definition of Done and SLA targets per project
-- GitHub / GitLab commits shown on the tickets they name, with the branches they reached
-- Notifications in the app and by email, chosen per event by each user
-- Monthly SLA reports per client
-- Formatted descriptions and replies (stored as Markdown)
-- An MCP server, so staff can read and work tickets from an AI client such as Claude Code
+## Features
 
-> **Status:** early development. Done: sign-in, users and roles; clients and the business-hours calendar; tickets with replies, internal notes and attachments; projects with their own SLA targets and global priority names; the kanban board with filters, search and drag-and-drop status changes; notifications in the app and by email (per-event switches, grouped emails and summaries, colleagues under "People notified"); live SLA clocks with pauses, at-risk and breach alerts; a Definition of Done per project (or per ticket, with a reason) that guards resolving, client UAT approval in the portal and from email, and the 3-working-day reopen window with auto-close; the read-only GitHub/GitLab connector (repository webhooks with their own secret; a commit that names a ticket shows on it with the branches it reached, on the board and in notifications, and never moves the ticket); the monthly SLA report per client with an Excel export for every client and a PDF for each; settings for the organisation (name, logo, ticket prefix, time zone), members and roles with emailed invites, requesters invited on each client; several vendor organizations per install (people pick one after signing in and switch from the header, with a role in each; administrators work in all of them), a project filter saved per person for the board and ticket lists; first-run setup (the administrator, then the first organization); a formatting toolbar for descriptions, replies and internal notes; and an MCP server for AI clients with personal access tokens. Next: the production image and self-hosting guides.
+**For your clients**
+- A portal to report incidents and request services from your catalogue, follow every ticket and reply to the team
+- Fixes go to the client for approval (UAT) in the portal or straight from the email; a ticket can be reopened for 3 working days, then it closes by itself
+- Requesters see only the projects they are linked to, and can add colleagues to a ticket's "People notified"
 
-## Stack
+**For your team**
+- A kanban board with drag-and-drop status changes, filters, search, a saved project filter and a reported-date range
+- Replies and internal notes with a formatting toolbar; internal notes never reach clients, in the app or by email
+- Attachments, and an audit log of every state change
 
-Go (chi, pgx, sqlc, River) · PostgreSQL 18 · React + TypeScript (Vite, TanStack, Tailwind) · OpenAPI 3
+**SLA you can defend**
+- Targets per project and priority, in minutes, hours, working days or calendar days
+- Business hours with holidays (Indonesian official holiday lists included), or a 24/7 clock per project
+- Clocks pause while the team waits on the client, and optionally while a fix is in UAT
+- At-risk and breach alerts, and a Definition of Done per project that guards resolving a ticket
+- SLA reports per project over a range of months, with an Excel file for every project and a PDF for each one
+
+**Connected to your code**
+- GitHub and GitLab repository webhooks, each with its own secret: a commit that names a ticket key shows on the ticket with the branches it reached
+- A Definition of Done item can wait for the fix to reach a branch, and Git ticks it; Git never moves a ticket
+
+**Notifications**
+- A bell in the app and emails, switched on or off per event by each person
+- Emails right away, hourly or daily; urgent items (P1, SLA, UAT) always go right away
+
+**AI clients (MCP)**
+- Staff connect Claude Code or another MCP client with a personal access token to search and read tickets, reply, add internal notes and change status, assignee or priority
+
+**Easy to host**
+- One binary with the web app built in, plus PostgreSQL
+- Fonts and assets are self-hosted, so an install works without outside services
+
+## Run SimDesk
+
+You need PostgreSQL 18 and an SMTP server for emails (invites, password resets, notifications). Building needs Go 1.26+ (the go command downloads it automatically) and Node 22+.
+
+**1. Build** the binary, with the web app inside it:
+
+```sh
+make build        # writes bin/simdesk
+```
+
+**2. Configure** with environment variables (every setting is documented in [`.env.example`](.env.example)). For production:
+
+| Variable | Value |
+|---|---|
+| `APP_ENV` | `prod` |
+| `APP_URL` | The address people open, e.g. `https://helpdesk.example.com` (used in email links) |
+| `HTTP_ADDR` | Where SimDesk listens, e.g. `127.0.0.1:8080` behind a proxy |
+| `DATABASE_URL` | `postgres://user:password@localhost:5432/simdesk?sslmode=disable` |
+| `STORAGE_DIR` | An absolute path for uploaded attachments |
+| `ENCRYPTION_KEY` | 32 random bytes, base64: `openssl rand -base64 32` |
+| `SMTP_ADDR`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Your mail server and sender address |
+| `TRUSTED_PROXIES` | The address of your HTTPS proxy or tunnel, e.g. `127.0.0.1/32` |
+
+Production serves cookies over HTTPS only, so put SimDesk behind an HTTPS proxy or a tunnel (Caddy, nginx, Cloudflare Tunnel). Keep `ENCRYPTION_KEY` and `STORAGE_DIR` with your database backups: without the key, stored webhook secrets can't be read.
+
+**3. Create the database schema and the first administrator:**
+
+```sh
+simdesk migrate up
+simdesk user create --role admin --email you@example.com --name "Your Name"
+```
+
+Creating the administrator from the command line closes first-run setup, so do it before the address is public. Without it, the first person to open the address goes through first-run setup and becomes the administrator. The administrator creates the first organization after signing in.
+
+**4. Start** the web server and the background jobs (SLA clocks, emails, auto-close):
+
+```sh
+simdesk serve --worker
+```
+
+To load a year's Indonesian holidays into the business-hours calendar: `simdesk holidays load-preset --year 2027`.
+
+**To update:** build again, replace the binary, run `simdesk migrate up` and restart `simdesk serve --worker`.
 
 ## Development
 
-Requirements: Go 1.26+ (the go command downloads it automatically), Node 22+, Docker.
+Requirements: Go 1.26+, Node 22+, Docker.
 
 ```sh
 cp .env.example .env
@@ -34,37 +96,22 @@ make dev       # API on :8080, web on :5173
 - Mail catcher: http://localhost:8025
 - API docs: http://localhost:8080/api/docs
 
-`make test` runs all tests (Docker is needed for the database tests). `make help` lists every target.
+`make test` runs all tests (Docker is needed for the database tests), `make lint` the static checks. `make help` lists every target.
 
 ## Connect an AI client (MCP)
 
-Staff can read tickets, their attachments and activity, and (with a read-and-write token) reply,
-add internal notes and change status, assignee or priority from an MCP client. In SimDesk, open
-your menu › **MCP access**, make a personal access token, and add the server to your client, for
-example Claude Code:
+In SimDesk, open your menu › **MCP access**, make a personal access token (read only, or read and write), and add the server to your client, for example Claude Code:
 
 ```sh
-claude mcp add --transport http simdesk https://helpdesk.example/api/mcp \
+claude mcp add --transport http simdesk https://helpdesk.example.com/api/mcp \
   --header "Authorization: Bearer simdesk_pat_…"
 ```
 
 A token acts as you in the organization you made it in, until it expires or you revoke it.
 
-## Self-hosting
+## Stack
 
-A production image and guide are coming. Uploaded attachments live on local disk in
-`STORAGE_DIR` (an absolute path; back it up with the database). `ENCRYPTION_KEY` (32 random
-bytes, base64: `openssl rand -base64 32`) encrypts secrets kept in the database, such as webhook
-secrets; keep it with your backups. The GitHub/GitLab connector works through webhooks, so
-GitHub or your GitLab must be able to reach the install's address. On a fresh install, run
-`simdesk migrate`, then open the install's address: first-run setup creates the first admin,
-once, who then creates the first organization. Or create the first admin from the command line,
-which closes setup too; they create the first organization after signing in:
-
-```sh
-simdesk migrate
-simdesk user create --role admin --email you@example.com --name "Your Name"
-```
+Go (chi, pgx, sqlc, River) · PostgreSQL 18 · React + TypeScript (Vite, TanStack, Tailwind) · OpenAPI 3
 
 ## License
 
